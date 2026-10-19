@@ -5,8 +5,8 @@ Defined in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
 **`main` is the only integration branch.** Pull requests target `main`. Every
 event runs the always-on gates; the tiers follow the diff:
 
-- Tier 1 (app) and Tier 4 (backend) run when their paths change, and on every
-  push to `main`.
+- Tier 1 (app), Tier 4 (backend) and the Firestore rules tests run when their
+  paths change, and on every push to `main`.
 - Tier 3 (emulator) and Tier 5 (arm64 release, R8) run when the diff can break
   them — an engine bump or JNI change runs both, a packaging change (keep rules,
   `app/build.gradle.kts`, the version catalog) runs Tier 5 — on a PR and on a
@@ -27,6 +27,7 @@ console-pages ──────────────────────
 changes ──┬──> tier1-app-fast ───────────┤
           ├──> tier3-emulator-e2e (*) ───┤
           ├──> tier4-backend ────────────┤
+          ├──> firestore-rules ──────────┤
           └──> tier5-signed-release (*) ─┤
                                          └──> ci-ok
 
@@ -38,13 +39,14 @@ changes ──┬──> tier1-app-fast ───────────┤
 | Job | Proves | Path-filtered? | Typical (warm / cold) |
 |-----|--------|---|-----------------------|
 | `secret-scan` | gitleaks (see below) | No — always runs | ~1–2 min |
-| `legal-pages` | `scripts/render_legal_pages.py --check`: the published pages still match `docs/legal/` | No — always runs | seconds |
+| `legal-pages` | `scripts/render_legal_pages.py --check`: the published pages still match `docs/legal/`; `scripts/check_doc_paths.py`: every path a doc names exists; `scripts/check_framework_coverage.py`: every readiness-framework item (`docs/ops/READINESS_FRAMEWORK_2026-10.md`) has a row in the gate's cross-check and every open row an owner that exists in TECH_DEBT or FUTURE_IMPROVEMENTS | No — always runs | seconds |
 | `console-pages` | `scripts/check_console.py`: the consoles' wiring, CSP, deploy placeholders and gateway paths — their only gate, since they have no compiler — plus `node --test`: the DOM-free `console/util.js`, `auth.js` (sign-in, second factor, step-up, `api`, revoke gate), `router.js`, and the operator, account and institution pages, against a fake Firebase SDK loaded through a `module.register` hook and a DOM parsed from the real pages (`firebase-hosting/tests/harness.mjs`), with line coverage of the console's JS gated at 96 % by `scripts/console_coverage.mjs` (merged by file from the raw V8 coverage; every `.js` under `public/` but `vendor/`). | No — always runs | seconds |
 | `changes` | Resolves path filters + PR/main/Dependabot mode into tier flags | — | seconds |
 | `tier1-app-fast` | spotless, detekt, lint, JVM unit tests, `compileReleaseKotlin`, the androidTest and `:benchmark` sources compile, Kover coverage log + `koverVerify` floor. Failing tests are printed by `scripts/ci_test_report.py`; JUnit XML and the Kover XML/HTML upload as `app-unit-tests-and-coverage` | `app` (PR); always on `main` push | ~5–8 / ~10 min |
 | `tier3-emulator-e2e` | x86_64 emulator: the whole androidTest suite except `com.sempermechanics.semper.benchmark` (those need the `benchmark` job) — `EnginePipelineSmokeTest` through the JNI, `AnalysisWizardSmokeTest`, the device tests, and `FirebaseAuthIntegrationTest` signing the CI test account in to the app's Firebase project (secrets `FIREBASE_TEST_EMAIL` / `FIREBASE_TEST_PASSWORD`; it skips without them) | `emulator`: engine / JNI / native-CI actions, labels, weekly | ~20–40 / ~60–90 min |
-| `tier4-backend` | ruff, shell-script parse, pip-audit, hashed-lock verification, pytest at `--cov-fail-under=93`, then the Firestore emulator suite appended to the same coverage and the total gated at 93. pytest also holds the console gate's own tests (`test_check_console.py`), the index check (`test_firestore_query_indexes.py`) and the wire contracts (`test_wire_contracts.py`, over `contracts/`) | `backend` (PR); always on `main` push | ~5–10 min |
-| `tier5-signed-release` | R8 + signed `assembleRelease` arm64, `.so` presence, signature verify, R8 mapping artifact | `release_build`: engine / JNI / native-CI actions / packaging, labels, weekly | ~15–40 / up to ~90 min |
+| `tier4-backend` | ruff, shell-script parse, shellcheck of the two GCP ops scripts, pip-audit, hashed-lock verification, pytest at `--cov-fail-under=93`, then the Firestore emulator suite appended to the same coverage and the total gated at 93. pytest also holds the console gate's own tests (`test_check_console.py`), the index check (`test_firestore_query_indexes.py`) and the wire contracts (`test_wire_contracts.py`, over `contracts/`), the release APK gate's parsers (`test_script_check_release_apk.py`), the framework coverage check (`test_script_check_framework_coverage.py`), and `check_gcp_posture.sh` / `apply-monitoring.sh` run against a stub `gcloud` and `curl` (`test_script_ops_gcp.py`; never a real project) | `backend` (PR); always on `main` push | ~5–10 min |
+| `firestore-rules` | `firestore-rules-tests/`: `firestore.rules` on the Firestore emulator (`firebase emulators:exec`, project `demo-rules`) with `@firebase/rules-unit-testing` under `node --test`. For each collection and subcollection `backend/app` uses (`collections.mjs`: `users`, `auth_links`, `devices`, `challenges`, `sessions`, `files`, `licenses`, `licenses/{id}/seats`, `licenseInvites`, `deleted_licenses`, `deleted_licenses/{id}/deleted_seats`, `audit_logs`), signed out, as the owner, as another user and with admin-looking claims, every get, list, owner query, collectionGroup query and write is `assertFails`. `collections.test.mjs` greps `backend/app` for `.collection(…)` / `.collection_group(…)` names and fails when one is missing from the list, so a new collection cannot ship untested. Pinned `firebase-tools`, `firebase` and `@firebase/rules-unit-testing` from `package-lock.json` (`npm ci`, npm cache); the emulator's rule coverage report uploads as `firestore-rules-coverage` | `rules` (PR); always on `main` push | ~1–2 min |
+| `tier5-signed-release` | R8 + signed `assembleRelease` arm64, `.so` presence, signature verify, `scripts/check_release_apk.py` (the APK is not debuggable or testOnly, carries no debug source-set component and no `DebugAppCheckProviderFactory`, permits no cleartext, has `app/build.gradle.kts`'s `minSdk`, and R8 wrote a mapping; it warns when no certificate pin is compiled in, which is always the case here), R8 mapping artifact | `release_build`: engine / JNI / native-CI actions / packaging, labels, weekly | ~15–40 / up to ~90 min |
 | `tier-benchmark` | One API 34 emulator, two suites: Macrobenchmark cold/warm startup (`:benchmark`, `suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED`), then `:app`'s `HotPathMicroBenchmark` on the debug build, installed by Gradle and run with `adb shell am instrument` (`suppressErrors` adds `DEBUGGABLE`, `ACTIVITY-MISSING`, `NOT-AOT-COMPILED`; through Gradle the list arrives cut at its first comma, TD-86; the step fails unless `am instrument` prints `OK (`, and the results are pulled from the device). Emulator **smoke**: no numeric thresholds; both upload their `*-benchmarkData.json` (`macrobenchmark-results`, `microbenchmark-results`). On a PR the micro suite is also a gate: the step before the emulator builds the PR's base and the PR (debug app + androidTest APKs, base first in the one checkout), and `scripts/micro_ab.py` runs each on the emulator in A B B A order and fails if a benchmark's pooled median `timeNs` is more than `microAbMargin` (`benchmark/gates.json`) over the base's (TD-199); the `perf-accepted` label makes it warn instead, and the rounds upload as `microbenchmark-ab`. `scripts/ci_test_report.py` prints failing tests and each metric's min / median / max (`BENCH …` lines) into the log, as Tier 3 does for its failures. CI does not pass `--gates`: the real-device gates (`benchmark/gates.json`, checked only in the phone state `DeviceStateRule` records, [ADR-008](../adr/ADR-008-startup-gates-phone-state.md), [TESTING.md](../app/TESTING.md)) apply to a phone run only. The job reads the app id from `app/build.gradle.kts` (`APP_ID`) for the micro run's `am instrument` and pulls, so it runs unchanged in material_testing. | `benchmark` label / `run_benchmark` dispatch / a PR matching `hot_path` (the micro suite's sources, the benchmark, `scripts/micro_ab.py`, `benchmark/gates.json`) | ~45–75 min |
 | `ci-ok` | Single required status check — every job above passed or was skipped | — | seconds |
 
@@ -92,8 +94,9 @@ gitleaks detect --config .gitleaks.toml --log-opts="<base-sha>..HEAD"
 | `packaging` | `app/build.gradle.kts`, `app/proguard-rules.pro`, `gradle/libs.versions.toml` | `app` + `release_build` (tier 5 runs R8) |
 | `native_jni` | `engine`, `.gitmodules`, `app/src/main/cpp/**`, `SemperNativeLib.kt` | `emulator` + `release_build` (tiers 3 + 5) |
 | `native_ci` | `.github/actions/{setup-native-ci,enable-kvm,check-arm64-so}/**` | `emulator` + `release_build` |
-| `backend` | `backend/**`, `firestore.rules`, `firebase-hosting/firebase.json`, `scripts/deploy-firestore.sh`, `.github/workflows/deploy-backend.yml`, `docs/legal/**`, `scripts/*.py`, `contracts/**`, and the client's three wire-contract files | `backend` (tier 4) |
-| `ci_workflow` | `.github/workflows/ci.yml`, `.github/actions/**`, `scripts/ci_test_report.py` | `app` + `backend`, so a workflow-only PR is not gates-only |
+| `backend` | `backend/**`, `firestore.rules`, `firebase-hosting/firebase.json`, `scripts/deploy-firestore.sh`, `.github/workflows/deploy-backend.yml`, `docs/legal/**`, `scripts/*.py`, `scripts/tests/**` (the scripts' test fixtures), `scripts/check_gcp_posture.sh`, `scripts/apply-monitoring.sh`, `ops/monitoring/**`, `contracts/**`, and the client's three wire-contract files | `backend` (tier 4) |
+| `rules` | `firestore.rules`, `firestore-rules-tests/**`, `backend/app/**` | `rules` (Firestore rules tests) |
+| `ci_workflow` | `.github/workflows/ci.yml`, `.github/actions/**`, `scripts/ci_test_report.py` | `app` + `backend` + `rules`, so a workflow-only PR is not gates-only |
 
 The `backend` filter lists every file outside `backend/` that a backend test
 reads (`test_security_controls`, `test_terms_and_consent`), plus the ops
@@ -112,18 +115,20 @@ default (`some`), the negated pattern matched every file outside `cpp/`, so
 
 ### What runs for each diff
 
-| Diff class | T1 | T3 | T4 | T5 |
-|------------|----|----|----|-----|
-| app Kotlin / resources | run | —† | — | —† |
-| androidTest only | run (compiles it) | —† | — | —† |
-| keep rules / app build script / version catalog | run | —† | — | run |
-| engine pin / JNI / `app/src/main/cpp/**` | — (‡) | run | — | run |
-| backend, rules, Terms, ops scripts | — | — | run | — |
-| `contracts/**` (shared wire bodies) | run | —† | run | —† |
-| console pages only | — | — | — | — |
-| docs only | — | — | — | — |
-| push to `main` | run | as the diff | run | as the diff |
-| weekly schedule / `full-ci` label / dispatch `full_ci` | run | run | run | run |
+| Diff class | T1 | T3 | T4 | Rules | T5 |
+|------------|----|----|----|-------|-----|
+| app Kotlin / resources | run | —† | — | — | —† |
+| androidTest only | run (compiles it) | —† | — | — | —† |
+| keep rules / app build script / version catalog | run | —† | — | — | run |
+| engine pin / JNI / `app/src/main/cpp/**` | — (‡) | run | — | — | run |
+| `backend/app/**`, `firestore.rules` | — | — | run | run | — |
+| `firestore-rules-tests/**` | — | — | — | run | — |
+| other backend, Terms, ops scripts | — | — | run | — | — |
+| `contracts/**` (shared wire bodies) | run | —† | run | — | —† |
+| console pages only | — | — | — | — | — |
+| docs only | — | — | — | — | — |
+| push to `main` | run | as the diff | run | run | as the diff |
+| weekly schedule / `full-ci` label / dispatch `full_ci` | run | run | run | run | run |
 
 † Also with the `e2e`, `release`, or `full-ci` label on the PR.
 ‡ `SemperNativeLib.kt` is also under `app/**`, so a change to it runs Tier 1 too.
@@ -147,6 +152,7 @@ When `github.head_ref` starts with `dependabot/`:
 | Ecosystem (from branch name) | Tiers |
 |------------------------------|-------|
 | `dependabot/pip/…` | gates + Tier 4 |
+| `dependabot/npm_and_yarn/…` | gates + Firestore rules (monthly, major-only npm entry for `/firestore-rules-tests` in `dependabot.yml`) |
 | `dependabot/gradle/…` | gates + Tier 1 |
 | `dependabot/github_actions/…` | gates only — deploy workflows are **not** exercised; read WIF / Cloud Run action inputs by hand before landing |
 | `dependabot/docker/…` | gates + Tier 4. Tier 4 runs on the runner's Python 3.12, not the image, so read the base-image change by hand too. `dependabot.yml` ignores Python minor/major bumps: only digest and patch updates arrive while the lock is compiled on 3.12 (TD-68) |
@@ -197,9 +203,13 @@ dispatch it on the PR branch (a Dependabot branch, its purpose), not on `main`.
 ./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64 \
   -Pandroid.testInstrumentationRunnerArguments.notPackage=com.sempermechanics.semper.benchmark  # tier 3
 cd backend && pip install -r requirements-test.txt && pytest tests/ -v      # tier 4
+cd firestore-rules-tests && npm ci && \
+  npx firebase emulators:exec --only firestore --project demo-rules --config firebase.json "node --test"  # rules (Java 21)
 
 # The two always-on gates
 python scripts/render_legal_pages.py --check                                # legal-pages
+python scripts/check_doc_paths.py                                           # legal-pages
+python scripts/check_framework_coverage.py                                  # legal-pages
 python scripts/check_console.py                                             # console-pages
 node --test "firebase-hosting/tests/*.test.mjs"                             # console-pages
 gitleaks detect --config .gitleaks.toml                                     # secret-scan (human)
@@ -274,7 +284,12 @@ Required secrets / vars (repo-level on Free private orgs is fine — Environment
 `GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA`; vars `FIREBASE_PROJECT_ID`,
 `SHARED_DRIVE_ID`, `SERVICE_ACCOUNT_EMAIL`, `AUTO_APPROVE_HD`, `ADMIN_EMAILS`,
 `SUPPORT_EMAIL`, `NOTIFY_FROM`, async provisioning `TASKS_QUEUE`,
-`TASKS_LOCATION`, `TASKS_TARGET_BASE_URL` and `TASKS_INVOKER_SA`.
+`TASKS_LOCATION`, `TASKS_TARGET_BASE_URL` and `TASKS_INVOKER_SA`; optional
+`CHECK_REVOKED_ON_STEP_UP`, `ENTITLEMENT_KID`, `ENTITLEMENT_OFFLINE_GRACE_DAYS`,
+`MIN_SUPPORTED_VERSION_CODE`, `RECOMMENDED_VERSION_CODE`, `KILL_SWITCHES`
+(space-separated) and `ENTITLEMENT_SIGNING_SECRET` (a Secret Manager secret name,
+mounted as `ENTITLEMENT_SIGNING_KEY` only when it exists), all in
+[ENVIRONMENTS.md](ENVIRONMENTS.md).
 
 `REQUIRE_ATTESTED_UPLOADS` is no longer passed (retired 2026-09-26, TD-45):
 `/uploads` is always device-attested. The "Describe live env" step warns while
@@ -309,6 +324,7 @@ Create the **`restore-drill`** environment before relying on the schedule — th
 | `ccache` | `ccache-arm64-<hash>`, `ccache-x86_64-<hash>` | Compiled object cache, per ABI, keyed on native sources (not commit SHA) so Kotlin-only runs exact-hit |
 | `~/.gradle` | managed by `setup-gradle`; `org.gradle.caching=true` | Dependency + task output cache |
 | pip | managed by `setup-python` in `backend-gate`, keyed on `backend/requirements.lock` + `requirements-test.txt` | Backend dependencies |
+| npm | managed by `setup-node` in `firestore-rules`, keyed on `firestore-rules-tests/package-lock.json` | Rules-test emulator and SDK |
 
 ### Shared steps
 

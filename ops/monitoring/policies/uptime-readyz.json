@@ -1,0 +1,44 @@
+{
+  "displayName": "semper: __SERVICE__ /readyz uptime check failing",
+  "documentation": {
+    "content": "The /readyz uptime check on __SERVICE__ failed from two or more regions. /readyz probes Firestore and Drive, so read the 503 detail code first (firestore_unreachable, drive_unhealthy, ...) in the access log, then recent deploys. Runbook: ops/monitoring/README.md#uptime-readyz",
+    "mimeType": "text/markdown"
+  },
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "/readyz failing from 2+ regions",
+      "conditionThreshold": {
+        "filter": "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" AND metric.label.check_id=\"__UPTIME_CHECK_ID__\" AND resource.type=\"uptime_url\"",
+        "aggregations": [
+          {
+            "alignmentPeriod": "1200s",
+            "perSeriesAligner": "ALIGN_NEXT_OLDER",
+            "crossSeriesReducer": "REDUCE_COUNT_FALSE",
+            "groupByFields": [
+              "resource.label.project_id",
+              "resource.label.host"
+            ]
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 1,
+        "duration": "600s",
+        "trigger": {
+          "count": 1
+        }
+      }
+    }
+  ],
+  "alertStrategy": {
+    "autoClose": "86400s"
+  },
+  "severity": "CRITICAL",
+  "notificationChannels": [
+    "__NOTIFICATION_CHANNEL__"
+  ],
+  "userLabels": {
+    "app": "semper",
+    "managed_by": "ops-monitoring"
+  }
+}

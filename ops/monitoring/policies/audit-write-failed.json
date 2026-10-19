@@ -1,0 +1,43 @@
+{
+  "displayName": "semper: __SERVICE__ audit write failed",
+  "documentation": {
+    "content": "audit.record() could not write a row to Firestore audit_logs. The request it belonged to still succeeded, so the compliance record now has a gap. Runbook: ops/monitoring/README.md#audit-write-failed",
+    "mimeType": "text/markdown"
+  },
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "audit_write_failed > 0",
+      "conditionThreshold": {
+        "filter": "metric.type=\"logging.googleapis.com/user/semper_audit_write_failed\" AND resource.type=\"cloud_run_revision\"",
+        "aggregations": [
+          {
+            "alignmentPeriod": "300s",
+            "perSeriesAligner": "ALIGN_DELTA",
+            "crossSeriesReducer": "REDUCE_SUM",
+            "groupByFields": [
+              "resource.label.service_name"
+            ]
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 0,
+        "duration": "0s",
+        "trigger": {
+          "count": 1
+        }
+      }
+    }
+  ],
+  "alertStrategy": {
+    "autoClose": "86400s"
+  },
+  "severity": "ERROR",
+  "notificationChannels": [
+    "__NOTIFICATION_CHANNEL__"
+  ],
+  "userLabels": {
+    "app": "semper",
+    "managed_by": "ops-monitoring"
+  }
+}

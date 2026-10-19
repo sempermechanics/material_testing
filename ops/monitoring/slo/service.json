@@ -1,0 +1,8 @@
+{
+  "displayName": "__SERVICE__ (Cloud Run, __REGION__)",
+  "custom": {},
+  "userLabels": {
+    "app": "semper",
+    "managed_by": "ops-monitoring"
+  }
+}

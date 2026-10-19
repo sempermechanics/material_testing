@@ -22,6 +22,14 @@ Shared beside them:
 - `messages.js` — `explain(error, sentences, fallback)`: a page's own sentence
   for a refusal code, else a common one, else the raw text.
 
+The institution page adds two modules of its own beside `institution.js`:
+`institution/roster-tools.js` (the seat-count tiles from `GET …/summary`,
+read after every roster load; Export roster CSV, `GET …/seats/export`; and the
+bulk import, `POST …/seats/import`, with a row-count preview and one result
+line per row) and `institution/audit-log.js` (the licence's audit log,
+`GET …/audit`, read on demand with a date range, a page of 50 at a time, and
+exported as CSV or JSON, up to 5,000 events each).
+
 The operator desk is split by card: `operator.js` (sign-in and the row-button
 routing), `state.js` (the loaded licences, shared as one object), `licences.js`
 (the table), `mint.js`, `edit.js` (Edit and To institution), `verify.js`,
@@ -43,7 +51,7 @@ not declare.
 |---|---|---|
 | `/login` (`/console/`) | Anyone with an account | Signs in and forwards to whichever dashboard below is theirs. |
 | `/account` (`/console/account`) | Anyone with an account | See the licence, its term, the seat and the saved analyses; give a floating seat back, move the licence to a new device, download an analysis. The last two need **2FA**. |
-| `/console/institution` | IT staff named in a licence's `adminEmails` | Add and remove roster members, withdraw an unclaimed invitation, see who holds a seat, put a member on hold, clear a device lock. |
+| `/console/institution` | IT staff named in a licence's `adminEmails` | Add and remove roster members (one at a time or up to 500 from a CSV), withdraw an unclaimed invitation, see who holds a seat, put a member on hold, clear a device lock; seat counts, roster CSV export, and the licence's audit log with CSV / JSON export. |
 | `/console/operator` | Semper staff (`ADMIN_EMAILS` / `role=admin`) **with 2FA** | Issue individual and institution licences, edit or upgrade one, revoke or delete a key (30-day restore), drive any institution roster, approve accounts. |
 
 ## The front door
@@ -461,6 +469,7 @@ fake Firebase SDK:
 | `operator.test.mjs` | The desk only for `role=admin`; licence rows (seats, term, cap, state, which actions apply — no Delete on a system Demo key, only Delete on a revoked row); Show revoked / Show Demo refetch; Load more without duplicates; the filter, and the backend search after a 300 ms pause; revoke and delete: who-is-affected confirmation, typed key, `stepUpForRevoke` (a stale session goes to Google carrying the licence, nothing sent), the sent request and its message, each refusal's wording; the return leg finishes a revoke or delete after one plain confirmation, once, reads a licence past the first page first, refuses a gone or already-revoked one, and says a failed leg sent nothing; Edit prefill, a later end without a typed key, an earlier one only with it, clearing the cap, a Demo key's cap locked, a Demo key's hand-off to Issue (address filled, Individual ticked, nothing sent), each `editError` code in the dialog; New device; the roster card on the staff routes, with the same actions as IT, and a refusal said in the card |
 | `account.test.mjs` | Licence pills and explanation (licensed, Demo, perpetual, expired past grace, ended in grace, shared seat held or not, a backend without `held`); Move licence hidden without a held licence; "N of M", "N analyses stored", and the inactive-licence wording, also when the analyses answer first; each analysis row's state, file count and stored size ("—" for failed or nothing, "… when done" while uploading), Download disabled until something finished, a specimen name never markup; Show more; give a seat back and move the licence (confirmation, request, the cooldown instant from `device_change_too_soon: <ISO>`, each refusal); Download saves `semper-analysis-<id>.zip`, and its refusals |
 | `institution.test.mjs` | Nothing of the roster for an address no licence names (or an unverified one); a failed check leaves the page usable; the deep link; "N of M seats taken" / "in use right now" with invites counted apart; member rows (New device, Hold / Resume, Remove; nothing for a removed member; invites with Withdraw); not-found wording; Hold / Resume / New device bodies and reload; Remove and Withdraw confirm first; `ACT_ERRORS`; adding a member (on now vs invited, each refusal, `claim_contended`); the licence picker; a roster longer than one page read to the end |
+| `institution-tools.test.mjs` | The seat-count tiles (attention marked, a failure said in place, a late answer for another licence dropped); Export roster CSV saves `roster-<keyPrefix>.csv`; the import's row-count preview and 500-row stop, a chosen file, the sent body, every row's result, a roster reload only when someone was added, each whole-file refusal; another licence clears the results, one not yours hides the tools; the audit log read on demand with its dates, members named by address, Older events, an empty range, `invalid_audit_range`, a late page dropped, CSV and JSON exports and the 5,000-event note |
 
 How the fake gets in: `tests/harness.mjs` calls `module.register` with
 `tests/firebase-hooks.mjs`, whose `resolve` hook maps the two

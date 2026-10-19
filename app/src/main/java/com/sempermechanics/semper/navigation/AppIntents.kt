@@ -14,7 +14,13 @@ object AppIntents {
     private const val SEAT_REQUIRED =
         "com.sempermechanics.semper.ui.limit.SeatRequiredActivity"
 
+    private const val UPDATE_REQUIRED =
+        "com.sempermechanics.semper.ui.limit.UpdateRequiredActivity"
+
     fun sessionLimit(context: Context): Intent = gate(context, SESSION_LIMIT)
+
+    /** The "this version is no longer supported" screen (A6.1). */
+    fun updateRequired(context: Context): Intent = gate(context, UPDATE_REQUIRED)
 
     /** The "someone else has the seat" screen, for a floating institution license. */
     fun seatRequired(context: Context): Intent = gate(context, SEAT_REQUIRED)

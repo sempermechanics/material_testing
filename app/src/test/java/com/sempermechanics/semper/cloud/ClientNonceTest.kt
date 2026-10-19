@@ -10,6 +10,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -43,6 +44,13 @@ class ClientNonceTest {
         assertFalse(ClientNonce.isUsable())
         ClientNonce.observeServerTime(serverMs = 1_800_000_000_000L, nowMs = 1_800_000_000_000L)
         assertTrue(ClientNonce.isUsable())
+    }
+
+    @Test
+    fun `the server's clock now follows the learned offset`() {
+        assertNull(ClientNonce.serverNowMs(nowMs = 5_000L))
+        ClientNonce.observeServerTime(serverMs = 1_800_000_000_000L, nowMs = 1_799_999_000_000L)
+        assertEquals(1_800_000_060_000L, ClientNonce.serverNowMs(nowMs = 1_799_999_060_000L))
     }
 
     @Test

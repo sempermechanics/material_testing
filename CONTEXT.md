@@ -114,7 +114,7 @@ emulator (`scripts/micro_ab.py`, [TESTING.md](docs/app/TESTING.md)); the phone-r
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-17)
+## Current state (2026-10-18)
 
 - **Deployed.** Cloud Run `semper-api` behind API Gateway `semper-gw`, and staging
   `semper-api-staging` behind `semper-gw-staging`, from `c295639d` (2026-10-14; gateways
@@ -126,31 +126,33 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md)). What went out
   when, the monthly restore drill included: [CHANGELOG](docs/ops/CHANGELOG.md). Project
   IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
-- **App id `com.sempermechanics.semper`** ([ADR-019](docs/adr/ADR-019-sempermechanics-app-id.md),
-  2026-10-05); material_testing moves to `com.sempermechanics.materialtesting` when it
-  merges this code ([FORK_SYNC](docs/ops/FORK_SYNC.md)).
+- **App id `com.sempermechanics.semper`** ([ADR-019](docs/adr/ADR-019-sempermechanics-app-id.md));
+  material_testing becomes `com.sempermechanics.materialtesting` when it merges this code.
 - **App release `v1.2-beta.4`** (beta, versionCode 1036, from `33dce87d`, 2026-10-17;
   engine `23034fe`, 0.4.2). It is the first release under the new app id, so it installs
   beside the old app, not over it. Contents and install steps: the GitHub Release and
   [CHANGELOG](docs/ops/CHANGELOG.md). Nothing is on `main` beyond it.
-- **material_testing shares this history** and merges this `main` (last at `8ba7081`,
-  material_testing#133, 2026-10-15; [FORK_SYNC.md](docs/ops/FORK_SYNC.md)), which took
-  #434's reader and writer together. It released `v1.4-beta.2` from `d08aae07` on
-  2026-10-17.
+- **Branch `claude/new-session-jhfhj9`** (not merged, not deployed): the readiness-framework
+  cross-check ([gate](docs/ops/PRODUCTION_READINESS_GATE.md#framework-cross-check-2026-10-18),
+  TD-214–TD-269, FI-17–FI-23). Built: signed offline entitlement ([ADR-023](docs/adr/ADR-023-signed-offline-entitlement.md)),
+  **minSdk 30**, version gate and kill switches on `/v1/config`, EMM config, revocation on step-up,
+  roster import/export/summary and per-licence audit export, rules tests, APK inspection, AAB,
+  monitoring as code. Owed outside the repo: Auth IAM grant (TD-214), signing key and pinned
+  public key (TD-215), index then backend then gateway deploy (TD-216), `apply-monitoring.sh`
+  and the posture check (TD-217), App Check enforce (TD-226), Play items (TD-229–TD-232);
+  first CI run of the Android half (TD-219).
+- **material_testing** merges this `main` (last `8ba7081`, material_testing#133,
+  [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); it released `v1.4-beta.2` (`d08aae07`) 2026-10-17.
 - **CI.** Tiers follow the diff, coverage floors rise with every test PR
   ([TESTING.md](docs/app/TESTING.md#coverage-floors)), and `main` requires `CI OK`.
-- **Owed.** A device smoke of `v1.2-beta.4` ([RELEASING.md](docs/ops/RELEASING.md) step 5),
-  installed beside the old app after a backup there. At the 0.4.2 pin: the on-device
-  characterization (TD-212). Pixel 6 runs for #435: `HotPathMicroBenchmark` (`buildReport_oneFrame`,
-  `generateDeformedHeatmap_oneFrame`, `gifEncode_*`, `decodeDatFile_oneFrame`) and
-  `ViewerScrubBenchmark`. Optional: a Hosting deploy (`scripts/deploy-console.sh`) for
-  the account console's backup-name column (#429). The public release (website / Play)
-  with each PR's emulator and Pixel checks, ADR-015's queued-work upgrade check and the
-  material_testing ports #298–#302; a licensed-account smoke of share, PDF and Delete
-  everywhere; the transfer notifications and AVI import on a device
+- **Owed.** A device smoke of `v1.2-beta.4` ([RELEASING.md](docs/ops/RELEASING.md) step 5).
+  At the 0.4.2 pin: the on-device characterization (TD-212). Pixel 6 runs for #435
+  (`HotPathMicroBenchmark`, `ViewerScrubBenchmark`). Optional: a Hosting deploy for #429.
+  The public release (website / Play) with each PR's emulator and Pixel checks, ADR-015's
+  queued-work upgrade check and the material_testing ports #298–#302; a licensed-account
+  smoke of share, PDF and Delete; transfer notifications and AVI import on a device
   ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a); Material Testing beside Semper on one
-  phone, and its App Check; the privacy-policy values (TD-36); unchecked rows in
-  [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md).
+  phone; the privacy-policy values (TD-36); unchecked rows in the gate.
 - **Look it up; this list rots.** `gh pr list --state open`, [CHANGELOG.md](docs/ops/CHANGELOG.md), [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
 ## Traps

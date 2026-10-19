@@ -1,0 +1,25 @@
+{
+  "spec": {
+    "template": {
+      "metadata": {
+        "annotations": {}
+      },
+      "spec": {
+        "containers": [
+          {
+            "env": [
+              {
+                "name": "APP_CHECK_MODE",
+                "value": "off"
+              },
+              {
+                "name": "ENTITLEMENT_SIGNING_KEY",
+                "value": "-----BEGIN PRIVATE KEY-----"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

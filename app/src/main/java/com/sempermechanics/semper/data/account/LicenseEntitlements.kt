@@ -1,7 +1,11 @@
 package com.sempermechanics.semper.data.account
 
 import android.content.Context
+import com.sempermechanics.semper.data.account.entitlement.EntitlementPolicy
+import com.sempermechanics.semper.data.account.entitlement.EntitlementStore
+import com.sempermechanics.semper.data.account.entitlement.TokenBound
 import com.sempermechanics.semper.data.net.AppRemoteConfig
+import com.sempermechanics.semper.data.policy.AppPolicy
 
 /**
  * Client view of the account's demo / licensed entitlements.
@@ -9,6 +13,19 @@ import com.sempermechanics.semper.data.net.AppRemoteConfig
  * The backend is the source of truth after [AppRemoteConfig.apply]. Until then
  * the app fails closed to demo: 25 saved analyses, no cloud backup/restore,
  * no share.
+ *
+ * Two more conditions narrow what the cached config allows, never widen it:
+ *
+ * - **The signed entitlement token** ([EntitlementStore]), when this build
+ *   pins a signing key and the backend sends one. Offline, a licence then
+ *   lasts until the token's `graceUntil`; past it, on a clock rollback, or
+ *   when the stored record was altered, entitlements drop to demo. Nothing
+ *   local is locked: analysis carries on within demo's limits, and every
+ *   saved analysis stays open, viewable and exportable. Without pins or a
+ *   token, or with a token that does not verify here, this is exactly the
+ *   behaviour before tokens.
+ * - **Device and fleet policy** ([AppPolicy]): the backend's kill switches
+ *   and the EMM's managed configuration.
  */
 @Suppress("TooManyFunctions")
 object LicenseEntitlements {
@@ -31,18 +48,41 @@ object LicenseEntitlements {
 
     private const val MILLIS_PER_DAY = 24L * 60 * 60 * 1000
 
-    fun mode(context: Context): String {
-        val stored = AppRemoteConfig.mode(context)
-        return if (stored == MODE_LICENSED) MODE_LICENSED else MODE_DEMO
-    }
+    fun mode(context: Context): String =
+        if (serverSaysLicensed(context) && tokenBound(context).licensed) MODE_LICENSED else MODE_DEMO
 
     fun isLicensed(context: Context): Boolean = mode(context) == MODE_LICENSED
 
+    /**
+     * What the cached `/v1/config` says, before the token's bound. The seat
+     * gates read this: a seat is the server's to grant or lapse, and an
+     * offline token running out must not stop the heartbeat of a seat the
+     * server still counts as held.
+     */
+    fun serverSaysLicensed(context: Context): Boolean = AppRemoteConfig.mode(context) == MODE_LICENSED
+
     fun cloudBackupEnabled(context: Context): Boolean =
-        isLicensed(context) && AppRemoteConfig.cloudBackupEnabled(context)
+        isLicensed(context) &&
+            AppRemoteConfig.cloudBackupEnabled(context) &&
+            tokenBound(context).backup &&
+            AppPolicy.backupAllowed(context)
+
+    /**
+     * Whether a backup may be pulled down now (restore, Save to Files from
+     * the cloud): [cloudBackupEnabled], unless the restore kill switch is on
+     * or this build must update first.
+     */
+    fun restoreEnabled(context: Context): Boolean = cloudBackupEnabled(context) && AppPolicy.restoreAllowed(context)
 
     fun shareEnabled(context: Context): Boolean =
-        isLicensed(context) && AppRemoteConfig.shareEnabled(context)
+        isLicensed(context) &&
+            AppRemoteConfig.shareEnabled(context) &&
+            tokenBound(context).share &&
+            AppPolicy.shareAllowed(context)
+
+    /** The most the entitlement token allows; unbounded when tokens are not in use. */
+    private fun tokenBound(context: Context): TokenBound =
+        EntitlementPolicy.bound(EntitlementStore.status(context), DEMO_MAX_ANALYSES)
 
     /**
      * `""`, `"individual"`, or `"institution"`. Display/support metadata — an
@@ -79,13 +119,15 @@ object LicenseEntitlements {
      * `analysisCap` only fire for them at the licensed ceiling. Without this
      * a member with no seat would sail past every existing check.
      *
-     * Reads [isLicensed] as the answer rather than the cached lease date. The
+     * Reads [serverSaysLicensed] as the answer rather than the cached lease
+     * date, and not [isLicensed]: a token past its offline grace drops to
+     * demo's limits, not to this screen. The
      * backend already folds the lease into `mode` — it resolves demo the
      * moment a seat lapses — so trusting a local timestamp instead would just
      * be a second, staler opinion of the same thing.
      */
     fun isSeatRequiredToStart(context: Context): Boolean =
-        needsSeat(context) && !isLicensed(context)
+        needsSeat(context) && !serverSaysLicensed(context)
 
     /** How often to renew a held seat while work is in progress, in minutes. */
     fun seatHeartbeatMinutes(context: Context): Int =
@@ -158,8 +200,12 @@ object LicenseEntitlements {
      * demo is 25 and a licensed account is uncapped.
      */
     fun analysisCap(context: Context): Int {
-        if (hasUnlimitedAnalysis(context)) return Int.MAX_VALUE
         val remote = AppRemoteConfig.maxSessions(context)
-        return if (remote > 0) remote else DEMO_MAX_ANALYSES
+        val cached = when {
+            hasUnlimitedAnalysis(context) -> Int.MAX_VALUE
+            remote > 0 -> remote
+            else -> DEMO_MAX_ANALYSES
+        }
+        return EntitlementPolicy.cap(cached, tokenBound(context))
     }
 }

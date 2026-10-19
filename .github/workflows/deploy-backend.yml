@@ -207,6 +207,36 @@ jobs:
             fi
           done
 
+      # The entitlement signing key reaches the service as a Secret Manager
+      # reference, never a plain env value. It is mounted only when the
+      # ENTITLEMENT_SIGNING_SECRET variable names a secret and that secret
+      # exists: Cloud Run refuses a revision whose secret is missing, and an
+      # environment that has not created the key yet must still deploy (the
+      # backend then issues no signed entitlements). Reading the secret's
+      # metadata needs roles/secretmanager.viewer for the deploy SA; the
+      # runtime SA needs roles/secretmanager.secretAccessor on the secret.
+      - id: runtime_secrets
+        name: Resolve runtime secrets
+        env:
+          PROJECT: ${{ github.event.inputs.project }}
+          ENTITLEMENT_SECRET: ${{ vars.ENTITLEMENT_SIGNING_SECRET }}
+        run: |
+          set -euo pipefail
+          lines="RESEND_API_KEY=resend-api-key:latest"
+          if [ -z "$ENTITLEMENT_SECRET" ]; then
+            echo "::notice::ENTITLEMENT_SIGNING_SECRET is not set: deploying without ENTITLEMENT_SIGNING_KEY."
+          elif gcloud secrets describe "$ENTITLEMENT_SECRET" --project "$PROJECT" --format='value(name)' >/dev/null 2>/tmp/secret-err; then
+            lines="$lines"$'\n'"ENTITLEMENT_SIGNING_KEY=${ENTITLEMENT_SECRET}:latest"
+            echo "Mounting ENTITLEMENT_SIGNING_KEY from secret ${ENTITLEMENT_SECRET}."
+          else
+            echo "::warning::Secret ${ENTITLEMENT_SECRET} not found or not readable in ${PROJECT} ($(head -c 200 /tmp/secret-err | tr '\n' ' ')). Deploying without ENTITLEMENT_SIGNING_KEY."
+          fi
+          {
+            echo "secrets<<SECRETS_EOF"
+            echo "$lines"
+            echo "SECRETS_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       # Deploy the candidate WITHOUT shifting live traffic when a prior revision
       # exists. A prior deploy with no_traffic=false still left 100% on the
       # previous revision while smoke ran (new revision Ready+Retired with zero
@@ -228,8 +258,8 @@ jobs:
           # variable must resolve to the safe value (demo cap 25, MFA on, App
           # Check off — `enforce` would 403 every installed pre-App-Check build),
           # never to an empty string the backend would parse as something else.
-          # CONSOLE_ORIGINS is space-separated: this block splits pairs on
-          # commas, so a comma inside a value truncates it.
+          # CONSOLE_ORIGINS and KILL_SWITCHES are space-separated: this block
+          # splits pairs on commas, so a comma inside a value truncates it.
           env_vars: |-
             GOOGLE_CLOUD_PROJECT=${{ github.event.inputs.project }}
             FIREBASE_PROJECT_ID=${{ vars.FIREBASE_PROJECT_ID }}
@@ -249,8 +279,17 @@ jobs:
             APP_CHECK_MODE=${{ vars.APP_CHECK_MODE || 'off' }}
             SELF_DEVICE_CHANGE_COOLDOWN_DAYS=${{ vars.SELF_DEVICE_CHANGE_COOLDOWN_DAYS || '30' }}
             CONSOLE_ORIGINS=${{ vars.CONSOLE_ORIGINS || 'https://app.sempermechanics.com https://indicvision-dic-app-auth.firebaseapp.com' }}
-          secrets: |-
-            RESEND_API_KEY=resend-api-key:latest
+            CHECK_REVOKED_ON_STEP_UP=${{ vars.CHECK_REVOKED_ON_STEP_UP || 'false' }}
+            ENTITLEMENT_KID=${{ vars.ENTITLEMENT_KID || 'ent-1' }}
+            ENTITLEMENT_OFFLINE_GRACE_DAYS=${{ vars.ENTITLEMENT_OFFLINE_GRACE_DAYS || '14' }}
+            MIN_SUPPORTED_VERSION_CODE=${{ vars.MIN_SUPPORTED_VERSION_CODE || '0' }}
+            RECOMMENDED_VERSION_CODE=${{ vars.RECOMMENDED_VERSION_CODE || '0' }}
+            MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING=${{ vars.MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING || '0' }}
+            RECOMMENDED_VERSION_CODE_MATERIAL_TESTING=${{ vars.RECOMMENDED_VERSION_CODE_MATERIAL_TESTING || '0' }}
+            KILL_SWITCHES=${{ vars.KILL_SWITCHES }}
+          # RESEND_API_KEY always; ENTITLEMENT_SIGNING_KEY when its secret exists
+          # (runtime_secrets above).
+          secrets: ${{ steps.runtime_secrets.outputs.secrets }}
           flags: >-
             ${{ steps.meta.outputs.ingress }} --cpu=1 --memory=512Mi
             --min-instances=${{ vars.MIN_INSTANCES || '0' }}

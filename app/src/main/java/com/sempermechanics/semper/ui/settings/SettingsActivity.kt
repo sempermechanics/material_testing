@@ -201,6 +201,10 @@ class SettingsActivity : AppCompatActivity() {
      * after SAF CreateDocument returns a destination.
      */
     private fun startBundleDownloadToUri(pending: PendingBundleDownload, destUri: Uri) {
+        if (!LicenseEntitlements.restoreEnabled(this)) {
+            Feedback.toast(this, R.string.restore_paused, long = true)
+            return
+        }
         if (pending.cloudSessionId.isBlank()) {
             Feedback.toast(this, R.string.download_analysis_failed, long = true)
             return
@@ -273,6 +277,10 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun restoreBackup(entry: AnalysisEntry) {
         val cloud = entry.cloud ?: return
+        if (!LicenseEntitlements.restoreEnabled(this)) {
+            Feedback.toast(this, R.string.restore_paused, long = true)
+            return
+        }
         val key = entry.downloadKey()
         if (analyses.isBusy(key)) {
             analyses.markBusy(key)

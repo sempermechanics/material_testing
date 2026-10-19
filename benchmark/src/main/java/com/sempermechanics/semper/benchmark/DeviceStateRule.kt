@@ -67,8 +67,8 @@ class DeviceStateRule : TestWatcher() {
         val swap = swapUsedMb()
         return JSONObject().apply {
             put("timeMs", System.currentTimeMillis())
-            // PowerManager.THERMAL_STATUS_NONE is 0; −1 means the API (29+) is missing.
-            put("thermalStatus", if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) power.currentThermalStatus else -1)
+            // PowerManager.THERMAL_STATUS_NONE is 0 (the API is 29+; minSdk is 30).
+            put("thermalStatus", power.currentThermalStatus)
             battery?.let {
                 put("batteryTempC", it.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) / TENTHS)
                 put("batteryPct", it.getIntExtra(BatteryManager.EXTRA_LEVEL, -1))

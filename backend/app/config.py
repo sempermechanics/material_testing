@@ -1,5 +1,8 @@
+import logging
 import os
 import re
+
+from .apps import MATERIAL_TESTING
 
 
 def _env_int(name: str, default: str) -> int:
@@ -10,6 +13,25 @@ def _env_int(name: str, default: str) -> int:
         return int(raw)
     except ValueError as e:
         raise RuntimeError(f"Environment variable {name}={raw!r} is not an integer") from e
+
+
+#: Features `KILL_SWITCHES` may name. The app ignores any other value.
+KILL_SWITCH_NAMES = ("backup", "share", "restore", "upload")
+
+
+def parse_kill_switches(raw: str) -> list[str]:
+    """The known kill switches in `raw`, in canonical order, de-duplicated.
+
+    An unknown name is logged and dropped: a typo must not stop the service
+    starting, and the app could not act on it anyway."""
+    named = {v for v in re.split(r"[\s,;]+", raw.strip().lower()) if v}
+    unknown = sorted(named.difference(KILL_SWITCH_NAMES))
+    if unknown:
+        logging.getLogger("semper").warning(
+            "KILL_SWITCHES: ignoring unknown value(s) %s; allowed: %s",
+            unknown, ", ".join(KILL_SWITCH_NAMES),
+        )
+    return [n for n in KILL_SWITCH_NAMES if n in named]
 
 
 class Settings:
@@ -206,6 +228,68 @@ class Settings:
     # for what it is. Flipping to `enforce` before the fleet has updated locks
     # out every older build, so it is deliberately not the default.
     APP_CHECK_MODE = os.environ.get("APP_CHECK_MODE", "off").strip().lower()
+
+    # --- revocation on the browser step-up (A3.4) ---------------------------
+    # On: a browser caller on the second-factor path (`deps.step_up_check`,
+    # via="mfa") has its ID token re-verified with check_revoked=True, so a
+    # user revoked or disabled in Firebase Auth stops changing anything at
+    # once rather than when the token expires (up to an hour). The device-
+    # signed path is not affected: a revoked device fails its own check.
+    #
+    # PREREQUISITE: the runtime service account must hold
+    # `roles/firebaseauth.admin` on the Auth project (FIREBASE_PROJECT_ID).
+    # The check reads the user record, and without that grant it fails, which
+    # this setting treats as a refusal (fail closed, 401 invalid_token, logged
+    # as `revocation_check_failed`). Hence off by default: grant the role,
+    # then turn this on.
+    CHECK_REVOKED_ON_STEP_UP = os.environ.get(
+        "CHECK_REVOKED_ON_STEP_UP", "false",
+    ).strip().lower() in ("1", "true", "yes")
+
+    # --- signed entitlement (A4.1 / A4.3) -----------------------------------
+    # PEM of an EC P-256 private key. When set, GET /v1/config adds
+    # `entitlement`: a compact JWS (ES256) the app verifies offline against
+    # its pinned public keys (backend/app/entitlement_token.py). Read from
+    # Secret Manager at deploy (--set-secrets), never --set-env-vars and never
+    # the repo. Empty = no token is issued and nothing fails.
+    ENTITLEMENT_SIGNING_KEY = os.environ.get("ENTITLEMENT_SIGNING_KEY", "")
+    # Names the key in the token header, so the app can pin the next key
+    # beside the current one and a rotation needs no flag day.
+    ENTITLEMENT_KID = os.environ.get("ENTITLEMENT_KID", "ent-1")
+    # How long a token lets the app run its entitlement offline. A timed
+    # licence caps it at its end plus its own grace; a floating seat at the
+    # lease's end.
+    ENTITLEMENT_OFFLINE_GRACE_DAYS = _env_int("ENTITLEMENT_OFFLINE_GRACE_DAYS", "14")
+
+    # --- release gate and kill switches (A6.1 / A6.4) -----------------------
+    # Published by GET /v1/config. The server refuses nothing on them: the app
+    # compares its own versionCode and blocks (below minimum) or nudges (below
+    # recommended). 0 = no gate.
+    #
+    # Per app: Semper and Material Testing share this service, and each
+    # numbers its builds from its own release run counter, so one number for
+    # both would retire the other app's builds by accident. The unsuffixed
+    # pair is Semper's; `release_gate(app)` picks the caller's.
+    MIN_SUPPORTED_VERSION_CODE = _env_int("MIN_SUPPORTED_VERSION_CODE", "0")
+    RECOMMENDED_VERSION_CODE = _env_int("RECOMMENDED_VERSION_CODE", "0")
+    MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING = _env_int(
+        "MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING", "0")
+    RECOMMENDED_VERSION_CODE_MATERIAL_TESTING = _env_int(
+        "RECOMMENDED_VERSION_CODE_MATERIAL_TESTING", "0")
+
+    def release_gate(self, app: str) -> tuple[int, int]:
+        """(minSupportedVersionCode, recommendedVersionCode) for `app`
+        (`apps.SEMPER` / `apps.MATERIAL_TESTING`): only that app's builds are
+        compared with them."""
+        if app == MATERIAL_TESTING:
+            return (self.MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING,
+                    self.RECOMMENDED_VERSION_CODE_MATERIAL_TESTING)
+        return self.MIN_SUPPORTED_VERSION_CODE, self.RECOMMENDED_VERSION_CODE
+    # Features the app must switch off, fleet-wide, without a release: any of
+    # backup, share, restore, upload. Separated by whitespace, `;` or `,`
+    # (prefer spaces: the deploy action splits env_vars on commas). An unknown
+    # name is dropped with a warning rather than failing the start.
+    KILL_SWITCHES = parse_kill_switches(os.environ.get("KILL_SWITCHES", ""))
 
     # Where "a new user is waiting for approval" mail goes. Same address the app
     # shows in Settings -> Help & support and on the pending-approval screen.

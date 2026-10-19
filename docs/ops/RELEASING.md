@@ -69,6 +69,67 @@ Check the R8 mapping reached Crashlytics (the release build uploads it); the wor
      `RELEASING.md` — and/or publish on Play Store.
    - Announce on https://sempermechanics.com/ / Discussions on
      `sempermechanics/website` (not this private repo).
+   - For Play, upload the **`release-aab`** artifact (or the `.aab` attached to the
+     GitHub Release), not the APK; see "Staged rollout on Google Play" below.
+
+**Release notes rule.** Every release's notes name what changed for the user and
+every customer-visible backend change it depends on. The first release built
+after 2026-10-18 must say that **Android 11 (API 30) is now the minimum**: phones
+on Android 7–10 cannot install or update it, and keep the version they have,
+which the backend may later gate (`MIN_SUPPORTED_VERSION_CODE`, or the `_MATERIAL_TESTING` pair for Material Testing).
+
+## Staged rollout on Google Play
+
+Readiness items 1.1, 6.3 and Part D5
+([READINESS_FRAMEWORK_2026-10.md](READINESS_FRAMEWORK_2026-10.md)). Nothing here
+has been rehearsed: there is no Play listing or closed track yet (TD-229, TD-231).
+Play does not allow a staged rollout for an app's first production release, and a
+staged percentage never rises by itself.
+
+| Stage | Users | Minimum soak before the next stage |
+|---|---|---|
+| Internal / closed track | testers | until every halt signal below has data |
+| 1 | 5 % | 24 h, and at least 7 days of the closed track behind it for a release that changes licensing |
+| 2 | 20 % | 24 h |
+| 3 | 50 % | 48 h |
+| 4 | 100 % | — |
+
+**Halt criteria.** Halt the rollout (Play Console → Release → Halt) when any of
+these holds for the new version. The numbers are starting values, to be tuned
+after the first rollouts:
+
+- **Crash-free users** below **99.5 %** (Crashlytics, the release's version) once at
+  least 200 users run it, or a new crash cluster in licensing, upload or restore.
+- **User-perceived ANR rate** above **0.47 %**, Play's bad-behaviour threshold
+  (Android vitals).
+- **Activation errors:** the share of `semper_activation` lines with
+  `outcome="refused"` on the new `appVersion` more than 5 points above the previous
+  version's 7-day share, with at least 20 attempts (`ops/monitoring/metrics/semper_activation.yaml`).
+  The same for `semper_checkout`, leaving out `no_floating_seat`, which is a full pool.
+- **Device-lock drops:** `semper_devlock_drop` with `stage="mismatch"` rising on the
+  new version.
+- **Refusals:** the `auth-denied-spike` alert, or any `AUTH_DENIED` with
+  `stage="app_check"` from the new version.
+- **Backend:** the `http-5xx-ratio` or `slo-burn-fast` alert while the rollout is
+  under way.
+
+Halting stops new installs only; users who already updated stay on the new build.
+That is why the levers below, not Play, are the rollback.
+
+## Rollback levers
+
+Play cannot recall a build. In order of speed:
+
+| Lever | Effect | How |
+|---|---|---|
+| `KILL_SWITCHES` | Switches off `backup`, `share`, `restore` or `upload` in every build that reads it, without a release | Repo variable, space-separated, then `deploy-backend.yml` ([ENVIRONMENTS.md](ENVIRONMENTS.md)) |
+| `MIN_SUPPORTED_VERSION_CODE` | Semper builds below it keep their analyses, viewer and exports, and cannot start an analysis, upload or restore until updated. `RECOMMENDED_VERSION_CODE` only nudges. Material Testing has its own pair, `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` / `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING`, because its versionCodes come from its own release counter (`settings.release_gate(app)`, `backend/app/config.py:280-287`) | Repo variable, redeploy. Raise the recommended one a release ahead. A local debug build at versionCode 1 is never gated |
+| `ENTITLEMENT_OFFLINE_GRACE_DAYS` | How long newly issued entitlement tokens hold offline; the fail-open / fail-closed lever for licensing. Tokens already issued keep theirs | Repo variable, redeploy ([ADR-023](../adr/ADR-023-signed-offline-entitlement.md)) |
+| `APP_CHECK_MODE` | `enforce` back to `monitor` or `off` | [INCIDENT_RESPONSE.md](INCIDENT_RESPONSE.md) |
+| Backend revision | Traffic back to the previous revision | `gcloud run services update-traffic semper-api --to-revisions=<previous>=100 --region asia-south1`; the image is kept as `rollback-prev` ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A7). Firestore is never rolled back by a deploy |
+| Hotfix | A new build with a higher `versionCode` | The release workflow's run number makes every release higher than the last (Versioning above); roll it out with the same stages, faster soak if the fix is narrow |
+
+None of these levers has been drilled on a running service yet (TD-220).
 
 ## CI-based release (workflow_dispatch)
 
@@ -115,7 +176,21 @@ so none of the signing steps run if any of the above fails.
    build-tools print `V2 Signer: certificate SHA-256 digest:` (and similar);
    older ones used `Signer #1 certificate SHA-256 digest:`. The workflow accepts
    both.
-5. **Verifies `assetlinks.json` lists the release certificate.** It extracts the
+5. **Inspects the APK's hardening** with
+   [`scripts/check_release_apk.py`](../../scripts/check_release_apk.py) (aapt2
+   from the newest build-tools, plus a scan of every `classes*.dex`). It fails
+   the release when the APK is debuggable or `testOnly`, ships a component or
+   class from the debug source set (`app/src/debug`, e.g.
+   `DebugViewerSeedActivity`), contains `DebugAppCheckProviderFactory` or a
+   firebase-appcheck-debug version file, allows cleartext (manifest or network
+   security config), has a `minSdkVersion` other than `minSdk` in
+   `app/build.gradle.kts`, or R8's `mapping.txt` is missing or empty. It
+   **warns** when no `sha256/…` pin is compiled in, i.e. the
+   `SEMPER_API_CERT_PINS` secret was empty. CI tier 5 runs the same check on
+   its own release build. Locally:
+   `python3 scripts/check_release_apk.py app-release.apk --mapping mapping.txt`.
+6. **Verifies the bundle's signature** (`jarsigner -verify` on the `.aab`).
+7. **Verifies `assetlinks.json` lists the release certificate.** It extracts the
    SHA-256 digest from the signed APK, reformats it to the colon-separated
    uppercase form Digital Asset Links uses, and greps
    `firebase-hosting/public/.well-known/assetlinks.json` for it. If the
@@ -127,8 +202,11 @@ so none of the signing steps run if any of the above fails.
    back to a browser disambiguation dialog — phishable, and indistinguishable from
    an app bug. Rotating the signing key or moving to Play App Signing means adding
    the new fingerprint here and redeploying Hosting.
-6. Uploads two artifacts: the APK, and **`release-mapping-<version>`**, the R8
-   mapping file (90-day retention, `if-no-files-found: error`).
+8. Uploads three artifacts: the APK, the **`release-aab`** Android App Bundle
+   (built in the same Gradle run as the APK, `:app:bundleRelease`, so both
+   share one R8 mapping; for a Play Console upload by hand: nothing here uploads
+   to Play), and **`release-mapping-<version>`**, the R8 mapping file (90-day
+   retention, `if-no-files-found: error`).
 
 **The R8 mapping is not attached to the GitHub Release, deliberately.** It is the
 deobfuscation key — publishing it would undo the obfuscation for everyone — but
@@ -140,8 +218,8 @@ artifact is only the fallback for a manual `retrace`. Local builds never upload.
 
 ### `publish`
 
-Creates the **GitHub Release** with the APK attached, gated on the `release`
-environment.
+Creates the **GitHub Release** with the APK and the AAB attached, gated on the
+`release` environment.
 
 ### Required secrets (repo or `release` environment)
 
@@ -151,12 +229,14 @@ environment.
 | `KEY_ALIAS` | Signing key alias |
 | `KEY_PASSWORD` | Key password |
 | `STORE_PASSWORD` | Keystore password |
+| `SEMPER_API_CERT_PINS` | Optional. Comma-separated `sha256/…=` CertificatePinner pins for the API host, passed to Gradle as env. Empty ships system trust only, and the APK inspection warns |
 
 ### Required variables (repo or `release` environment)
 
 | Variable | Description |
 |----------|-------------|
 | `SEMPER_API_BASE_URL` | HTTPS base URL of the API Gateway (preferred) or Cloud Run service |
+| `SEMPER_ENTITLEMENT_PUBKEYS` | Public key(s) the app verifies signed entitlements with, passed to Gradle as env. Public material, so a variable, not a secret |
 
 ### Backend staging / production
 

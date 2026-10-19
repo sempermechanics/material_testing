@@ -33,6 +33,8 @@ NOT_FIRESTORE_GETS = frozenset({
     ("observability.py", "_request_id"),
     ("observability.py", "_uid"),
     ("observability.py", "_device_id"),
+    ("observability.py", "_app_id"),
+    ("observability.py", "_app_version"),
     ("notify.py", "_work"),
 })
 

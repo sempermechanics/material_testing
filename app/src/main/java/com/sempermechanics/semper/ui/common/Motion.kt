@@ -2,7 +2,6 @@ package com.sempermechanics.semper.ui.common
 
 import android.animation.ValueAnimator
 import android.content.Context
-import android.os.Build
 import android.provider.Settings
 import android.view.View
 import android.view.ViewGroup
@@ -51,8 +50,7 @@ object Motion {
             Settings.Global.ANIMATOR_DURATION_SCALE,
             1f,
         )
-        val enabled = Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ValueAnimator.areAnimatorsEnabled()
-        return scale == 0f || !enabled
+        return scale == 0f || !ValueAnimator.areAnimatorsEnabled()
     }
 
     /** One-shot entrance: rise + fade. Use on a root/card when a screen appears. */

@@ -1,6 +1,7 @@
 """PII-safe structured operational logging and API error types."""
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -11,14 +12,35 @@ from typing import Any, Iterable
 _request_id: ContextVar[str | None] = ContextVar("request_id", default=None)
 _uid: ContextVar[str | None] = ContextVar("uid", default=None)
 _device_id: ContextVar[str | None] = ContextVar("device_id", default=None)
+# What the caller says it is: the `X-App-Id` as the access log records it
+# (`apps.logged_application_id`) and the `X-App-Version` versionCode. Bound by
+# the edge middleware for the whole request, so every event a request emits —
+# activation, checkout, a device-lock drop — can be counted per app and build
+# without each call site passing them.
+_app_id: ContextVar[str | None] = ContextVar("app_id", default=None)
+_app_version: ContextVar[int | None] = ContextVar("app_version", default=None)
 
 _ALLOWED = frozenset({
     "requestId", "uid", "deviceId", "event", "outcome", "errorCode",
     "dependency", "latencyMs", "method", "path", "status", "attempt",
     "maxAttempts", "httpStatus", "count", "stage",
     "opClass", "routeTemplate", "fileCount", "frameCount", "folderMs",
-    "appId",
+    "appId", "appVersion", "licenseId", "action",
 })
+
+#: The largest versionCode Android allows (`Integer.MAX_VALUE`).
+_MAX_VERSION_CODE = 2_147_483_647
+
+
+def parse_app_version(raw: str | None) -> int | None:
+    """An `X-App-Version` header as a versionCode, or None when absent or not
+    one. Caller text, so anything but a plain non-negative int in range is
+    dropped rather than logged. Nothing is refused on it."""
+    raw = (raw or "").strip()
+    if not raw.isascii() or not raw.isdigit() or len(raw) > 10:
+        return None
+    value = int(raw)
+    return value if value <= _MAX_VERSION_CODE else None
 
 # Opaque path segments (session / file / user ids) collapse to {id} so log
 # groupings stay countable without retaining identifiers in routeTemplate.
@@ -164,6 +186,16 @@ class DependencyError(RuntimeError):
         self.status_code = status_code
 
 
+def short_hash(value: str | None) -> str:
+    """A stable 12-hex-digit tag for a personal value (an email address), so a
+    log line can say "the same address as before" without holding it. Not a
+    secret-keyed hash: it only keeps the address out of clear text, and a log
+    reader who already knows an address can match it."""
+    if not value:
+        return ""
+    return hashlib.sha256(value.strip().lower().encode("utf-8")).hexdigest()[:12]
+
+
 def bind_request(request_id: str):
     return _request_id.set(request_id)
 
@@ -176,10 +208,17 @@ def bind_device(device_id: str | None) -> None:
     _device_id.set(device_id)
 
 
+def bind_client(app_id: str | None, app_version: int | None) -> None:
+    _app_id.set(app_id)
+    _app_version.set(app_version)
+
+
 def reset_request(token) -> None:
     _request_id.reset(token)
     _uid.set(None)
     _device_id.set(None)
+    _app_id.set(None)
+    _app_version.set(None)
 
 
 def utc_timestamp() -> str:
@@ -202,6 +241,8 @@ def event_payload(event: str, **fields: Any) -> dict:
         "requestId": _request_id.get(),
         "uid": _uid.get(),
         "deviceId": _device_id.get(),
+        "appId": _app_id.get(),
+        "appVersion": _app_version.get(),
     }
     payload.update({key: _safe_value(value) for key, value in fields.items() if key in _ALLOWED})
     return {key: value for key, value in payload.items() if value is not None}
