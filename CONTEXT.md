@@ -145,11 +145,14 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   At deploy ([checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md)): TOTP re-registration, C1/C2,
   `NOTIFY_SECURITY_FROM` (TD-309), `TASKS_QUEUE` (TD-294), the audit bucket lock (TD-237).
   Left: TD-237, TD-246, TD-294, TD-298, TD-299, TD-309.
-- **Open: `ccr-603fe346-1bw2fa`** merges #443/#444: Advanced → Reference, the engine's
-  `IncrementalSession` every N frames (a video's in seconds of the clip); fixed stays the
-  default, its path unchanged. Pin unchanged. Not yet run on a device or emulator.
-- **Engine: semper-dic-engine#9 open** (0.5.0, the review's engine fixes). The pin stays
-  `23034fe` (0.4.2) until it is released; the bump, with re-captured oracles, is TD-299.
+- **Merged after #457, not deployed:** #458 (#443/#444: Advanced → Reference, the engine's
+  `IncrementalSession` every N frames, a video's in seconds of the clip; fixed stays the
+  default; not yet run on a device), #459 (unit-test JVM diagnostics, TD-312), #453
+  (`firebase-bom` 35). `main` @ `9992576`.
+- **Open: `ccr-603fe346-1bw2fa`**: staff test accounts for QC and CI
+  ([ADR-027](docs/adr/ADR-027-test-accounts.md)); off until `TEST_ACCOUNT_DOMAINS` is set.
+- **Engine: semper-dic-engine#9 merged** (0.5.0, the review's engine fixes). The pin stays
+  `23034fe` (0.4.2); the bump, with re-captured oracles, is TD-299.
 - **material_testing** merges this `main` (last `17d7bc8`, material_testing#139,
   [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); its #140 carries the lab fixes and four of #457's
   commits; the rest come with the next sync. It released `v1.4-beta.2` (`d08aae07`) 2026-10-17.
