@@ -154,6 +154,7 @@ QUERY_SHAPES: dict[str, list[Shape]] = {
         _q("users", ("access_status", "=="), order=_BY_ID),
     ],
     "app/repo/users.py::set_user_status": [_q("devices", ("uid", "=="))],
+    "app/repo/users.py::sign_in_uids": [_q("auth_links", ("uid", "=="))],
 }
 
 #: Functions that order a query their caller built; the caller declares the shape.

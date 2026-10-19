@@ -37,8 +37,9 @@ Firebase Analytics' `AD_ID` permission is unchecked (TD-232).
 
 Email address, display name, sign-in provider, password hash (password accounts),
 TOTP enrolment (staff and console users). Purpose: identity. Retention: until the
-account is erased; `DELETE /v1/me` deletes the Auth user once the runtime SA holds
-Firebase Auth admin (`backend/app/routers/account.py:350`; TD-214). Both apps sign in to this one Auth project, so deleting the account removes the sign-in for both, consistent with the account-wide erase ([ADR-023](../adr/ADR-023-signed-offline-entitlement.md), decision note).
+account is erased; `DELETE /v1/me` deletes the Auth user, and every other Auth
+user linked to the account (`linkedAuthUids`, `auth_links`; `repo.sign_in_uids`), once
+the runtime SA holds Firebase Auth admin (`backend/app/routers/account.py:356`; TD-214). Both apps sign in to this one Auth project, so deleting the account removes the sign-in for both, consistent with the account-wide erase ([ADR-023](../adr/ADR-023-signed-offline-entitlement.md), decision note).
 
 ### Firestore (project `indicvision-dic-app`; location unrecorded, TD-227)
 

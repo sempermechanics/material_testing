@@ -86,14 +86,19 @@ def admin_revoke_user(uid: Uid, ctx=Depends(attested_or_mfa_admin)):
     (A5.5) only stops new ID tokens being minted from existing sign-ins, and
     is best-effort until the runtime account holds Firebase Auth admin on the
     Auth project, so the audit row says whether it happened
-    (`sessionsRevoked`) and the request never fails on it.
+    (`sessionsRevoked`, with `authUsers` and `authUsersRevoked`: every Auth
+    user that signs in to the account is revoked, linked subs included) and
+    the request never fails on it.
     """
     admin = ctx.user
     if not repo.set_user_status(uid, statuses.ACCESS_SUSPENDED):
         raise HTTPException(404, errors.USER_NOT_FOUND)
-    revoked = google_auth.revoke_sessions(uid)
+    # Every Auth user that signs in to the account, linked subs included.
+    auth_uids = repo.sign_in_uids(uid)
+    revoked = sum(1 for sub in auth_uids if google_auth.revoke_sessions(sub))
     audit.record(admin["uid"], action="ADMIN_REVOKE", target={"type": "user", "id": uid},
-                 detail={"sessionsRevoked": revoked})
+                 detail={"sessionsRevoked": revoked == len(auth_uids),
+                         "authUsers": len(auth_uids), "authUsersRevoked": revoked})
     return {"uid": uid, "access_status": statuses.ACCESS_SUSPENDED}
 
 

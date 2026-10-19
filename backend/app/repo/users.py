@@ -107,6 +107,25 @@ def _link_auth_uid(canonical_uid: str, firebase_sub: str) -> None:
         _update_doc(ref, {"linkedAuthUids": linked})
 
 
+def sign_in_uids(uid: str) -> list[str]:
+    """Every Firebase Auth uid that signs in to account `uid`, its own first.
+
+    An account adopted by a second Firebase sub (`_link_auth_uid`) is reached
+    by more than one Auth user, and each of them holds the address and the
+    name. Erasure deletes, and a suspension revokes, every one of them, not
+    only the canonical uid. Read from both records of the link: the profile's
+    `linkedAuthUids` and the `auth_links` that point at the account (one
+    equality filter, served by the automatic index).
+    """
+    out = [uid]
+    user = _load_user(uid) or {}
+    links = db().collection("auth_links").where("uid", "==", uid)
+    for sub in [*(user.get("linkedAuthUids") or []), *(snap.id for snap in _stream(links))]:
+        if sub and sub not in out:
+            out.append(sub)
+    return out
+
+
 def _user_for_device(device_id: str | None):
     if not device_id:
         return None

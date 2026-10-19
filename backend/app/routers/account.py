@@ -299,9 +299,11 @@ def delete_account(ctx=Depends(verified_device)):
     anything orphaned by a failed sync), then every Firestore record: sessions,
     file pointers, device registrations and the user profile.
 
-    Last, the Firebase Auth user itself is deleted (best-effort: it needs
+    Last, the Firebase Auth users themselves are deleted: the account's own
+    and every one linked to it (`repo.sign_in_uids`). Best-effort: it needs
     Firebase Auth admin on the Auth project, and the audit row says whether it
-    happened, `authUserDeleted`). Once it is gone the sign-in cannot mint
+    happened (`authUserDeleted` when every one went, with `authUsers` and
+    `authUsersDeleted`). Once it is gone the sign-in cannot mint
     another token, and signing in again with the same address creates a new
     Firebase user with a new uid, so nothing erased here is reattached to it.
 
@@ -342,12 +344,16 @@ def delete_account(ctx=Depends(verified_device)):
 
     drive_ms = int((time.monotonic() - started) * 1000)
 
-    # 3. Only once the blobs are gone: erase the metadata.
+    # 3. Only once the blobs are gone: erase the metadata. The sign-ins are
+    #    read first, since the erasure deletes the links that name them.
+    auth_uids = repo.sign_in_uids(uid)
     counts = repo.delete_all_user_data(uid)
     firestore_ms = int((time.monotonic() - started) * 1000) - drive_ms
-    # 4. Then the sign-in. After the data, so a failure here leaves an empty
-    #    account rather than data nobody can sign in to reach.
-    auth_user_deleted = google_auth.delete_auth_user(uid)
+    # 4. Then the sign-ins: the account's own Auth user and every one linked
+    #    to it (`linkedAuthUids`), each holding the address and the name.
+    #    After the data, so a failure here leaves an empty account rather
+    #    than data nobody can sign in to reach.
+    auth_deleted = sum(1 for sub in auth_uids if google_auth.delete_auth_user(sub))
     total_ms = int((time.monotonic() - started) * 1000)
     # Timed per phase: erasure is the one call a user waits on with nothing to
     # look at, so when it feels slow the log should say which half was slow.
@@ -355,7 +361,9 @@ def delete_account(ctx=Depends(verified_device)):
         **counts,
         "driveFolders": folders_deleted,
         "userFolderFound": bool(user_folder),
-        "authUserDeleted": auth_user_deleted,
+        "authUserDeleted": auth_deleted == len(auth_uids),
+        "authUsers": len(auth_uids),
+        "authUsersDeleted": auth_deleted,
         "driveMs": drive_ms,
         "firestoreMs": firestore_ms,
         "totalMs": total_ms,

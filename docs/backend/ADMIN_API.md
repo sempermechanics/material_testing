@@ -115,7 +115,7 @@ pasted CSV does not survive the round trip: paste it and import again on return.
 |---|---|---|
 | `GET /v1/admin/users` | `admin` | List accounts, `status` filter, paged |
 | `POST /v1/admin/users/{uid}/approve` | `admin-stepup` | Approve a PENDING account |
-| `POST /v1/admin/users/{uid}/revoke` | `admin-stepup` | Suspend an account and revoke its refresh tokens (best-effort until TD-214; the audit row says `sessionsRevoked`) |
+| `POST /v1/admin/users/{uid}/revoke` | `admin-stepup` | Suspend an account and revoke the refresh tokens of every Auth user that signs in to it, linked subs included (best-effort until TD-214; the audit row says `sessionsRevoked`, `authUsers`, `authUsersRevoked`) |
 | `PATCH /v1/admin/users/{uid}/config` | `admin-stepup` | Per-user limit overrides |
 | `POST /v1/admin/device-releases` | `admin-stepup` | `{"email"}`: free a Demo account's registered phone |
 | `GET /v1/admin/licenses` | `admin` | Licences, newest first, paged (`limit` ≤ 200, `page_token`, `include_demo`, `include_revoked`). `q` (exact address, domain or key prefix) is **deprecated**: it puts an address in the URL, which request logs keep. It still answers for one release and logs `deprecated_query_search` with the caller's uid, never the value (`backend/app/routers/admin.py:141-163`; removal TD-273) |

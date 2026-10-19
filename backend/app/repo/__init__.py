@@ -105,6 +105,7 @@ from .users import (  # noqa: F401
     list_users,
     release_account_device,
     set_user_status,
+    sign_in_uids,
 )
 from .leases import (  # noqa: F401
     checkout_lease,
