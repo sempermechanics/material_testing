@@ -60,7 +60,7 @@ class SessionLayout(val dir: File) {
     /** The per-field range sidecar the summary animation reads (`report.FieldRangesStore.FILE_NAME`). */
     val fieldRanges: File get() = File(dir, FIELD_RANGES)
 
-    /** Integrity rebuilds since the last good upload (`UploadErrors.INTEGRITY_REBUILDS_MARKER`). */
+    /** Integrity rebuilds since the last good upload (`RebuildBudget.INTEGRITY`). */
     val integrityRebuildsMarker: File get() = File(dir, INTEGRITY_REBUILDS_MARKER)
 
     companion object {

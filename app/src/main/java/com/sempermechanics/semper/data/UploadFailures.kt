@@ -5,6 +5,7 @@ import androidx.annotation.StringRes
 import androidx.work.ListenableWorker
 import androidx.work.workDataOf
 import com.sempermechanics.semper.R
+import com.sempermechanics.semper.data.cloud.RebuildBudget
 import com.sempermechanics.semper.data.cloud.UploadErrors
 import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.ApiErrors
@@ -21,7 +22,7 @@ import java.io.File
 /**
  * End the backup for good: mark the row FAILED (counted under
  * [analyticsReason] when there is one), then drop [stagingDir] and the rebuild
- * counts, so the next attempt is a fresh one.
+ * counts ([RebuildBudget]), so the next attempt is a fresh one.
  *
  * FAILED goes first. Killed between the two, the row is FAILED with its staging
  * still there, which a retry from the row handles; the other order left it
@@ -30,7 +31,7 @@ import java.io.File
 private fun UploadRun.abandon(stagingDir: File, analyticsReason: String?) {
     markBackupFailed(context, localId, analyticsReason)
     stagingDir.deleteRecursively()
-    UploadErrors.clearRebuildCounts(sessionDir)
+    RebuildBudget.clear(sessionDir)
 }
 
 /**
@@ -79,12 +80,21 @@ internal class UploadFailures(private val run: UploadRun, private val stagingDir
             // The session can't be finished (Drive's expected size no longer
             // matches, the object or file record is gone). Erase it so it
             // doesn't orphan and eat a quota slot, and keep Session.zip so the
-            // recreate is cheap.
+            // recreate is cheap. Bounded ([RebuildBudget.STALE_SESSION]): each
+            // recreate uploads every byte again.
             UploadErrors.Kind.STALE_SESSION -> {
                 Timber.e("Upload %d (%s) — discarding stale session, keeping staging", e.code, e.parsedDetail)
-                discardCloudSession(context, run.api, run.freshToken(), run.localId, run.currentCloudId())
-                val detail = e.parsedDetail.take(UploadTuning.STALE_DETAIL_MAX_LEN)
-                UploadLog.retry("HTTP ${e.code} stale session — $detail", e.requestId)
+                when {
+                    // The pointer stays until the delete goes through; a later run deletes it.
+                    !discardCloudSession(context, run.api, run.freshToken(), run.localId, run.currentCloudId()) ->
+                        UploadLog.retry("HTTP ${e.code} stale session — session not deleted yet", e.requestId)
+                    !RebuildBudget.STALE_SESSION.spend(run.sessionDir) ->
+                        giveUp(e, "stale_session", R.string.cloud_backup_failed_generic)
+                    else -> UploadLog.retry(
+                        "HTTP ${e.code} stale session — ${e.parsedDetail.take(UploadTuning.STALE_DETAIL_MAX_LEN)}",
+                        e.requestId,
+                    )
+                }
             }
             UploadErrors.Kind.INTEGRITY -> integrityMismatch(e)
             // The kill switch is on: a pause, not a failure. Keep the staged
@@ -110,8 +120,8 @@ internal class UploadFailures(private val run: UploadRun, private val stagingDir
      * retried it forever (it is an IOException).
      *
      * Bounded like an integrity rebuild: a link that keeps expiring on every
-     * fresh session is not going to stop, so after
-     * [UploadErrors.MAX_LINK_EXPIRED_REBUILDS] the backup fails instead.
+     * fresh session is not going to stop, so past [RebuildBudget.LINK_EXPIRED]
+     * the backup fails instead.
      */
     suspend fun linkExpired(e: UploadLinkExpiredException): ListenableWorker.Result {
         Timber.e("Drive upload link expired (HTTP %d) — discarding the session, keeping staging", e.code)
@@ -120,7 +130,7 @@ internal class UploadFailures(private val run: UploadRun, private val stagingDir
             // later finds the same dead link and comes back here.
             !discardCloudSession(context, run.api, run.freshToken(), run.localId, run.currentCloudId()) ->
                 UploadLog.retry("upload link expired (HTTP ${e.code}) — session not deleted yet")
-            UploadErrors.recordLinkExpiredRebuild(run.sessionDir) > UploadErrors.MAX_LINK_EXPIRED_REBUILDS -> {
+            !RebuildBudget.LINK_EXPIRED.spend(run.sessionDir) -> {
                 Timber.e("Upload links kept expiring (HTTP %d) — failing the backup", e.code)
                 run.abandon(stagingDir, analyticsReason = "link_expired")
                 run.failure(context.getString(R.string.cloud_backup_failed_generic))
@@ -192,7 +202,7 @@ internal class UploadFailures(private val run: UploadRun, private val stagingDir
             // rebuild. Try the delete again later.
             !discardCloudSession(context, run.api, run.freshToken(), run.localId, run.currentCloudId()) ->
                 UploadLog.retry("HTTP ${e.code} integrity — session not deleted yet", e.requestId)
-            UploadErrors.recordIntegrityRebuild(run.sessionDir) > UploadErrors.MAX_INTEGRITY_REBUILDS ->
+            !RebuildBudget.INTEGRITY.spend(run.sessionDir) ->
                 giveUp(e, "integrity", R.string.cloud_backup_failed_generic)
             else -> {
                 stagingDir.deleteRecursively()

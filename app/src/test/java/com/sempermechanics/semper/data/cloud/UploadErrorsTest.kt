@@ -83,16 +83,24 @@ class UploadErrorsTest {
     }
 
     @Test
-    fun `integrity rebuilds count up until cleared`() {
+    fun `a rebuild budget runs out past its cap and is refilled when cleared`() {
         val dir = temp.newFolder()
-        assertEquals(1, UploadErrors.recordIntegrityRebuild(dir))
-        assertEquals(2, UploadErrors.recordIntegrityRebuild(dir))
-        UploadErrors.clearRebuildCounts(dir)
-        assertFalse(File(dir, UploadErrors.INTEGRITY_REBUILDS_MARKER).exists())
-        assertEquals(1, UploadErrors.recordIntegrityRebuild(dir))
+        repeat(RebuildBudget.INTEGRITY.max) { assertTrue(RebuildBudget.INTEGRITY.spend(dir)) }
+        assertFalse(RebuildBudget.INTEGRITY.spend(dir))
+        // Each kind counts on its own.
+        assertTrue(RebuildBudget.STALE_SESSION.spend(dir))
+        RebuildBudget.clear(dir)
+        RebuildBudget.entries.forEach { assertFalse(it.name, File(dir, it.marker).exists()) }
+        assertTrue(RebuildBudget.INTEGRITY.spend(dir))
         // An unreadable count restarts rather than failing the upload.
-        File(dir, UploadErrors.INTEGRITY_REBUILDS_MARKER).writeText("garbage")
-        assertEquals(1, UploadErrors.recordIntegrityRebuild(dir))
+        File(dir, RebuildBudget.INTEGRITY.marker).writeText("garbage")
+        repeat(RebuildBudget.INTEGRITY.max) { assertTrue(RebuildBudget.INTEGRITY.spend(dir)) }
+    }
+
+    @Test
+    fun `every rebuild is bounded, each by its own count`() {
+        assertEquals(RebuildBudget.entries.size, RebuildBudget.entries.map { it.marker }.toSet().size)
+        RebuildBudget.entries.forEach { assertTrue(it.name, it.max in 1..5) }
     }
 
     @Test
