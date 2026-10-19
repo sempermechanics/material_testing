@@ -142,7 +142,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   nothing entered or sold in the app, Refresh licence, locked-not-hidden features, claim codes on
   the web account page, kill switches refused server-side, a per-device demo cap). Owed at
   deploy, in order: indexes (TD-216, TD-271), backend, gateway, Hosting, monitoring (TD-217); also
-  TD-214, TD-215, TD-219, TD-226, TD-229–TD-232, and counsel on the Terms' fees (TD-277).
+  TD-214, TD-215, TD-219, TD-226, TD-229–TD-232, and counsel on the aligned Terms (TD-277).
 - **material_testing** merges this `main` (last `8ba7081`, material_testing#133,
   [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); it released `v1.4-beta.2` (`d08aae07`) 2026-10-17.
 - **CI.** Tiers follow the diff, coverage floors rise with every test PR
