@@ -135,14 +135,15 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   No release built from it. Owed at deploy, in order ([checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md)):
   indexes (TD-216, TD-271), backend, gateway, Hosting, monitoring (TD-217); also TD-214,
   TD-215, a device smoke (TD-219), TD-226, TD-229–TD-232, counsel on the Terms (TD-277).
-- **Open: #457** (`ccr-603fe346-1bw2fa`, the 2026-10-19 whole-repo review). Backend: device
-  trust levels and one-transaction registration (ADR-010 amendment), one verified address,
-  linked Auth users erased and revoked, no delete of a provisioning session, `audit_logs`
-  through `repo/`. Console: `auth.js` split, CSP pinned to `firebasejs/12.4.0`. App: no resume
-  under a rebuilt staging, a failed batch run undone, run outcomes applied on Main (`RunEnd`,
-  `ViewerArgs.of`), Home/Auth/viewer state in ViewModels; [ADR-025](docs/adr/ADR-025-test-type-extension-points.md)
-  proposed. At deploy: staff and IT phones re-register once with TOTP after the backend
-  (checklist §6); C1/C2 ship with the Hosting step (`deploy-console.sh`). Left: TD-281–TD-299.
+- **Open: #457** (`ccr-603fe346-1bw2fa`: the 2026-10-19 whole-repo review, then its tech-debt
+  batch, which closed TD-281–TD-297 but for TD-294's licence fan-out). Backend: device trust
+  levels and one-transaction registration (ADR-010 amendment), one verified address, no delete
+  of a provisioning session, step-up tiers in `step_up.py` and route flows in `services/`, a
+  new-device mail. Console: `auth.js` split, CSP pinned. App: uploads resume only on the
+  declared sha256 and a bound staging, a failed batch run undone, `WizardInputs`, viewer hosts,
+  screen work in ViewModels; CI checks ADR-015's file size and ADR-016 rule 1; [ADR-025](docs/adr/ADR-025-test-type-extension-points.md)
+  proposed. At deploy: staff and IT phones re-register once with TOTP (checklist §6); C1/C2
+  with Hosting; `NOTIFY_SECURITY_FROM` (§0, TD-309). Left: TD-294, TD-298, TD-299, TD-306–TD-309.
 - **material_testing** merges this `main` (last `17d7bc8`, material_testing#139,
   [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); its #140 carries the lab fixes and four of #457's
   commits (upload, download, detekt split, ui-4); the rest come with the next sync. It released `v1.4-beta.2` (`d08aae07`) 2026-10-17.
