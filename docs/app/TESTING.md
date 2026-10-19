@@ -400,6 +400,7 @@ Their tests are `unittest` modules in `scripts/tests`, run in the same job:
 ```bash
 python scripts/check_kotlin_file_size.py                   # ADR-015's 500-line file budget (TD-292)
 python scripts/check_activity_scope_work.py                # ADR-016 rule 1 on screens' lifecycleScope (TD-291)
+python scripts/check_swallowed_cancellation.py            # ADR-018: cancellation rethrown around suspend calls (TD-171)
 python -m unittest discover -s scripts/tests -p "test_*.py"
 ```
 
@@ -415,6 +416,21 @@ call or an enqueue, directly or through a function of the same file. Its tests
 copy the Kotlin fixtures in `scripts/tests/fixtures/activity_scope/` into a
 temporary tree: Home's restore on `lifecycleScope` fails, the same restore on
 `viewModelScope` passes.
+
+`check_swallowed_cancellation.py` stands in for detekt's
+`SuspendFunSwallowedCancellation`, which needs type resolution detekt 1.23.8
+cannot do here (TD-171). It reads every `app/src/main` file for a
+`catch (e: Exception)` (or `Throwable`, `RuntimeException`,
+`IllegalStateException`) or a `runCatching { }` whose block calls a suspend
+function, known by name: one the main sources declare `suspend`, a
+`suspend`-typed parameter or property, or a kotlinx.coroutines / androidx
+suspend call. It passes a `CancellationException` clause ahead of the broad
+one, a catch that rethrows or calls `rethrowIfCallerCancelled()`, a
+`runCatching` chained to `getOrThrow()`, and anything under `NonCancellable`;
+an exception goes in `scripts/swallowed_cancellation_allowlist.txt` with a
+TD/ADR pointer. A name that is also a plain `fun` counts only in a suspend
+context, so a library suspend call it does not list is missed. Its fixtures are
+in `scripts/tests/fixtures/cancellation/`.
 
 ## What not to test here
 

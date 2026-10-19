@@ -120,6 +120,14 @@ jobs:
       - name: No user work on a screen's lifecycleScope (ADR-016)
         run: python scripts/check_activity_scope_work.py
 
+      # ADR-018 (TD-171): no broad catch or runCatching around a suspend call
+      # that swallows CancellationException. detekt's
+      # SuspendFunSwallowedCancellation needs type resolution, which detekt
+      # 1.23.8 cannot do here, so this is a source heuristic too; the triaged
+      # exceptions are in scripts/swallowed_cancellation_allowlist.txt.
+      - name: No swallowed coroutine cancellation (ADR-018)
+        run: python scripts/check_swallowed_cancellation.py
+
       # The tests of the checks above that live in scripts/tests (stdlib
       # unittest, nothing to install). The older checks' tests are in
       # backend/tests (test_script_*.py) and run in Tier 4.
