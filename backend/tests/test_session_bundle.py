@@ -111,7 +111,7 @@ async def test_nothing_is_buffered(client, stored, monkeypatch):
     Asserted by counting what the sink is asked to hold: if the response were
     assembled first, one drain would carry the whole archive.
     """
-    from app.routers import sessions as route
+    from app.services import sessions as route
 
     sizes = []
     original = route._ZipSink.drain

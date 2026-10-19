@@ -260,12 +260,25 @@ jobs:
         env:
           PROJECT: ${{ github.event.inputs.project }}
           ENTITLEMENT_SECRET: ${{ vars.ENTITLEMENT_SIGNING_SECRET }}
+          RUNTIME_SA: ${{ vars.SERVICE_ACCOUNT_EMAIL }}
         run: |
           set -euo pipefail
           lines="RESEND_API_KEY=resend-api-key:latest"
           if [ -z "$ENTITLEMENT_SECRET" ]; then
             echo "::notice::ENTITLEMENT_SIGNING_SECRET is not set: deploying without ENTITLEMENT_SIGNING_KEY."
           elif gcloud secrets describe "$ENTITLEMENT_SECRET" --project "$PROJECT" --format='value(name)' >/dev/null 2>/tmp/secret-err; then
+            # The runtime SA must be able to read it, or the candidate never
+            # starts and every deploy stops there (TD-269). Read-only; an
+            # unreadable policy is a warning, a missing grant fails here.
+            if [ -z "$RUNTIME_SA" ]; then
+              echo "::warning::SERVICE_ACCOUNT_EMAIL is not set: not checked whether the runtime SA can read ${ENTITLEMENT_SECRET}."
+            elif ! check=$(bash scripts/check_secret_access.sh "$PROJECT" "$ENTITLEMENT_SECRET" "$RUNTIME_SA"); then
+              echo "::error::$check"
+              exit 1
+            else
+              echo "$check"
+              case "$check" in WARN:*) echo "::warning::$check" ;; esac
+            fi
             lines="$lines"$'\n'"ENTITLEMENT_SIGNING_KEY=${ENTITLEMENT_SECRET}:latest"
             echo "Mounting ENTITLEMENT_SIGNING_KEY from secret ${ENTITLEMENT_SECRET}."
           else
@@ -305,6 +318,8 @@ jobs:
           # never to an empty string the backend would parse as something else.
           # CONSOLE_ORIGINS and KILL_SWITCHES are space-separated: this block
           # splits pairs on commas, so a comma inside a value truncates it.
+          # NOTIFY_SECURITY_FROM unset (empty) keeps the holder's new-device
+          # mail off (TD-295, TD-309); set it to a verified Resend sender.
           env_vars: |-
             GOOGLE_CLOUD_PROJECT=${{ github.event.inputs.project }}
             FIREBASE_PROJECT_ID=${{ vars.FIREBASE_PROJECT_ID }}
@@ -314,6 +329,7 @@ jobs:
             ADMIN_EMAILS=${{ vars.ADMIN_EMAILS }}
             SUPPORT_EMAIL=${{ vars.SUPPORT_EMAIL }}
             NOTIFY_FROM=${{ vars.NOTIFY_FROM }}
+            NOTIFY_SECURITY_FROM=${{ vars.NOTIFY_SECURITY_FROM }}
             TASKS_QUEUE=${{ vars.TASKS_QUEUE }}
             TASKS_LOCATION=${{ vars.TASKS_LOCATION }}
             TASKS_TARGET_BASE_URL=${{ vars.TASKS_TARGET_BASE_URL }}

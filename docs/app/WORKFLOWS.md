@@ -416,8 +416,9 @@ with their own index, and checks keyframe and fixed-interval picks, portrait
 rotation, and that every PNG came from the lossless Y-plane path rather than the
 retriever fallback. Keyframes mode is checked on every rung: the hardware decoder,
 the AVI demuxer (an indexed H.264 AVI gives its I-frames; an all-intra or
-index-less AVI falls back to the interval), and the retriever, forced; the
-hardware and AVI frames carry their own clip times. Rows 5.1a.1–11 remain for the
+index-less AVI falls back to the interval), and the retriever, forced; every
+rung's frames carry their own clip times (the retriever's from a sample walk, TD-207,
+also checked at a fixed 7 fps). Rows 5.1a.1–11 remain for the
 sheet itself and for real vendor decoders and camera AVIs.
 
 ### 5.2 Step 2 — Confirm settings
@@ -886,7 +887,7 @@ The backend counts account-wide (every app and phone) and refuses only at
 `POST /v1/sessions`, the upload. For a demo account it also counts every
 account's analyses stored from this phone, and refuses at the cap with its own
 `409 device_quota_exceeded` (`count_device_sessions`,
-`backend/app/repo/sessions.py:415-439`); both counts are of analyses stored now,
+`backend/app/repo/sessions.py:466-490`); both counts are of analyses stored now,
 so a delete frees a place.
 
 **Where the cap (`M`) comes from.** `LicenseEntitlements.analysisCap()` reads

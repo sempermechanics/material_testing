@@ -11,7 +11,7 @@ from firebase_admin import auth as fb_auth
 
 import fake_firestore
 import repo_view as repo
-from app import config, deps, drive, google_auth, rate_limit
+from app import config, deps, drive, google_auth, rate_limit, step_up
 from app.config import settings
 
 
@@ -90,6 +90,7 @@ def stepping_admin(monkeypatch, audited):
                 "firebase": {"sign_in_second_factor": "phone"}, "auth_time": time.time() - 60}
 
     monkeypatch.setattr(deps, "verify_id_token", verify)
+    monkeypatch.setattr(step_up, "verify_id_token", verify)
     repo.patch(monkeypatch, "get_or_create_user", lambda c, device_id=None: {
         "uid": "admin-1", "email": "admin@sempermechanics.com",
         "role": "admin", "access_status": "APPROVED",
@@ -188,8 +189,26 @@ async def test_revoking_a_user_revokes_their_sessions(admin_store, audited, clie
     assert r.status_code == 200
     assert seen == ["u1"]
     row = next(a for a in audited if a["action"] == "ADMIN_REVOKE")
-    assert row["detail"] == {"sessionsRevoked": True}
+    assert row["detail"] == {"sessionsRevoked": True, "authUsers": 1, "authUsersRevoked": 1}
     assert row["target"] == {"type": "user", "id": "u1"}
+
+
+async def test_revoking_a_user_revokes_every_linked_sign_in(admin_store, audited, client,
+                                                            monkeypatch):
+    """A second Firebase sub adopted into the account signs in to it too, so
+    suspending the account revokes that sub's refresh tokens as well."""
+    admin_store._data["users"]["u1"]["linkedAuthUids"] = ["sub-b"]
+    admin_store._data["auth_links"] = {"u1": {"uid": "u1"}, "sub-b": {"uid": "u1"},
+                                       "sub-c": {"uid": "u1"}, "x": {"uid": "u2"}}
+    seen = []
+    monkeypatch.setattr(google_auth.fb_auth, "revoke_refresh_tokens", seen.append)
+
+    r = await client.post("/v1/admin/users/u1/revoke")
+
+    assert r.status_code == 200
+    assert seen == ["u1", "sub-b", "sub-c"]
+    row = next(a for a in audited if a["action"] == "ADMIN_REVOKE")
+    assert row["detail"] == {"sessionsRevoked": True, "authUsers": 3, "authUsersRevoked": 3}
 
 
 async def test_a_failed_session_revoke_still_suspends(admin_store, audited, client, monkeypatch):
@@ -202,7 +221,7 @@ async def test_a_failed_session_revoke_still_suspends(admin_store, audited, clie
     assert r.json() == {"uid": "u1", "access_status": "SUSPENDED"}
     assert admin_store._data["users"]["u1"]["access_status"] == "SUSPENDED"
     assert next(a for a in audited if a["action"] == "ADMIN_REVOKE")["detail"] == {
-        "sessionsRevoked": False}
+        "sessionsRevoked": False, "authUsers": 1, "authUsersRevoked": 0}
 
 
 async def test_revoking_a_missing_user_revokes_nothing(admin_store, client, monkeypatch):
@@ -311,7 +330,7 @@ async def test_over_budget_a_suspension_still_lands_and_says_so(spent, admin_sto
     assert r.status_code == 200
     assert admin_store._data["users"]["u1"]["access_status"] == "SUSPENDED"
     assert next(a for a in audited if a["action"] == "ADMIN_REVOKE")["detail"] == {
-        "sessionsRevoked": False}
+        "sessionsRevoked": False, "authUsers": 1, "authUsersRevoked": 0}
 
 
 async def test_over_budget_the_step_up_check_is_503_not_invalid_token(

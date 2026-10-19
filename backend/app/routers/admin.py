@@ -6,8 +6,9 @@ from .. import apps, audit, errors, google_auth, repo, statuses
 from .. import observability as obs
 from .. import rate_limit
 from ..config import settings
-from ..deps import admin_user, attested_or_mfa_admin, attested_or_mfa_admin_fresh, rate_limited
-from ..licenses import KIND_INDIVIDUAL, KIND_INSTITUTION, normalize_kind
+from ..deps import admin_user, rate_limited
+from ..step_up import attested_or_mfa_admin, attested_or_mfa_admin_fresh
+from ..licenses import KIND_INSTITUTION, normalize_kind
 from ..models import (
     AdminDeviceRelease,
     AdminLicenseConvert,
@@ -16,6 +17,7 @@ from ..models import (
     AdminLicenseUpdate,
     UserConfigPatch,
 )
+from ..services import licenses as license_service
 from ..validation import AccessStatus, DocumentId, LicenceSearch, PageToken, Uid
 from ._shared import clamp_page_size, page_block
 from .roster import RosterAdmin, Tier, roster_router
@@ -24,19 +26,17 @@ log = logging.getLogger("semper.admin")
 router = APIRouter()
 
 
-def _admin_email_detail(admin_emails) -> dict:
-    """`adminEmails` as an audit detail holds it: hashed, with the count
-    (TD-242). Audit rows outlive account erasure and must hold no address."""
-    emails = list(admin_emails or [])
-    return {"adminEmailHashes": audit.address_tags(emails), "adminEmailCount": len(emails)}
-
-
 def _audited_patch(patch: dict) -> dict:
     """A licence edit as ADMIN_LICENSE_EXTEND records it: each term as text,
-    except `adminEmails`, which is hashed (`_admin_email_detail`)."""
-    out = {k: str(v) for k, v in patch.items() if k != "adminEmails"}
+    except `adminEmails`, which is hashed (`admin_email_detail`), and `note`,
+    free text staff may type a name or an address into: only that it changed
+    and its length (TD-270). The row outlives erasure and reaches the
+    licence's audit export."""
+    out = {k: str(v) for k, v in patch.items() if k not in ("adminEmails", "note")}
     if "adminEmails" in patch:
-        out.update(_admin_email_detail(patch["adminEmails"]))
+        out.update(license_service.admin_email_detail(patch["adminEmails"]))
+    if "note" in patch:
+        out.update({"noteChanged": "true", "noteLength": str(len(patch["note"] or ""))})
     return out
 
 
@@ -81,14 +81,19 @@ def admin_revoke_user(uid: Uid, ctx=Depends(attested_or_mfa_admin)):
     (A5.5) only stops new ID tokens being minted from existing sign-ins, and
     is best-effort until the runtime account holds Firebase Auth admin on the
     Auth project, so the audit row says whether it happened
-    (`sessionsRevoked`) and the request never fails on it.
+    (`sessionsRevoked`, with `authUsers` and `authUsersRevoked`: every Auth
+    user that signs in to the account is revoked, linked subs included) and
+    the request never fails on it.
     """
     admin = ctx.user
     if not repo.set_user_status(uid, statuses.ACCESS_SUSPENDED):
         raise HTTPException(404, errors.USER_NOT_FOUND)
-    revoked = google_auth.revoke_sessions(uid)
+    # Every Auth user that signs in to the account, linked subs included.
+    auth_uids = repo.sign_in_uids(uid)
+    revoked = sum(1 for sub in auth_uids if google_auth.revoke_sessions(sub))
     audit.record(admin["uid"], action="ADMIN_REVOKE", target={"type": "user", "id": uid},
-                 detail={"sessionsRevoked": revoked})
+                 detail={"sessionsRevoked": revoked == len(auth_uids),
+                         "authUsers": len(auth_uids), "authUsersRevoked": revoked})
     return {"uid": uid, "access_status": statuses.ACCESS_SUSPENDED}
 
 
@@ -111,10 +116,13 @@ def admin_release_account_device(body: AdminDeviceRelease,
     if user is None:
         raise HTTPException(404, errors.USER_NOT_FOUND)
     released = repo.release_account_device(user["uid"])
+    # The phone may go to someone else: its demo count stops holding this
+    # account's analyses, which still count toward the account's (TD-276).
+    forgotten = repo.forget_device_sessions(user["uid"], released.values())
     audit.record(
         admin["uid"], action="ADMIN_DEVICE_RELEASE",
         target={"type": "user", "id": user["uid"]},
-        detail=apps.spread("releasedDeviceId", released),
+        detail={**apps.spread("releasedDeviceId", released), "sessionsForgotten": forgotten},
     )
     return {"uid": user["uid"], "email": user.get("email") or "",
             **apps.spread("releasedDeviceId", released)}
@@ -213,57 +221,7 @@ def admin_create_license(
     Only Semper staff (this device-attested admin path) may mint or whole-key
     revoke; institution IT never reaches this route.
     """
-    admin = ctx.user
-    if body.kind == KIND_INSTITUTION:
-        minted = repo.create_institution_license(
-            domain_lock=body.domainLock,
-            admin_emails=body.adminEmails,
-            created_by_uid=admin["uid"],
-            max_seats=body.maxSeats,
-            seating=body.seating,
-            expires_at=body.expiresAt,
-            grace_days=body.graceDays,
-            support_until=body.supportUntil,
-            max_analyses=body.maxAnalyses,
-            note=body.note,
-        )
-        audit.record(
-            admin["uid"], action="ADMIN_LICENSE_MINT",
-            target={"type": "license", "id": minted["license"]["id"]},
-            detail={"kind": KIND_INSTITUTION, "domainLock": body.domainLock,
-                    **_admin_email_detail(body.adminEmails), "maxSeats": body.maxSeats,
-                    "seating": body.seating},
-        )
-        return minted
-    # One licence per person. Refused before anything is written: the mint
-    # used to go ahead and only report that the licence had not reached them.
-    # The id is the licence they hold, for the desk to open — renewal is
-    # Extend on that one.
-    held = repo.licence_held_by(body.emailLock)
-    if held:
-        raise HTTPException(409, f"{errors.EMAIL_ALREADY_LICENSED}: {held}")
-    minted = repo.create_individual_license(
-        email_lock=body.emailLock,
-        device_id_lock=body.deviceIdLock,
-        created_by_uid=admin["uid"],
-        expires_at=body.expiresAt,
-        grace_days=body.graceDays,
-        support_until=body.supportUntil,
-        max_analyses=body.maxAnalyses,
-        note=body.note,
-    )
-    audit.record(
-        admin["uid"], action="ADMIN_LICENSE_MINT",
-        target={"type": "license", "id": minted["license"]["id"]},
-        detail={"kind": KIND_INDIVIDUAL, "emailLockHash": audit.address_tag(body.emailLock),
-                "deviceIdLock": body.deviceIdLock,
-                "inviteError": minted.get("inviteError") or "",
-                # Set when the address already had an account, which the
-                # mint attached to directly (see _attach_to_existing_holder).
-                "claimedByUid": minted.get("claimedByUid") or "",
-                "claimError": minted.get("claimError") or ""},
-    )
-    return minted
+    return license_service.mint_license(body, ctx.user["uid"])
 
 
 @router.get("/v1/admin/licenses/{license_id}")
@@ -431,7 +389,7 @@ def admin_convert_license(
         admin["uid"], action="ADMIN_LICENSE_CONVERT",
         target={"type": "license", "id": license_id},
         detail={"to": out["license"]["id"], "domainLock": body.domainLock,
-                **_admin_email_detail(body.adminEmails), "maxSeats": body.maxSeats,
+                **license_service.admin_email_detail(body.adminEmails), "maxSeats": body.maxSeats,
                 "seating": body.seating, "claimedByUid": out["claimedByUid"]},
     )
     return out
@@ -485,7 +443,7 @@ def admin_license_device_history(
         raise HTTPException(404, errors.LICENSE_NOT_FOUND)
     return {
         "licenseId": license_id,
-        "events": audit.list_license_device_history(license_id, limit=limit),
+        "events": repo.list_license_device_history(license_id, limit=limit),
     }
 
 

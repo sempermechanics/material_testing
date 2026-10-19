@@ -10,16 +10,12 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.account.AuthRepository
 import com.sempermechanics.semper.data.account.DevAuth
-import com.sempermechanics.semper.data.cloud.CloudAccountExport
 import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.SemperApi
 import com.sempermechanics.semper.data.prefs.AppSettings
-import com.sempermechanics.semper.data.session.SessionEverythingExporter
 import com.sempermechanics.semper.databinding.ViewSettingsScrollContentBinding
 import com.sempermechanics.semper.diagnostics.Diagnostics
-import com.sempermechanics.semper.diagnostics.SemperAnalytics
 import com.sempermechanics.semper.ui.common.auth.AuthRoute
 import com.sempermechanics.semper.ui.common.auth.ExternalLinks
 import com.sempermechanics.semper.ui.common.dialog.Dialogs
@@ -28,7 +24,6 @@ import com.sempermechanics.semper.ui.common.transfer.TransferBannerController
 import com.sempermechanics.semper.ui.viewer.share.SendToSheet
 import com.sempermechanics.semper.util.ProgressCount
 import kotlinx.coroutines.launch
-import timber.log.Timber
 
 /**
  * Export / erasure / diagnostics. Session restore / download / delete stay on
@@ -54,32 +49,20 @@ class SettingsYourDataSection(
             Diagnostics.setEnabled(activity, checked)
         }
         wireLegal()
+        observeConsent()
+        observeExports()
         observeAccountDeletion()
     }
 
     /**
      * The product-improvement consent, kept apart from diagnostics and from
      * the Terms: it is optional, off until granted, and withdrawable here at
-     * any time. The switch reflects the last value the server confirmed.
+     * any time. The switch shows the answer this phone holds, or the one being
+     * sent ([SettingsViewModel.setImprovementConsent], which a rotation does
+     * not cancel), and waits while it is sent.
      */
     private fun wireLegal() {
-        val switchImprove = views.switchImprovementConsent
-        switchImprove.isChecked = AccountCache.improvementConsent(activity) == true
-        switchImprove.setOnCheckedChangeListener { _, checked ->
-            switchImprove.isEnabled = false
-            activity.lifecycleScope.launch {
-                val result = AuthRepository(activity).setImprovementConsent(checked)
-                switchImprove.isEnabled = true
-                result.onFailure {
-                    Timber.w(it, "Improvement consent update failed")
-                    // Revert silently: the server still holds the previous answer.
-                    switchImprove.setOnCheckedChangeListener(null)
-                    switchImprove.isChecked = !checked
-                    wireLegal()
-                    Feedback.toast(activity, R.string.terms_error_generic, long = true)
-                }
-            }
-        }
+        showConsent(activity.viewModel.consentSending.value)
 
         val accepted = AccountCache.termsAcceptedVersion(activity)
         views.tvTermsAccepted.text =
@@ -90,6 +73,39 @@ class SettingsYourDataSection(
             }
         views.btnViewTerms.setOnClickListener {
             ExternalLinks.open(activity, activity.getString(R.string.legal_terms_url))
+        }
+    }
+
+    /**
+     * The switch at [sending] while that change is sent, and waiting; else at
+     * the answer this phone holds. Set with no listener, so showing a value
+     * never sends it.
+     */
+    private fun showConsent(sending: Boolean?) {
+        val switchImprove = views.switchImprovementConsent
+        switchImprove.setOnCheckedChangeListener(null)
+        switchImprove.isChecked = sending ?: (AccountCache.improvementConsent(activity) == true)
+        switchImprove.isEnabled = sending == null
+        switchImprove.setOnCheckedChangeListener { _, checked ->
+            switchImprove.isEnabled = false
+            activity.viewModel.setImprovementConsent(checked)
+        }
+    }
+
+    /**
+     * Each consent change's answer once, on whichever Settings is started.
+     * A change the server did not take is said; either way the switch shows
+     * the answer this phone holds, which the repository stores only once the
+     * server took it, so a refused change puts the switch back (TD-306).
+     */
+    private fun observeConsent() {
+        activity.lifecycleScope.launch {
+            activity.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                activity.viewModel.consentOutcomes.collect { answer ->
+                    showConsent(null)
+                    if (!answer.saved) Feedback.toast(activity, R.string.terms_error_generic, long = true)
+                }
+            }
         }
     }
 
@@ -106,86 +122,85 @@ class SettingsYourDataSection(
             Feedback.toast(activity, R.string.export_cloud_data_offline, long = true)
             return
         }
-        runExport(CLOUD_EXPORT) { CloudAccountExport.download(activity.cacheDir, api) }
+        runExport(CLOUD_EXPORT)
     }
 
     private fun exportMyData() {
-        runExport(LOCAL_EXPORT) { onProgress ->
-            SessionEverythingExporter.exportMasterZip(activity, onProgress)?.file
-        }
+        runExport(LOCAL_EXPORT)
     }
 
-    /** What differs between the two "export my data" buttons; the flow is shared. */
+    /** What differs between the two "export my data" buttons on screen; the flow is shared. */
     private class ExportKind(
+        val export: SettingsViewModel.DataExport,
         val key: String,
-        val analyticsKind: String,
         val bannerTitle: Int,
         val failedMessage: Int,
         val mime: String,
     )
 
+    /** The exports this screen's banner shows now. */
+    private val shownExports = mutableSetOf<SettingsViewModel.DataExport>()
+
     /**
-     * Banner, produce, share: one flow for both exports. [produce] returns the
-     * file to share, or null on failure; an empty file counts as a failure.
-     * Cancelling from the banner cancels [produce] — and says nothing, because
-     * the user asked for it.
+     * Banner, produce, share: one flow for both exports. The export runs in
+     * [SettingsViewModel.exportData], so a rotation does not cancel it; the
+     * banner's Cancel does, and says nothing, because the user asked for it.
      */
-    private fun runExport(
-        kind: ExportKind,
-        produce: suspend (onProgress: (done: Int, total: Int) -> Unit) -> java.io.File?,
-    ) {
-        if (activity.transferBanner.contains(kind.key)) {
+    private fun runExport(kind: ExportKind) {
+        if (!activity.viewModel.exportData(kind.export)) {
             Feedback.toast(activity, R.string.download_analysis_already)
-            return
         }
-        var job: kotlinx.coroutines.Job? = null
-        SemperAnalytics.event(activity, SemperAnalytics.EXPORT_STARTED, mapOf("kind" to kind.analyticsKind))
-        activity.transferBanner.upsert(
-            TransferBannerController.Transfer(
-                id = kind.key,
-                title = activity.getString(kind.bannerTitle),
-                onCancel = { job?.cancel() },
-            ),
-        )
-        job = activity.lifecycleScope.launch {
-            try {
-                val produced = produce { done, total ->
-                    val pct = if (total > 0) done * SettingsActivity.PERCENT.toDouble() / total else 0.0
-                    activity.runOnUiThread {
-                        activity.transferBanner.updateProgress(
-                            kind.key,
-                            pct,
-                            // done counts finished sessions; the label names the one in progress.
-                            activity.getString(
-                                R.string.export_progress_fmt,
-                                ProgressCount.current(done, total),
-                                total,
-                            ),
-                        )
-                    }
-                }
-                activity.transferBanner.remove(kind.key)
-                // Safety: only share a file that actually exists and has content.
-                val file = produced?.takeIf { it.exists() && it.length() > 0L }
-                if (file == null) {
-                    SemperAnalytics.event(
-                        activity,
-                        SemperAnalytics.EXPORT_FAILED,
-                        mapOf("kind" to kind.analyticsKind),
-                    )
-                    Feedback.toast(activity, kind.failedMessage, long = true)
-                    return@launch
-                }
-                SemperAnalytics.event(
-                    activity,
-                    SemperAnalytics.EXPORT_COMPLETED,
-                    mapOf("kind" to kind.analyticsKind),
-                )
-                SendToSheet.show(activity, file, kind.mime)
-            } finally {
-                activity.transferBanner.remove(kind.key)
+    }
+
+    /** The running exports in the banner, and each export's end once, on whichever Settings is started. */
+    private fun observeExports() {
+        activity.lifecycleScope.launch {
+            activity.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch { activity.viewModel.exports.collect(::showExports) }
+                activity.viewModel.exportOutcomes.collect(::onExportFinished)
             }
         }
+    }
+
+    private fun showExports(running: Map<SettingsViewModel.DataExport, SettingsViewModel.ExportProgress?>) {
+        val banner = activity.transferBanner
+        (shownExports - running.keys).forEach { banner.remove(kindOf(it).key) }
+        shownExports.retainAll(running.keys)
+        running.forEach { (export, progress) ->
+            val kind = kindOf(export)
+            if (shownExports.add(export)) {
+                banner.upsert(
+                    TransferBannerController.Transfer(
+                        id = kind.key,
+                        title = activity.getString(kind.bannerTitle),
+                        onCancel = { activity.viewModel.cancelExport(export) },
+                    ),
+                )
+            }
+            if (progress != null) {
+                val (done, total) = progress
+                val pct = if (total > 0) done * SettingsActivity.PERCENT.toDouble() / total else 0.0
+                // done counts finished sessions; the label names the one in progress.
+                val label = activity.getString(R.string.export_progress_fmt, ProgressCount.current(done, total), total)
+                banner.updateProgress(kind.key, pct, label)
+            }
+        }
+    }
+
+    /** Shares what an export produced; only a file with content gets this far. */
+    private fun onExportFinished(finished: SettingsViewModel.ExportFinished) {
+        val kind = kindOf(finished.export)
+        val file = finished.file
+        if (file == null) {
+            Feedback.toast(activity, kind.failedMessage, long = true)
+        } else {
+            SendToSheet.show(activity, file, kind.mime)
+        }
+    }
+
+    private fun kindOf(export: SettingsViewModel.DataExport): ExportKind = when (export) {
+        SettingsViewModel.DataExport.CLOUD -> CLOUD_EXPORT
+        SettingsViewModel.DataExport.LOCAL -> LOCAL_EXPORT
     }
 
     private fun confirmDeleteAccount() {
@@ -281,15 +296,15 @@ class SettingsYourDataSection(
 
     private companion object {
         val CLOUD_EXPORT = ExportKind(
+            export = SettingsViewModel.DataExport.CLOUD,
             key = "export_cloud",
-            analyticsKind = "cloud",
             bannerTitle = R.string.transfer_banner_export_cloud,
             failedMessage = R.string.export_cloud_data_failed,
             mime = SettingsActivity.JSON_MIME,
         )
         val LOCAL_EXPORT = ExportKind(
+            export = SettingsViewModel.DataExport.LOCAL,
             key = "export_local",
-            analyticsKind = "local",
             bannerTitle = R.string.transfer_banner_export_local,
             failedMessage = R.string.export_data_failed,
             mime = SettingsActivity.ZIP_MIME,

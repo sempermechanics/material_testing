@@ -17,19 +17,15 @@ import com.sempermechanics.semper.data.session.SkippedNode
 import com.sempermechanics.semper.field.DicParams
 import com.sempermechanics.semper.report.EngineStats
 import com.sempermechanics.semper.report.ReportImageNames
-import com.sempermechanics.semper.util.LenientObjectListSerializer
 import com.sempermechanics.semper.util.OptBooleanSerializer
 import com.sempermechanics.semper.util.OptDoubleSerializer
 import com.sempermechanics.semper.util.OptFloatListSerializer
 import com.sempermechanics.semper.util.OptIntListSerializer
 import com.sempermechanics.semper.util.OptIntSerializer
-import com.sempermechanics.semper.util.OptObjectSerializer
 import com.sempermechanics.semper.util.OptStringListSerializer
 import com.sempermechanics.semper.util.OptStringSerializer
-import com.sempermechanics.semper.util.StrictObjectListSerializer
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.nullable
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.text.SimpleDateFormat
@@ -483,24 +479,4 @@ data class SessionMetadataDoc(
             },
         )
     }
-
-    internal object FramesSerializer : StrictObjectListSerializer<Frame>(Frame.serializer())
-
-    internal object AppSerializer : OptObjectSerializer<App>(App.serializer())
-
-    internal object DeviceSerializer : OptObjectSerializer<Device>(Device.serializer())
-
-    internal object UserSerializer : OptObjectSerializer<User>(User.serializer())
-
-    internal object EngineSerializer : OptObjectSerializer<Engine>(Engine.serializer())
-
-    internal object RoiSerializer : OptObjectSerializer<Roi>(Roi.serializer())
-
-    internal object SweepSerializer : OptObjectSerializer<Sweep>(Sweep.serializer())
-
-    internal object SkippedSerializer : OptObjectSerializer<Skipped>(Skipped.serializer())
-
-    internal object MetricsSerializer : OptObjectSerializer<Metrics>(Metrics.serializer())
-
-    internal object NodesSerializer : LenientObjectListSerializer<Node>(Node.serializer().nullable)
 }

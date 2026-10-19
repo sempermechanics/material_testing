@@ -6,13 +6,13 @@ import android.view.View
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.field.RunStop
+import com.sempermechanics.semper.fixtures.sessionRecord
 import com.sempermechanics.semper.ui.analysis.run.BatchRunController
 import com.sempermechanics.semper.ui.analysis.run.ComputeOverlayController
 import com.sempermechanics.semper.ui.analysis.run.RunChrome
-import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
+import com.sempermechanics.semper.ui.analysis.run.RunEnd
+import com.sempermechanics.semper.ui.analysis.run.RunStatusLine
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
-import com.sempermechanics.semper.ui.analysis.wizard.BatchAnalysisOutcome
 import com.sempermechanics.semper.ui.analysis.wizard.PendingOutcome
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -43,10 +43,15 @@ class RunOutcomeDeliveryTest {
 
     private val built = mutableListOf<ActivityController<AppCompatActivity>>()
 
-    /** What the controllers handed their hosts. */
-    private var viewersOpened = 0
-    private val sweepsFinished = mutableListOf<BatchAnalysisOutcome?>()
+    /** Results the screens opened so far: viewers and lattices. */
+    private var openedCount = 0
     private var computeEnabled = false
+
+    /** [openedCount], after counting what every screen has started since the last call. */
+    private fun opened(): Int {
+        built.forEach { ac -> while (shadowOf(ac.get()).nextStartedActivity != null) openedCount++ }
+        return openedCount
+    }
 
     @After
     fun tearDown() = built.forEach { runCatching { it.pause().stop().destroy() } }
@@ -72,37 +77,28 @@ class RunOutcomeDeliveryTest {
         )
         val chrome = RunChrome(activity, overlay, cancelButton = View(activity))
         if (runInFlight) chrome.beginRun {}
-        val host = object : BatchRunController.Host {
-            override fun checkReady() {
-                computeEnabled = !chrome.isBusy
-            }
-
-            override fun onPartialRun(outcome: BatchAnalysisOutcome) = Unit
-            override fun openResultViewer() {
-                viewersOpened++
-            }
-
-            override fun engineFailureMessage(code: Int, frameIndex: Int, frameName: String?) = ""
-            override fun showEngineFailureDialog(message: String, titleRes: Int, faqUrlRes: Int, why: String?) = Unit
-            override fun clearEngineFailFaq() = Unit
-            override fun onSweepProgress(progress: SweepStudyRunner.Progress) = Unit
-            override fun onSweepFinished(outcome: BatchAnalysisOutcome?) {
-                sweepsFinished += outcome
-            }
-        }
+        val status = RunStatusLine(activity, chrome, TextView(activity), View(activity))
         // No done moment: these tests count the viewer opening as the outcome is handled.
-        BatchRunController(activity, viewModel, chrome, TextView(activity), host, doneHoldMs = 0L).observe()
+        BatchRunController(
+            activity,
+            viewModel,
+            chrome,
+            status,
+            recheck = { computeEnabled = !chrome.isBusy },
+            doneHoldMs = 0L,
+        ).observe()
         idle()
         return ac
     }
 
-    private fun outcome(code: Int = 0, frames: Int = 3) = BatchAnalysisOutcome(
-        engineErrorCode = code,
-        firstFrameValidPoints = 500,
-        totalFrames = frames,
-        executionTimeMs = 0,
-        batchDirPath = "",
-        saved = code != RunStop.Cancelled.wireCode,
+    /** A run that solved [frames] frames and saved them. */
+    private fun solved(frames: Int = 3): RunEnd =
+        RunEnd.Solved(sessionRecord(id = "run", frameCount = frames, sessionDir = "/sessions/run"), 0)
+
+    /** A sweep of [frames] combinations, saved. */
+    private fun sweep(frames: Int): RunEnd = RunEnd.SweepSaved(
+        sessionRecord(id = "sweep", frameCount = frames, sessionDir = "/sessions/sweep")
+            .copy(sweepSubsets = List(frames) { 21 }, sweepSteps = List(frames) { 5 }),
     )
 
     @Test
@@ -112,14 +108,14 @@ class RunOutcomeDeliveryTest {
         ac.pause().stop()
         idle()
 
-        viewModel.runs.batchOutcome.post(Result.success(outcome()))
+        viewModel.runs.batchOutcome.post(solved())
         idle()
-        assertEquals("nothing handled while stopped", 0, viewersOpened)
+        assertEquals("nothing handled while stopped", 0, opened())
         assertTrue(viewModel.batchOutcome.isPending)
 
         ac.start().resume()
         idle()
-        assertEquals(1, viewersOpened)
+        assertEquals(1, opened())
         assertTrue("chrome down, Compute usable", computeEnabled)
         assertFalse(viewModel.batchOutcome.isPending)
     }
@@ -128,9 +124,9 @@ class RunOutcomeDeliveryTest {
     fun `a handled batch outcome is not handled again when the wizard restarts`() {
         val viewModel = AnalysisViewModel()
         val ac = screen(viewModel)
-        viewModel.runs.batchOutcome.post(Result.success(outcome()))
+        viewModel.runs.batchOutcome.post(solved())
         idle()
-        assertEquals(1, viewersOpened)
+        assertEquals(1, opened())
 
         ac.pause().stop()
         idle()
@@ -138,7 +134,7 @@ class RunOutcomeDeliveryTest {
         idle()
         // A second screen over the same view model sees nothing either.
         screen(viewModel)
-        assertEquals(1, viewersOpened)
+        assertEquals(1, opened())
     }
 
     @Test
@@ -148,21 +144,20 @@ class RunOutcomeDeliveryTest {
         ac.pause().stop()
         idle()
 
-        val finished = outcome(frames = 9)
-        viewModel.runs.sweepOutcome.post(Result.success(finished))
+        viewModel.runs.sweepOutcome.post(sweep(frames = 9))
         idle()
-        assertTrue("nothing handled while stopped", sweepsFinished.isEmpty())
+        assertEquals("nothing handled while stopped", 0, opened())
 
         ac.start().resume()
         idle()
-        assertEquals(listOf(finished), sweepsFinished)
+        assertEquals("its lattice", 1, opened())
         assertTrue(computeEnabled)
 
         ac.pause().stop()
         idle()
         ac.start().resume()
         idle()
-        assertEquals("handled once", listOf(finished), sweepsFinished)
+        assertEquals("handled once", 1, opened())
     }
 
     @Test
@@ -172,10 +167,10 @@ class RunOutcomeDeliveryTest {
         // absorb) never raised the run's chrome; the cancelled outcome must not
         // open anything there, only leave Compute usable.
         val viewModel = AnalysisViewModel()
-        viewModel.runs.batchOutcome.post(Result.success(outcome(RunStop.Cancelled.wireCode, frames = 0)))
+        viewModel.runs.batchOutcome.post(RunEnd.Cancelled)
 
         screen(viewModel, runInFlight = false)
-        assertEquals(0, viewersOpened)
+        assertEquals(0, opened())
         assertTrue(computeEnabled)
         assertFalse(viewModel.batchOutcome.isPending)
 

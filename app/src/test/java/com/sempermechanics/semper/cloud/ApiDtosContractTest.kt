@@ -141,6 +141,8 @@ class ApiDtosContractTest {
         assertEquals("metadata", u.role)
         assertEquals(2048L, u.sizeBytes)
         assertEquals(33554432, u.chunkSize)
+        // The declared hash, which the resume matches the staged bytes on (TD-281).
+        assertEquals(64, u.sha256?.length)
         assertNull(resp.provisionError)
     }
 
@@ -242,6 +244,16 @@ class ApiDtosContractTest {
     }
 
     // ------------------------------------------------- older backends' bodies
+
+    @Test
+    fun `a pending upload from a backend that sends no hash decodes a null hash`() {
+        // Before TD-281 the pending list carried no sha256; the resume then
+        // matches on role, name and size alone.
+        val resp = json.decodeFromString<SessionUploadsResponse>(
+            """{"sessionId":"s","uploads":[{"fileId":"f","uploadUrl":"u","sizeBytes":3}]}""",
+        )
+        assertNull(resp.uploads.single().sha256)
+    }
 
     @Test
     fun `config response missing mode still decodes the plan mirror`() {

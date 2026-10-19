@@ -9,9 +9,25 @@ Each page is an HTML document plus one ES module beside it — `router.js`,
 loaded with `<script type="module" src="…">`. **Not inline.** The console
 `script-src` is `'self'` with no `'unsafe-inline'` (see below), so an inline
 script on these pages does not run at all: the page renders and every button is
-dead. `auth.js` and `config.js` are shared by all four. `util.js` holds the
-DOM-free helpers (`esc`, `when`, and the roster cells both seat tables render),
-so `node --test` can run them; `auth.js` re-exports `esc` and `when`.
+dead. Shared by all four:
+- `auth.js` — sign-in, the second factor, `stepUp`, and the Firebase SDK. It
+  is the only module that loads Firebase (and waits, at the top level, for
+  the project config), so it holds nothing else and re-exports nothing.
+- `api.js` — `api()`, `apiBlob()`, `saveBlob()` and `ApiError`: every call
+  to the backend, with one step-up retry on `reauth_required`.
+- `dialogs.js` — the in-page cards (`askInPage`, `confirmInPage`,
+  `tellInPage`, `confirmByTyping`, the authenticator-code and enrolment
+  cards) and `ERR_CANCELLED`. DOM only.
+- `status.js` — the status line (`setStatus`, `whileWaiting`) and the load
+  marks (`markFirstData`). DOM only.
+- `config.js` — the API base URL, filled in at deploy.
+- `util.js` — the DOM-free helpers (`esc`, `when`, `day`, and the roster cells
+  both seat tables render), so `node --test` can run them.
+
+A page imports each name from the module that owns it. `util.test.mjs` fails
+if `util.js`, `dialogs.js`, `status.js` or `messages.js` comes to load
+Firebase, or if `auth.js` re-exports anything; `check_console.py` fails a
+page that does not `modulepreload` every module it runs.
 
 Shared beside them:
 - `roster.js` — one institution roster: the table, its actions, adding a
@@ -149,7 +165,7 @@ builds, with the key beneath it for anyone who cannot scan. It is never
 fetched: every QR *service* is somebody else's server and the payload is the
 TOTP secret itself, so a picture from one would hand away the factor that
 protects licence issuance. The CSP's `img-src` names no such origin and must
-not start to. Every console uses the same card (`enrolInPage` in `auth.js`);
+not start to. Every console uses the same card (`enrolInPage` in `dialogs.js`);
 the account page hosts it in its own section.
 
 Every later sign-in and step-up asks for the code the same way: a card under
@@ -164,7 +180,7 @@ that timed out ends the card, and the status line says to sign in again.
 
 Nothing else uses `window.prompt` either. The operator desk's typed-key
 confirmations (revoke, delete, shortening a licence's term) and the password
-before a revoke use `askInPage` in `auth.js`: a card with a heading, the
+before a revoke use `askInPage` in `dialogs.js`: a card with a heading, the
 message, a text or password box, the confirm button and Cancel, placed under
 the status line and scrolled into view. The shortening check runs inside the
 modal Edit dialog, so its card goes inside the dialog (after `#editHint`). The
@@ -319,8 +335,10 @@ addresses that rewrite into it. Every other page — the legal pages, the auth
 continue-URLs — keeps the strict
 `default-src 'self'` policy. `connect-src` is widened for the API and
 Firebase Auth's token endpoints. `script-src` is `'self'` plus two Google
-origins: the SDK modules come from `https://www.gstatic.com/firebasejs/<ver>/`
-and the auth iframe loads gapi from `https://apis.google.com` — without both
+sources: the SDK modules come from `https://www.gstatic.com/firebasejs/<ver>/`,
+which is also the whole of gstatic the policy allows (pinned to the version
+`auth.js` imports; an SDK bump edits both, and `check_console.py` fails until
+it does), and the auth iframe loads gapi from `https://apis.google.com` — without both
 the page renders and *Sign in* does nothing (the first production deploy
 proved it). `auth.js` imports **both** `firebase-app.js` and `firebase-auth.js`
 from gstatic, never Hosting's `/__/firebase/<ver>/` copies: Hosting's
@@ -403,7 +421,7 @@ A load is never a blank page or a silent one:
 - **Restricted pages stay hidden until allowed.** The operator desk and the
   institution page call `requireSignIn(onReady, { showApp: false })` and show
   `#app` only once `/v1/me` (or the licence list) says the account may see it.
-- **Each step is named** on the status line by `whileWaiting` (`auth.js`):
+- **Each step is named** on the status line by `whileWaiting` (`status.js`):
   "Checking your access…", "Loading licences…", "Loading the roster…",
   "Loading your analyses…", "Finding your dashboard…". After 4 s it adds
   "Still working — the server can take a few seconds to start.": the API
@@ -480,8 +498,8 @@ stay one copy, as in a browser.
 The same job runs `node --test "firebase-hosting/tests/*.test.mjs"` (Node 22,
 no `npm install`). `util.test.mjs` covers `util.js`: escaping, dates, and the
 roster cells (an expired floating lease reads "—", not "until <past time>").
-The other files cover `auth.js`, `router.js` and the three pages against a
-fake Firebase SDK:
+The other files cover `auth.js`, `api.js`, `dialogs.js`, `status.js`,
+`router.js` and the three pages against a fake Firebase SDK:
 
 | File | Pins |
 |---|---|
@@ -498,7 +516,8 @@ How the fake gets in: `tests/harness.mjs` calls `module.register` with
 `tests/firebase-hooks.mjs`, whose `resolve` hook maps the two
 `www.gstatic.com/firebasejs/<ver>/` imports to `tests/fakes/` and refuses any
 other remote import. A test file therefore imports `auth.js` dynamically
-(`loadAuth()`), after the harness has run. The harness also puts a small
+(`loadAuth()`, which answers `auth.js`, `api.js`, `dialogs.js` and `status.js`
+as one namespace), after the harness has run. The harness also puts a small
 `window` / `document` / `location` on `globalThis` and a `fetch` that answers
 only what a test scripted (by order, or by method and path), so nothing
 reaches the network. `document` is `tests/fake-dom.mjs`: the page's real

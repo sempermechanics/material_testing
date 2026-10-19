@@ -116,32 +116,38 @@ internal suspend fun AnalysisViewModel.restoreFromDraft(): DraftRestore {
         DraftRestore.LOST
     } else {
         drafts.mirror = false
-        refBytes = inputs.reference
-        roiMaskBytes = inputs.mask
+        edit {
+            it.copy(
+                refBytes = inputs.reference,
+                roiMaskBytes = inputs.mask,
+                deformedFrames = inputs.frames.toDeformedFrames(),
+            )
+        }
         drafts.mirror = true
-        deformedFrames = inputs.frames.toDeformedFrames()
         DraftRestore.RESTORED
     }
 }
 
 /** Back to an empty wizard. Sweep ranges and the line-cut choice stay. */
-private fun AnalysisViewModel.clearInputs() {
-    refBytes = null
-    roiMaskBytes = null
-    deformedFrames = emptyList()
-    frameSizeError = null
-    defFromVideo = false
-    defVideoName = null
-    refSize = ImageSize.UNKNOWN
-    refName = AnalysisViewModel.NO_REFERENCE_NAME
-    hasCustomRoi = false
-    roi = AnalysisViewModel.NO_ROI
-    step = WizardStep.IMAGES
-    settingsReviewed = false
-    subsetRecommendation = null
-    subsetRecommendationKey = null
-    subsetUserModified = false
-    workingLocalId = null
+private fun AnalysisViewModel.clearInputs() = edit {
+    it.copy(
+        refBytes = null,
+        roiMaskBytes = null,
+        deformedFrames = emptyList(),
+        frameSizeError = null,
+        defFromVideo = false,
+        defVideoName = null,
+        refSize = ImageSize.UNKNOWN,
+        refName = AnalysisViewModel.NO_REFERENCE_NAME,
+        hasCustomRoi = false,
+        roi = AnalysisViewModel.NO_ROI,
+        step = WizardStep.IMAGES,
+        settingsReviewed = false,
+        subsetRecommendation = null,
+        subsetRecommendationKey = null,
+        subsetUserModified = false,
+        working = null,
+    )
 }
 
 /**

@@ -9,10 +9,11 @@ import android.os.Bundle
 import androidx.core.graphics.createBitmap
 import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FieldKind
+import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.FieldRangesStore
 import com.sempermechanics.semper.report.VisualizationEngine
 import com.sempermechanics.semper.ui.viewer.ViewerArgs
-import com.sempermechanics.semper.ui.viewer.summary.SummaryAnimation
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.ByteBuffer
@@ -31,7 +32,7 @@ import java.nio.ByteOrder
  *
  * `framePhotos` (default false) seeds a separate session whose every frame has its own
  * photo in `raw_deformed/`, so the viewer draws each frame over it with
- * `VisualizationEngine.generateDeformedHeatmap` (ADR-011, TD-175). Its frames move by a
+ * `VisualizationEngine.render` of a displaced request (ADR-011, TD-175). Its frames move by a
  * moderate u = 0.02·x, v = 0.01·y px rather than the default frames' ~300 px drift, which
  * would warp most of the map off the canvas. The photos are one flat grey PNG, so their
  * decode is cheaper than a camera photo's. The default session, which the gated
@@ -87,8 +88,8 @@ class BenchmarkSeedActivity : Activity() {
         val photoDir = File(dir, SessionPaths.RAW_DEFORMED_SUBDIR)
         val photosSeeded = photoNames == null || File(photoDir, photoNames.last()).isFile
         if (expected.exists() && rangesFile.exists() && photosSeeded) return dir // already seeded
-        val fieldIndices = SummaryAnimation.FIELDS.map { it.second }.toIntArray()
-        val perFrameRanges = ArrayList<Map<Int, Pair<Float, Float>?>>(frameCount)
+        val fieldIndices = FieldKind.entries.map { it.dataIndex }.toIntArray()
+        val perFrameRanges = ArrayList<Map<Int, ValueRange?>>(frameCount)
         val floats = FloatArray(COLS * ROWS * DicResult.STRIDE)
         val buf = ByteBuffer.allocate(floats.size * 4).order(ByteOrder.nativeOrder())
         for (i in 0 until frameCount) {

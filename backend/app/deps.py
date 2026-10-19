@@ -5,7 +5,7 @@ import hashlib
 import logging
 import re
 import time
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from cryptography.exceptions import InvalidSignature
@@ -13,7 +13,6 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
 from fastapi import Depends, Header, HTTPException, Request
-from firebase_admin import auth as fb_auth
 from starlette.concurrency import run_in_threadpool
 
 from . import apps, audit, errors, repo, rate_limit, statuses
@@ -331,16 +330,19 @@ def unless_paused(*switches: str):
     return Depends(check)
 
 
-def admin_user(user: dict = Depends(current_user)) -> dict:
-    """Authenticated caller that is an admin (role=admin or in ADMIN_EMAILS).
+def admin_user(request: Request, user: dict = Depends(current_user)) -> dict:
+    """Authenticated caller that is an admin: `role=admin`, or a token that
+    proves an address in ADMIN_EMAILS (`repo.is_admin_email`). Not the stored
+    address: an account that typed a staff address and never verified it is
+    not staff.
 
     ID-token based (no device signature) so list/read admin screens and curl in
     dev mode work without a registered device. **Mutating** admin routes
     (approve / revoke / config-patch) additionally require `verified_device` so
     a stolen ID token alone cannot change access — see those handlers.
     """
-    email = (user.get("email") or "").lower()
-    if user.get("role") != "admin" and email not in settings.ADMIN_EMAILS:
+    claims = getattr(request.state, "claims", None) or {}
+    if user.get("role") != "admin" and not repo.is_admin_email(claims):
         raise HTTPException(403, errors.NOT_ADMIN)
     return user
 
@@ -354,8 +356,9 @@ async def verified_device(
 ) -> Caller:
     """Device-attested caller: active device + single-use nonce + ECDSA signature.
 
-    Keeps `async` only for `await request.body()`. Firestore device/nonce lookups
-    run in the threadpool so they do not stall the event loop.
+    Keeps `async` only for `await request.body()`. Firestore device/nonce lookups,
+    the body hash and the signature check run in the threadpool so they do not
+    stall the event loop.
     """
     if settings.DEV_INSECURE_AUTH:
         return Caller(user, _DEV_DEVICE)
@@ -370,8 +373,21 @@ async def verified_device(
         raise HTTPException(400, errors.INVALID_SIGNATURE)
 
     dev = await run_in_threadpool(repo.get_device, x_device_id)
-    if not dev or dev["uid"] != user["uid"] or dev["status"] != statuses.DEVICE_ACTIVE:
+    # `_authenticate` resolved the app this request came from (ADR-010).
+    app = getattr(request.state, "app", None) or apps.SEMPER
+    if not _device_is_bound(dev, user, x_device_id, app):
         raise HTTPException(409, errors.DEVICE_NOT_ACTIVE)
+    if _device_app(dev) != app:
+        # One signing key gives two apps one device id, and the record holds
+        # the key of whichever registered last. A key registered under the
+        # other app must not sign for this one, where the same id may be the
+        # bound phone. `bad_signature`, because that is what it is to the
+        # phone: the backend holds another key for its id, and the app
+        # registers again and resends once (`DeviceKeyRecovery`). No nonce
+        # is spent.
+        audit.record(user["uid"], x_device_id, action="AUTH_DENIED", outcome="DENIED",
+                     detail={"stage": "device_app", "app": app})
+        raise HTTPException(401, errors.BAD_SIGNATURE)
     client_nonce_ts = parse_client_nonce(x_nonce)
     if client_nonce_ts is None:
         # Server-issued challenge: claimed (deleted) before the signature check,
@@ -397,12 +413,10 @@ async def verified_device(
     target = request.url.path
     if request.url.query:
         target = target + "?" + request.url.query
-    msg = (x_nonce + request.method + target).encode() + hashlib.sha256(body).digest()
-    try:
-        pub = load_pem_public_key(dev["publicKeyPem"].encode())
-        signature = base64.b64decode(x_signature, validate=True)
-        pub.verify(signature, msg, ec.ECDSA(hashes.SHA256()))
-    except (binascii.Error, InvalidSignature, ValueError):
+    # In the threadpool, as the Firestore lookups are (TD-198): the hash of a
+    # 4 MiB body is a few ms, and the event loop serves every other request.
+    signed = (x_nonce + request.method + target).encode()
+    if not await run_in_threadpool(_signature_ok, dev["publicKeyPem"], x_signature, signed, body):
         audit.record(user["uid"], x_device_id, action="AUTH_DENIED", outcome="DENIED",
                      detail={"stage": "signature"})
         raise HTTPException(401, errors.BAD_SIGNATURE)
@@ -418,6 +432,42 @@ async def verified_device(
     request.state.device_id = x_device_id
     obs.bind_device(x_device_id)
     return Caller(user, dev)
+
+
+def _signature_ok(public_key_pem: str, signature_b64: str, signed: bytes, body: bytes) -> bool:
+    """Whether `signature_b64` is the device key's ECDSA P-256 signature over
+    `signed` followed by the SHA-256 of `body`. CPU work, called off the
+    event loop."""
+    msg = signed + hashlib.sha256(body).digest()
+    try:
+        pub = load_pem_public_key(public_key_pem.encode())
+        signature = base64.b64decode(signature_b64, validate=True)
+        pub.verify(signature, msg, ec.ECDSA(hashes.SHA256()))
+    except (binascii.Error, InvalidSignature, ValueError):
+        return False
+    return True
+
+
+def _device_is_bound(dev: dict | None, user: dict, device_id: str, app: str) -> bool:
+    """Whether `dev` is the device `user` has bound for `app`.
+
+    ACTIVE and the caller's is not enough: the account's binding for the
+    asking app must name this device too, so a stale ACTIVE record (a
+    registration that lost a race, a release that left one behind) cannot
+    sign (ADR-010, device trust).
+    """
+    return bool(
+        dev
+        and dev.get("uid") == user.get("uid")
+        and dev.get("status") == statuses.DEVICE_ACTIVE
+        and user.get(apps.field("activeDeviceId", app)) == device_id
+    )
+
+
+def _device_app(dev: dict) -> str:
+    """The app `dev` was registered under. A record from before devices
+    named their app is Semper's, as every request without `X-App-Id` is."""
+    return dev.get("app") or apps.SEMPER
 
 
 _CLIENT_NONCE = re.compile(r"t1\.(\d{9,11})\.[A-Za-z0-9_-]{22,86}")
@@ -438,183 +488,3 @@ def parse_client_nonce(nonce: str) -> int | None:
 
 def client_nonce_fresh(ts: int) -> bool:
     return abs(time.time() - ts) <= settings.CLIENT_NONCE_WINDOW_SECONDS
-
-
-def _second_factor(claims: dict) -> str:
-    """The second factor the token records, or "" when there was none.
-
-    Firebase sets `firebase.sign_in_second_factor` only on a token minted after
-    an MFA challenge actually completed. Enrolment alone does not set it, so
-    this is "they proved a second factor for *this* session", not "they own
-    one" — which is the property worth checking.
-    """
-    firebase = claims.get("firebase")
-    if not isinstance(firebase, dict):
-        return ""
-    return str(firebase.get("sign_in_second_factor") or "")
-
-
-def _auth_age_seconds(claims: dict) -> float | None:
-    """How long ago this session authenticated, or None if the token does not
-    say. None is treated as too old: a token that will not state its own age
-    cannot satisfy a freshness requirement."""
-    raw = claims.get("auth_time")
-    try:
-        return time.time() - float(raw)
-    except (TypeError, ValueError):
-        return None
-
-
-def _step_up(base, window: str, doc: str):
-    """A route dependency: `base`'s caller, held to `step_up_check` with the
-    freshness window `settings.<window>` (read per request, so a test or a
-    redeploy that changes it is honoured)."""
-    async def dependency(
-        request: Request,
-        user: dict = Depends(base),
-        x_device_id: str = Header(default=""),
-        x_nonce: str = Header(default=""),
-        x_signature: str = Header(default=""),
-    ) -> Caller:
-        return await step_up_check(request, user, x_device_id, x_nonce, x_signature,
-                                   max_age_seconds=getattr(settings, window))
-
-    dependency.__doc__ = doc
-    return dependency
-
-
-#: State-changing Semper-staff caller: an attested device, or a 2FA browser.
-#:
-#: The device path is preferred: a request carrying any device header is held
-#: to the full `verified_device` check, so the phone admin screen keeps exactly
-#: the guarantee it had. The browser path exists because a browser cannot
-#: produce an ECDSA attestation. It needs a completed **second factor** on the
-#: ID token (so a token stolen from a password-only session is refused) and a
-#: **recent** sign-in (ADMIN_WEB_REAUTH_SECONDS, so a token that leaks later
-#: stops working). That is weaker than attestation — a phished live MFA
-#: session inside the window can mint a licence — and is enabled because staff
-#: administer licences from a computer; ADMIN_WEB_MFA_ENABLED=0 withdraws it.
-#: Reads do not go through here, only the routes that change state.
-attested_or_mfa_admin = _step_up(
-    admin_user, "ADMIN_WEB_REAUTH_SECONDS",
-    "Semper staff, attested device or a second factor on a recent sign-in.",
-)
-#: The same, with the tighter window whole-licence revoke and delete ask for:
-#: the console forces password (or Google re-auth) plus TOTP first.
-attested_or_mfa_admin_fresh = _step_up(
-    admin_user, "ADMIN_WEB_REVOKE_REAUTH_SECONDS",
-    "Semper staff, step-up within the revoke window.",
-)
-#: The same step-up for an account holder acting on their own licence: moving
-#: it to a new device, pulling an analysis out through a browser. The question
-#: does not change with who asks; only the tier below it does, so this
-#: authorises nothing beyond what the holder already holds.
-attested_or_mfa_user = _step_up(
-    current_user, "ADMIN_WEB_REAUTH_SECONDS",
-    "An account holder, attested device or a second factor on a recent sign-in.",
-)
-
-
-async def step_up_check(
-    request: Request,
-    user: dict,
-    x_device_id: str,
-    x_nonce: str,
-    x_signature: str,
-    *,
-    max_age_seconds: int,
-) -> Caller:
-    """The step-up itself, shared by the admin, user and institution tiers.
-
-    Institution IT calls it directly, after its membership check, so a
-    foreign licence 404s without disclosing that MFA was the next gate.
-
-    A device attestation is preferred and checked in full whenever the request
-    carries any device header, so the phone keeps exactly the guarantee it
-    had. The browser path — second factor, recent sign-in — is the fallback,
-    governed by ADMIN_WEB_MFA_ENABLED and the caller's freshness window: the
-    trade being made is the same one either way, and a deployment that
-    withdraws the browser path should withdraw all of it.
-    """
-    if settings.DEV_INSECURE_AUTH:
-        return Caller(user, _DEV_DEVICE, via="dev")
-
-    if x_device_id or x_nonce or x_signature:
-        ctx = await verified_device(request, user, x_device_id, x_nonce, x_signature)
-        return replace(ctx, via="device")
-
-    if not settings.ADMIN_WEB_MFA_ENABLED:
-        # No device headers and no browser path: this is the attestation-only
-        # posture, and the honest answer is that the call needs a device.
-        raise HTTPException(400, errors.INVALID_SIGNATURE)
-
-    claims = getattr(request.state, "claims", None) or {}
-    factor = _second_factor(claims)
-    if not factor:
-        audit.record(user["uid"], action="AUTH_DENIED", outcome="DENIED",
-                     detail={"stage": "second_factor"})
-        raise HTTPException(403, errors.MFA_REQUIRED)
-
-    age = _auth_age_seconds(claims)
-    if age is None or age > max_age_seconds:
-        audit.record(user["uid"], action="AUTH_DENIED", outcome="DENIED",
-                     detail={"stage": "reauth", "ageSeconds": age})
-        raise HTTPException(403, errors.REAUTH_REQUIRED)
-
-    if settings.CHECK_REVOKED_ON_STEP_UP:
-        await run_in_threadpool(_require_not_revoked, request, user["uid"])
-
-    request.state.device_id = ""
-    return Caller(user, via="mfa", second_factor=factor)
-
-
-def _require_not_revoked(request: Request, uid: str) -> None:
-    """Re-verify the browser caller's bearer with revocation checked, or 401.
-
-    Only the second-factor path asks (`CHECK_REVOKED_ON_STEP_UP`): a browser
-    session is what a revoked or disabled user can keep using until the token
-    expires, while a phone's signed path is held to its device record.
-
-    A revoked token or a disabled account is `invalid_token`, audited as stage
-    `revoked`. Any other failure of the check — the runtime account lost
-    `roles/firebaseauth.admin` on the Auth project, or the Auth API is down —
-    also refuses, 401 `invalid_token`, audited as stage `revocation_check` and
-    logged as `revocation_check_failed`. Fail closed, because whoever turned
-    the setting on asked for revoked users to be kept out, and a check that
-    cannot answer cannot say this one is not. Not 503: the console and app
-    already handle `invalid_token`, and a new wire code would reach neither.
-
-    The one exception is this instance's own Auth Admin budget
-    (`rate_limit.auth_admin_bucket`, TD-239). Spent, the check is not asked
-    and the answer is 503 `auth_check_busy` with Retry-After, logged as
-    `auth_admin_rate_limited`: the token may well be fine, and telling the
-    caller it is invalid would sign a working console out.
-    """
-    bearer = _client_bearer(
-        request.headers.get("authorization", ""),
-        request.headers.get("x-forwarded-authorization", ""),
-    )
-    token = bearer[7:] if bearer.startswith("Bearer ") else ""
-    if not rate_limit.auth_admin_allowed():
-        obs.log_event(log, logging.WARNING, "auth_admin_rate_limited", uid=uid,
-                      stage="revocation_check", outcome="refused",
-                      errorCode=errors.AUTH_CHECK_BUSY, dependency="firebase_auth")
-        raise HTTPException(
-            503, errors.AUTH_CHECK_BUSY,
-            headers={"Retry-After": str(rate_limit.auth_admin_bucket.retry_after(
-                rate_limit.AUTH_ADMIN_KEY))},
-        )
-    try:
-        verify_id_token(token, check_revoked=True)
-    except (fb_auth.RevokedIdTokenError, fb_auth.UserDisabledError) as e:
-        obs.log_event(log, logging.WARNING, "step_up_revoked", uid=uid,
-                      stage="revoked", errorCode=type(e).__name__)
-        audit.record(uid, action="AUTH_DENIED", outcome="DENIED", detail={"stage": "revoked"})
-        raise HTTPException(401, errors.INVALID_TOKEN) from e
-    except Exception as e:  # noqa: BLE001 - fail closed; see the docstring
-        obs.log_event(log, logging.ERROR, "revocation_check_failed", uid=uid,
-                      stage="revocation_check", errorCode=type(e).__name__,
-                      dependency="firebase_auth")
-        audit.record(uid, action="AUTH_DENIED", outcome="DENIED",
-                     detail={"stage": "revocation_check"})
-        raise HTTPException(401, errors.INVALID_TOKEN) from e

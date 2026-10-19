@@ -14,7 +14,7 @@ chunk own?" here.
 | **analysis** | Import → ROI → batch / parameter sweep; speckle and noise-floor suitability; the wizard across a process death | `analysis/AnalysisViewModelTest`, `WizardStateTest`, `SweepStudyTest`, `SubsetRecommenderTest`, `ConvergenceGateTest`, `DicGoodPracticeTest`, `SpeckleScaleTest`, `NoiseFloorProbeTest`, `NoiseFloorStatsTest`, `NoiseCorrelationTest`, `FrameOrderHelperTest`, `BitmapDecoderTest`, `ExifOrientedSizeTest`, `LossyFormatCheckTest`, `RawRgbaTest`, `SweepSetupControllerTest`, `BatchAnalysisLimitTest`, `ui/common/media/MediaPickerSheetTest`, `ui/analysis/roi/StudioOverlayViewTest`, `RoiDrawActivityTest`, `SweepLatticeViewTest`, `RoiViewportTest`, `SweepPlotViewTest` | `ui/analysis/wizard/WizardDraftRestoreTest`; `e2e/RoiEditorGestureTest` (ROI editor under real touches: pinch keeps the ROI's pixels, two-finger pan stops at the edge, double-tap 2× / fit, a stray tap keeps the ROI, a zoomed draw saves the pixels under the finger) |
 | **session** | Session store durability, disk footprint, failure provenance; the Home list and its multi-select | `session/SessionStoreAtomicTest`, `LocalStorageFootprintTest`, `FailureProvenanceTest`, `ui/home/SessionListAdapterTest`, `SessionSelectionControllerTest`, `CloudBackupsCardTest` | — |
 | **results** | `.dat` decode, CSV, heatmap, PDF, GIF | `results/DicResultCsvTest`, `AnalysisCsvSectionsTest`, `DicResultDecodeTest`, `VisualizationEngineTest`, `ReportBuilderTest`, `ReportBuilderMeanStdParityTest`, `GifEncoderTest`, `SummaryAnimationTest`, `PdfReportGeneratorTest` | `report/PdfReportDeviceTest` |
-| **viewer** | Result viewer controls, frame cache bounds, the Intent contract both entry points write and all four readers parse | `viewer/FrameNumberEntryTest`, `ScrubFrameCacheTest`, `ViewerFieldPillsTest`, `ShareCenterTest`, `ui/viewer/ViewerArgsTest`, `TouchImageViewTest`, `SettingsUsedSheetTest`, `analysis/RunSpecTest` | `ui/viewer/ViewerEntryParityDeviceTest` |
+| **viewer** | Result viewer controls, frame cache bounds, the Intent contract its one builder (`ViewerArgs.of` a saved row) writes and all four readers parse | `viewer/FrameNumberEntryTest`, `ScrubFrameCacheTest`, `ViewerFieldPillsTest`, `ShareCenterTest`, `ui/viewer/ViewerArgsTest`, `TouchImageViewTest`, `SettingsUsedSheetTest`, `analysis/RunSpecTest` | `ui/viewer/ViewerEntryParityDeviceTest` |
 | **cloud** | Upload, API, restore, quota, account deletion | `cloud/ApiDtosContractTest`, `ApiErrorMappingTest`, `UploadResumableTest`, `DicUploadWorkerOutcomesTest`, `RestoreAndImportSafetyTest`, `RestoreStartTest`, `CloudBackupListingTest`, `QuotaGateTest`, `AccountDeletionTest`, `SessionEverythingExporterTest`, `data/cloud/SessionUploadBundlerTest` | `data/cloud/SessionUploadBundlerDeviceTest` |
 | **settings** | Settings sections, contacting support, account deletion | `settings/AnalysisEntriesTest`, `HelpSupportSectionTest`, `DeleteAccountReauthTest`, `AccountDeletionDeathTest`, `AppSettingsMigrateTest` | — |
 | **analytics** | Consent-gated Firebase Analytics events | `diagnostics/SemperAnalyticsTest` | — |
@@ -65,7 +65,7 @@ hand-rolled copies (#315, #330).
 | `packDat`, `gridFrame`, `writeGridBatch` | `fixtures/DatFixtures.kt` | `.dat` bytes in the engine's layout, a synthetic grid frame, or a whole batch of them in a folder |
 | `viewerArgs`, `viewerController`, `launchViewer` | `fixtures/ViewerFixture.kt` | A `ResultViewerActivity` under Robolectric on a `writeGridBatch` batch; keep the controller to recreate the viewer |
 | `idleUntil(what, timeoutMs) { done }` | `fixtures/Robo.kt` | Waiting for work that runs on a background dispatcher and posts back to main: idles the main looper until `done` holds, and names `what` when it times out. Use it instead of `Thread.sleep` or a bare `idle()` |
-| `CleanAppState` | `fixtures/CleanAppState.kt` | A JUnit rule: signed out, no saved sessions, before and after each test (token store, remote config, session index and folders) |
+| `CleanAppState` | `fixtures/CleanAppState.kt` | A JUnit rule: signed out, no saved sessions, before and after each test (token store, remote config, session index and folders). Before each test it also clears `AndroidViewModelFactory`'s singleton, which keeps the first test's application, so an `AndroidViewModel(app)` is given this test's application |
 | `MockWebServerRule` | OkHttp's `mockwebserver3.junit4` | Starting and closing a `MockWebServer` per test; do not start one by hand |
 | `WizardTestBed`, `FakeWizardHost` | `ui/analysis/WizardTestBed.kt` | The wizard's parts one at a time: its views in a plain themed Activity, a fresh `AnalysisViewModel`, and a host that counts what each part asks of it. Pass `resumed = false` for a part that registers a result launcher |
 
@@ -390,6 +390,47 @@ CI runs this only with the `benchmark` PR label or workflow_dispatch
 the app's own startup path has nothing to gain: on a Pixel 6, `Full` compilation
 starts no faster than `None` ([perf/startup.md](../perf/startup.md), which has the
 `StartupHeadroomBenchmark` steps). Measure that again before generating one.
+
+## Source checks (no Gradle)
+
+Rules that read the sources rather than run them are Python checks, stdlib
+only, run in CI's `legal-pages` job on every event ([CI.md](../ops/CI.md)).
+Their tests are `unittest` modules in `scripts/tests`, run in the same job:
+
+```bash
+python scripts/check_kotlin_file_size.py                   # ADR-015's 500-line file budget (TD-292)
+python scripts/check_activity_scope_work.py                # ADR-016 rule 1 on screens' lifecycleScope (TD-291)
+python scripts/check_swallowed_cancellation.py            # ADR-018: cancellation rethrown around suspend calls (TD-171)
+python -m unittest discover -s scripts/tests -p "test_*.py"
+```
+
+`check_kotlin_file_size.py` does not count the fused hot-loop functions
+([ADR-015](../adr/ADR-015-package-layout.md#amendments)); an exception goes in
+`scripts/kotlin_file_size_allowlist.txt` with its ceiling and a TD/ADR pointer,
+and an entry that is no longer needed fails the check.
+
+`check_activity_scope_work.py` reads `ui/` for a `lifecycleScope` launch (or a
+lambda handed to a function that launches it, like the old `runAuth`) whose
+block reaches a `data/net` / `data/cloud` client, an `AuthRepository` network
+call or an enqueue, directly or through a function of the same file. Its tests
+copy the Kotlin fixtures in `scripts/tests/fixtures/activity_scope/` into a
+temporary tree: Home's restore on `lifecycleScope` fails, the same restore on
+`viewModelScope` passes.
+
+`check_swallowed_cancellation.py` stands in for detekt's
+`SuspendFunSwallowedCancellation`, which needs type resolution detekt 1.23.8
+cannot do here (TD-171). It reads every `app/src/main` file for a
+`catch (e: Exception)` (or `Throwable`, `RuntimeException`,
+`IllegalStateException`) or a `runCatching { }` whose block calls a suspend
+function, known by name: one the main sources declare `suspend`, a
+`suspend`-typed parameter or property, or a kotlinx.coroutines / androidx
+suspend call. It passes a `CancellationException` clause ahead of the broad
+one, a catch that rethrows or calls `rethrowIfCallerCancelled()`, a
+`runCatching` chained to `getOrThrow()`, and anything under `NonCancellable`;
+an exception goes in `scripts/swallowed_cancellation_allowlist.txt` with a
+TD/ADR pointer. A name that is also a plain `fun` counts only in a suspend
+context, so a library suspend call it does not list is missed. Its fixtures are
+in `scripts/tests/fixtures/cancellation/`.
 
 ## What not to test here
 

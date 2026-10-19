@@ -9,9 +9,6 @@ import com.sempermechanics.semper.data.cloud.SessionMetadataDoc
 import com.sempermechanics.semper.data.cloud.SessionUploadMetadata
 import com.sempermechanics.semper.fixtures.sessionRecord
 import com.sempermechanics.semper.navigation.IntentKeys
-import com.sempermechanics.semper.report.RoiData
-import com.sempermechanics.semper.report.toRoi
-import com.sempermechanics.semper.report.toRoiData
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -137,11 +134,5 @@ class RoiCodecsTest {
         assertEquals(true, ImageSize(3, 4).isKnown)
         assertEquals(false, ImageSize(0, 4).isKnown)
         assertEquals(false, ImageSize(3, -1).isKnown)
-    }
-
-    @Test
-    fun `report row round-trips`() {
-        assertEquals(RoiData(12, 34, 560, 400), roi.toRoiData())
-        assertEquals(roi, RoiData(12, 34, 560, 400).toRoi())
     }
 }

@@ -42,7 +42,8 @@ import kotlin.math.abs
  * RGB retriever fallback, which would pass every other check silently.
  * Keyframe mode is checked on each rung: the hardware decoder, the AVI
  * demuxer (indexed, all-intra and index-less files), and the retriever,
- * forced; frames from the first two carry their own clip times.
+ * forced; frames from each carry their own clip times (the retriever's from
+ * a sample walk, TD-207).
  */
 @RunWith(AndroidJUnit4::class)
 class VideoFrameExtractionDeviceTest {
@@ -104,6 +105,18 @@ class VideoFrameExtractionDeviceTest {
         val frames = extractWithRetriever(clip, preferKeyframes = true, fps = 5.0, endMs = CLIP_MS)
         // At 5 fps a uniform plan would hold 15 frames; the I-frames are three.
         assertEquals(listOf(0, 30, 60), frames.map { it.code(rotation = 0) })
+        // TD-207: each I-frame is timed by its own presentation time.
+        frames.drop(1).forEach { it.assertTimedAsFrame(it.code(rotation = 0)) }
+    }
+
+    @Test
+    fun fixedIntervalOnTheRetrieverRungTimesEachFrameByItsOwnTime() {
+        val clip = encodeMp4("retriever-uniform.mp4", rotation = 0)
+        // 7 fps asks for t = 0, 142, 285, … ms, none of them a 30 fps frame's start:
+        // each frame reads the time of the frame the retriever returned (TD-207).
+        val frames = extractWithRetriever(clip, preferKeyframes = false, fps = 7.0, endMs = 2_000)
+        assertTrue("too few frames: ${frames.size}", frames.size > 2)
+        frames.drop(1).forEach { it.assertTimedAsFrame(it.code(rotation = 0)) }
     }
 
     @Test

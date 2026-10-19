@@ -14,13 +14,12 @@ import kotlin.math.floor
  * - the rate: "1.1 MB/s";
  * - pieces joined with a middle dot: "34.6% · About 35 s left".
  *
- * Byte units are binary (1 KB = 1024 bytes), as [ByteSize] counts them.
+ * Byte units are [ByteUnit]'s, as every byte count in the app.
  */
 object ProgressText {
 
     private const val PERCENT_MAX = 100.0
     private const val TENTHS = 10.0
-    private const val BYTES_PER_KB = 1024.0
     private const val FLOAT_SLACK = 1e-6
 
     /** "34.6%": [percent] (0–100) rounded down to a tenth. */
@@ -71,18 +70,4 @@ object ProgressText {
     /** "[first] · [second]". */
     fun joined(res: Resources, first: String, second: String): String =
         res.getString(R.string.progress_joined_fmt, first, second)
-
-    /** The unit a byte count is shown in: the largest that keeps it at 1 or more, KB at least. */
-    private enum class ByteUnit(val bytes: Double, val label: String) {
-        KB(BYTES_PER_KB, "KB"),
-        MB(BYTES_PER_KB * BYTES_PER_KB, "MB"),
-        GB(BYTES_PER_KB * BYTES_PER_KB * BYTES_PER_KB, "GB"),
-        ;
-
-        fun amount(count: Long): Double = count / bytes
-
-        companion object {
-            fun of(count: Long): ByteUnit = entries.lastOrNull { count >= it.bytes } ?: KB
-        }
-    }
 }

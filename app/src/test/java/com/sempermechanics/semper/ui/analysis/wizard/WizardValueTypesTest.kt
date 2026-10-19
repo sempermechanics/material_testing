@@ -28,37 +28,27 @@ import org.robolectric.annotation.Config
 class WizardValueTypesTest {
 
     private fun wizard(): AnalysisViewModel = AnalysisViewModel().apply {
-        realRefWidth = 400
-        realRefHeight = 300
-        hasCustomRoi = true
-        roiX = 10
-        roiY = 20
-        roiW = 300
-        roiH = 200
-        deformedFrames = listOf(
-            DeformedFrame("/c/f1.png", "IMG_1.png", 100L, ImageSize(400, 300)),
-            DeformedFrame("/c/f2.png", "IMG_2.png", Long.MAX_VALUE),
-            DeformedFrame("/c/f3.png", "IMG_3.png", 50L, ImageSize(400, 300)),
-        )
-        subsetMin = 21
-        subsetMax = 61
-        strainWinMin = 9
-        strainWinMax = 31
-        subsetSamples = 4
-        strainWinSamples = 5
-        stepDenominator = 4
+        edit {
+            it.copy(
+                refSize = ImageSize(400, 300),
+                hasCustomRoi = true,
+                roi = Roi(10, 20, 300, 200),
+                deformedFrames = listOf(
+                    DeformedFrame("/c/f1.png", "IMG_1.png", 100L, ImageSize(400, 300)),
+                    DeformedFrame("/c/f2.png", "IMG_2.png", Long.MAX_VALUE),
+                    DeformedFrame("/c/f3.png", "IMG_3.png", 50L, ImageSize(400, 300)),
+                ),
+                sweepRanges = SweepRanges(21, 61, 9, 31, subsetSamples = 4, strainWinSamples = 5, stepDenominator = 4),
+            )
+        }
     }
 
-    private fun AnalysisViewModel.sweepFields() =
-        SweepRanges(subsetMin, subsetMax, strainWinMin, strainWinMax, subsetSamples, strainWinSamples, stepDenominator)
-
     @Test
-    fun `the seven sweep fields read and write the view model's sweep ranges`() {
+    fun `one sweep axis edits as a copy of the view model's sweep ranges`() {
         val vm = wizard()
-        assertEquals(vm.sweepFields(), vm.sweepRanges)
-        vm.strainWinSamples = 7
-        assertEquals(7, vm.sweepRanges.strainWinSamples)
-        assertEquals(vm.sweepFields(), vm.sweepRanges)
+        val before = vm.inputs.value.sweepRanges
+        vm.edit { it.copy(sweepRanges = it.sweepRanges.copy(strainWinSamples = 7)) }
+        assertEquals(before.copy(strainWinSamples = 7), vm.inputs.value.sweepRanges)
     }
 
     @Test
@@ -72,12 +62,12 @@ class WizardValueTypesTest {
     fun `sweep ranges pack exactly as the saved state does and restore the same fields`() {
         val vm = wizard()
         val saved = WizardState.save(vm, "")
-        assertEquals(saved.getIntArray("sweepRanges")!!.toList(), vm.sweepRanges.toIntArray().toList())
+        assertEquals(saved.getIntArray("sweepRanges")!!.toList(), vm.inputs.value.sweepRanges.toIntArray().toList())
 
         val restored = AnalysisViewModel()
         WizardState.restoreScalars(restored, saved)
-        assertEquals(vm.sweepRanges, restored.sweepRanges)
-        assertEquals(vm.sweepRanges, SweepRanges.fromIntArray(saved.getIntArray("sweepRanges")))
+        assertEquals(vm.inputs.value.sweepRanges, restored.inputs.value.sweepRanges)
+        assertEquals(vm.inputs.value.sweepRanges, SweepRanges.fromIntArray(saved.getIntArray("sweepRanges")))
     }
 
     @Test
@@ -89,8 +79,7 @@ class WizardValueTypesTest {
 
     @Test
     fun `unseeded ranges are the view model's defaults`() {
-        assertEquals(SweepRanges.UNSEEDED, AnalysisViewModel().sweepRanges)
-        assertEquals(SweepRanges.UNSEEDED, AnalysisViewModel().sweepFields())
+        assertEquals(SweepRanges.UNSEEDED, AnalysisViewModel().inputs.value.sweepRanges)
     }
 
     /** Only [SweepSetupController.Callbacks.maxSubsetForRoi] matters to `currentPlan`. */
@@ -113,15 +102,15 @@ class WizardValueTypesTest {
      * the body verbatim, its ceiling passed in rather than read from the callbacks.
      */
     private fun legacyCurrentPlan(viewModel: AnalysisViewModel, ceiling: Int): List<SweepStudy.Point> {
-        if (viewModel.subsetMin > ceiling) return emptyList()
+        if (viewModel.inputs.value.sweepRanges.subsetMin > ceiling) return emptyList()
         return SweepStudy.plan(
-            subsetMin = viewModel.subsetMin,
-            subsetMax = viewModel.subsetMax.coerceAtMost(ceiling),
-            subsetSamples = viewModel.subsetSamples,
-            strainWinMin = viewModel.strainWinMin,
-            strainWinMax = viewModel.strainWinMax,
-            strainWinSamples = viewModel.strainWinSamples,
-            stepDenominator = viewModel.stepDenominator,
+            subsetMin = viewModel.inputs.value.sweepRanges.subsetMin,
+            subsetMax = viewModel.inputs.value.sweepRanges.subsetMax.coerceAtMost(ceiling),
+            subsetSamples = viewModel.inputs.value.sweepRanges.subsetSamples,
+            strainWinMin = viewModel.inputs.value.sweepRanges.strainWinMin,
+            strainWinMax = viewModel.inputs.value.sweepRanges.strainWinMax,
+            strainWinSamples = viewModel.inputs.value.sweepRanges.strainWinSamples,
+            stepDenominator = viewModel.inputs.value.sweepRanges.stepDenominator,
         )
     }
 
@@ -135,10 +124,10 @@ class WizardValueTypesTest {
             ceiling.max = max
             val expected = legacyCurrentPlan(vm, max)
             assertEquals("currentPlan, ceiling $max", expected, helper.currentPlan())
-            assertEquals("plan, ceiling $max", expected, vm.sweepRanges.plan(subsetCeiling = max))
+            assertEquals("plan, ceiling $max", expected, vm.inputs.value.sweepRanges.plan(subsetCeiling = max))
         }
-        assertEquals(emptyList<SweepStudy.Point>(), vm.sweepRanges.plan(subsetCeiling = 20))
-        assertEquals(41, vm.sweepRanges.plan(subsetCeiling = 41).maxOf { it.subset })
+        assertEquals(emptyList<SweepStudy.Point>(), vm.inputs.value.sweepRanges.plan(subsetCeiling = 20))
+        assertEquals(41, vm.inputs.value.sweepRanges.plan(subsetCeiling = 41).maxOf { it.subset })
     }
 
     @Test
@@ -149,7 +138,7 @@ class WizardValueTypesTest {
         assertEquals(listOf(100L, Long.MAX_VALUE, 50L), vm.defFrameDates)
         // A frame with no measured size has no entry.
         assertEquals(mapOf("/c/f1.png" to (400 to 300), "/c/f3.png" to (400 to 300)), vm.defFrameSizes)
-        assertEquals(3, vm.defCount)
+        assertEquals(3, vm.inputs.value.deformedFrames.size)
     }
 
     @Test
@@ -158,7 +147,7 @@ class WizardValueTypesTest {
         val draftFrames = WizardState.frames(vm)
         assertEquals(listOf(400, -1, 400), draftFrames.widths)
         val asFrames = draftFrames.toDeformedFrames()
-        assertEquals(vm.deformedFrames, asFrames)
+        assertEquals(vm.inputs.value.deformedFrames, asFrames)
         assertEquals(draftFrames, wizardFramesOf(asFrames))
     }
 

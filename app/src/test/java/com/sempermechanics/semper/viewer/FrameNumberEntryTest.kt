@@ -81,7 +81,7 @@ class FrameNumberEntryTest {
 
         activity.jumpTo("5")
 
-        assertEquals(4, activity.currentFrameIndex)
+        assertEquals(4, activity.viewModel.currentFrameIndex)
         assertEquals("5", activity.field().text.toString())
     }
 
@@ -91,7 +91,7 @@ class FrameNumberEntryTest {
 
         activity.jumpTo("999")
 
-        assertEquals(0, activity.currentFrameIndex)
+        assertEquals(0, activity.viewModel.currentFrameIndex)
         assertEquals("1", activity.field().text.toString())
     }
 
@@ -101,7 +101,7 @@ class FrameNumberEntryTest {
 
         activity.jumpTo("0")
 
-        assertEquals(0, activity.currentFrameIndex)
+        assertEquals(0, activity.viewModel.currentFrameIndex)
         assertEquals("1", activity.field().text.toString())
     }
 
@@ -112,7 +112,7 @@ class FrameNumberEntryTest {
 
         activity.jumpTo("")
 
-        assertEquals(2, activity.currentFrameIndex)
+        assertEquals(2, activity.viewModel.currentFrameIndex)
         assertEquals("3", activity.field().text.toString())
     }
 
@@ -120,7 +120,7 @@ class FrameNumberEntryTest {
     fun `the scrubber stays up while a number is typed, then hides after the jump`() {
         val activity = viewer()
         val scrubber = activity.findViewById<View>(R.id.layoutScrubber)
-        activity.bumpChrome()
+        activity.chrome.bumpChrome()
         activity.field().requestFocus()
 
         // Well past the 2.5 s auto-hide: hiding would take the field's focus
@@ -132,7 +132,7 @@ class FrameNumberEntryTest {
         activity.jumpTo("4")
         shadowOf(activity.mainLooper).idleFor(Duration.ofSeconds(10))
 
-        assertEquals(3, activity.currentFrameIndex)
+        assertEquals(3, activity.viewModel.currentFrameIndex)
         assertEquals(View.INVISIBLE, scrubber.visibility)
     }
 
@@ -143,7 +143,7 @@ class FrameNumberEntryTest {
         activity.findViewById<View>(R.id.btnNextFrame).performClick()
         shadowOf(activity.mainLooper).idle()
 
-        assertEquals(1, activity.currentFrameIndex)
+        assertEquals(1, activity.viewModel.currentFrameIndex)
         assertEquals("2", activity.field().text.toString())
     }
 
@@ -172,7 +172,7 @@ class FrameNumberEntryTest {
         shadowOf(activity.mainLooper).idle()
 
         assertTrue(activity.isShowingSummary)
-        assertEquals(0, activity.currentFrameIndex)
+        assertEquals(0, activity.viewModel.currentFrameIndex)
     }
 
     @Test
@@ -187,7 +187,7 @@ class FrameNumberEntryTest {
 
         activity.jumpTo("3")
 
-        assertEquals(2, activity.currentFrameIndex)
+        assertEquals(2, activity.viewModel.currentFrameIndex)
         assertFalse(activity.isShowingSummary)
     }
 }

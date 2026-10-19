@@ -8,9 +8,10 @@
  * summary, where messages land); this module owns the rows, what each button
  * sends, and what a refusal says.
  */
-import { api, esc, confirmInPage } from "./auth.js";
+import { api } from "./api.js";
+import { confirmInPage } from "./dialogs.js";
 import { explain } from "./messages.js";
-import { seatCells, inviteCells } from "./util.js";
+import { esc, seatCells, inviteCells } from "./util.js";
 
 /**
  * The roster of the licence at `base`: its summary, every seat and the

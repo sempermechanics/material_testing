@@ -1,40 +1,9 @@
 package com.sempermechanics.semper.ui.analysis.wizard
 
-import com.sempermechanics.semper.data.session.SessionRecordSettings
+import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.ui.analysis.run.RunSpec
-
-/**
- * The result of the last (or in-progress) run, as ONE immutable snapshot.
- *
- * These fields are written from the native solve dispatcher and read on Main
- * (e.g. `restoreUiFromViewModel()` on Activity recreation, and
- * [AnalysisNavHelper] when building the result intent). Holding them in a
- * single `MutableStateFlow` gives that cross-thread hand-off a consistent
- * snapshot and one owning source, instead of a bag of separate `@Volatile`
- * fields. The `lastX` / `currentX` properties of [AnalysisViewModel] are thin
- * accessors over it; each setter does an atomic `update { copy(...) }`.
- *
- * @property spec what the run was computed from (ADR-004); null before the first run
- * @property settings what the saved session records, once it is saved. For a
- *   sweep that is its first solved combination, not the plan's first.
- */
-@Suppress("ArrayInDataClass") // engineStats identity-compared; never used as a map key
-data class RunResult(
-    val batchDirPath: String? = null,
-    val refPath: String? = null,
-    val defPath: String? = null,
-    val stop: RunStop = RunStop.Finished,
-    val plannedFrames: Int = 0,
-    val engineStats: FloatArray? = null,
-    val spec: RunSpec? = null,
-    val settings: SessionRecordSettings? = null,
-    /** The Home-list id of the session the run wrote, which the viewer opens on. */
-    val sessionId: String? = null,
-) {
-    /** The settings the viewer shows: the saved session's, else the spec's (a sweep that solved nothing). */
-    fun viewerSettings(): SessionRecordSettings? = settings ?: spec?.recordSettings()
-}
+import com.sempermechanics.semper.ui.viewer.ViewerArgs
 
 /**
  * One tick of a batch run's progress, for the overlay.
@@ -58,7 +27,20 @@ data class BatchProgressUpdate(
     val perFrameConvergence: FloatArray? = null,
 )
 
-/** How a batch run or a sweep ended. */
+/** What a run is: one solve per frame, or a parameter sweep. A single run and a sweep never share a session. */
+enum class RunKind { BATCH, SWEEP }
+
+/**
+ * The session a run wrote, as the wizard's working session names it
+ * ([WizardInputs.working]): while no Home row names it, the next run of
+ * the same [kind] writes it again (`openRunSession`).
+ */
+data class WorkingSession(val id: String, val kind: RunKind)
+
+/**
+ * How a batch run or a sweep ended, as the run reports it: what its
+ * analytics event reads, and what `RunEnd.of` makes of it for the wizard.
+ */
 data class BatchAnalysisOutcome(
     val engineErrorCode: Int,
     val firstFrameValidPoints: Int,
@@ -87,19 +69,36 @@ data class BatchAnalysisOutcome(
      */
     val firstFrameCorrelatedPoints: Int = -1,
     /**
-     * Whether a Home row holds this run's frames: its own record was
-     * written. A run writes a record only when its first frame kept points, so
-     * later frames can solve (a non-zero [totalFrames]) with nothing
-     * saved; only a saved run may be told its frames are kept.
+     * The Home row that holds this run's frames, as the index holds it: what
+     * its result opens on (ADR-022). Null when it saved none: a run writes a
+     * record only when its first frame kept points, so later frames can solve
+     * (a non-zero [totalFrames]) with nothing saved; only a saved run may be
+     * told its frames are kept.
      */
-    val saved: Boolean = false,
+    val record: SessionRecord? = null,
     /**
      * True when the run's record could not be saved because the session
      * index could not be read or written: not the quota, which stops the
      * run as [RunStop.SessionLimit].
      */
     val indexUnavailable: Boolean = false,
+    /**
+     * The session the run wrote: null when it never got one (the quota
+     * blocked it) or kept nothing (it was cancelled). The view model makes it
+     * its working session unless it was [saved] (`applyRunOutcome`).
+     */
+    val session: WorkingSession? = null,
+    /** What the run solved (ADR-004): the VSG and step a first frame that kept no points is explained by. */
+    val spec: RunSpec? = null,
+    /** The lattice of a sweep that solved no combination, the one result with no row; null for any other. */
+    val failedSweep: ViewerArgs? = null,
 ) {
+    /** Whether a Home row holds this run's frames ([record]). */
+    val saved: Boolean get() = record != null
+
+    /** The Home-list id of the session the run wrote; null with none. */
+    val sessionId: String? get() = session?.id
+
     /**
      * [engineErrorCode] as the batch's stop code: [RunStop.Finished] when
      * the loop ran through every frame, whatever they kept.

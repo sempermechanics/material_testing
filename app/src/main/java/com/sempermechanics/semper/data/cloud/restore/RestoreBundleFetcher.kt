@@ -9,6 +9,7 @@ import com.sempermechanics.semper.data.session.SessionZip
 import com.sempermechanics.semper.data.session.ZipDirectory
 import com.sempermechanics.semper.util.AtomicFiles
 import com.sempermechanics.semper.util.suspendRunCatching
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -39,6 +40,9 @@ internal object RestoreBundleFetcher {
     private const val PREFIX_MIN_SAVING_DIVISOR = 20L // 5%
 
     private const val PERCENT = 100L
+
+    /** The scratch a split bundle downloads into ([PayloadFetch.scratch]); its `.part` outlives a stop (TD-283). */
+    const val BUNDLE_SCRATCH = "bundle.zip"
 
     /** One restore's source and destination: everything a payload fetch needs, travelling together. */
     class PayloadFetch(
@@ -90,7 +94,13 @@ internal object RestoreBundleFetcher {
 
     /**
      * Download Session.zip with size checks, verify zip magic, unpack.
-     * Deletes `.part` / `.full` sidecars so a corrupt transfer cannot stick.
+     * Deletes `.part` / `.full` sidecars so a corrupt transfer cannot stick,
+     * except when the attempt will run again: a stop WorkManager reruns
+     * (TD-283) or a failure the worker retries ([keepsPartFor], TD-307)
+     * resumes from them. A failed size, zip or sha256 check, or any failure
+     * the worker gives up on, drops them, as does the worker when the app
+     * cancelled or it gave up ([CloudRestore.discardDownloads]). The bundle's
+     * sha256 catches a bad resume.
      * [onProgress] is byte-based: (bytesOnDisk, declaredSize).
      */
     private suspend fun downloadAndUnpackBundle(
@@ -98,7 +108,8 @@ internal object RestoreBundleFetcher {
         bundle: CloudFileDto,
         onProgress: suspend (done: Long, total: Long) -> Unit,
     ): PayloadOutcome {
-        val zipTmp = fetch.scratch("bundle.zip")
+        val zipTmp = fetch.scratch(BUNDLE_SCRATCH)
+        var keepPart = false
         try {
             val whole = fetch.api.downloadReporting(fetch.token, bundle, zipTmp, onProgress)
             RestoreZipVerifier.verifySessionZip(zipTmp, bundle.declaredSize, bundle.sha256, requireEntries = true)
@@ -106,10 +117,23 @@ internal object RestoreBundleFetcher {
             // doesn't look stuck again during inflate.
             onProgress(whole, whole)
             return PayloadOutcome(RestoreUnpacker.unpackBundle(zipTmp, fetch.layout), "whole-bundle", zipTmp.length())
+        } catch (e: CancellationException) {
+            keepPart = true
+            throw e
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            keepPart = keepsPartFor(e)
+            throw e
         } finally {
-            discard(zipTmp)
+            if (keepPart) zipTmp.delete() else discard(zipTmp)
         }
     }
+
+    /**
+     * Whether a bundle download that failed with [e] keeps its `.part` for
+     * the next attempt: only for a failure `DicRestoreWorker` retries
+     * ([DownloadFailure.Transient]: a dropped connection, a 5xx, no sign-in).
+     */
+    private fun keepsPartFor(e: Exception): Boolean = DownloadFailure.of(e) is DownloadFailure.Transient
 
     /**
      * Legacy backup: one `Session.zip` holding raw/, dat/, csv/, reports/ and

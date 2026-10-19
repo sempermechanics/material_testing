@@ -49,7 +49,7 @@ class RoiStudioLauncher(
 
     /** Opens the studio on the reference, or says to load one first. */
     fun open() {
-        val bytes = viewModel.refBytes
+        val bytes = viewModel.inputs.value.refBytes
         if (bytes == null) {
             Feedback.toast(activity, R.string.load_image_first)
         } else {
@@ -82,7 +82,7 @@ class RoiStudioLauncher(
             }
             val intent = Intent(activity, RoiDrawActivity::class.java)
             intent.putExtra(IntentKeys.IMAGE_FILE_PATH, tempFile.absolutePath)
-            ImageSizeExtras.ROI_EDITOR.put(intent, viewModel.refSize)
+            ImageSizeExtras.ROI_EDITOR.put(intent, viewModel.inputs.value.refSize)
             launcher.launch(intent)
         }
     }
@@ -98,29 +98,27 @@ class RoiStudioLauncher(
     internal fun applyRoiResult(data: Intent) {
         // After a process death whose draft was lost there is no reference
         // left to measure this ROI against.
-        if (viewModel.realRefWidth == 0) {
+        val refSize = viewModel.inputs.value.refSize
+        if (refSize.width == 0) {
             Timber.w("ROI result with no reference; ignored")
             return
         }
-        val drawn = data.getRoiExtras(default = Roi.full(viewModel.refSize))
-        viewModel.roi = drawn
+        val drawn = data.getRoiExtras(default = Roi.full(refSize))
         // A selection covering the whole image counts as no custom ROI.
-        viewModel.hasCustomRoi = !drawn.coversFrameOf(viewModel.refSize)
+        viewModel.edit { it.copy(roi = drawn, hasCustomRoi = !drawn.coversFrameOf(refSize)) }
 
         val maskPath = data.getStringExtra(IntentKeys.MASK_FILE_PATH)
         activity.lifecycleScope.launch {
             val mask = maskPath?.let { path -> withContext(io) { readMask(File(path)) } }
-            if (mask != null) viewModel.roiMaskBytes = mask
+            if (mask != null) viewModel.edit { it.copy(roiMaskBytes = mask) }
             onRoiChanged()
         }
     }
 
     /** Clears a custom crop and treats the whole reference frame as the ROI. */
     internal fun applyFullImageRoi() {
-        if (viewModel.realRefWidth > 0) {
-            viewModel.hasCustomRoi = false
-            viewModel.roiMaskBytes = null
-            viewModel.roi = Roi.full(viewModel.refSize)
+        if (viewModel.inputs.value.refSize.width > 0) {
+            viewModel.edit { it.copy(hasCustomRoi = false, roiMaskBytes = null, roi = Roi.full(it.refSize)) }
         }
         onRoiChanged()
     }

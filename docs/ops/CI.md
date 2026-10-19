@@ -39,7 +39,7 @@ changes ──┬──> tier1-app-fast ───────────┤
 | Job | Proves | Path-filtered? | Typical (warm / cold) |
 |-----|--------|---|-----------------------|
 | `secret-scan` | gitleaks (see below) | No — always runs | ~1–2 min |
-| `legal-pages` | `scripts/render_legal_pages.py --check`: the published pages still match `docs/legal/`; `scripts/check_doc_paths.py`: every path a doc names exists; `scripts/check_framework_coverage.py`: every readiness-framework item (`docs/ops/READINESS_FRAMEWORK_2026-10.md`) has a row in the gate's cross-check and every open row an owner that exists in TECH_DEBT or FUTURE_IMPROVEMENTS | No — always runs | seconds |
+| `legal-pages` | `scripts/render_legal_pages.py --check`: the published pages still match `docs/legal/`; `scripts/check_doc_paths.py`: every path a doc names exists; `scripts/check_framework_coverage.py`: every readiness-framework item (`docs/ops/READINESS_FRAMEWORK_2026-10.md`) has a row in the gate's cross-check and every open row an owner that exists in TECH_DEBT or FUTURE_IMPROVEMENTS; `scripts/check_kotlin_file_size.py`: no main Kotlin file over ADR-015's 500-line budget, fused hot loops not counted, the exceptions and their ceilings in `scripts/kotlin_file_size_allowlist.txt` (TD-292); `scripts/check_activity_scope_work.py`: no network call or WorkManager enqueue launched on a screen's `lifecycleScope` (ADR-016 rule 1), the triaged exceptions in `scripts/activity_scope_allowlist.txt` (TD-291); `scripts/check_swallowed_cancellation.py`: no broad catch or `runCatching` around a suspend call in `app/src/main` that swallows `CancellationException` (ADR-018), the triaged exceptions in `scripts/swallowed_cancellation_allowlist.txt` (TD-171); then the stdlib `unittest` suites in `scripts/tests` that test these source checks | No — always runs | seconds |
 | `console-pages` | `scripts/check_console.py`: the consoles' wiring, CSP, deploy placeholders and gateway paths — their only gate, since they have no compiler — plus `node --test`: the DOM-free `console/util.js`, `auth.js` (sign-in, second factor, step-up, `api`, revoke gate), `router.js`, and the operator, account and institution pages, against a fake Firebase SDK loaded through a `module.register` hook and a DOM parsed from the real pages (`firebase-hosting/tests/harness.mjs`), with line coverage of the console's JS gated at 96 % by `scripts/console_coverage.mjs` (merged by file from the raw V8 coverage; every `.js` under `public/` but `vendor/`). | No — always runs | seconds |
 | `changes` | Resolves path filters + PR/main/Dependabot mode into tier flags | — | seconds |
 | `tier1-app-fast` | spotless, detekt, lint, JVM unit tests, `compileReleaseKotlin`, the androidTest and `:benchmark` sources compile, Kover coverage log + `koverVerify` floor. Failing tests are printed by `scripts/ci_test_report.py`; JUnit XML and the Kover XML/HTML upload as `app-unit-tests-and-coverage` | `app` (PR); always on `main` push | ~5–8 / ~10 min |
@@ -89,10 +89,10 @@ gitleaks detect --config .gitleaks.toml --log-opts="<base-sha>..HEAD"
 
 | Filter | Paths | Sets |
 |--------|-------|------|
-| `app` | `app/**` except `app/src/main/cpp/**`; `benchmark/**`, `gradle/**`, `*.gradle.kts`, `gradle.properties`, `gradlew`, `gradlew.bat`, `settings.gradle.kts`, `contracts/**` | `app` (tier 1) |
+| `app` | `app/**`, `benchmark/**`, `gradle/**`, `*.gradle.kts`, `gradle.properties`, `gradlew`, `gradlew.bat`, `settings.gradle.kts`, `contracts/**` | `app` (tier 1) |
 | `android_test` | `app/src/androidTest/**` | `app` (tier 1 compiles it) |
 | `packaging` | `app/build.gradle.kts`, `app/proguard-rules.pro`, `gradle/libs.versions.toml` | `app` + `release_build` (tier 5 runs R8) |
-| `native_jni` | `engine`, `.gitmodules`, `app/src/main/cpp/**`, `SemperNativeLib.kt` | `emulator` + `release_build` (tiers 3 + 5) |
+| `native_jni` | `engine`, `.gitmodules`, `SemperNativeLib.kt` | `emulator` + `release_build` (tiers 3 + 5) |
 | `native_ci` | `.github/actions/{setup-native-ci,enable-kvm,check-arm64-so}/**` | `emulator` + `release_build` |
 | `backend` | `backend/**`, `firestore.rules`, `firebase-hosting/firebase.json`, `scripts/deploy-firestore.sh`, `.github/workflows/deploy-backend.yml`, `docs/legal/**`, `scripts/*.py`, `scripts/tests/**` (the scripts' test fixtures), `scripts/check_gcp_posture.sh`, `scripts/apply-monitoring.sh`, `ops/monitoring/**`, `contracts/**`, and the client's three wire-contract files | `backend` (tier 4) |
 | `rules` | `firestore.rules`, `firestore-rules-tests/**`, `backend/app/**` | `rules` (Firestore rules tests) |
@@ -105,13 +105,16 @@ scripts, whose only lint is Tier 4's ruff. The console pages under
 
 Because the engine is a submodule, `native_jni` matches the **gitlink**
 `engine` rather than a source tree — bumping the pinned engine commit is what
-triggers it.
+triggers it. The JNI adapter is part of the engine
+(`engine/adapters/android/`; Gradle builds `engine/CMakeLists.txt`), so a JNI
+change arrives as a pin bump too.
 
 The filter step runs with `predicate-quantifier: 'some-with-excludes'`: a file
 matches a filter if any of its patterns includes it and no `!` pattern excludes
-it. That is what makes `app`'s "except `app/src/main/cpp/**`" hold. Under the
-default (`some`), the negated pattern matched every file outside `cpp/`, so
-`app` was true on every PR and a docs-only PR ran Tier 1 (TD-96).
+it. No filter has a `!` pattern since `app/src/main/cpp/` (a dead redirect)
+was deleted; the setting stays so the next one holds. Under the default
+(`some`), `app`'s old `!app/src/main/cpp/**` matched every file outside
+`cpp/`, so `app` was true on every PR and a docs-only PR ran Tier 1 (TD-96).
 
 ### What runs for each diff
 
@@ -120,7 +123,7 @@ default (`some`), the negated pattern matched every file outside `cpp/`, so
 | app Kotlin / resources | run | —† | — | — | —† |
 | androidTest only | run (compiles it) | —† | — | — | —† |
 | keep rules / app build script / version catalog | run | —† | — | — | run |
-| engine pin / JNI / `app/src/main/cpp/**` | — (‡) | run | — | — | run |
+| engine pin (JNI adapter included) / `SemperNativeLib.kt` | — (‡) | run | — | — | run |
 | `backend/app/**`, `firestore.rules` | — | — | run | run | — |
 | `firestore-rules-tests/**` | — | — | — | run | — |
 | other backend, Terms, ops scripts | — | — | run | — | — |
@@ -210,6 +213,10 @@ cd firestore-rules-tests && npm ci && \
 python scripts/render_legal_pages.py --check                                # legal-pages
 python scripts/check_doc_paths.py                                           # legal-pages
 python scripts/check_framework_coverage.py                                  # legal-pages
+python scripts/check_kotlin_file_size.py                                    # legal-pages
+python scripts/check_activity_scope_work.py                                 # legal-pages
+python scripts/check_swallowed_cancellation.py                             # legal-pages
+python -m unittest discover -s scripts/tests -p "test_*.py"               # legal-pages
 python scripts/check_console.py                                             # console-pages
 node --test "firebase-hosting/tests/*.test.mjs"                             # console-pages
 gitleaks detect --config .gitleaks.toml                                     # secret-scan (human)
@@ -292,6 +299,7 @@ Required secrets / vars (repo-level on Free private orgs is fine — Environment
 `SHARED_DRIVE_ID`, `SERVICE_ACCOUNT_EMAIL`, `AUTO_APPROVE_HD`, `ADMIN_EMAILS`,
 `SUPPORT_EMAIL`, `NOTIFY_FROM`, async provisioning `TASKS_QUEUE`,
 `TASKS_LOCATION`, `TASKS_TARGET_BASE_URL` and `TASKS_INVOKER_SA`; optional
+`NOTIFY_SECURITY_FROM` (the new-device mail; unset keeps it off),
 `CHECK_REVOKED_ON_STEP_UP`, `ENTITLEMENT_KID`, `ENTITLEMENT_OFFLINE_GRACE_DAYS`,
 `MIN_SUPPORTED_VERSION_CODE`, `RECOMMENDED_VERSION_CODE`, `KILL_SWITCHES`
 (space-separated) and `ENTITLEMENT_SIGNING_SECRET` (a Secret Manager secret name,

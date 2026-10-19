@@ -28,17 +28,17 @@ the user is told and to whether to retry, in one `when`.
 | A backend call | `Authed<T>`: `Ok`, `Disabled` (no backend), `NoToken`, `Failed(HttpFailure)` | `data/net/Authed.kt:9`, made by `CloudApi.authed` (`:37`) | The caller maps the outcome, e.g. an erase to `EraseOutcome` (`data/cloud/CloudErase.kt:174-185`), a status check to an access status (`data/account/AccessStatusResolver.kt:101-114`) | Per caller; `HttpFailure.isRetryable` (429, 5xx, no answer) is only the generic rule (`data/net/HttpFailure.kt:92`) |
 | What a thrown call means | `HttpFailure(kind, cause)`, `HttpFailure.classify(e)` | `data/net/HttpFailure.kt:17`, `:98` | From `kind`; the backend's `detail` code is in `body`, its request id in `requestId` for the "(ref: …)" suffix | `isRetryable`; `isGoneOrNotOurs` (404/403) means give up |
 | A non-200 backend answer, inside the client | `ApiAnswer(code, body, requestId)` with per-route mappers (`failSigned`, `failMe`, `failApprovedOnly`) | `data/net/SemperApiHttp.kt:78`, `data/net/SemperApiCalls.kt:61-93` | Becomes the specific exception (`DeviceConflictException`, `NotApprovedException`, …) or an `ApiException` that `HttpFailure` classifies | — |
-| Why a run stopped | `RunStop` (sealed; `wireCode` is the stored `Int`, `fromWireCode` maps any `Int` back) | `field/RunStop.kt` | `EngineFailure.reasonRes` / `shortReason` (`ui/analysis/run/EngineFailure.kt:46`, `:72`); an unknown code is shown with its number, never as a known cause | A run is not retried; Compute is re-enabled after every outcome (`BatchRunController.kt:116`) |
+| Why a run stopped | `RunStop` (sealed; `wireCode` is the stored `Int`, `fromWireCode` maps any `Int` back) | `field/RunStop.kt` | `EngineFailure.reasonRes` / `shortReason` (`ui/analysis/run/EngineFailure.kt:61`, `:90`); an unknown code is shown with its number, never as a known cause. Since 2026-10-19 a run's outcome is read once by the pure `RunEnd.of` (sealed `RunEnd`, `ui/analysis/run/RunEnd.kt:80`) and shown by one `when` (`BatchRunController.render`, `ui/analysis/run/BatchRunController.kt:75-91`) | A run is not retried; Compute is re-checked first, whatever the outcome (`BatchRunController.kt:76-77`) |
 | A restore or Save-to-Files download | `DownloadFailure`: `Rejected` (404/403), `Unusable` (corrupt or incomplete backup), `Paused` (503 `feature_paused`, the restore kill switch; since 2026-10-18), `Transient` | `data/cloud/restore/DownloadFailure.kt` | `Rejected`: the backend's licence message (`LicenseErrors.restoreMessage`); `Unusable`: "restore failed", the reason code only logged; `Paused`: restoring is paused, counted as no failure (`data/DicRestoreWorker.kt:115-140`) | `Transient` → `Result.retry()`; the other three end the work |
-| A backup upload | `UploadFailures`: one method per thrown failure, catch order in `DicUploadWorker` (`data/DicUploadWorker.kt:137-155`); HTTP refusals by `UploadErrors.classify` → `Kind` (`data/cloud/UploadErrors.kt:60`), `feature_paused` first as `Kind.PAUSED` | `data/UploadFailures.kt` | `run.failure(<string>)` writes the reason Home shows; quota opens the limit screen instead | `UploadLog.retry` keeps staging (`PAUSED` too, `data/UploadFailures.kt:92-95`); a stale session or expired link is discarded and recreated, at most a bounded number of times; terminal paths go through one `abandon` |
-| A session index write | `SessionStore.UpsertOutcome`: `SAVED`, `QUOTA_FULL`, `INDEX_UNAVAILABLE` | `data/session/SessionStore.kt:91` | `afterSave` (`ui/analysis/run/BatchAnalysis.kt:415-420`): quota → the session-limit screen; unavailable index → "Couldn't save results". Sweeps go the same way: `finishSolvedSweep` (`ui/analysis/wizard/SweepAnalysis.kt:141`) saves through `persistSweepSession`, which returns `afterSave`'s reading (`:259`) | Not retried |
+| A backup upload | `UploadFailures`: one method per thrown failure, catch order in `DicUploadWorker` (`data/DicUploadWorker.kt:170-187`); HTTP refusals by `UploadErrors.classify` → `Kind` (`data/cloud/UploadErrors.kt:64`), `feature_paused` first as `Kind.PAUSED` | `data/UploadFailures.kt` | `run.failure(<string>)` writes the reason Home shows; quota opens the limit screen instead | `UploadLog.retry` keeps staging (`PAUSED` too, `data/UploadFailures.kt:102-105`); a stale session, an expired link or an integrity mismatch is discarded and rebuilt at most `RebuildBudget` times (`data/cloud/UploadErrors.kt:127`: 2 for integrity, 3 for a link, 3 for a stale session, `:110-116`; the stale count since 2026-10-19), then fails; terminal paths go through one `abandon` |
+| A session index write | `SessionStore.UpsertOutcome`: `SAVED`, `QUOTA_FULL`, `INDEX_UNAVAILABLE` | `data/session/SessionStore.kt:96` | `afterSave` (`ui/analysis/run/BatchAnalysis.kt:455`, called at `:417`): quota → the session-limit screen; unavailable index → "Couldn't save results". Sweeps go the same way: `finishSolvedSweep` (`ui/analysis/wizard/SweepAnalysis.kt:167`) saves through `persistSweepSession`, which returns `afterSave`'s reading (`:299`) | Not retried |
 
 **Cancellation.**
 
 - **Rethrow `CancellationException`.** In a `suspend` path use
   `suspendRunCatching` (`util/SuspendRunCatching.kt`), never `runCatching`, or
   put `catch (e: CancellationException) { throw e }` ahead of a generic catch
-  (`data/DicUploadWorker.kt:147-151`).
+  (`data/DicUploadWorker.kt:180-184`).
 - **A cancelled Firebase `Task` is not the caller's cancellation.**
   `Task.await()` throws `CancellationException` when the task was cancelled
   while the caller is still active. In a generic catch around Firebase or
@@ -100,7 +100,10 @@ and the tests pin them (`HttpFailureTest`, `AuthedTest`, `AfterSaveTest`,
 - detekt does not check cancellation handling: `SuspendFunSwallowedCancellation`
   needs type resolution, which `:app:detekt` does not run, and detekt 1.23.8's
   Kotlin 2.0 compiler cannot read the Kotlin 2.4 dependencies it would resolve
-  against (TD-171).
+  against. A source check does it instead (TD-171, 2026-10-19):
+  `scripts/check_swallowed_cancellation.py` fails a broad catch or a `runCatching`
+  around a suspend call that neither rethrows `CancellationException` first nor
+  runs under `NonCancellable`; its allowlist is empty.
 
 ## Action items
 
@@ -108,5 +111,7 @@ and the tests pin them (`HttpFailureTest`, `AuthedTest`, `AfterSaveTest`,
    (#323, #326, #327).
 2. [x] `RunStop` (#318) and its adoption (#325, #330); `UpsertOutcome` (#326,
    #330, #331); `DownloadFailure` (#326); `UploadFailures` (#327).
-3. [ ] TD-171: run detekt with type resolution and enable
-   `SuspendFunSwallowedCancellation`.
+3. [x] TD-171: checked in CI by `scripts/check_swallowed_cancellation.py` (step "No
+   swallowed coroutine cancellation (ADR-018)", 2026-10-19, `3e75188`) instead of
+   detekt's `SuspendFunSwallowedCancellation`, which stays an option with detekt 2.x
+   (TD-69).

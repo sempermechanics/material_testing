@@ -1,12 +1,10 @@
 import logging
-import time
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from .. import audit, drive, entitlement_token, errors, google_auth, repo, legal
+from .. import audit, entitlement_token, errors, repo, legal
 from .. import observability as obs
 from .. import rate_limit
 from ..config import settings
@@ -18,8 +16,8 @@ from ..deps import (
     token_uid,
     verified_device,
 )
+from ..services import account as account_service
 from ..validation import require_header_identifier
-from ._shared import json_dumps
 
 log = logging.getLogger("semper")
 router = APIRouter()
@@ -203,61 +201,10 @@ def export_account(ctx=Depends(verified_device)):
     Device-signed (like DELETE /v1/me): a full-account export is high-consequence
     enough that a stolen ID token alone must not be able to trigger it.
     """
-    user = ctx.user
-    uid = user["uid"]
-    profile = repo.get_user(uid) or {}
-
-    audit.record(uid, action="DATA_EXPORT", target={"type": "user", "id": uid})
-    header = {
-        "exportedAtUtc": datetime.now(timezone.utc).isoformat(),
-        "schema": "indic.account.export/1",
-        "profile": {
-            "uid": uid,
-            "email": profile.get("email"),
-            "displayName": profile.get("displayName"),
-            "hostedDomain": profile.get("hd"),
-            "role": profile.get("role"),
-            "accessStatus": profile.get("access_status"),
-            "createdAt": str(profile.get("createdAt")),
-            "lastSeenAt": str(profile.get("lastSeenAt")),
-        },
-        # Contract and consent records are personal data too (right of access).
-        "termsAccepted": profile.get("termsAccepted"),
-        "improvementConsent": profile.get("improvementConsent"),
-        "devices": repo.list_user_devices(uid),
-        "artifactDownload": {
-            "endpoint": "/v1/files/{fileId}/content",
-            "note": "Images, .dat results, CSVs and reports are downloadable per file "
-                    "using the fileId values above, or via the app's Restore screen.",
-        },
-    }
-
-    def stream():
-        """Emit the document incrementally.
-
-        The previous version built the whole account in memory first — every
-        session, plus a files query per session — before writing a byte. The
-        files are now one ordered stream beside the sessions'. For a
-        busy account that is an unbounded allocation and a long silence before
-        the first byte, on a request with a 60s budget. Streaming keeps memory
-        flat and starts the response immediately; `"complete": true` is written
-        last, so a truncated transfer is detectable rather than looking like a
-        smaller-but-valid export.
-        """
-        prefix = json_dumps(header)
-        yield prefix[:-1].encode()  # drop the closing brace; we continue the object
-        yield b',"sessions":['
-        first = True
-        count = 0
-        for s in repo.iter_sessions_with_files(uid):
-            yield (b"" if first else b",") + json_dumps(s).encode()
-            first = False
-            count += 1
-        yield b'],"sessionCount":' + str(count).encode()
-        yield b',"complete":true}'
-
+    uid = ctx.user["uid"]
+    header = account_service.export_header(uid)
     return StreamingResponse(
-        stream(),
+        account_service.export_stream(uid, header),
         media_type="application/json",
         headers={
             "Content-Disposition": 'attachment; filename="semper-account-export.json"',
@@ -299,9 +246,11 @@ def delete_account(ctx=Depends(verified_device)):
     anything orphaned by a failed sync), then every Firestore record: sessions,
     file pointers, device registrations and the user profile.
 
-    Last, the Firebase Auth user itself is deleted (best-effort: it needs
+    Last, the Firebase Auth users themselves are deleted: the account's own
+    and every one linked to it (`repo.sign_in_uids`). Best-effort: it needs
     Firebase Auth admin on the Auth project, and the audit row says whether it
-    happened, `authUserDeleted`). Once it is gone the sign-in cannot mint
+    happened (`authUserDeleted` when every one went, with `authUsers` and
+    `authUsersDeleted`). Once it is gone the sign-in cannot mint
     another token, and signing in again with the same address creates a new
     Firebase user with a new uid, so nothing erased here is reattached to it.
 
@@ -310,57 +259,6 @@ def delete_account(ctx=Depends(verified_device)):
     must sign out afterwards: while the Auth user survives (the delete failed),
     any further authenticated call would create a fresh, empty profile.
     """
-    user = ctx.user
-    uid = user["uid"]
-    started = time.monotonic()
-    token = drive.access_token()
-
-    # 1. The session folders live inside the user folder, so deleting that one
-    #    removes the whole subtree in a single call. The per-session loop below
-    #    is the fallback for accounts predating the stored pointer; it deletes
-    #    the session folders with a bounded fan-out (`drive.delete_files`),
-    #    where one round trip per session made a busy account take the best
-    #    part of a minute.
-    user_folder = user.get("driveFolderId")
-    folders_deleted = 0
-    if user_folder:
-        drive.delete_file(token, user_folder)  # raises → we abort before Firestore
-    else:
-        # No stored pointer: delete each session's folder via its OWN stored id
-        # rather than trusting a lookup by name. If a name lookup missed we would
-        # silently skip Drive and still wipe the metadata, stranding the blobs
-        # with nothing left pointing at them.
-        folders_deleted = drive.delete_files(
-            token, [s.get("driveFolderId") for s in repo.iter_user_sessions(uid)],
-        )
-        # Then the scaffolding itself, and anything a failed sync orphaned.
-        user_folder = drive.find_user_folder(token, uid)
-        if user_folder:
-            drive.delete_file(token, user_folder)
-        else:
-            log.warning("No Drive folder found for uid %s — nothing to purge there", uid)
-
-    drive_ms = int((time.monotonic() - started) * 1000)
-
-    # 3. Only once the blobs are gone: erase the metadata.
-    counts = repo.delete_all_user_data(uid)
-    firestore_ms = int((time.monotonic() - started) * 1000) - drive_ms
-    # 4. Then the sign-in. After the data, so a failure here leaves an empty
-    #    account rather than data nobody can sign in to reach.
-    auth_user_deleted = google_auth.delete_auth_user(uid)
-    total_ms = int((time.monotonic() - started) * 1000)
-    # Timed per phase: erasure is the one call a user waits on with nothing to
-    # look at, so when it feels slow the log should say which half was slow.
-    detail = {
-        **counts,
-        "driveFolders": folders_deleted,
-        "userFolderFound": bool(user_folder),
-        "authUserDeleted": auth_user_deleted,
-        "driveMs": drive_ms,
-        "firestoreMs": firestore_ms,
-        "totalMs": total_ms,
-    }
-    audit.record(uid, ctx.device_id, action="ACCOUNT_DELETE",
-                 target={"type": "user", "id": uid}, detail=detail)
-    log.info("Erased account %s: %s", uid, detail)
+    uid = ctx.user["uid"]
+    detail = account_service.erase_account(ctx.user, ctx.device_id)
     return {"deleted": uid, **detail}

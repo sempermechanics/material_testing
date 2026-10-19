@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
-from .. import tasks
-from ..models import ProvisionTask
+from .. import repo, tasks
+from ..models import LicenseFanoutTask, ProvisionTask
 from ..session_provision import provision_session
 
 router = APIRouter()
@@ -18,3 +18,12 @@ def provision_session_task(body: ProvisionTask, caller=Depends(tasks.tasks_calle
     result = provision_session(body.sessionId)
     # Cloud Tasks only reads the status code; keep upload URLs out of the reply.
     return {k: v for k, v in result.items() if k != "uploads"}
+
+
+@router.post(tasks.LICENSE_FANOUT_PATH)
+def license_fanout_task(body: LicenseFanoutTask, caller=Depends(tasks.tasks_caller)):
+    """Cloud Tasks callback: finish a licence-wide fan-out that the revoke or
+    edit which recorded it did not (ADR-026). Nothing pending, the usual case,
+    and a licence that is gone both answer 200 with nothing finished, so the
+    queue does not retry them; a failed fan-out raises, and is retried."""
+    return {"licenseId": body.licenseId, "finished": repo.finish_license_fanout(body.licenseId)}

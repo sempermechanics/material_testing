@@ -1,5 +1,5 @@
 """Bulk roster import, roster CSV export, the seat summary and the licence's
-own audit log (`routers/roster.py`, `roster_io.py`, `audit.page_license_audit`).
+own audit log (`routers/roster.py`, `roster_io.py`, `repo.page_license_audit`).
 
 Mostly over HTTP at institution IT's tier, where the scoping matters: IT for
 their own licence only, staff for any, everyone else refused. The staff tier
@@ -32,7 +32,7 @@ def _mint(domain: str, admin: str, **kw) -> str:
 
 def _account(store, uid: str, email: str, **extra) -> None:
     store._data.setdefault("users", {})[uid] = {
-        "email": email, "access_status": "APPROVED", "plan": "demo", **extra,
+        "email": email, "access_status": "APPROVED", "emailVerified": True, "plan": "demo", **extra,
     }
 
 
@@ -130,6 +130,31 @@ async def test_each_row_is_answered_and_added_through_the_single_add(it, client)
     assert summary["uid"] == "it-a"
     assert summary["target"] == {"type": "license", "id": it.a}
     assert summary["detail"] == {"rows": 7, **body["counts"]}
+
+
+@pytest.mark.parametrize("extra", [
+    {"emailVerified": False},
+    {"emailVerified": True, "access_status": "PENDING"},
+])
+@pytest.mark.asyncio
+async def test_unverified_holder_gets_invite_not_seat(it, client, extra):
+    """An account whose address is unproven, or not yet approved, is not
+    seated: the address is the whole claim to the seat, so it gets the
+    invite an account-less address gets, redeemed once it qualifies. The
+    mint path refused it already; IT's add now agrees."""
+    _account(it, "unv", "unv@uni-a.edu", **extra)
+
+    r = await _import(client, it, "unv@uni-a.edu\n")
+
+    assert [x["outcome"] for x in r.json()["results"]] == ["invited"]
+    assert "unv" not in it._data.get(f"licenses/{it.a}/seats", {})
+    assert it._data["licenses"][it.a]["seatsUsed"] == 0
+
+    # Once it qualifies, its next request claims the invite.
+    it._data["users"]["unv"].update(emailVerified=True, access_status="APPROVED")
+    user = repo.ensure_entitlement({**it._data["users"]["unv"], "uid": "unv"}, None)
+    assert user["licenseId"] == it.a
+    assert it._data[f"licenses/{it.a}/seats"]["unv"]["status"] == "active"
 
 
 @pytest.mark.asyncio
@@ -503,8 +528,7 @@ async def test_the_audit_log_downloads_as_csv(logged, client):
 
 def test_licence_events_are_stamped_with_their_licence(monkeypatch):
     rows = []
-    monkeypatch.setattr(audit, "_add_doc", lambda col, data: rows.append(data))
-    monkeypatch.setattr(audit, "db", lambda: type("Db", (), {"collection": lambda s, n: n})())
+    monkeypatch.setattr(audit.audit_log, "add_audit_row", rows.append)
     audit.record("u", action="INSTITUTION_SEAT_ADD", target={"type": "seat", "id": "L1/u9"})
     audit.record("u", action="LICENSE_DEVICE_UNBIND", target={"type": "seat", "id": "L1"})
     audit.record("u", action="ADMIN_LICENSE_REVOKE", target={"type": "license", "id": "L2"})
@@ -514,11 +538,10 @@ def test_licence_events_are_stamped_with_their_licence(monkeypatch):
 
 
 def test_a_lost_audit_write_is_one_structured_line(monkeypatch, caplog):
-    def refuse(col, data):
+    def refuse(row):
         raise google_exceptions.DeadlineExceeded("slow")
 
-    monkeypatch.setattr(audit, "_add_doc", refuse)
-    monkeypatch.setattr(audit, "db", lambda: type("Db", (), {"collection": lambda s, n: n})())
+    monkeypatch.setattr(audit.audit_log, "add_audit_row", refuse)
     with caplog.at_level(logging.ERROR, logger="audit"):
         audit.record("u", action="INSTITUTION_SEAT_ADD", target={"type": "seat", "id": "L1/u"})
     (rec,) = [r for r in caplog.records if r.name == "audit"]
@@ -587,8 +610,7 @@ def test_audit_range_reads_dates_and_instants():
 
 
 def test_a_refusal_is_also_one_structured_log_line(monkeypatch, caplog):
-    monkeypatch.setattr(audit, "_add_doc", lambda col, data: None)
-    monkeypatch.setattr(audit, "db", lambda: type("Db", (), {"collection": lambda s, n: n})())
+    monkeypatch.setattr(audit.audit_log, "add_audit_row", lambda row: None)
     with caplog.at_level(logging.WARNING, logger="audit"):
         audit.record(action="AUTH_DENIED", outcome="DENIED", detail={"stage": "id_token"})
         audit.record("u", action="INSTITUTION_SEAT_ADD", target={"type": "seat", "id": "L1/u"})

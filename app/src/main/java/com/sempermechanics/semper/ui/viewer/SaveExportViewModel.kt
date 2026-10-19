@@ -8,11 +8,11 @@ import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.AP
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.sempermechanics.semper.util.SafCopy
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import timber.log.Timber
 import java.io.File
 
 /**
@@ -37,16 +37,7 @@ internal class SaveExportViewModel(
 
     private fun start(uri: Uri, file: File): Deferred<Boolean> {
         val resolver = getApplication<Application>().contentResolver
-        return viewModelScope.async(io) {
-            runCatching {
-                // Treat the copy as successful only if bytes actually landed —
-                // an opened-but-empty stream shouldn't report "Saved".
-                val copied = resolver.openOutputStream(uri)?.use { out ->
-                    file.inputStream().use { it.copyTo(out) }
-                } ?: 0L
-                copied > 0L
-            }.onFailure { Timber.e(it, "Save to Files failed") }.getOrDefault(false)
-        }
+        return viewModelScope.async(io) { SafCopy.copy(resolver, uri, file) }
     }
 
     companion object {

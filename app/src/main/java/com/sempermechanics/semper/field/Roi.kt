@@ -9,7 +9,7 @@ package com.sempermechanics.semper.field
  * viewer), an `[x, y, w, h]`
  * `IntArray` (`RoiResolveHelper`, `RunSpec.of`, the wizard's saved state), an
  * `android.graphics.Rect`, an `[l, t, r, b]` `FloatArray` (`HeatmapFit`),
- * `RoiData` (reports), the `ROI_X..ROI_H` extras and the `engine.roi` object of
+ * the reports, the `ROI_X..ROI_H` extras and the `engine.roi` object of
  * `metadata.json`. This is a view over them: building one from any of those and
  * converting back gives the same values, so nothing persisted changes.
  *

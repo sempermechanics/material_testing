@@ -223,6 +223,11 @@ the deploy workflow — Free private orgs often use repo-level — or
 part of the public API and is absent from `gateway/openapi.yaml`. It is also the
 OIDC audience, so it must match exactly.
 
+The same queue carries the licence fan-out tasks (`POST /v1/tasks/license-fanout`,
+[ADR-026](../adr/ADR-026-licence-fanout-marker.md)): one per staff revoke or
+terms edit, due six minutes later, which finishes the holder writes if the call
+died part-way and otherwise does nothing.
+
 Manifests of up to `INLINE_PROVISION_MAX_FILES` (default 8 — a bundle upload is
 three) are still provisioned inside the request: the task hop plus the
 client's first poll cost more than the work.
@@ -333,7 +338,7 @@ gcloud projects add-iam-policy-binding $AUTH_PROJECT \
 
 Then set the repository variable `CHECK_REVOKED_ON_STEP_UP=true` and redeploy. Not
 before: with the setting on and no grant, every console step-up call fails closed
-with 401 `invalid_token` (`backend/app/deps.py:571-620`). The posture check passes 3.4-iam only on
+with 401 `invalid_token` (`backend/app/step_up.py:180-229`). The posture check passes 3.4-iam only on
 `roles/firebaseauth.admin`, `roles/firebase.admin`, or a custom role holding
 `firebaseauth.users.update` and `firebaseauth.users.delete`
 (`scripts/check_gcp_posture.sh:315-353`).
@@ -356,7 +361,8 @@ gcloud secrets create $SECRET --replication-policy=automatic \
 
 # Grant the runtime first, before the repo variable names the secret: a
 # deploy mounts any secret it can see, and a revision whose runtime SA cannot
-# read its secret fails to start (TD-269). The deploy only checks existence.
+# read its secret fails to start. The deploy checks the grant first
+# (scripts/check_secret_access.sh) and stops with the command to run.
 gcloud secrets add-iam-policy-binding $SECRET --project $PROJECT \
   --member="serviceAccount:$API_SA" --role="roles/secretmanager.secretAccessor"
 gcloud secrets add-iam-policy-binding $SECRET --project $PROJECT \
@@ -374,13 +380,15 @@ gh variable set SEMPER_ENTITLEMENT_PUBKEYS --body "$KID:$PUB"
 - `deploy-backend.yml` mounts the key as `ENTITLEMENT_SIGNING_KEY=<secret>:latest`
   only when `ENTITLEMENT_SIGNING_SECRET` names a secret the deploy SA can see; a
   missing secret deploys without it, with a warning
-  (`.github/workflows/deploy-backend.yml:258-278`). Never pass the key with
+  (`.github/workflows/deploy-backend.yml:258-291`). Never pass the key with
   `--set-env-vars`.
-- **Order matters.** The deploy SA only checks that the secret exists. If it
-  exists but the runtime SA cannot read it, the candidate revision fails to start,
-  the deploy stops and traffic stays on the previous revision (TD-269). So: create
-  the secret, grant `secretAccessor` to the runtime SA, grant `secretmanager.viewer`
-  to the deploy SA, and only then set `ENTITLEMENT_SIGNING_SECRET`.
+- **Order matters.** A revision whose runtime SA cannot read a mounted secret
+  never starts. The deploy checks the grant before mounting
+  (`scripts/check_secret_access.sh`, reading the secret's and the project's IAM
+  policy) and stops with the `add-iam-policy-binding` command to run; when the deploy
+  SA cannot read those policies it only warns. So: create the secret, grant
+  `secretAccessor` to the runtime SA, grant `secretmanager.viewer` to the deploy SA,
+  and only then set `ENTITLEMENT_SIGNING_SECRET`.
 - `SEMPER_ENTITLEMENT_PUBKEYS` is `kid:base64SPKI`, several separated by commas
   during a rotation; `release.yml` passes it to Gradle
   ([RELEASING.md](../ops/RELEASING.md) variables). A build without it ignores tokens.
@@ -445,7 +453,7 @@ Everything above is required (or near enough). These are the rest of what
 | `ENTITLEMENT_OFFLINE_GRACE_DAYS` | `14` | How long a token lets the app keep its entitlement offline, capped at a timed licence's end plus grace and a floating lease's end |
 | `MIN_SUPPORTED_VERSION_CODE` · `RECOMMENDED_VERSION_CODE` | `0` · `0` | Semper's release gate, published on `/v1/config` to Semper builds only; the app blocks new runs and cloud calls below the minimum and nudges below the recommended. The server refuses nothing on them. `0` = no gate |
 | `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` · `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING` | `0` · `0` | The same pair for Material Testing builds, which number their versionCodes separately (`settings.release_gate(app)`, `backend/app/config.py:293-300`) |
-| `KILL_SWITCHES` | empty | Features switched off fleet-wide: any of `backup`, `share`, `restore`, `upload`, **space-separated**. An unknown name is logged and ignored (`backend/app/config.py:18-34`). Published on `/v1/config` and enforced by the backend (`backend/app/config.py:305-317`; `deps.unless_paused`, `backend/app/deps.py:296-331`): `upload` or `backup` refuse `POST /v1/sessions` and `POST /v1/files/{id}/complete`; `restore` refuses `GET /v1/files/{id}/content` and `GET /v1/sessions/{sid}/bundle`; each answers 503 `feature_paused` with `Retry-After: 300`, logged `event="feature_paused"`. `share` is the app's own export and is published only. A change is a new revision |
+| `KILL_SWITCHES` | empty | Features switched off fleet-wide: any of `backup`, `share`, `restore`, `upload`, **space-separated**. An unknown name is logged and ignored (`backend/app/config.py:18-34`). Published on `/v1/config` and enforced by the backend (`backend/app/config.py:305-317`; `deps.unless_paused`, `backend/app/deps.py:295-330`): `upload` or `backup` refuse `POST /v1/sessions` and `POST /v1/files/{id}/complete`; `restore` refuses `GET /v1/files/{id}/content` and `GET /v1/sessions/{sid}/bundle`; each answers 503 `feature_paused` with `Retry-After: 300`, logged `event="feature_paused"`. `share` is the app's own export and is published only. A change is a new revision |
 | `CONSOLE_ORIGINS` | `https://app.sempermechanics.com https://indicvision-dic-app-auth.firebaseapp.com` | Browser origins the API answers CORS for. The dashboards live on Firebase Hosting, never on the gateway host, so every console call is cross-origin and preflighted; an origin missing here renders a page whose every button silently does nothing. Exact origins, **space-separated** (the deploy action splits its `env_vars` on commas, so a comma-separated value is truncated), no wildcard. The phone sends no `Origin` and is unaffected. The gateway must also carry `allowCors` (step 3 below) or the preflight never reaches Cloud Run |
 
 > **`MAX_SESSIONS_PER_USER` and `PRO_MAX_SESSIONS_PER_USER` are no longer
@@ -526,6 +534,15 @@ Then deploy with the `--set-secrets` flag shown in B1. Verify by signing in with
 a fresh non-admin, non-domain account: mail should land in support@ within
 seconds, and `gcloud run services logs read semper-api --region $REGION` should
 carry no `access-request mail` warning.
+
+**New-device mail to the holder (optional, TD-295).** Set `NOTIFY_SECURITY_FROM`
+to a verified Resend sender (for example `Semper security <security@yourdomain.com>`)
+and each account's holder is mailed, at their verified address, when a new device
+registers to the account: once per account and device, never for a key heal of
+the device already bound. Unset, that mail is off; the access-request mail is
+unaffected. `deploy-backend.yml` passes it from the `NOTIFY_SECURITY_FROM` repo
+variable, like `NOTIFY_FROM` (TD-309): verify the sender in Resend, then set the
+variable and redeploy.
 
 > `--no-allow-unauthenticated` keeps Cloud Run private: only the service
 > accounts in C0 invoke it, and the API Gateway is the public door. **Auth is

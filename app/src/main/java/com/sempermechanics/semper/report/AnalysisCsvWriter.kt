@@ -4,6 +4,7 @@
 package com.sempermechanics.semper.report
 
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import java.io.File
 import java.io.Writer
@@ -53,14 +54,6 @@ object AnalysisCsvWriter {
     private const val POINT_HEADER_BASE = DicResult.CSV_POINT_HEADER
     private const val MOTION_SUFFIX_HEADER = "shift_u_px,shift_v_px,shift_rot_deg"
     private const val SWEEP_SETTINGS_HEADER = "subset_px,step_px,strain_window,vsg_px,"
-
-    private val FIELD_STATS = listOf(
-        "U" to DicResult.IDX_U,
-        "V" to DicResult.IDX_V,
-        "Exx" to DicResult.IDX_EXX,
-        "Eyy" to DicResult.IDX_EYY,
-        "Exy" to DicResult.IDX_EXY,
-    )
 
     /**
      * Writes [frames] in two passes: every frame's field statistics, then every
@@ -204,9 +197,10 @@ object AnalysisCsvWriter {
 
         fun appendFieldStats(frame: Frame, data: FloatArray) {
             check(!pointSectionStarted) { "field stats after the point section started" }
-            FIELD_STATS.forEach { (fieldKey, dataIndex) ->
-                val stats = DicResult.fieldStats(data, dataIndex) ?: return@forEach
-                val unit = if (DicResult.isStrainFieldIndex(dataIndex)) "mε" else "px"
+            FieldKind.entries.forEach { field ->
+                val fieldKey = field.label
+                val stats = DicResult.fieldStats(data, field.dataIndex) ?: return@forEach
+                val unit = field.unit
                 writeFieldStatsRow(
                     pendingStats,
                     frame,

@@ -317,26 +317,38 @@ class AuthRepository(
                 Timber.d(e, "Terms acceptance not synced; will retry on next status refresh")
                 AccountCache.setTermsAccepted(appContext, version, synced = false)
             }
-            setImprovementConsent(improvementConsent)
+            // The gate's choice is local first, like the acceptance; the next
+            // status check brings the server's copy back ([refreshStatus]).
+            AccountCache.setImprovementConsent(appContext, improvementConsent)
+            sendImprovementConsent(token, improvementConsent)
             Result.success(Unit)
         }
 
     /**
-     * Grant or withdraw the product-improvement consent. The local value is the
-     * one the UI shows; the server copy is what the improvement pipeline reads,
-     * so a failed sync is reported rather than hidden.
+     * Grant or withdraw the product-improvement consent. The server copy is
+     * what the improvement pipeline reads, so this phone stores [granted] only
+     * once the server took it: a refused change is reported, and the stored
+     * answer (the one Settings shows) stays at the server's last accepted
+     * value (TD-306). With no token (signed out, or none to be had) the choice
+     * is this phone's alone and is stored as is.
      */
     suspend fun setImprovementConsent(granted: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
-        AccountCache.setImprovementConsent(appContext, granted)
-        val token = (if (api.enabled) tokens.usableIdToken() else null)
-            ?: return@withContext Result.success(Unit)
-        try {
-            api.setImprovementConsent(token, granted)
-            Result.success(Unit)
-        } catch (e: IOException) {
-            Timber.w(e, "Improvement consent not synced")
-            Result.failure(e)
+        val token = if (api.enabled) tokens.usableIdToken() else null
+        if (token == null) {
+            AccountCache.setImprovementConsent(appContext, granted)
+            return@withContext Result.success(Unit)
         }
+        sendImprovementConsent(token, granted)
+    }
+
+    /** Sends [granted]; stores it on this phone only once the server took it. */
+    private suspend fun sendImprovementConsent(token: String, granted: Boolean): Result<Unit> = try {
+        api.setImprovementConsent(token, granted)
+        AccountCache.setImprovementConsent(appContext, granted)
+        Result.success(Unit)
+    } catch (e: IOException) {
+        Timber.w(e, "Improvement consent not synced")
+        Result.failure(e)
     }
 
     // ------------------------------------------------------------------ internal

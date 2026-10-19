@@ -13,7 +13,8 @@
  * once it has been used. A step-up redirect for an old sign-in unloads the
  * page with the code in nobody's storage: it is typed again on return.
  */
-import { api, setStatus, whileWaiting } from "../auth.js";
+import { api } from "../api.js";
+import { setStatus, whileWaiting } from "../status.js";
 import { normaliseClaimCode, claimCodeShaped } from "../util.js";
 import { explain as refusalText, ACCOUNT } from "../messages.js";
 

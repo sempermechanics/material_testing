@@ -15,6 +15,14 @@ from ._base import (  # noqa: F401
     ping,
     get_license,
 )
+from .audit_log import (  # noqa: F401
+    DEVICE_HISTORY_ACTIONS,
+    MAX_AUDIT_PAGE,
+    SEAT_PATCH_ACTIONS,
+    add_audit_row,
+    list_license_device_history,
+    page_license_audit,
+)
 from .user_config import (  # noqa: F401
     INACTIVE_LICENCE_ENDED,
     INACTIVE_NO_SEAT,
@@ -46,6 +54,7 @@ from .invites import (  # noqa: F401
 from .holders import (  # noqa: F401
     licence_is_live,
     licence_held_by,
+    verified_address,
 )
 from .mint import (  # noqa: F401
     ensure_demo_license,
@@ -68,6 +77,7 @@ from .license_admin import (  # noqa: F401
     analysis_cap_error,
     license_edit_error,
     update_license,
+    finish_license_fanout,
 )
 from .upgrade import (  # noqa: F401
     convert_to_institution,
@@ -92,6 +102,7 @@ from .institution_admin import (  # noqa: F401
 from .devices import (  # noqa: F401
     get_device,
     register_device,
+    forget_device_sessions,
     issue_nonce,
     consume_nonce,
     claim_client_nonce,
@@ -99,9 +110,11 @@ from .devices import (  # noqa: F401
 from .users import (  # noqa: F401
     DeviceInUseError,
     get_or_create_user,
+    is_admin_email,
     list_users,
     release_account_device,
     set_user_status,
+    sign_in_uids,
 )
 from .leases import (  # noqa: F401
     checkout_lease,
@@ -145,6 +158,7 @@ from .sessions import (  # noqa: F401
     upload_target,
     list_session_files,
     set_session_status,
+    start_provisioning,
     set_new_session_status,
     iter_unprovisioned_files,
     set_file_upload_urls,
@@ -168,6 +182,7 @@ from .sessions import (  # noqa: F401
 from . import (
     _base,
     account,
+    audit_log,
     activation,
     claims,
     deletion,
@@ -189,4 +204,4 @@ from . import (
 )
 
 #: Every module of the package, each after everything it imports.
-PACKAGE = (_base, user_config, devlock, claims, invites, holders, mint, activation, entitlement, license_admin, upgrade, deletion, institution_admin, devices, users, leases, seats, reconcile, account, sessions)
+PACKAGE = (_base, audit_log, user_config, devlock, claims, invites, holders, mint, activation, entitlement, license_admin, upgrade, deletion, institution_admin, devices, users, leases, seats, reconcile, account, sessions)

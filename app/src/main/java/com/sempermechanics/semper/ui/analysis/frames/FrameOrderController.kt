@@ -37,8 +37,8 @@ class FrameOrderController(
             AnalysisFrameOrderMenuHelper.show(
                 activity = activity,
                 anchor = anchor,
-                mode = viewModel.defOrderMode,
-                direction = viewModel.defOrderDirection,
+                mode = viewModel.inputs.value.defOrderMode,
+                direction = viewModel.inputs.value.defOrderDirection,
                 onSelect = ::applyMode,
             )
         }
@@ -48,9 +48,8 @@ class FrameOrderController(
     fun release() = adapter.release()
 
     internal fun applyMode(mode: FrameOrderMode, direction: FrameOrderDirection) {
-        if (viewModel.defFromVideo || viewModel.defFilePaths.size <= 1) return
-        viewModel.defOrderMode = mode
-        viewModel.defOrderDirection = direction
+        if (viewModel.inputs.value.defFromVideo || viewModel.defFilePaths.size <= 1) return
+        viewModel.edit { it.copy(defOrderMode = mode, defOrderDirection = direction) }
         adapter.dragEnabled = mode == FrameOrderMode.MANUAL
         if (mode == FrameOrderMode.MANUAL) {
             Feedback.toast(activity, R.string.frame_order_manual_hint)
@@ -58,7 +57,7 @@ class FrameOrderController(
         }
         // Import no longer probes URI dates (kept the overlay at 0% on PLC).
         // Resolve from the cached files the first time the user sorts by date.
-        val snapshot = viewModel.deformedFrames
+        val snapshot = viewModel.inputs.value.deformedFrames
         activity.lifecycleScope.launch {
             val dated = withContext(io) {
                 if (mode == FrameOrderMode.DATE && snapshot.all { it.date == DeformedFrame.UNKNOWN_DATE }) {
@@ -68,7 +67,8 @@ class FrameOrderController(
                 }
             }
             val ordered = withContext(Dispatchers.Default) { FrameOrderHelper.reorder(dated, mode, direction) }
-            viewModel.deformedFrames = withContext(io) { FrameOrderHelper.reprefixTempFiles(ordered) }
+            val staged = withContext(io) { FrameOrderHelper.reprefixTempFiles(ordered) }
+            viewModel.edit { it.copy(deformedFrames = staged) }
             onReordered()
             viewModel.checkFrameSizes(activity.resources)
         }
@@ -80,9 +80,9 @@ class FrameOrderController(
         val order = orderedPaths.mapNotNull { indexOf[it] }
         if (order.size != orderedPaths.size) return
         // Keep file names as-is during drag; analysis uses list order, not path sort.
-        viewModel.deformedFrames =
-            FrameOrderHelper.reorder(viewModel.deformedFrames, FrameOrderMode.MANUAL, manualOrder = order)
-        viewModel.defOrderMode = FrameOrderMode.MANUAL
+        val current = viewModel.inputs.value.deformedFrames
+        val reordered = FrameOrderHelper.reorder(current, FrameOrderMode.MANUAL, manualOrder = order)
+        viewModel.edit { it.copy(deformedFrames = reordered, defOrderMode = FrameOrderMode.MANUAL) }
         viewModel.checkFrameSizes(activity.resources)
     }
 }

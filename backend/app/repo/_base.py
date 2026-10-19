@@ -347,9 +347,10 @@ def _update_refs(updates: list) -> None:
         _commit(batch)
 
 
-def _get_all(refs: list) -> list:
+def _get_all(refs: list, field_paths=None) -> list:
     """Snapshots for every reference, in `_BATCH_LIMIT` chunks, one call each,
-    each under the query deadline.
+    each under the query deadline. `field_paths` keeps only those fields of
+    each document, as a query's `select()` does.
 
     `get_all` answers in no particular order, so callers key the result by
     `snap.id` or `snap.reference`, never by position.
@@ -357,7 +358,8 @@ def _get_all(refs: list) -> list:
     out = []
     for start in range(0, len(refs), _BATCH_LIMIT):
         out.extend(db().get_all(
-            refs[start:start + _BATCH_LIMIT], retry=_QUERY_RETRY, timeout=_QUERY_TIMEOUT_S,
+            refs[start:start + _BATCH_LIMIT], field_paths=field_paths,
+            retry=_QUERY_RETRY, timeout=_QUERY_TIMEOUT_S,
         ))
     return out
 

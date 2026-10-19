@@ -1,5 +1,7 @@
-import { requireSignIn, api, setStatus, esc, markFirstData, whileWaiting } from "../auth.js";
-import { day, licenceStatePill, placeholderRows, retryRow } from "../util.js";
+import { requireSignIn } from "../auth.js";
+import { api } from "../api.js";
+import { setStatus, markFirstData, whileWaiting } from "../status.js";
+import { esc, day, licenceStatePill, placeholderRows, retryRow } from "../util.js";
 import { fetchRoster, wireRoster } from "../roster.js";
 import { mountSwitcher } from "../switcher.js";
 import { loadTiles, wireExport, wireImport } from "../roster-tools.js";

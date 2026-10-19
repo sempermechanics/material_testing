@@ -10,6 +10,8 @@ import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.VsgLatticeActivity
+import com.sempermechanics.semper.ui.analysis.sweep.toSkippedNode
+import com.sempermechanics.semper.ui.analysis.wizard.SweepSession
 import timber.log.Timber
 
 /**
@@ -31,8 +33,10 @@ data class ViewerSweepArgs(
  * Everything a viewer launch puts on its Intent, and everything a viewer reads
  * back (ADR-003).
  *
- * Two callers open the viewer — `SessionOpenHelper` from the Home list and a
- * finished run from `AnalysisNavHelper` — and four places read it:
+ * Every opened result is a saved row (ADR-022), so one builder writes it:
+ * [of] a [SessionRecord], whether Home opens the row or the run that just
+ * saved it does. The one result with no row, a sweep that solved nothing,
+ * opens its lattice through [forFailedSweep]. Four places read it:
  * `ResultViewerActivity`, `VsgLatticeActivity`, `SettingsUsedSheet` and
  * `ViewerReportFactory`. All of them go through this type: writers through
  * [toIntent], readers through [from]. A missing extra used to read as whatever
@@ -63,9 +67,10 @@ data class ViewerArgs(
     val roiW: Int,
     val roiH: Int,
     val sweep: ViewerSweepArgs? = null,
-    // The just-analysed run's paths. Home omits both: its frames are the
-    // originals persisted under the session dir, which the viewer prefers
-    // anyway, and an absent extra and an empty one read the same there.
+    // A run's own image paths, which an Intent of an older build may carry. A
+    // row's frames are the originals persisted under the session dir, which
+    // the viewer prefers anyway, so [of] writes neither, and an absent extra
+    // and an empty one read the same there.
     val defPath: String? = null,
     val defFilePaths: List<String> = emptyList(),
     /** The frame to open on; null opens a run on its summary. A lattice node sets it. */
@@ -155,6 +160,90 @@ data class ViewerArgs(
 
         /** The only strain method the engine has. */
         const val STRAIN_METHOD_VSG = "VSG"
+
+        /**
+         * The viewer, or for a sweep its lattice, on the saved row [session]:
+         * what Home opens, and what a run that just saved it opens. A sweep
+         * names its frames after the combination behind them, and needs each
+         * frame's own settings to render and describe it.
+         */
+        fun of(session: SessionRecord): ViewerArgs = ViewerArgs(
+            imgW = session.imgW,
+            imgH = session.imgH,
+            step = session.step,
+            refName = session.refName,
+            refPath = session.refPath,
+            batchDirPath = session.sessionDir,
+            frameNames = session.frameNames,
+            stopCode = session.stopCode,
+            plannedFrames = session.plannedFrameCount,
+            sessionId = session.id,
+            sessionLocalId = session.id,
+            subsetSize = session.subset,
+            strainWindow = session.strainWindow,
+            engineStats = session.engineStats.ifEmpty { null },
+            roiX = session.roiX,
+            roiY = session.roiY,
+            roiW = session.roiW,
+            roiH = session.roiH,
+            frameTimesMs = session.frameTimesMs.takeUnless { session.isSweep },
+            sweep = if (session.isSweep) {
+                ViewerSweepArgs(
+                    subsets = session.sweepSubsets,
+                    steps = session.sweepSteps,
+                    strainWindows = session.sweepStrainWindows,
+                    lineCutHorizontal = session.lineCutHorizontal,
+                    skippedJson = SkippedNode.encodeJson(session.resolvedSkipNodes()),
+                )
+            } else {
+                null
+            },
+        )
+
+        /**
+         * The lattice of a sweep that solved no combination, [run]: the one
+         * result no Home row holds. Every node of its plan failed, each with
+         * its own reason (the run's codes, else the sweep's one code for every
+         * node); the settings shown are its spec's, the plan's first
+         * combination, and the frames are its launch's.
+         */
+        internal fun forFailedSweep(run: SweepSession): ViewerArgs {
+            val result = run.result
+            val sweep = checkNotNull(run.spec.sweep) { "not a sweep" }
+            val settings = run.spec.recordSettings()
+            val recorded = result.skipped.mapIndexed { i, point -> point.toSkippedNode(result.skippedCodes[i]) }
+            val skipped = SkippedNode.forFailedSweep(recorded) {
+                sweep.plan.map { it.toSkippedNode(result.engineErrorCode) }
+            }
+            return ViewerArgs(
+                imgW = run.inputs.reference.size.width,
+                imgH = run.inputs.reference.size.height,
+                step = settings.step,
+                refName = run.inputs.reference.name,
+                refPath = "",
+                batchDirPath = run.batchDir.absolutePath,
+                frameNames = emptyList(),
+                stopCode = result.engineErrorCode,
+                plannedFrames = sweep.plan.size,
+                sessionId = run.localSessionId,
+                sessionLocalId = run.localSessionId,
+                subsetSize = settings.subset,
+                strainWindow = settings.strainWin,
+                engineStats = result.firstMetrics?.toList(),
+                roiX = settings.roiX,
+                roiY = settings.roiY,
+                roiW = settings.roiW,
+                roiH = settings.roiH,
+                sweep = ViewerSweepArgs(
+                    subsets = emptyList(),
+                    steps = emptyList(),
+                    strainWindows = emptyList(),
+                    lineCutHorizontal = sweep.lineCutHorizontal,
+                    skippedJson = SkippedNode.encodeJson(skipped),
+                ),
+                defFilePaths = run.inputs.frames.paths,
+            )
+        }
 
         /**
          * A viewer over a bare directory of `.dat` frames with no session behind

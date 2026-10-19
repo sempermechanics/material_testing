@@ -52,7 +52,8 @@ def wired(monkeypatch, keypair):
     monkeypatch.setattr(deps.settings, "DEV_INSECURE_AUTH", False)
 
     def fake_current_user(*a, **k):
-        return {"uid": "u1", "email": "a@b.com", "access_status": "APPROVED"}
+        return {"uid": "u1", "email": "a@b.com", "access_status": "APPROVED",
+                "activeDeviceId": "d1"}
 
     monkeypatch.setattr(deps, "current_user", fake_current_user)
     monkeypatch.setattr(
@@ -73,7 +74,7 @@ def wired(monkeypatch, keypair):
 
 async def _call(priv, method="POST", path="/v1/sessions", body=b'{"x":1}', nonce="n1", sig=None):
     request = _make_request(method, path, body)
-    user = {"uid": "u1", "email": "a@b.com", "access_status": "APPROVED"}
+    user = {"uid": "u1", "email": "a@b.com", "access_status": "APPROVED", "activeDeviceId": "d1"}
     return await deps.verified_device(
         request=request,
         user=user,
@@ -133,6 +134,34 @@ async def test_nonce_replay_rejected(wired):
     with pytest.raises(HTTPException) as e:
         await _call(wired)
     assert e.value.status_code == 401
+
+
+async def test_the_hash_and_the_signature_check_run_off_the_event_loop(wired, monkeypatch):
+    """TD-198: the body hash (up to a few ms for a 4 MiB body) and the ECDSA
+    verify run in the threadpool, as the Firestore lookups beside them do,
+    not on the thread that serves every other request."""
+    import threading
+
+    sig = _sign(wired, "n1", "POST", "/v1/sessions", b'{"x":1}')
+    loop_thread = threading.current_thread()
+    seen = []
+    real_sha256, real_load = hashlib.sha256, deps.load_pem_public_key
+
+    def sha256(data=b""):
+        seen.append(("hash", threading.current_thread() is loop_thread))
+        return real_sha256(data)
+
+    def load(pem):
+        seen.append(("verify", threading.current_thread() is loop_thread))
+        return real_load(pem)
+
+    monkeypatch.setattr(deps.hashlib, "sha256", sha256)
+    monkeypatch.setattr(deps, "load_pem_public_key", load)
+
+    ctx = await _call(wired, sig=sig)
+
+    assert ctx.device["deviceId"] == "d1"
+    assert seen == [("hash", False), ("verify", False)]
 
 
 # --- client-minted timestamped nonces (no /v1/challenge round-trip) ---------

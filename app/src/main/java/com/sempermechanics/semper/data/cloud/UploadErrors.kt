@@ -30,7 +30,8 @@ internal object UploadErrors {
          * resumable PUT (400), `:complete` found Drive's object gone (400
          * `drive_file_gone`), the file record no longer matches (409
          * `size_or_state_mismatch`) or is gone (404 `file_not_found`). Delete
-         * it and recreate from the same staging.
+         * it and recreate from the same staging, a bounded number of times
+         * ([RebuildBudget.STALE_SESSION]).
          */
         STALE_SESSION,
 
@@ -38,7 +39,7 @@ internal object UploadErrors {
          * Drive holds different bytes than the staged file (422
          * `checksum_mismatch` / `size_mismatch` at `:complete`). Completing
          * the same object again fails the same way forever: delete the session
-         * and restage, a bounded number of times ([MAX_INTEGRITY_REBUILDS]).
+         * and restage, a bounded number of times ([RebuildBudget.INTEGRITY]).
          */
         INTEGRITY,
 
@@ -103,42 +104,53 @@ internal object UploadErrors {
 
     /** [UPLOAD_FAIL_KIND] for an account whose analysis quota is full. */
     const val FAIL_KIND_QUOTA = "quota"
+}
+
+/** Integrity rebuilds allowed before the backup fails instead. */
+private const val MAX_INTEGRITY_REBUILDS = 2
+
+/** Link-expired rebuilds allowed before the backup fails instead. */
+private const val MAX_LINK_EXPIRED_REBUILDS = 3
+
+/** Stale-session rebuilds allowed before the backup fails instead. */
+private const val MAX_STALE_SESSION_REBUILDS = 3
+
+/**
+ * How many times a backup may throw its cloud session away and start again
+ * since its last good upload, by why. Each rebuild uploads every byte again,
+ * so a cause that survives [max] fresh sessions fails the backup instead of
+ * looping on WorkManager's backoff (on a metered network too).
+ *
+ * Each count is a file in the session dir ([marker]), not `upload_staging/`,
+ * because an integrity rebuild deletes the staging.
+ */
+internal enum class RebuildBudget(val marker: String, val max: Int) {
+    /** Drive held other bytes than the staged file ([UploadErrors.Kind.INTEGRITY]): restage. */
+    INTEGRITY(SessionLayout.INTEGRITY_REBUILDS_MARKER, MAX_INTEGRITY_REBUILDS),
+
+    /** Drive no longer knew an upload link (`UploadLinkExpiredException`): recreate from the same staging. */
+    LINK_EXPIRED("link_expired_rebuilds", MAX_LINK_EXPIRED_REBUILDS),
+
+    /** The session could no longer be finished ([UploadErrors.Kind.STALE_SESSION]): recreate from the same staging. */
+    STALE_SESSION("upload_stale_session_rebuilds", MAX_STALE_SESSION_REBUILDS),
+    ;
 
     /**
-     * Session-dir file counting the integrity rebuilds ([Kind.INTEGRITY]) since
-     * the last successful upload. In the session dir, not `upload_staging/`,
-     * because a rebuild deletes the staging.
+     * Count one more rebuild for [sessionDir]. True while the count is within
+     * [max]; false once it is past it, and the backup should fail. An
+     * unreadable count restarts rather than failing the upload.
      */
-    const val INTEGRITY_REBUILDS_MARKER = SessionLayout.INTEGRITY_REBUILDS_MARKER
-
-    /** Integrity rebuilds allowed before the backup fails instead. */
-    const val MAX_INTEGRITY_REBUILDS = 2
-
-    /**
-     * Session-dir file counting the sessions rebuilt because Drive no longer
-     * knew an upload link (`UploadLinkExpiredException`) since the last
-     * successful upload. Beside [INTEGRITY_REBUILDS_MARKER], for the same reason.
-     */
-    const val LINK_EXPIRED_REBUILDS_MARKER = "link_expired_rebuilds"
-
-    /** Link-expired rebuilds allowed before the backup fails instead. */
-    const val MAX_LINK_EXPIRED_REBUILDS = 3
-
-    /** Count one more integrity rebuild for [sessionDir]; returns the new total. */
-    fun recordIntegrityRebuild(sessionDir: File): Int = bump(SessionLayout(sessionDir).integrityRebuildsMarker)
-
-    /** Count one more link-expired rebuild for [sessionDir]; returns the new total. */
-    fun recordLinkExpiredRebuild(sessionDir: File): Int = bump(File(sessionDir, LINK_EXPIRED_REBUILDS_MARKER))
-
-    /** A finished upload, or a backup given up, starts both rebuild counts afresh. */
-    fun clearRebuildCounts(sessionDir: File) {
-        SessionLayout(sessionDir).integrityRebuildsMarker.delete()
-        File(sessionDir, LINK_EXPIRED_REBUILDS_MARKER).delete()
+    fun spend(sessionDir: File): Boolean {
+        val file = File(sessionDir, marker)
+        val count = (runCatching { file.readText().trim().toInt() }.getOrNull() ?: 0) + 1
+        runCatching { file.writeText(count.toString()) }
+        return count <= max
     }
 
-    private fun bump(marker: File): Int {
-        val count = (runCatching { marker.readText().trim().toInt() }.getOrNull() ?: 0) + 1
-        runCatching { marker.writeText(count.toString()) }
-        return count
+    companion object {
+        /** A finished upload, or a backup given up, starts every count afresh. */
+        fun clear(sessionDir: File) {
+            entries.forEach { File(sessionDir, it.marker).delete() }
+        }
     }
 }

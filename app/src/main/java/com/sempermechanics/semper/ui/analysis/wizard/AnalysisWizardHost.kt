@@ -9,9 +9,9 @@ import com.sempermechanics.semper.ui.analysis.sweep.SweepSetupController
  */
 interface AnalysisWizardHost : SweepSetupController.Callbacks {
 
-    /** The subset or its recommendation changed: the sweep re-seeds its suggestions, once it is set up. */
+    /** The subset or its recommendation changed: the sweep re-seeds its suggestions. */
     fun onSweepInputsChanged()
 
-    /** The settings went back to their defaults: so do the sweep's, once it is set up. */
+    /** The settings went back to their defaults: so do the sweep's. */
     fun resetSweepInputs()
 }

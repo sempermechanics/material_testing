@@ -60,7 +60,7 @@ class SessionLayout(val dir: File) {
     /** The per-field range sidecar the summary animation reads (`report.FieldRangesStore.FILE_NAME`). */
     val fieldRanges: File get() = File(dir, FIELD_RANGES)
 
-    /** Integrity rebuilds since the last good upload (`UploadErrors.INTEGRITY_REBUILDS_MARKER`). */
+    /** Integrity rebuilds since the last good upload (`RebuildBudget.INTEGRITY`). */
     val integrityRebuildsMarker: File get() = File(dir, INTEGRITY_REBUILDS_MARKER)
 
     companion object {
@@ -102,6 +102,9 @@ class StagingLayout(val dir: File) {
     /** Written only after a complete report pass; without it the staging is redone. */
     val bundlesDone: File get() = File(dir, BUNDLES_DONE)
 
+    /** Which cloud session the staging was declared to, and the hashes it declared (`StagingBinding`). */
+    val declared: File get() = File(dir, DECLARED)
+
     /** The restore-essential archive. */
     val sessionZip: File get() = archive(SESSION_ZIP)
 
@@ -128,6 +131,7 @@ class StagingLayout(val dir: File) {
         const val ANALYSIS_CSV = "analysis_data.csv"
         const val ANIMATIONS_SUBDIR = "animations"
         const val BUNDLES_DONE = ".bundles_done"
+        const val DECLARED = ".declared"
         const val SESSION_ZIP = "Session.zip"
         const val EXTRAS_ZIP = "Extras.zip"
         const val SHA256_SUFFIX = ".sha256"

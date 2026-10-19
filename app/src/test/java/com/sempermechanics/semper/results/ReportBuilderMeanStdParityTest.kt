@@ -2,9 +2,9 @@ package com.sempermechanics.semper.results
 
 import androidx.core.graphics.createBitmap
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.report.EngineStats
 import com.sempermechanics.semper.report.ReportBuilder
-import com.sempermechanics.semper.report.RoiData
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -86,7 +86,7 @@ class ReportBuilderMeanStdParityTest {
                 subsetSize = 41,
                 strainWindow = 15,
                 strainMethod = "VSG",
-                roiData = RoiData(0, 0, w, h),
+                roi = Roi(0, 0, w, h),
                 engineStats = EngineStats.fromArray(FloatArray(EngineStats.SLOT_COUNT)),
                 referenceImageName = "ref.png",
                 deformedImageName = "def.png",

@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
-from .. import apps, audit, errors, repo, statuses
+from .. import apps, audit, errors, notify, repo
 from .. import rate_limit
 from ..deps import current_user, request_app
+from ..step_up import second_factor
 from ..models import DeviceReg
 from ..validation import require_header_identifier
 
@@ -10,8 +11,8 @@ router = APIRouter()
 
 
 @router.post("/v1/devices/register", status_code=201)
-def register_device(body: DeviceReg, user=Depends(current_user), app=Depends(request_app),
-                    x_app_id: str = Header(default="")):
+def register_device(body: DeviceReg, request: Request, user=Depends(current_user),
+                    app=Depends(request_app), x_app_id: str = Header(default="")):
     # A retired app id (`apps.RETIRED`) reports the device id of the app that
     # succeeded it on the same phone, so registering would replace that app's
     # key and fail every call it signs (`bad_signature`). Nothing is written.
@@ -21,13 +22,6 @@ def register_device(body: DeviceReg, user=Depends(current_user), app=Depends(req
         raise HTTPException(410, errors.APP_RETIRED)
     rate_limit.enforce(rate_limit.device_register_bucket, user["uid"])
     active = user.get(apps.field("activeDeviceId", app))
-    # This ACCOUNT is already bound to a different device for this app → real
-    # device switch, needs a reset/rebind. (Same device id re-registering after
-    # a reinstall is fine — it just heals the stored public key.) Each app has
-    # its own binding (ADR-010): Material Testing on the phone Semper is
-    # registered on reports its own device id, and is not a conflict.
-    if active and active != body.deviceId:
-        raise HTTPException(409, errors.DEVICE_CONFLICT)
     # A device-lock clear just released THIS phone for a new one. Its upload
     # worker re-registers on `device_not_active`; letting it would hand the
     # account back and refuse the new phone. Installed builds read any 409 here
@@ -36,19 +30,31 @@ def register_device(body: DeviceReg, user=Depends(current_user), app=Depends(req
         audit.record(user["uid"], body.deviceId, action="DEVICE_REGISTER", outcome="DENIED",
                      detail={"reason": "released", "app": app})
         raise HTTPException(409, errors.DEVICE_CONFLICT)
-    # This DEVICE is already bound to a different account. Enforces one-account-
-    # per-device: a second person can't sign in on someone else's phone.
-    existing = repo.get_device(body.deviceId)
-    if (existing and existing.get("status") == statuses.DEVICE_ACTIVE
-            and existing.get("uid") != user["uid"]):
-        audit.record(user["uid"], body.deviceId, action="DEVICE_IN_USE", outcome="DENIED",
-                     detail={"owner": existing.get("uid")})
-        raise HTTPException(409, errors.DEVICE_IN_USE)
+    # Whether this registration may later step up for staff or IT: the
+    # token that registers the key proved a second factor (ADR-010, device
+    # trust). An ordinary account has none, and its device is still its own.
+    eligible = bool(second_factor(request))
     healed = active == body.deviceId
-    repo.register_device(user["uid"], body, app)  # upsert: refreshes the public key
+    # The account bound to a different device for this app (a real device
+    # switch, which needs a reset first: `device_conflict`), and the device
+    # bound to a different account (one account per device: `device_in_use`)
+    # are checked inside the registration's transaction, so two phones
+    # registering at once cannot both end up ACTIVE. Each app has its own
+    # binding (ADR-010): Material Testing on the phone Semper is registered on
+    # reports its own device id, and is not a conflict.
+    try:
+        repo.register_device(user["uid"], body, app, step_up_eligible=eligible)
+    except errors.Refusal as refusal:
+        if refusal.code == errors.DEVICE_IN_USE:
+            audit.record(user["uid"], body.deviceId, action="DEVICE_IN_USE", outcome="DENIED",
+                         detail={"owner": (repo.get_device(body.deviceId) or {}).get("uid")})
+        raise
     audit.record(user["uid"], body.deviceId,
                  action="DEVICE_REBIND" if healed else "DEVICE_REGISTER",
-                 detail={"app": app})
+                 detail={"app": app, "stepUpEligible": eligible})
+    if not healed:  # A new device tells its holder (TD-295); a key heal is not one.
+        notify.device_registered(user["uid"], repo.verified_address(user), body.deviceId, app,
+                                 model=body.model)
     return {"deviceId": body.deviceId, "healed": healed}
 
 

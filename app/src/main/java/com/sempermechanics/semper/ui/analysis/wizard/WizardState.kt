@@ -8,6 +8,7 @@ import com.sempermechanics.semper.field.getRoi
 import com.sempermechanics.semper.field.putRoi
 import com.sempermechanics.semper.ui.analysis.frames.FrameOrderDirection
 import com.sempermechanics.semper.ui.analysis.frames.FrameOrderMode
+import com.sempermechanics.semper.ui.analysis.sweep.SweepFrame
 import com.sempermechanics.semper.ui.analysis.sweep.SweepRanges
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -83,63 +84,74 @@ internal object WizardState {
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    /** The scalars of [viewModel], with the fingerprint of [framesJson], the list queued for the draft. */
-    fun save(viewModel: AnalysisViewModel, framesJson: String): Bundle = Bundle().apply {
-        putInt(STEP, viewModel.wizardStep)
-        putBoolean(SETTINGS_REVIEWED, viewModel.settingsReviewed)
-        putBoolean(SUBSET_USER_MODIFIED, viewModel.subsetUserModified)
-        putInt(REF_W, viewModel.refSize.width)
-        putInt(REF_H, viewModel.refSize.height)
-        putString(REF_NAME, viewModel.refName)
-        putBoolean(HAS_REFERENCE, viewModel.refBytes != null)
-        putBoolean(HAS_MASK, viewModel.roiMaskBytes != null)
-        putBoolean(HAS_CUSTOM_ROI, viewModel.hasCustomRoi)
-        putRoi(ROI, viewModel.roi)
-        putInt(FRAME_COUNT, viewModel.deformedFrames.size)
-        putString(ORDER_MODE, viewModel.defOrderMode.name)
-        putString(ORDER_DIRECTION, viewModel.defOrderDirection.name)
-        putString(FRAME_SIZE_ERROR, viewModel.frameSizeError)
-        putBoolean(FROM_VIDEO, viewModel.defFromVideo)
-        putString(VIDEO_NAME, viewModel.defVideoName)
-        putBoolean(SWEEP_MODE, viewModel.sweepMode)
-        putIntArray(SWEEP_RANGES, viewModel.sweepRanges.toIntArray())
-        putDouble(SUBSET_OVERLAP, viewModel.subsetOverlap)
-        putBoolean(LINE_CUT_HORIZONTAL, viewModel.lineCutHorizontal)
-        putInt(SWEEP_FRAME_INDEX, viewModel.sweepFrameIndex)
-        putString(WORKING_LOCAL_ID, viewModel.workingLocalId)
-        putBoolean(WORKING_IS_SWEEP, viewModel.workingIsSweep)
+    /** The scalars of [viewModel]'s inputs, with the fingerprint of [framesJson], the list queued for the draft. */
+    fun save(viewModel: AnalysisViewModel, framesJson: String): Bundle = save(viewModel.inputs.value, framesJson)
+
+    /** The scalars of [inputs], read from the one value, with the fingerprint of [framesJson]. */
+    fun save(inputs: WizardInputs, framesJson: String): Bundle = Bundle().apply {
+        putInt(STEP, inputs.step.number)
+        putBoolean(SETTINGS_REVIEWED, inputs.settingsReviewed)
+        putBoolean(SUBSET_USER_MODIFIED, inputs.subsetUserModified)
+        putInt(REF_W, inputs.refSize.width)
+        putInt(REF_H, inputs.refSize.height)
+        putString(REF_NAME, inputs.refName)
+        putBoolean(HAS_REFERENCE, inputs.refBytes != null)
+        putBoolean(HAS_MASK, inputs.roiMaskBytes != null)
+        putBoolean(HAS_CUSTOM_ROI, inputs.hasCustomRoi)
+        putRoi(ROI, inputs.roi)
+        putInt(FRAME_COUNT, inputs.deformedFrames.size)
+        putString(ORDER_MODE, inputs.defOrderMode.name)
+        putString(ORDER_DIRECTION, inputs.defOrderDirection.name)
+        putString(FRAME_SIZE_ERROR, inputs.frameSizeError)
+        putBoolean(FROM_VIDEO, inputs.defFromVideo)
+        putString(VIDEO_NAME, inputs.defVideoName)
+        putBoolean(SWEEP_MODE, inputs.sweepMode)
+        putIntArray(SWEEP_RANGES, inputs.sweepRanges.toIntArray())
+        putDouble(SUBSET_OVERLAP, inputs.subsetOverlap)
+        putBoolean(LINE_CUT_HORIZONTAL, inputs.lineCutHorizontal)
+        putInt(SWEEP_FRAME_INDEX, inputs.sweepFrame.savedIndex)
+        putString(WORKING_LOCAL_ID, inputs.working?.id)
+        putBoolean(WORKING_IS_SWEEP, inputs.working?.kind == RunKind.SWEEP)
         putString(FRAMES_FINGERPRINT, fingerprint(framesJson))
     }
 
-    /** The scalars of a [save]d Bundle; the draft's parts follow through [readInputs]. */
-    fun restoreScalars(viewModel: AnalysisViewModel, b: Bundle) {
-        viewModel.wizardStep = b.getInt(STEP, 1)
-        viewModel.settingsReviewed = b.getBoolean(SETTINGS_REVIEWED)
-        viewModel.subsetUserModified = b.getBoolean(SUBSET_USER_MODIFIED)
-        viewModel.refSize = ImageSize(b.getInt(REF_W), b.getInt(REF_H))
-        b.getString(REF_NAME)?.let { viewModel.refName = it }
-        viewModel.hasCustomRoi = b.getBoolean(HAS_CUSTOM_ROI)
-        b.getRoi(ROI)?.let { viewModel.roi = it }
-        b.getString(ORDER_MODE)?.let { name -> FrameOrderMode.entries.find { it.name == name } }
-            ?.let { viewModel.defOrderMode = it }
-        b.getString(ORDER_DIRECTION)?.let { name -> FrameOrderDirection.entries.find { it.name == name } }
-            ?.let { viewModel.defOrderDirection = it }
-        viewModel.frameSizeError = b.getString(FRAME_SIZE_ERROR)
-        viewModel.defFromVideo = b.getBoolean(FROM_VIDEO)
-        viewModel.defVideoName = b.getString(VIDEO_NAME)
-        viewModel.sweepMode = b.getBoolean(SWEEP_MODE)
-        SweepRanges.fromIntArray(b.getIntArray(SWEEP_RANGES))?.let { viewModel.sweepRanges = it }
-        viewModel.subsetOverlap = b.getDouble(SUBSET_OVERLAP, viewModel.subsetOverlap)
-        viewModel.lineCutHorizontal = b.getBoolean(LINE_CUT_HORIZONTAL, true)
-        viewModel.sweepFrameIndex = b.getInt(SWEEP_FRAME_INDEX, -1)
+    /**
+     * The scalars of a [save]d Bundle, into [viewModel]'s inputs in one edit;
+     * the draft's parts follow through [readInputs].
+     */
+    fun restoreScalars(viewModel: AnalysisViewModel, b: Bundle) = viewModel.edit { restoreScalars(it, b) }
+
+    /** [inputs] with the scalars of a [save]d Bundle [b]; a key [b] lacks or garbles keeps its value. */
+    fun restoreScalars(inputs: WizardInputs, b: Bundle): WizardInputs = inputs.copy(
+        step = WizardStep.of(b.getInt(STEP, 1)),
+        settingsReviewed = b.getBoolean(SETTINGS_REVIEWED),
+        subsetUserModified = b.getBoolean(SUBSET_USER_MODIFIED),
+        refSize = ImageSize(b.getInt(REF_W), b.getInt(REF_H)),
+        refName = b.getString(REF_NAME) ?: inputs.refName,
+        hasCustomRoi = b.getBoolean(HAS_CUSTOM_ROI),
+        roi = b.getRoi(ROI) ?: inputs.roi,
+        defOrderMode = b.getString(ORDER_MODE)?.let { name -> FrameOrderMode.entries.find { it.name == name } }
+            ?: inputs.defOrderMode,
+        defOrderDirection = b.getString(ORDER_DIRECTION)
+            ?.let { name -> FrameOrderDirection.entries.find { it.name == name } }
+            ?: inputs.defOrderDirection,
+        frameSizeError = b.getString(FRAME_SIZE_ERROR),
+        defFromVideo = b.getBoolean(FROM_VIDEO),
+        defVideoName = b.getString(VIDEO_NAME),
+        sweepMode = b.getBoolean(SWEEP_MODE),
+        sweepRanges = SweepRanges.fromIntArray(b.getIntArray(SWEEP_RANGES)) ?: inputs.sweepRanges,
+        subsetOverlap = b.getDouble(SUBSET_OVERLAP, inputs.subsetOverlap),
+        lineCutHorizontal = b.getBoolean(LINE_CUT_HORIZONTAL, true),
+        sweepFrame = SweepFrame.fromSaved(b.getInt(SWEEP_FRAME_INDEX, -1)),
         // A Bundle from before the kind was saved cannot say whether its
         // session is a single run or a sweep, and a run of the other kind
         // must not write over it: the next run starts a new record instead.
-        viewModel.workingLocalId = b.getString(WORKING_LOCAL_ID)?.takeIf { b.containsKey(WORKING_IS_SWEEP) }
-        viewModel.workingIsSweep = b.getBoolean(WORKING_IS_SWEEP)
-    }
+        working = b.getString(WORKING_LOCAL_ID)
+            ?.takeIf { b.containsKey(WORKING_IS_SWEEP) }
+            ?.let { WorkingSession(it, if (b.getBoolean(WORKING_IS_SWEEP)) RunKind.SWEEP else RunKind.BATCH) },
+    )
 
-    fun frames(viewModel: AnalysisViewModel): Frames = wizardFramesOf(viewModel.deformedFrames)
+    fun frames(viewModel: AnalysisViewModel): Frames = wizardFramesOf(viewModel.inputs.value.deformedFrames)
 
     fun encodeFrames(frames: Frames): String = json.encodeToString(Frames.serializer(), frames)
 

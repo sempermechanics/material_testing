@@ -6,14 +6,16 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.viewModels
 import androidx.annotation.MainThread
 import androidx.annotation.VisibleForTesting
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.AuthRepository
 import com.sempermechanics.semper.data.account.LegalTerms
-import com.sempermechanics.semper.data.net.TermsVersionMismatchException
 import com.sempermechanics.semper.databinding.ActivityTermsBinding
 import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.auth.AuthRoute
@@ -42,6 +44,8 @@ class TermsActivity : AppCompatActivity() {
 
     private val authRepo by lazy { AuthRepository(applicationContext) }
 
+    private val viewModel: TermsViewModel by viewModels()
+
     /** Seam for tests: declining must sign out, and the JVM has no Firebase to sign out of. */
     @VisibleForTesting
     internal var signOut: suspend () -> Unit = { authRepo.signOut() }
@@ -65,7 +69,9 @@ class TermsActivity : AppCompatActivity() {
         // The affirmative act: the button only becomes usable once the required
         // box is ticked by the user — never pre-ticked, never implied by "Continue".
         binding.btnAgree.isEnabled = false
-        binding.cbAgreeTerms.setOnCheckedChangeListener { _, checked -> binding.btnAgree.isEnabled = checked }
+        binding.cbAgreeTerms.setOnCheckedChangeListener { _, checked ->
+            binding.btnAgree.isEnabled = checked && !viewModel.busy.value
+        }
         binding.btnAgree.setOnClickListener { onAgree() }
         binding.btnDecline.setOnClickListener { onDecline() }
         onBackPressedDispatcher.addCallback(
@@ -75,28 +81,37 @@ class TermsActivity : AppCompatActivity() {
             },
         )
         SignOutRun.observe(this, onRunning = { setLoading(true) }) { AuthRoute.toSignIn(this) }
+        observeViewModel()
     }
 
+    /** Records the acceptance in [TermsViewModel], so a rotation cannot cancel it. */
     private fun onAgree() {
         if (!binding.cbAgreeTerms.isChecked) return
-        setLoading(true)
+        viewModel.agree(
+            version = LegalTerms.requiredVersion(this),
+            improvementConsent = binding.cbImprovementConsent.isChecked,
+        )
+    }
+
+    /**
+     * The spinner while an acceptance is recorded, and what each came to once,
+     * on whichever gate is started. Only busy is drawn from the state: idle is
+     * drawn by the outcome, so a sign-out's spinner ([SignOutRun]) is never undone.
+     */
+    private fun observeViewModel() {
         lifecycleScope.launch {
-            val result = authRepo.acceptTerms(
-                version = LegalTerms.requiredVersion(this@TermsActivity),
-                improvementConsent = binding.cbImprovementConsent.isChecked,
-            )
-            setLoading(false)
-            result.fold(
-                onSuccess = { continueToDestination() },
-                onFailure = { error ->
-                    val message = if (error is TermsVersionMismatchException) {
-                        getString(R.string.terms_error_update_app)
-                    } else {
-                        error.message ?: getString(R.string.terms_error_generic)
-                    }
-                    Feedback.toast(this@TermsActivity, message, long = true)
-                },
-            )
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch { viewModel.busy.collect { busy -> if (busy) setLoading(true) } }
+                viewModel.outcomes.collect(::showOutcome)
+            }
+        }
+    }
+
+    private fun showOutcome(outcome: TermsViewModel.Outcome) {
+        setLoading(false)
+        when (outcome) {
+            TermsViewModel.Outcome.Accepted -> continueToDestination()
+            is TermsViewModel.Outcome.Refused -> Feedback.toast(this, outcome.message, long = true)
         }
     }
 

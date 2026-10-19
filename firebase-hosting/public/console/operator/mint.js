@@ -1,5 +1,6 @@
 /* The Issue card: a new licence, individual or institution. */
-import { api, setStatus } from "../auth.js";
+import { api } from "../api.js";
+import { setStatus } from "../status.js";
 import { alreadyLicensedId } from "../util.js";
 import { explain } from "../messages.js";
 import { $ } from "./state.js";

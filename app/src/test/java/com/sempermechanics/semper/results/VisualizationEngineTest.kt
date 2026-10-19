@@ -1,7 +1,10 @@
 package com.sempermechanics.semper.results
 
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.ImageSize
+import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.HeatmapColorScale
+import com.sempermechanics.semper.report.HeatmapRequest
 import com.sempermechanics.semper.report.VisualizationEngine
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -52,8 +55,22 @@ class VisualizationEngineTest {
         val h = rows * step
         val data = rampField(cols, rows, step)
 
-        val plane = VisualizationEngine.generateHeatmapIndices(data, w, h, DicResult.IDX_EXX, step)
-        val (bitmap, min, max) = VisualizationEngine.generateHeatmap(data, w, h, DicResult.IDX_EXX, step)
+        val plane = VisualizationEngine.indices(
+            HeatmapRequest(
+                data = data,
+                size = ImageSize(w, h),
+                valIndex = DicResult.IDX_EXX,
+                step = step,
+            ),
+        )
+        val (bitmap, min, max) = VisualizationEngine.render(
+            HeatmapRequest(
+                data = data,
+                size = ImageSize(w, h),
+                valIndex = DicResult.IDX_EXX,
+                step = step,
+            ),
+        )
 
         assertEquals(plane.width, bitmap.width)
         assertEquals(plane.height, bitmap.height)
@@ -102,12 +119,13 @@ class VisualizationEngineTest {
         val step = 4
         val data = rampField(cols = 25, rows = 17, step = step)
         for (valIndex in listOf(DicResult.IDX_EXX, DicResult.IDX_X)) {
-            val plane = VisualizationEngine.generateHeatmapIndices(
-                data,
-                25 * step,
-                17 * step,
-                valIndex,
-                step,
+            val plane = VisualizationEngine.indices(
+                HeatmapRequest(
+                    data = data,
+                    size = ImageSize(25 * step, 17 * step),
+                    valIndex = valIndex,
+                    step = step,
+                ),
             )
             val (mn, mx) = boxedSigmaClamp(data, valIndex)
             assertEquals("min field=$valIndex", mn, plane.min, 0f)
@@ -132,8 +150,8 @@ class VisualizationEngineTest {
         for (valIndex in fields) {
             val actual = requireNotNull(ranges[valIndex]) { "field=$valIndex missing" }
             val (mn, mx) = boxedSigmaClamp(data, valIndex)
-            assertEquals("min field=$valIndex", mn, actual.first, 0f)
-            assertEquals("max field=$valIndex", mx, actual.second, 0f)
+            assertEquals("min field=$valIndex", mn, actual.min, 0f)
+            assertEquals("max field=$valIndex", mx, actual.max, 0f)
         }
     }
 
@@ -176,7 +194,14 @@ class VisualizationEngineTest {
         // Every point rejected: the native engine's invalid sentinel.
         val data = FloatArray(4 * DicResult.STRIDE) { -1f }
 
-        val plane = VisualizationEngine.generateHeatmapIndices(data, 8, 8, DicResult.IDX_EXX, 4)
+        val plane = VisualizationEngine.indices(
+            HeatmapRequest(
+                data = data,
+                size = ImageSize(8, 8),
+                valIndex = DicResult.IDX_EXX,
+                step = 4,
+            ),
+        )
 
         assertTrue(
             plane.indices.all { (it.toInt() and 0xFF) == VisualizationEngine.TRANSPARENT_INDEX },
@@ -216,7 +241,14 @@ class VisualizationEngineTest {
             it[250] = 5.5f
         }
         val data = singleFieldData(values)
-        val plane = VisualizationEngine.generateHeatmapIndices(data, values.size, 1, DicResult.IDX_EXX, 1)
+        val plane = VisualizationEngine.indices(
+            HeatmapRequest(
+                data = data,
+                size = ImageSize(values.size, 1),
+                valIndex = DicResult.IDX_EXX,
+                step = 1,
+            ),
+        )
         val (mn, mx) = boxedSigmaClamp(data, DicResult.IDX_EXX)
         assertEquals(mn, plane.min, 0f)
         assertEquals(mx, plane.max, 0f)
@@ -295,7 +327,14 @@ class VisualizationEngineTest {
     @Test
     fun `quickSelect-backed range matches the sort oracle on a single point`() {
         val data = singleFieldData(floatArrayOf(42f))
-        val plane = VisualizationEngine.generateHeatmapIndices(data, 1, 1, DicResult.IDX_EXX, 1)
+        val plane = VisualizationEngine.indices(
+            HeatmapRequest(
+                data = data,
+                size = ImageSize(1, 1),
+                valIndex = DicResult.IDX_EXX,
+                step = 1,
+            ),
+        )
         val (mn, mx) = boxedSigmaClamp(data, DicResult.IDX_EXX)
         assertEquals(mn, plane.min, 0f)
         assertEquals(mx, plane.max, 0f)
@@ -304,7 +343,14 @@ class VisualizationEngineTest {
     @Test
     fun `quickSelect-backed range matches the sort oracle when every value is identical`() {
         val data = singleFieldData(FloatArray(200) { 3.5f })
-        val plane = VisualizationEngine.generateHeatmapIndices(data, 200, 1, DicResult.IDX_EXX, 1)
+        val plane = VisualizationEngine.indices(
+            HeatmapRequest(
+                data = data,
+                size = ImageSize(200, 1),
+                valIndex = DicResult.IDX_EXX,
+                step = 1,
+            ),
+        )
         val (mn, mx) = boxedSigmaClamp(data, DicResult.IDX_EXX)
         assertEquals(mn, plane.min, 0f)
         assertEquals(mx, plane.max, 0f)
@@ -314,7 +360,14 @@ class VisualizationEngineTest {
     fun `quickSelect-backed range matches the sort oracle on reverse-sorted input`() {
         val values = FloatArray(300) { (300 - it).toFloat() }
         val data = singleFieldData(values)
-        val plane = VisualizationEngine.generateHeatmapIndices(data, values.size, 1, DicResult.IDX_EXX, 1)
+        val plane = VisualizationEngine.indices(
+            HeatmapRequest(
+                data = data,
+                size = ImageSize(values.size, 1),
+                valIndex = DicResult.IDX_EXX,
+                step = 1,
+            ),
+        )
         val (mn, mx) = boxedSigmaClamp(data, DicResult.IDX_EXX)
         assertEquals(mn, plane.min, 0f)
         assertEquals(mx, plane.max, 0f)
@@ -357,7 +410,14 @@ class VisualizationEngineTest {
             val n = rng.nextInt(2, 400)
             val values = FloatArray(n) { (rng.nextFloat() - 0.5f) * rng.nextInt(1, 10_000) }
             val data = singleFieldData(values)
-            val plane = VisualizationEngine.generateHeatmapIndices(data, n, 1, DicResult.IDX_EXX, 1)
+            val plane = VisualizationEngine.indices(
+                HeatmapRequest(
+                    data = data,
+                    size = ImageSize(n, 1),
+                    valIndex = DicResult.IDX_EXX,
+                    step = 1,
+                ),
+            )
             val (mn, mx) = boxedSigmaClamp(data, DicResult.IDX_EXX)
             assertEquals("trial=$trial n=$n min", mn, plane.min, 0f)
             assertEquals("trial=$trial n=$n max", mx, plane.max, 0f)
@@ -370,14 +430,14 @@ class VisualizationEngineTest {
         val cols = 16
         val data = rampField(cols, 4, step)
 
-        val plane = VisualizationEngine.generateHeatmapIndices(
-            data,
-            cols * step,
-            4 * step,
-            DicResult.IDX_EXX,
-            step,
-            customMin = 0f,
-            customMax = 1f,
+        val plane = VisualizationEngine.indices(
+            HeatmapRequest(
+                data = data,
+                size = ImageSize(cols * step, 4 * step),
+                valIndex = DicResult.IDX_EXX,
+                step = step,
+                bounds = ValueRange(0f, 1f),
+            ),
         )
 
         val used = plane.indices

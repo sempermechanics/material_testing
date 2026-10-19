@@ -29,8 +29,10 @@ from ._base import (
 )
 from .devices import (
     _release_devices,
+    forget_device_sessions,
 )
 from .license_admin import (
+    _demo_drop_patch,
     _drop_user_to_demo_if_licensed,
 )
 
@@ -163,6 +165,11 @@ def clear_device_lock(license_id: str, uid: str = "", *,
     and its cooldown is that app's: moving Semper to a new phone does not make
     Material Testing wait a month to follow.
 
+    A staff or IT clear also stops the released phone's demo count holding
+    the holder's analyses (`forget_device_sessions`, TD-276); the holder's
+    own clear does not, or a second account on the same phone could shed
+    the first one's count.
+
     The cooldown applies to `ACTOR_SELF` alone. A second factor proves *who*
     is asking, not *how often*, so one person could otherwise re-bind daily
     and pass a single licence round a lab. It is counted against
@@ -215,8 +222,12 @@ def clear_device_lock(license_id: str, uid: str = "", *,
             "schemaVersion": SCHEMA_VERSION,
         })
         released = _settle_holder(license_id, lic, ref, scope, uid, previous)
+        # The phone may go to someone else: its demo count stops holding the
+        # holder's analyses (TD-276). Staff and IT only; see the docstring.
+        holder = uid if scope == "seat" else lic.get("redeemedByUid") or ""
+        forgotten = forget_device_sessions(holder, released.values()) if holder else 0
         return {**detail, **apps.spread("previousDeviceId", previous),
-                **apps.spread("releasedDeviceId", released)}
+                **apps.spread("releasedDeviceId", released), "sessionsForgotten": forgotten}
 
     now = _now()
     cooldown = timedelta(days=max(0, settings.SELF_DEVICE_CHANGE_COOLDOWN_DAYS))
@@ -276,9 +287,15 @@ def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> None:
     Resuming one used to set it active again without taking a slot back —
     licensed, on the roster, and not counted in `seatsUsed` — and holding one
     made a freed slot look occupied.
+
+    The holder, while still pointed at this licence, moves in the same commit
+    as the seat (TD-294). It was a separate write after it, so a call that
+    died in between left a held seat's holder licensed until IT pressed the
+    button again.
     """
     lic_ref = db().collection("licenses").document(license_id)
     ref = _seat_ref(license_id, uid)
+    user_ref = db().collection("users").document(uid)
 
     @_base.firestore.transactional
     def _set(tx) -> str:
@@ -291,6 +308,8 @@ def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> None:
             return errors.SEAT_REVOKED
         if lic_snap.exists and _is_revoked(lic_snap.to_dict() or {}):
             return errors.LICENSE_REVOKED
+        # Every read before the first write, as a transaction requires.
+        user_snap = _get(user_ref, tx)
         patch = {
             "status": "active" if enabled else "disabled",
             "updatedAt": _base.firestore.SERVER_TIMESTAMP,
@@ -302,23 +321,19 @@ def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> None:
         tx.update(ref, patch)
         if release and lic_snap.exists:
             tx.update(lic_ref, {"leasesActive": _base.firestore.Increment(-1)})
-        return ""
-
-    # Losing means a revoke, checkout or another hold landed on this seat
-    # first. Nothing was written; IT tries again against the new state.
-    err = _run_tx(_set, on_contended=lambda: errors.SEAT_BUSY)
-    if err:
-        raise Refusal(err)
-    if not enabled:
-        _drop_user_to_demo_if_licensed(uid, license_id)
-    else:
-        user_ref = db().collection("users").document(uid)
-        user_snap = _get(user_ref)
         if user_snap.exists and (user_snap.to_dict() or {}).get("licenseId") == license_id:
-            _update_doc(user_ref, {
+            tx.update(user_ref, _demo_drop_patch() if not enabled else {
                 **_mode_patch(MODE_LICENSED),
                 "updatedAt": _base.firestore.SERVER_TIMESTAMP,
             })
+        return ""
+
+    # Losing means a revoke, checkout or another hold landed on this seat
+    # (or a write on its holder) first. Nothing was written; IT tries again
+    # against the new state.
+    err = _run_tx(_set, on_contended=lambda: errors.SEAT_BUSY)
+    if err:
+        raise Refusal(err)
 
 
 def revoke_institution_seat(license_id: str, uid: str) -> bool:

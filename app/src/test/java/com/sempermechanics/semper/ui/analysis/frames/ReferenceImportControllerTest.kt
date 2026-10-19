@@ -45,7 +45,7 @@ class ReferenceImportControllerTest {
             bed.idle()
         }
 
-        assertNull(bed.viewModel.refBytes)
+        assertNull(bed.viewModel.inputs.value.refBytes)
         assertEquals(0, loaded)
     }
 

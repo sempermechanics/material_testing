@@ -9,7 +9,10 @@
  * or remembered in the browser, so an account that changes hands routes
  * correctly the first time.
  */
-import { requireSignIn, api, setStatus, esc, whileWaiting } from "./auth.js";
+import { requireSignIn } from "./auth.js";
+import { api } from "./api.js";
+import { setStatus, whileWaiting } from "./status.js";
+import { esc } from "./util.js";
 import { licencesAdministered } from "./roles.js";
 
 const $ = (id) => document.getElementById(id);

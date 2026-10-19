@@ -1,5 +1,5 @@
-import { api, esc, when } from "../auth.js";
-import { placeholderRows, retryRow } from "../util.js";
+import { api } from "../api.js";
+import { esc, when, placeholderRows, retryRow } from "../util.js";
 import { $, desk, labelOf } from "./state.js";
 import { renderLicences, onLicenceRead } from "./licences.js";
 

@@ -22,7 +22,7 @@ answer and trusted it indefinitely while offline: an account that stopped
 reaching the backend kept whatever mode and features it last saw, with no
 bound in time and nothing to stop an edited cache. Revocation reached a device
 only at its next `/v1/config` (`LicenseConfigWorker`, every 4 hours,
-`app/src/main/java/com/sempermechanics/semper/data/LicenseConfigWorker.kt:84`),
+`app/src/main/java/com/sempermechanics/semper/data/LicenseConfigWorker.kt:82`),
 and a device that never came back online never learned of it.
 
 The readiness framework asks for a server-signed entitlement with a pinned
@@ -56,22 +56,22 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
      carries `lic: null` and an uncapped grace (`:237`);
    - `mode` and `features` are read from the same resolved config the plain
      `/v1/config` JSON returns, so the token never grants more than the answer it
-     rides in (`backend/app/routers/account.py:147-191`).
+     rides in (`backend/app/routers/account.py:145-189`).
 3. **Delivery.** `GET /v1/config` adds `entitlement` when the service holds a
    key, the caller sent `X-Device-Id`, and that device is an active device of
    this account with a registered key (`entitlement_token.py:269-302`). Anything
-   else omits the field and fails nothing (`routers/account.py:177-191`). After
+   else omits the field and fails nothing (`routers/account.py:175-189`). After
    each floating-seat checkout or heartbeat the app fetches `/v1/config` again,
    so the token follows the lease; when that fetch fails it queues the one-off
    refresh, unique work `license-config-now`, expedited and retried with backoff
    up to six attempts, about 15 minutes (`SeatLease.refreshConfigAfterCheckout`,
    `app/src/main/java/com/sempermechanics/semper/data/account/SeatLease.kt:79-87`;
-   `LicenseConfigWorker.refreshNow`, `data/LicenseConfigWorker.kt:109-120`;
+   `LicenseConfigWorker.refreshNow`, `data/LicenseConfigWorker.kt:106-117`;
    `EntitlementRefresh.MAX_ATTEMPTS`, `data/account/entitlement/EntitlementRefresh.kt:48`).
    The same refresh is queued at launch and on each return to the foreground
    when the stored token is past `refreshAfter` or has lapsed
-   (`LicenseConfigWorker.installForegroundCheck`, `:123-138`; `EntitlementRefresh.refreshDue`,
-   `:45-49`), so `refreshAfter` is a server-side lever; the 4-hour periodic
+   (`LicenseConfigWorker.foregroundCheck`, an `AppForeground` listener, `:121-139`;
+   `EntitlementRefresh.refreshDue`, `data/account/entitlement/EntitlementRefresh.kt:57`), so `refreshAfter` is a server-side lever; the 4-hour periodic
    refresh stays (TD-264, TD-266, closed 2026-10-18).
 4. **The key.** A P-256 private key in Secret Manager, mounted as
    `ENTITLEMENT_SIGNING_KEY` only when the repo variable
@@ -200,7 +200,7 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
 
 **Decision note (2026-10-18): account deletion and the shared Firebase user.**
 `DELETE /v1/me` now also deletes the Firebase Auth user
-(`backend/app/routers/account.py:350`). Semper and Material Testing sign in to the
+(`backend/app/services/account.py:124`). Semper and Material Testing sign in to the
 same Auth project, so this removes the sign-in for both apps. That matches the
 erase itself, which is account-wide: it removes the sessions, files and devices of
 both apps, and (since 2026-10-18, TD-243) the account's `auth_links` rows and the

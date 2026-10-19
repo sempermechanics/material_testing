@@ -13,6 +13,7 @@ import com.sempermechanics.semper.data.session.StagingLayout
 import com.sempermechanics.semper.data.session.imageSize
 import com.sempermechanics.semper.data.session.paramsAt
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.imaging.BitmapDecoder
 import com.sempermechanics.semper.imaging.ImageEncoder
 import com.sempermechanics.semper.report.AnalysisCsvWriter
@@ -28,6 +29,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
@@ -240,15 +242,15 @@ object SessionUploadBundler {
         )
         val ranges = SummaryAnimation.globalRanges(batchFiles, SessionLayout(sessionDir).fieldRanges)
         var gifs = 0
-        for ((label, dataIndex) in SummaryAnimation.FIELDS) {
+        for (field in FieldKind.entries) {
             currentCoroutineContext().ensureActive() // one GIF per check, like the frame loop
-            val bounds = ranges[dataIndex] ?: continue
+            val bounds = ranges[field.dataIndex] ?: continue
             try {
-                if (animation.build(dataIndex, label, bounds) != null) gifs++
+                if (animation.build(field.dataIndex, field.label, bounds) != null) gifs++
             } catch (e: CancellationException) {
                 throw e
             } catch (@Suppress("TooGenericExceptionCaught") e: Throwable) {
-                Timber.w(e, "Skipping %s animation for %s in backup", label, record.id)
+                Timber.w(e, "Skipping %s animation for %s in backup", field.label, record.id)
             }
         }
         return gifs
@@ -389,11 +391,15 @@ object SessionUploadBundler {
             var ok = true
             try {
                 scratch.outputStream().use { stream ->
-                    PdfReportGenerator.generate(reportData, stream, resources).collect { progress ->
-                        if (progress is PdfReportGenerator.Progress.Error) {
-                            Timber.e(progress.ex, "PDF generation failed for %s", frameName)
-                            ok = false
-                        }
+                    // The generator throws a failed render; the frame's report is
+                    // then skipped (its heatmaps still staged), cancellation is not.
+                    try {
+                        PdfReportGenerator.generate(reportData, stream, resources).collect()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                        Timber.e(e, "PDF generation failed for %s", frameName)
+                        ok = false
                     }
                 }
                 onFieldHeatmaps(reportData.fieldResults)

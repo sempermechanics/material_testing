@@ -24,11 +24,12 @@ class SweepFramePickerTest {
 
     @Test
     fun `a frame is labelled by its picked name, else by its number`() {
-        bed.viewModel.deformedFrames = listOf(
+        val frames = listOf(
             DeformedFrame(path = "/c/0000_a.png", name = "specimen.png"),
             DeformedFrame(path = "/c/0001_b.png", name = ""),
             DeformedFrame(path = "/c/0002_c.png", name = "dir/IMG_3.png"),
         )
+        bed.viewModel.edit { it.copy(deformedFrames = frames) }
 
         assertEquals("specimen.png", picker.frameLabel(0))
         assertEquals("Frame 2", picker.frameLabel(1))

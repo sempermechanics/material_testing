@@ -2,6 +2,7 @@ package com.sempermechanics.semper.ui.viewer
 
 import android.graphics.BitmapFactory
 import android.os.Trace
+import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.session.SessionPaths
@@ -16,14 +17,34 @@ import kotlinx.coroutines.yield
 import timber.log.Timber
 import java.io.File
 
+/** What [ViewerFrameLoader] needs from the viewer. */
+internal interface FrameLoaderHost {
+    /** Holds the frame on screen ([ResultViewerViewModel.currentFrameIndex]). */
+    val viewModel: ResultViewerViewModel
+
+    /** The opened frame set's `.dat` files; empty until it is read. */
+    val batchFiles: List<File>
+    val scrubCache: ScrubFrameCache
+
+    /** Puts frame [index], decoded as [data], on screen. Main thread. */
+    fun applyLoadedFrame(index: Int, data: FloatArray)
+}
+
 /**
  * The viewer's frame data: the batch listing read when the viewer opens, each
  * frame's `.dat` decoded off the main thread, and a bounded look-ahead that
  * keeps the scrub cache warm around the frame on screen.
  *
- * Constructed before onCreate; reads [ResultViewerActivity.binding] lazily.
+ * [activity] is the scope the decodes run in and the snackbar's window;
+ * [images] learns which photo a frame goes on as it is read, and [captions]
+ * drops the opening pill when a frame cannot be drawn.
  */
-internal class ViewerFrameLoader(private val host: ResultViewerActivity) {
+internal class ViewerFrameLoader(
+    private val activity: AppCompatActivity,
+    private val host: FrameLoaderHost,
+    private val images: ViewerImageLoader,
+    private val captions: ViewerCaptions,
+) {
 
     /** What the viewer needs from disk before the first frame can load; see [readFrameSet]. */
     class FrameSet(
@@ -52,40 +73,6 @@ internal class ViewerFrameLoader(private val host: ResultViewerActivity) {
     private val batchFiles: List<File> get() = host.batchFiles
     private val scrubCache: ScrubFrameCache get() = host.scrubCache
 
-    /**
-     * Reads the batch listing, the deformed originals, each frame's size and (for an
-     * Intent without it) the reference's dimensions. Disk only — call it off the
-     * main thread.
-     */
-    fun readFrameSet(refPath: String?, knownSize: ImageSize): FrameSet {
-        var size = knownSize
-        if (!size.isKnown && refPath != null) {
-            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeFile(refPath, bounds)
-            if (bounds.outWidth > 0 && bounds.outHeight > 0) {
-                size = ImageSize(bounds.outWidth, bounds.outHeight)
-            }
-        }
-        val args = host.args
-        val batchDirPath = args.batchDirPath
-        // Prefer the raw deformed originals persisted in the session dir (survive
-        // reopen/eviction); fall back to the just-analysed session's temp paths.
-        val rawDeformedDir = batchDirPath?.let { File(it, SessionPaths.RAW_DEFORMED_SUBDIR) }
-        val defPaths = rawDeformedDir?.takeIf { it.isDirectory }
-            ?.listFiles()?.sortedBy { it.name }?.map { it.absolutePath }
-            ?: args.defFilePaths
-        val dir = batchDirPath?.let { File(it) }?.takeIf { it.isDirectory }
-        val files = dir?.listFiles { file -> file.extension == "dat" }?.sortedBy { it.name }.orEmpty()
-        return FrameSet(
-            imageSize = size,
-            defImagePaths = defPaths,
-            batchFiles = files,
-            plannedFrames = SessionPaths.plannedFrameIndices(files),
-            // Once, here: the prefetch heap guard used to stat() every file per load.
-            maxDatBytes = files.maxOfOrNull { it.length() } ?: 0L,
-        )
-    }
-
     /** Takes what this loader needs from the [set] the viewer has just read. Main thread. */
     fun useFrameSet(set: FrameSet) {
         maxDatBytes = set.maxDatBytes
@@ -100,18 +87,18 @@ internal class ViewerFrameLoader(private val host: ResultViewerActivity) {
             return
         }
 
-        loadFrameJob.launch(host.lifecycleScope, Dispatchers.IO) {
+        loadFrameJob.launch(activity.lifecycleScope, Dispatchers.IO) {
             try {
                 val data = readFrameDat(index)
                 if (data == null) {
                     // Nothing to draw: the opening pill must not wait on it.
-                    withContext(Dispatchers.Main) { host.captions.openingDone() }
+                    withContext(Dispatchers.Main) { captions.openingDone() }
                     return@launch
                 }
                 scrubCache.putData(index, data)
 
                 withContext(Dispatchers.Main) {
-                    if (host.currentFrameIndex == index) host.applyLoadedFrame(index, data)
+                    if (host.viewModel.currentFrameIndex == index) host.applyLoadedFrame(index, data)
                     // On Main: prefetchJob is a SerialJob, which is main-thread only.
                     prefetchAround(index)
                 }
@@ -122,16 +109,16 @@ internal class ViewerFrameLoader(private val host: ResultViewerActivity) {
                 Timber.e(e, "OOM loading frame $index")
                 scrubCache.clear()
                 withContext(Dispatchers.Main) {
-                    host.captions.openingDone()
+                    captions.openingDone()
                     FaqRedirect.snackbar(
-                        host,
+                        activity,
                         R.string.viewer_frame_oom,
                         R.string.url_faq_viewer_oom,
                     )
                 }
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 Timber.e(e, "Failed to load frame $index")
-                withContext(Dispatchers.Main) { host.captions.openingDone() }
+                withContext(Dispatchers.Main) { captions.openingDone() }
             }
         }
     }
@@ -157,7 +144,7 @@ internal class ViewerFrameLoader(private val host: ResultViewerActivity) {
         val direction = if (center >= lastPrefetchCenter) 1 else -1
         lastPrefetchCenter = center
 
-        prefetchJob.launch(host.lifecycleScope, Dispatchers.IO) {
+        prefetchJob.launch(activity.lifecycleScope, Dispatchers.IO) {
             try {
                 for (offset in lookAheadOffsets(direction)) {
                     val index = center + offset
@@ -200,7 +187,7 @@ internal class ViewerFrameLoader(private val host: ResultViewerActivity) {
         try {
             // Off the main thread, before the frame can be shown: which photo it
             // goes on decides how its map is drawn.
-            host.images.lookUpFramePhoto(index)
+            images.lookUpFramePhoto(index)
             val file = batchFiles[index]
             val data = DicResult.decodeDatFile(file)
             if (data == null) {
@@ -225,8 +212,42 @@ internal class ViewerFrameLoader(private val host: ResultViewerActivity) {
         loadFrameJob.cancel()
     }
 
-    private companion object {
+    companion object {
         /** Free heap a prefetch needs, in largest frames. */
-        const val PREFETCH_HEADROOM_FRAMES = 3
+        private const val PREFETCH_HEADROOM_FRAMES = 3
+
+        /**
+         * Reads the batch listing of [args], the deformed originals, each frame's
+         * size and (for an Intent without it) the reference's dimensions from
+         * [refPath]. Plain data in and out, so the view model can keep it across
+         * a rotation. Disk only — call it off the main thread.
+         */
+        fun readFrameSet(args: ViewerArgs, refPath: String?, knownSize: ImageSize): FrameSet {
+            var size = knownSize
+            if (!size.isKnown && refPath != null) {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(refPath, bounds)
+                if (bounds.outWidth > 0 && bounds.outHeight > 0) {
+                    size = ImageSize(bounds.outWidth, bounds.outHeight)
+                }
+            }
+            val batchDirPath = args.batchDirPath
+            // Prefer the raw deformed originals persisted in the session dir (survive
+            // reopen/eviction); fall back to the just-analysed session's temp paths.
+            val rawDeformedDir = batchDirPath?.let { File(it, SessionPaths.RAW_DEFORMED_SUBDIR) }
+            val defPaths = rawDeformedDir?.takeIf { it.isDirectory }
+                ?.listFiles()?.sortedBy { it.name }?.map { it.absolutePath }
+                ?: args.defFilePaths
+            val dir = batchDirPath?.let { File(it) }?.takeIf { it.isDirectory }
+            val files = dir?.listFiles { file -> file.extension == "dat" }?.sortedBy { it.name }.orEmpty()
+            return FrameSet(
+                imageSize = size,
+                defImagePaths = defPaths,
+                batchFiles = files,
+                plannedFrames = SessionPaths.plannedFrameIndices(files),
+                // Once, here: the prefetch heap guard used to stat() every file per load.
+                maxDatBytes = files.maxOfOrNull { it.length() } ?: 0L,
+            )
+        }
     }
 }
