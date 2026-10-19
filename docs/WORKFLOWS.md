@@ -189,9 +189,11 @@ One Activity, three pages (`WizardStep`); pages 2 and 3 inflate from ViewStubs.
 
 | Field | Value |
 |---|---|
-| Writes | `<sessionDir>/frame_%04d.dat` (`data/session/SessionPaths`), `raw_deformed/`, reference copy and the index row via `data/session/SessionRepository.buildSessionRecord` → `ui/analysis/run/RunRecordSave.saveRunRecord` → `data/session/SessionStore.save` |
+| Writes | `<sessionDir>/run_staging/frame_%04d.dat` while it runs, moved up to `<sessionDir>/frame_%04d.dat` (`data/session/SessionPaths`) by `RunSession.commit` when it ends any way but a cancel, `raw_deformed/`, reference copy and the index row via `data/session/SessionRepository.buildSessionRecord` → `ui/analysis/run/RunRecordSave.saveRunRecord` → `data/session/SessionStore.save` |
 | Then | Once the row is saved, `saveRunRecord` calls `data/cloud/CloudSync.enqueueUpload` → B1 when cloud backup is on. `afterSave` reads the save's `UpsertOutcome` for both, a sweep's through `SweepAnalysis.finishSolvedSweep` → `persistSweepSession`: a full quota ends the run at the session limit and opens the session-limit screen; an index that could not be read or written shows **Couldn't save results**. Either way a sweep's lattice does not open, and the sweep records `analysis_failed` with reason `session_limit` or `index_unavailable` (`SweepAnalysis.sweepEndEvent`) |
-| Fails as | `EngineFailure.reasonRes` dialog with **Why?** → FAQ; stop reason persisted on the record (`stopCode`, `plannedFrameCount`) so it survives a restart, and in the backup's `metadata.json` `metrics` so it survives a restore. A re-run that saves nothing updates or drops its Home row to match what is left on disk (`BatchAnalysis.afterUnsavedRerun`); a cancelled re-run is saved as a partial run |
+| Fails as | `EngineFailure.reasonRes` dialog with **Why?** → FAQ; stop reason persisted on the record (`stopCode`, `plannedFrameCount`) so it survives a restart, and in the backup's `metadata.json` `metrics` so it survives a restore. A run never writes over a saved analysis: once its row is saved the wizard lets go of the session (`RunChannels.closeSavedSession`), and `openRunSession` reuses a working id only while no row names it. A cancel keeps nothing, for a batch run or a sweep: the staged results are deleted, the frames the run moved go back to the import, and a new session's folder is deleted (`SessionStore.deleteUnsavedDir`) (`CancelledRun.discardCancelledBatch`, `SweepAnalysis.endSweep` → `RunChannels.discardRun`) |
+| Then, on results | The results open and the wizard finishes (`WizardRunOutcomes.openResults` → `finish()`), so their Back lands on Home and the draft is discarded (owner decision, 2026-10-15) |
+| Re-run inputs | A saved run also keeps `<sessionDir>/rerun/` (`ui/analysis/rerun/RerunKeeper`: `inputs.json`, the original reference bytes, the mask, and frames the loop never moved); Home's **Re-run** (`SessionSelectionController.rerunSelected` → `HomeActivity.startRerun`, the FAB's seat and quota gates) opens the wizard with `IntentKeys.RERUN_SESSION_ID`, and `RerunImportController` copies them into the import cache as a new analysis. A row without `rerun/` but with its frames (older, or restored) has its reference picked again first (`ui/home/RerunReferencePicker`, size checked against the record; `RerunLoader.loadWithReference`) ([ADR-022](adr/ADR-022-rerun-as-copy.md)) |
 | Signals | Timber; `android.os.Trace` sections; `diagnostics/SemperAnalytics` analysis started / completed / failed (consent-gated, buckets only) |
 | Tests | `analysis/SweepStudyTest`, `analysis/SubsetRecommenderTest`, `analysis/ConvergenceGateTest`, `session/FailureProvenanceTest`, `results/DicResultDecodeTest`, `EngineFailureTest`, `AnalysisViewModelTest`, instrumented `pipeline/EnginePipelineSmokeTest` |
 
@@ -249,12 +251,11 @@ demand, never on open; report compositing is capped at
 start, the FAB, the quota chip, a pre-run check (`AnalysisNavHelper.ensureSessionQuota`)
 or a quota rejection during B1. Not a paywall: the way past it is an email.
 
-The pre-run check (and the seat check, `ensureSeat`) applies only to a run
-that would start a new Home row, `AnalysisViewModel.wouldCreateNewSession`
-(`workingLocalId == null`). A re-run of the same inputs passes. Picking a
-reference (`applyNewReference`, image or video, even the same file) or
-importing frames calls `clearPreviousResults`, which drops `workingLocalId`,
-so the next run is a new row and is checked.
+The pre-run check (and the seat check, `ensureSeat`) applies to every run:
+a saved analysis is never written over, so every run that saves makes a new
+Home row (owner decision, 2026-10-15; `AnalysisNavHelper.ensureCanStart`, then
+`RunChannels.admitRun` on the native thread). Home's Re-run applies the same
+gates before it opens the wizard.
 
 ---
 

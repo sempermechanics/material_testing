@@ -11,7 +11,6 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 import androidx.core.content.ContextCompat
-import androidx.core.graphics.withSave
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.ui.common.dp
 import kotlin.math.hypot
@@ -26,7 +25,8 @@ import kotlin.math.hypot
  * Interactive: tap to focus a solved node, double-tap/long-press to open it.
  *
  * Both plot axes: Y (VSG) is floored at 1; X (subset) uses evenly spaced
- * columns for the present subset sizes.
+ * columns for the present subset sizes. Labels are the app's sans, set
+ * horizontally.
  */
 class SweepLatticeView @JvmOverloads constructor(
     context: Context,
@@ -40,12 +40,13 @@ class SweepLatticeView @JvmOverloads constructor(
     var interactionEnabled: Boolean = false
 
     /**
-     * When true, drops the separate axis-title lines and shrinks the gutters to
-     * just the tick labels (subset size's unit folds onto the rightmost tick
-     * instead). Set on both consumers of this view -- the result lattice and
-     * the wizard's sweep preview -- which now share the same 136dp height;
-     * neither has room for the full gutters at that size. Defaults false only
-     * because a shared view shouldn't assume a caller wants it.
+     * True for the result lattice and the wizard's sweep preview: a tick label
+     * on every gridline, subset size's unit folded onto the rightmost tick.
+     * False for the run overlay ([LiveSweepLattice]), which labels only the
+     * ends of each range (the lowest and highest VSG at the left, the smallest
+     * and largest subset under the axis with "subset px" between them) and
+     * draws bigger nodes, up to [NODE_RADIUS_LIVE_DP], so the solve being run
+     * is easy to follow.
      */
     var compact: Boolean = false
         set(value) {
@@ -93,17 +94,22 @@ class SweepLatticeView @JvmOverloads constructor(
     private val placed = ArrayList<Placed>()
 
     private companion object {
-        /** Full gutters (wizard sweep preview): tick labels + a separate axis title. */
-        const val PAD_LEFT_FULL_DP = 44f
-        const val PAD_BOTTOM_FULL_DP = 44f
-
         /** [compact] gutters (result lattice): tick labels only, unit folded in. */
         const val PAD_LEFT_COMPACT_DP = 30f
-        const val PAD_BOTTOM_COMPACT_DP = 20f
+        const val PAD_BOTTOM_DP = 20f
 
         const val PAD_RIGHT_DP = 14f
         const val PAD_TOP_DP = 14f
         const val NODE_RADIUS_DP = 5f
+
+        /** The run overlay's node radius, where its rows leave room. */
+        const val NODE_RADIUS_LIVE_DP = 10f
+
+        /** The run overlay's ring around the node being solved, beyond the node. */
+        const val CURRENT_RING_LIVE_DP = 4f
+
+        /** A live node's diameter at most this share of the gap between its column's rows. */
+        const val NODE_ROW_SHARE = 0.4f
         const val NODE_STROKE_DP = 2f
         const val CONNECTOR_DP = 1.5f
         const val TICK_GAP_DP = PlotStyle.LATTICE_TICK_GAP_DP
@@ -120,9 +126,6 @@ class SweepLatticeView @JvmOverloads constructor(
 
         /** Half a column, so a column's nodes sit at its centre. */
         const val HALF_COLUMN = 0.5f
-
-        /** How far below the x-axis ticks the axis title sits, in text heights. */
-        const val AXIS_TITLE_OFFSET = 2.4f
 
         /** Tap tolerance around a node centre, in dp. */
         const val TOUCH_RADIUS_DP = 22f
@@ -144,13 +147,15 @@ class SweepLatticeView @JvmOverloads constructor(
         style = Paint.Style.STROKE
         strokeWidth = dp(NODE_STROKE_DP)
     }
-    private val textPaint = PlotStyle.axisTextPaint(context)
+    private val textPaint = PlotStyle.labelTextPaint(context)
     private val path = Path()
 
     private var nodes: List<Node> = emptyList()
     private var columns: List<Int> = emptyList()
     private var winMin = AXIS_MIN
     private var winMax = AXIS_MIN + 1
+    private var vsgLo = AXIS_MIN
+    private var vsgHi = AXIS_MIN
 
     fun setNodes(nodes: List<Node>) {
         this.nodes = nodes
@@ -161,6 +166,8 @@ class SweepLatticeView @JvmOverloads constructor(
         // away most of the plot.
         val lo = windows.minOrNull() ?: AXIS_MIN
         val hi = windows.maxOrNull() ?: AXIS_MIN
+        vsgLo = lo
+        vsgHi = hi
         val yMargin = ((hi - lo) * Y_MARGIN_FRACTION).toInt().coerceAtLeast(1)
         winMin = (lo - yMargin).coerceAtLeast(0)
         winMax = maxOf(hi + yMargin, winMin + 1)
@@ -172,10 +179,15 @@ class SweepLatticeView @JvmOverloads constructor(
         placed.clear()
         if (nodes.isEmpty() || columns.isEmpty()) return
 
-        val left = dp(if (compact) PAD_LEFT_COMPACT_DP else PAD_LEFT_FULL_DP)
+        val left = if (compact) {
+            dp(PAD_LEFT_COMPACT_DP)
+        } else {
+            maxOf(textPaint.measureText(vsgLo.toString()), textPaint.measureText(vsgHi.toString())) +
+                dp(TICK_GAP_DP) * 2
+        }
         val right = width - dp(PAD_RIGHT_DP)
         val top = dp(PAD_TOP_DP)
-        val bottom = height - dp(if (compact) PAD_BOTTOM_COMPACT_DP else PAD_BOTTOM_FULL_DP)
+        val bottom = height - dp(PAD_BOTTOM_DP)
         if (right <= left || bottom <= top) return
 
         columnX.clear()
@@ -185,7 +197,7 @@ class SweepLatticeView @JvmOverloads constructor(
         frame.set(left, top, right, bottom)
         fun yFor(win: Int) = bottom - (win - winMin).toFloat() / (winMax - winMin) * (bottom - top)
 
-        drawGrid(canvas, columnX, frame)
+        drawGrid(canvas, columnX, frame, ::yFor)
         drawConnectors(canvas, columnX, ::yFor)
         drawNodes(canvas, columnX, ::yFor)
         drawLabels(canvas, columnX, frame)
@@ -261,14 +273,23 @@ class SweepLatticeView @JvmOverloads constructor(
         return if (hypot(hit.x - x, hit.y - y) <= dp(TOUCH_RADIUS_DP)) hit.node else null
     }
 
-    private fun drawGrid(canvas: Canvas, columnX: Map<Int, Float>, f: RectF) {
+    /**
+     * Each column, and labelled rows: in [compact] [Y_TICKS] even steps of the
+     * framed range, in the run overlay the lowest and the highest VSG only.
+     */
+    private fun drawGrid(canvas: Canvas, columnX: Map<Int, Float>, f: RectF, yFor: (Int) -> Float) {
         columnX.values.forEach { x -> canvas.drawLine(x, f.top, x, f.bottom, gridPaint) }
         textPaint.textAlign = Paint.Align.RIGHT
         textPaint.color = PlotStyle.ink(context)
-        for (i in 0..Y_TICKS) {
-            val y = f.bottom - (f.bottom - f.top) * i / Y_TICKS
+        val rows = if (compact) {
+            (0..Y_TICKS).map { i ->
+                f.bottom - (f.bottom - f.top) * i / Y_TICKS to winMin + (winMax - winMin) * i / Y_TICKS
+            }
+        } else {
+            listOf(vsgLo, vsgHi).distinct().map { yFor(it) to it }
+        }
+        rows.forEach { (y, vsg) ->
             canvas.drawLine(f.left, y, f.right, y, gridPaint)
-            val vsg = winMin + (winMax - winMin) * i / Y_TICKS
             val baseline = y + textPaint.textSize * TICK_BASELINE
             canvas.drawText(vsg.toString(), f.left - dp(TICK_GAP_DP), baseline, textPaint)
         }
@@ -288,9 +309,21 @@ class SweepLatticeView @JvmOverloads constructor(
         }
     }
 
+    /**
+     * The node radius: [NODE_RADIUS_DP] in [compact]; in the run overlay up to
+     * [NODE_RADIUS_LIVE_DP], shrunk so a column's nearest rows do not touch.
+     */
+    private fun nodeRadius(yFor: (Int) -> Float): Float {
+        if (compact) return dp(NODE_RADIUS_DP)
+        val closest = nodes.groupBy { it.subset }.values
+            .flatMap { column -> column.map { yFor(it.vsg) }.distinct().sorted().zipWithNext { a, b -> b - a } }
+            .minOrNull() ?: Float.MAX_VALUE
+        return (closest * NODE_ROW_SHARE).coerceIn(dp(NODE_RADIUS_DP), dp(NODE_RADIUS_LIVE_DP))
+    }
+
     private fun drawNodes(canvas: Canvas, columnX: Map<Int, Float>, yFor: (Int) -> Float) {
-        val radius = dp(NODE_RADIUS_DP)
-        val selectedRadius = radius + dp(SELECT_RING_DP)
+        val radius = nodeRadius(yFor)
+        val selectedRadius = radius + dp(if (compact) SELECT_RING_DP else CURRENT_RING_LIVE_DP)
         // Single solved colour, not one per curve (SweepPlotView.paletteColor is
         // reserved for the plot's own emphasis -- keying the node fill to it too
         // taught a colour that never matched once more than one node was solved,
@@ -333,42 +366,35 @@ class SweepLatticeView @JvmOverloads constructor(
         }
     }
 
+    /**
+     * The x labels. [compact]: every subset, the rightmost carrying the unit.
+     * The run overlay: the smallest and the largest subset, with "subset px"
+     * between them (at the left edge when there is one column).
+     */
     private fun drawLabels(canvas: Canvas, columnX: Map<Int, Float>, f: RectF) {
         textPaint.color = PlotStyle.ink(context)
         textPaint.textAlign = Paint.Align.CENTER
+        val baseline = f.bottom + textPaint.textSize + dp(TICK_GAP_DP)
         val lastColumn = columns.lastOrNull()
-        columns.forEach { subset ->
+        val labelled = if (compact) columns else listOfNotNull(columns.firstOrNull(), lastColumn).distinct()
+        labelled.forEach { subset ->
             val x = columnX[subset] ?: return@forEach
-            // Compact mode has no separate "Subset size (px)" title, so the
-            // rightmost tick carries the unit instead.
             val label = if (compact && subset == lastColumn) {
                 context.getString(R.string.vsg_lattice_axis_subset_unit_fmt, subset)
             } else {
                 subset.toString()
             }
-            canvas.drawText(label, x, f.bottom + textPaint.textSize + dp(TICK_GAP_DP), textPaint)
+            canvas.drawText(label, x, baseline, textPaint)
         }
-        if (compact) {
-            textPaint.textAlign = Paint.Align.LEFT
-            return
-        }
-
-        textPaint.color = PlotStyle.inkStrong(context)
-        canvas.drawText(
-            context.getString(R.string.vsg_lattice_axis_subset),
-            (f.left + f.right) / 2f,
-            f.bottom + textPaint.textSize * AXIS_TITLE_OFFSET + dp(TICK_GAP_DP),
-            textPaint,
-        )
-        // Pivot at the frame's vertical centre, not bottom/2f -- the old pivot
-        // ignored top's offset (PAD_TOP_DP), so the rotated title sat high.
-        canvas.withSave {
-            val pivot = (f.top + f.bottom) / 2f
-            rotate(-QUARTER_TURN, textPaint.textSize, pivot)
-            drawText(context.getString(R.string.vsg_lattice_axis_vsg), textPaint.textSize, pivot, textPaint)
+        if (!compact) {
+            val title = context.getString(R.string.vsg_lattice_axis_subset_range)
+            if (labelled.size > 1) {
+                canvas.drawText(title, (f.left + f.right) / 2f, baseline, textPaint)
+            } else {
+                textPaint.textAlign = Paint.Align.LEFT
+                canvas.drawText(title, f.left, baseline, textPaint)
+            }
         }
         textPaint.textAlign = Paint.Align.LEFT
     }
 }
-
-private const val QUARTER_TURN = 90f

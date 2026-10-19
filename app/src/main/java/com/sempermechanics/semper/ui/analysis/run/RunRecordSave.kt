@@ -13,7 +13,7 @@ import timber.log.Timber
  * let start as a new session (`RunAdmission.Admitted`): its row is saved even
  * if the cap filled while it ran, since only starting is blocked. The result
  * says why a row was not written: [SessionStore.UpsertOutcome.QUOTA_FULL] is a
- * new row with no admission at the limit (a re-run whose row was deleted);
+ * new row with no admission at the limit (every run is admitted, so none today);
  * [SessionStore.UpsertOutcome.INDEX_UNAVAILABLE] is an index that could not
  * be read or written, which no upgrade or deletion would fix.
  */

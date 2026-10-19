@@ -50,21 +50,23 @@ class RunChrome(
     /**
      * A run has started: shows the overlay, keeps the screen on, and arms
      * Cancel with [onCancel]. A batch run passes no [title], [status] or
-     * [sweepPlan] and gets the overlay's own, with its convergence graph; a
-     * sweep passes all three and gets its lattice instead, since its solves
-     * are combinations, not frames.
+     * [sweepPlan] and gets the overlay's own, with its convergence graph and
+     * its [reference] name; a sweep passes all three and gets its lattice
+     * instead, since its solves are combinations, not frames. Cancel's
+     * question says a cancel keeps nothing of the run.
      */
     fun beginRun(
         title: String? = null,
         status: String? = null,
         sweepPlan: List<SweepStudy.Point> = emptyList(),
+        reference: String? = null,
         onCancel: () -> Unit,
     ) {
         overlay.processingStartTime = System.currentTimeMillis()
         if (title != null && status != null) {
             overlay.show(title, status, showConvergence = false, sweepPlan = sweepPlan)
         } else {
-            overlay.show()
+            overlay.show(reference = reference)
         }
         activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         begin(CancelPrompt(R.string.cancel_run_title, R.string.cancel_run_body, R.string.keep_running, onCancel))

@@ -141,7 +141,7 @@ class RunKindOwnRecordTest {
         assertEquals("a new sweep is named after its frame", "$frameBase sweep", saved.name)
         val copy = SessionLayout(sweep.dir).rawDeformed(names()[SWEEP_FRAME])
         assertEquals("image ${names()[SWEEP_FRAME]}", copy.readText())
-        // A single re-run reads these paths: they must all still be there.
+        // The next single run in this wizard reads these paths: they must all still be there.
         vm.defFilePaths.forEach { assertTrue("$it is gone", File(it).isFile) }
     }
 
@@ -171,7 +171,7 @@ class RunKindOwnRecordTest {
     }
 
     @Test
-    fun `a re-run of the same kind keeps its session`() {
+    fun `a run after one of the same kind that saved nothing keeps its folder`() {
         val single = vm.openRunSession(ctx, sweep = false)
         assertEquals(single.id, vm.openRunSession(ctx, sweep = false).id)
 
@@ -182,27 +182,37 @@ class RunKindOwnRecordTest {
     }
 
     @Test
-    fun `a sweep re-run over a single run's frame copies it again and keeps the name`() {
+    fun `a second sweep is a new analysis that copies the frame again and leaves the first whole`() {
         savedSingleRun()
         val first = runSweep()
+        val firstRow = SessionStore.get(ctx, first.id)
         val second = runSweep()
 
-        assertEquals(first.id, second.id)
-        val raw = SessionLayout(second.dir).rawDeformedDir
-        assertEquals(listOf(names()[SWEEP_FRAME]), raw.list()?.toList())
-        assertEquals(listOf(names()[SWEEP_FRAME], names()[SWEEP_FRAME]), SessionStore.get(ctx, second.id)?.defNames)
+        assertNotEquals("a saved sweep is never written over", first.id, second.id)
+        assertEquals(firstRow, SessionStore.get(ctx, first.id))
+        assertEquals(3, SessionStore.list(ctx).size)
+        listOf(first, second).forEach { sweep ->
+            val raw = SessionLayout(sweep.dir).rawDeformedDir
+            assertEquals(listOf(names()[SWEEP_FRAME]), raw.list()?.toList())
+            assertEquals(List(2) { names()[SWEEP_FRAME] }, SessionStore.get(ctx, sweep.id)?.defNames)
+        }
+        val frameBase = names()[SWEEP_FRAME].substringBeforeLast('.')
+        assertEquals("$frameBase sweep (2)", SessionStore.get(ctx, second.id)?.name)
     }
 
     @Test
     fun `a run clears the field-range sidecar its previous run left`() {
         val sweep = vm.openRunSession(ctx, sweep = true)
         val sidecar = SessionLayout(sweep.dir).fieldRanges.apply { writeText("stale ranges") }
-        val dat = SessionPaths.frameDat(sweep.dir, 0).apply { writeText("old") }
+        val dat = SessionPaths.frameDat(sweep.dir, 1).apply { writeText("old") }
 
-        vm.openRunSession(ctx, sweep = true)
+        val rerun = vm.openRunSession(ctx, sweep = true)
+        SessionPaths.frameDat(rerun.staging, 0).writeText("new")
+        rerun.commit()
 
-        assertFalse("a stale sidecar would give the re-run the old ranges", sidecar.exists())
+        assertFalse("a stale sidecar would give the next run the old ranges", sidecar.exists())
         assertFalse(dat.exists())
+        assertEquals("new", SessionPaths.frameDat(sweep.dir, 0).readText())
     }
 
     @Test

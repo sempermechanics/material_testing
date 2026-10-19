@@ -2,6 +2,7 @@ package com.sempermechanics.semper.ui.analysis.recommend
 
 import android.animation.ValueAnimator
 import android.graphics.Rect
+import androidx.annotation.VisibleForTesting
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
@@ -42,7 +43,7 @@ class SubsetRecommendationController(
     private val settings: WizardStepSettingsContentBinding,
     private val host: AnalysisWizardHost,
     /** Where the measurement runs: the engine's thread. A function, so the engine loads only when one is asked. */
-    private val measureOn: () -> CoroutineDispatcher = { SemperNativeLib.nativeDispatcher },
+    private val measureOn: () -> CoroutineDispatcher = { engineThread() },
 ) {
     private val lowTextureChip = WarnChip(binding.lowTextureWarnRow.root, host::confirmOpenFaq)
         .apply { setFaq(activity.getString(R.string.url_faq_speckle)) }
@@ -233,4 +234,14 @@ class SubsetRecommendationController(
     /** Region the recommendation samples: the ROI when set, else the frame. */
     private fun currentSamplingRoi(): Rect? =
         viewModel.roi.orFullFrame(viewModel.hasCustomRoi, viewModel.refSize)?.toRect()
+
+    internal companion object {
+        /**
+         * The engine's thread, for a controller the wizard builds itself. A
+         * Robolectric test of the whole wizard, which has no native library,
+         * swaps in a thread of its own and puts this back after.
+         */
+        @VisibleForTesting
+        var engineThread: () -> CoroutineDispatcher = { SemperNativeLib.nativeDispatcher }
+    }
 }

@@ -821,8 +821,10 @@ own code since TD-279, so the app does not lift it on the account's count). A
 session with no `deviceId` counts toward no device. `GET /v1/sessions`
 `quota.used` stays the account's count (`sessions.py:131`). A demo create costs
 11 reads, not 9 ([request-volume.md](../perf/request-volume.md) Pass 4). After
-a staff device release the phone still counts its previous holder's analyses
-(TD-276). Tests `backend/tests/test_demo_device_cap.py`.
+a staff device release, or a staff or IT licence lock clear, the phone no longer
+counts its previous holder's analyses: `forget_device_sessions` drops their
+`deviceId` (`backend/app/repo/devices.py:82-107`; TD-276, closed). The holder's own
+device change keeps them counted. Tests `backend/tests/test_demo_device_cap.py`.
 
 **`MAX_SESSIONS_PER_USER` is deleted, not merely unread.** It used to be the
 one cap for everyone (default 4). `mode` now selects between
@@ -1001,7 +1003,7 @@ Every Firestore call in `backend/app` now goes through a helper in
   so the helper reads the stream to the end before the caller writes anything.
 - **Not covered.** A transaction's begin and commit take no timeout in the
   client's public API (google-cloud-firestore 2.32), so they keep the 60 s
-  default. The reads inside a transaction are covered.
+  default. The reads inside a transaction are covered. Open as TD-210.
 
 `tests/test_firestore_timeouts.py` fails on a raw `.get()`, `.stream()`,
 `get_all`, `.commit()` or document write anywhere in `backend/app` outside
@@ -2627,10 +2629,10 @@ that keep the phone from contradicting it.
   a live lease is not over any quota — a licensed account never is — so
   `SessionQuota.blocked` would let them through every existing
   gate. `LicenseEntitlements.isSeatRequiredToStart` is a separate predicate. It
-  gates the Home **+** before the source menu opens (`HomeActivity`) and both
-  compute paths (`AnalysisNavHelper`), guarded by
-  `AnalysisViewModel.wouldCreateNewSession()` so a run already in flight is
-  never aborted. `SeatRequiredActivity` is one button that asks again, because
+  gates the Home **+** before the source menu opens and Home's Re-run
+  (`HomeActivity.mayStartNewAnalysis`), and both compute paths
+  (`AnalysisNavHelper.ensureCanStart`). Only starting is checked, so a run
+  already in flight is never aborted. `SeatRequiredActivity` is one button that asks again, because
   seats free themselves.
 - **Floating seats renew in-process and release on sign-out.**
   `SeatHeartbeat` re-calls checkout every `seatHeartbeatMinutes` while the

@@ -53,10 +53,12 @@ class PlotStyleTest {
     }
 
     @Test
-    fun `the lattice's grid and axis text`() {
+    fun `the lattice's grid and axis text, the text in the app's sans`() {
         val lattice = SweepLatticeView(context)
         assertSamePaint(lattice.paint("gridPaint"), PlotStyle.gridPaint(context))
-        assertSamePaint(lattice.paint("textPaint"), PlotStyle.axisTextPaint(context))
+        assertSamePaint(lattice.paint("textPaint"), PlotStyle.labelTextPaint(context))
+        assertEquals(Typeface.DEFAULT, lattice.paint("textPaint").typeface)
+        assertEquals(PlotStyle.axisLabelPx(context), lattice.paint("textPaint").textSize, 0f)
     }
 
     @Test

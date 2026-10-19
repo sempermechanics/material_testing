@@ -62,9 +62,19 @@ object FrameOrderHelper {
      * Renames each frame's temp file to `%04d_…` in [frames]' order, so a
      * lexicographic path sort matches the analysis order. Returns the frames
      * at their new paths; names, dates and sizes stay with them.
+     *
+     * Only the import's own copies, all in the import cache
+     * ([FrameImportHelper.COMMITTED_DIR_NAME]), are renamed. Frames anywhere
+     * else keep their paths (TD-211): one a run moved into a session's
+     * `raw_deformed/` is that analysis's image, which its Home row names, and
+     * renaming it broke Home, the exports and the backup. The run reads list
+     * order, not path order, so the new order holds either way.
      */
     fun reprefixTempFiles(frames: List<DeformedFrame>): List<DeformedFrame> {
-        val parent = frames.firstOrNull()?.let { File(it.path).parentFile } ?: return frames
+        val parent = frames.firstOrNull()?.let { File(it.path).parentFile }
+        val inImport = parent?.name == FrameImportHelper.COMMITTED_DIR_NAME &&
+            frames.all { File(it.path).parentFile == parent }
+        if (parent == null || !inImport) return frames
         // Through a "_ord_" name first, so no rename lands on a file that a
         // later frame has yet to move out of the way.
         val staged = frames.mapIndexed { index, frame ->

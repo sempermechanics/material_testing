@@ -42,17 +42,22 @@ class WizardRunLauncher(
         ).copy(mechanical = viewModel.mechanicalInputs(forSweep = false))
 
         // Hard stop: do not start a new analysis when the session quota is full.
-        // Re-runs that update an existing Home row are still allowed.
+        // Every run is a new analysis; a saved one is never written over.
         activity.lifecycleScope.launch {
-            if (!AnalysisNavHelper.ensureCanStart(activity, viewModel, sweep = false)) return@launch
+            if (!AnalysisNavHelper.ensureCanStart(activity)) return@launch
 
-            chrome.beginRun { viewModel.cancelRequested = true }
+            // Frozen here, on Main, so the sheet names the reference the run solves against.
+            val inputs = viewModel.snapshotRunInputs()
+            chrome.beginRun(reference = inputs.reference.name) {
+                viewModel.cancelRequested = true
+            }
             checkReady()
 
             // Survives Activity destroy; progress/outcome observed via StateFlow / SharedFlow.
             viewModel.launchBatchAnalysis(
                 activity.applicationContext,
                 spec,
+                inputs,
                 activity.cacheDir,
                 chrome.overlay.processingStartTime,
             )
@@ -79,9 +84,13 @@ class WizardRunLauncher(
         ).copy(mechanical = viewModel.mechanicalInputs(forSweep = true))
 
         activity.lifecycleScope.launch {
-            if (!AnalysisNavHelper.ensureCanStart(activity, viewModel, sweep = true)) return@launch
+            if (!AnalysisNavHelper.ensureCanStart(activity)) return@launch
 
-            chrome.beginRun(activity.getString(R.string.mode_sweep), sweep.planSummary(plan), plan) {
+            chrome.beginRun(
+                title = activity.getString(R.string.mode_sweep),
+                status = sweep.planSummary(plan),
+                sweepPlan = plan,
+            ) {
                 viewModel.cancelRequested = true
             }
             checkReady()

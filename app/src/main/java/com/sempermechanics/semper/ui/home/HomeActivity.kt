@@ -4,6 +4,7 @@
 
 package com.sempermechanics.semper.ui.home
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.MainThread
@@ -27,6 +28,9 @@ import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.isRestorable
 import com.sempermechanics.semper.databinding.ActivityHomeBinding
 import com.sempermechanics.semper.navigation.IntentKeys
+import com.sempermechanics.semper.ui.analysis.StaticAnalysisActivity
+import com.sempermechanics.semper.ui.analysis.rerun.PickedReference
+import com.sempermechanics.semper.ui.analysis.rerun.RerunSource
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisNavHelper
 import com.sempermechanics.semper.ui.common.ConflatedRefresh
 import com.sempermechanics.semper.ui.common.Insets
@@ -124,6 +128,9 @@ class HomeActivity : AppCompatActivity() {
      * while it is open, and the wizard must not open typeless.
      */
     internal var pendingTestType: TestType? = null
+
+    /** An older analysis's Re-run: its reference picked again. Registers launchers, so built with the screen. */
+    private val rerunReference = RerunReferencePicker(this, onPicked = ::openRerun)
     internal val requestMediaPermission =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
             mediaPicker?.onPermissionResult()
@@ -192,6 +199,61 @@ class HomeActivity : AppCompatActivity() {
     }
 
     /**
+     * Whether new work may start, having opened the screen that says why not
+     * when it may not: the + button ([wireButtons]) and Re-run both ask. The
+     * version gate first, then two independent reasons: the seat check comes
+     * before the quota because an institution member is licensed, so the
+     * quota check is false for them by definition and would wave them
+     * through. At the account's analysis limit, new work is blocked behind
+     * the persistent limit screen (email support) instead of failing on
+     * upload.
+     */
+    internal fun mayStartNewAnalysis(): Boolean = when {
+        // A build the backend no longer supports: its gate screen is opened.
+        !AnalysisNavHelper.ensureUpToDate(this) -> false
+        LicenseEntitlements.isSeatRequiredToStart(this) -> {
+            AnalysisNavHelper.openSeatRequired(this)
+            false
+        }
+        else -> !quotaCard.openLimitScreenIfReached()
+    }
+
+    /**
+     * Re-run: opens the wizard on a new analysis copied from [record]'s
+     * photos and settings (owner decision, 2026-10-15: a saved analysis is
+     * never re-run in place). One saved before Re-run kept its reference, or
+     * restored, asks for its reference again ([RerunReferencePicker]); one
+     * whose frames are not here (freed up) says so. The new analysis counts
+     * toward the limit like any other, so the gates come first.
+     */
+    private fun startRerun(record: SessionRecord) {
+        lifecycleScope.launch {
+            val source = withContext(Dispatchers.IO) { RerunSource.of(record) }
+            when {
+                source == RerunSource.MISSING -> Dialogs.info(
+                    this@HomeActivity,
+                    R.string.rerun_unavailable_title,
+                    R.string.rerun_photos_missing_body,
+                )
+                !mayStartNewAnalysis() -> Unit
+                source == RerunSource.NEEDS_REFERENCE -> rerunReference.ask(record)
+                else -> openRerun(record, null)
+            }
+        }
+    }
+
+    /** The wizard on [record]'s Re-run, with the reference picked again when [picked]. */
+    private fun openRerun(record: SessionRecord, picked: PickedReference?) {
+        val intent = Intent(this, StaticAnalysisActivity::class.java)
+            .putExtra(IntentKeys.RERUN_SESSION_ID, record.id)
+        if (picked != null) {
+            intent.putExtra(IntentKeys.RERUN_REFERENCE_PATH, picked.file.absolutePath)
+                .putExtra(IntentKeys.RERUN_REFERENCE_NAME, picked.name)
+        }
+        startActivity(intent)
+    }
+
+    /**
      * The list, its selection and its delete feedback. Adapter callbacks close
      * over selection; both must exist before the list attaches so an early
      * bind cannot hit an uninitialized controller.
@@ -238,6 +300,7 @@ class HomeActivity : AppCompatActivity() {
         selectionCount = binding.tvSelectionCount,
         btnSelectionRename = binding.btnSelectionRename,
         btnSelectionRestore = binding.btnSelectionRestore,
+        btnSelectionRerun = binding.btnSelectionRerun,
         selectAllBox = binding.cbSelectionAll,
         fab = binding.fabNewAnalysis,
         backCallback = backCallback,
@@ -245,6 +308,7 @@ class HomeActivity : AppCompatActivity() {
         onDeviceOnlyDeleted = { showDeviceOnlyKeptSnackbar() },
         restoreEnabled = { LicenseEntitlements.restoreEnabled(this) },
         onRestore = { records -> startRestore(records) },
+        onRerun = { record -> startRerun(record) },
         onDeleteQueued = { workId, items ->
             justQueuedDeletes += items.filter { it.mode == SessionDeletes.Mode.EVERYWHERE }.map { it.localId }
             deleteFeedback.queued(workId, items.size)

@@ -141,6 +141,10 @@ QUERY_SHAPES: dict[str, list[Shape]] = {
         _q("sessions", ("deviceId", "==")),
         _q("sessions", ("deviceId", "=="), ("status", "=="), note="equality only: merged"),
     ],
+    # A staff or IT phone release: the account's sessions from that phone.
+    "app/repo/devices.py::forget_device_sessions": [
+        _q("sessions", ("uid", "=="), ("deviceId", "=="), note="equality only: merged"),
+    ],
     "app/repo/sessions.py::find_incomplete_session": [
         _q("sessions", ("uid", "=="), ("localSessionId", "=="), ("status", "in")),
     ],

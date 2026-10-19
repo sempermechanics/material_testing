@@ -30,6 +30,21 @@ class SessionLayout(val dir: File) {
     /** One raw deformed original, by the name the run persisted it under. */
     fun rawDeformed(name: String): File = File(rawDeformedDir, name)
 
+    /** Home's Re-run inputs ([SessionPaths.RERUN_SUBDIR]); this phone only. */
+    val rerunDir: File get() = File(dir, SessionPaths.RERUN_SUBDIR)
+
+    /** The wizard's inputs as the run had them, as JSON. */
+    val rerunInputs: File get() = File(rerunDir, RERUN_INPUTS)
+
+    /** The reference exactly as the engine was handed it: the original file's bytes, or a RAW's RGBA. */
+    val rerunReference: File get() = File(rerunDir, RERUN_REFERENCE)
+
+    /** The ROI mask, one byte per reference pixel; absent when the run had none. */
+    val rerunMask: File get() = File(rerunDir, RERUN_MASK)
+
+    /** The frames a run stopped before reaching, which [rawDeformedDir] does not keep. */
+    val rerunFramesDir: File get() = File(rerunDir, RERUN_FRAMES_SUBDIR)
+
     /** Field heatmaps and animations ([SessionPaths.PROCESSED_SUBDIR]); a restore puts `processed/` entries here. */
     val processedDir: File get() = File(dir, SessionPaths.PROCESSED_SUBDIR)
 
@@ -54,6 +69,10 @@ class SessionLayout(val dir: File) {
         const val REPORTS_SUBDIR = "reports"
         const val FIELD_RANGES = "field_ranges.bin"
         const val INTEGRITY_REBUILDS_MARKER = "upload_integrity_rebuilds"
+        const val RERUN_INPUTS = "inputs.json"
+        const val RERUN_REFERENCE = "reference.bin"
+        const val RERUN_MASK = "mask.bin"
+        const val RERUN_FRAMES_SUBDIR = "frames"
     }
 }
 

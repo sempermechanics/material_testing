@@ -10,6 +10,7 @@ from ..models import DeviceReg
 
 from . import _base
 from ._base import (
+    _BATCH_LIMIT,
     db,
     _load_user,
     _now,
@@ -17,6 +18,7 @@ from ._base import (
     SCHEMA_VERSION,
     _get,
     _commit,
+    _stream,
     _set_doc,
     _create_doc,
 )
@@ -75,6 +77,34 @@ def _release_devices(user_ref, devices: dict[str, str], patch: dict) -> None:
             _retire_device(batch, device_ref, statuses.DEVICE_SUPERSEDED)
     batch.update(user_ref, patch)
     _commit(batch)
+
+
+def forget_device_sessions(uid: str, device_ids) -> int:
+    """Stop the account's analyses counting toward each of `device_ids`'
+    demo cap: drop `deviceId` from the account's sessions created from them.
+    Returns how many were changed.
+
+    For a phone that staff or institution IT took off the account (a staff
+    release, a staff or IT lock clear): the phone may go to someone else, and
+    `count_device_sessions` would otherwise hold its next holder's demo to the
+    previous holder's analyses (TD-276). The analyses stay the account's and
+    still count toward its own cap. Never for a holder's own device change:
+    that would let a second account on the same phone shed the first one's
+    count. Two equality filters, served by the automatic indexes; chunked to
+    the batch write cap.
+    """
+    changed = 0
+    for device_id in {d for d in device_ids if d}:
+        query = (db().collection("sessions")
+                 .where("uid", "==", uid).where("deviceId", "==", device_id))
+        refs = [snap.reference for snap in _stream(query)]
+        for start in range(0, len(refs), _BATCH_LIMIT):
+            batch = db().batch()
+            for ref in refs[start:start + _BATCH_LIMIT]:
+                batch.update(ref, {"deviceId": _base.firestore.DELETE_FIELD})
+            _commit(batch)
+        changed += len(refs)
+    return changed
 
 
 def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER) -> dict:

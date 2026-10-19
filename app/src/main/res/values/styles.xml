@@ -64,6 +64,13 @@
         <item name="rippleColor">#22E53935</item>
     </style>
 
+    <!-- Quiet secondary action beside a filled one (a tip card's Skip) -->
+    <style name="Widget.Semper.Button.Text.Quiet" parent="Widget.MaterialComponents.Button.TextButton">
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="rippleColor">#225B6B7A</item>
+    </style>
+
     <!-- Prominent success CTA (Compute) -->
     <style name="Widget.Semper.Button.Cta">
         <item name="android:textSize">16sp</item>
@@ -286,6 +293,15 @@
     <style name="TextAppearance.Semper.SectionHeader" parent="TextAppearance.MaterialComponents.Subtitle1">
         <item name="android:textColor">@color/text_primary</item>
         <item name="android:textStyle">bold</item>
+    </style>
+
+    <!-- The run sheet docked at the bottom of the wizard: rounded on top only. -->
+    <style name="ShapeAppearance.Semper.RunSheet" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSizeTopLeft">22dp</item>
+        <item name="cornerSizeTopRight">22dp</item>
+        <item name="cornerSizeBottomLeft">0dp</item>
+        <item name="cornerSizeBottomRight">0dp</item>
     </style>
 
     <style name="TextAppearance.Semper.Caption" parent="TextAppearance.MaterialComponents.Caption">

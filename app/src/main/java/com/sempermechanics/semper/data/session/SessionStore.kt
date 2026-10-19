@@ -108,7 +108,7 @@ object SessionStore {
     /**
      * Insert or update a session row. A new row is refused when the account is
      * at its analysis quota ([SessionQuota.blocked], with the index's rows as
-     * the phone's count); re-runs of an existing id still save.
+     * the phone's count); an update of an existing id still saves.
      * @param allowOverLimit true for a cloud restore (the session already
      *   counts against the quota) and for a run the quota admitted at its start
      *   (`RunAdmission.Admitted`): a run under way when the cap fills still saves.
@@ -284,13 +284,28 @@ object SessionStore {
     }
 
     /**
-     * Removes the index row only; the directory stays. For a re-run that
-     * left nothing for the row to open, while the wizard still reads its
-     * images from the directory.
+     * Removes the index row only; the directory stays.
      */
     @WorkerThread
     fun forget(context: Context, id: String): Unit = synchronized(lock) {
         removeRow(context, id)
+    }
+
+    /**
+     * Deletes the directory of [id] when no row names it: the session a
+     * cancelled run started and never saved. A row for [id], or an index that
+     * cannot be read, keeps the directory, so this can never delete a saved
+     * analysis. The index is not written. Returns whether the directory is gone.
+     */
+    @WorkerThread
+    fun deleteUnsavedDir(context: Context, id: String): Boolean = synchronized(lock) {
+        val root = root(context)
+        val dir = File(root, id)
+        // Never the sessions root itself, or anything outside it.
+        if (id in setOf("", ".", "..") || dir.parentFile != root || dir.name != id) return@synchronized false
+        val rows = readRows(context) ?: return@synchronized false
+        if (rows.any { it.id == id }) return@synchronized false
+        dir.deleteRecursively()
     }
 
     /** Drops row [id] and tells the quota how many remain; false when the index refused the write. */

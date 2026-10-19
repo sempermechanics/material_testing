@@ -50,8 +50,8 @@
             android:textSize="12sp"
             tools:text="12 combinations · 10 solved · 2 skipped" />
 
-        <!-- compact=true (VsgLatticeActivity): no separate axis-title lines, the
-             coach mark already explains both axes on first open. -->
+        <!-- compact=true (VsgLatticeActivity): no separate axis-title lines, only
+             tick numbers with the "px" unit folded onto the last subset tick. -->
         <com.sempermechanics.semper.ui.analysis.sweep.SweepLatticeView
             android:id="@+id/latticeView"
             android:layout_width="match_parent"
