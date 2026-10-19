@@ -23,7 +23,6 @@ import com.sempermechanics.semper.report.PdfReportGenerator
 import com.sempermechanics.semper.report.ReportBuilder
 import com.sempermechanics.semper.report.ReportImageNames
 import com.sempermechanics.semper.report.ReportSource
-import com.sempermechanics.semper.report.StressStrain
 import com.sempermechanics.semper.report.VisualizationEngine
 import com.sempermechanics.semper.ui.viewer.HeatmapFit
 import com.sempermechanics.semper.ui.viewer.summary.SummaryAnimation
@@ -425,10 +424,6 @@ private fun SessionRecord.frameLoadN(index: Int): Float? =
 
 /** The cover's mechanical block, or null on a plain DIC session. */
 private fun SessionRecord.mechanicalCover(index: Int): MechanicalCover? {
-    if (testType.isBlank()) return null
-    return MechanicalCover(
-        testType = testType,
-        model = StressStrain.Model.of(testType, crossSectionMm2, loadAxisX, geometry, curveCorrection),
-        loadN = frameLoadN(index),
-    )
+    val model = labSession.stressModel() ?: return null
+    return MechanicalCover(testType = testType, model = model, loadN = frameLoadN(index))
 }

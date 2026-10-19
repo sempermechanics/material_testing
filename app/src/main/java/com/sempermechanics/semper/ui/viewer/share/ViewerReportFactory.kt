@@ -63,16 +63,10 @@ object ViewerReportFactory {
 
         /** The cover's mechanical block for the frame at [position], or null on a plain DIC session. */
         fun mechanicalCoverAt(position: Int): MechanicalCover? {
-            val type = args.testType.ifBlank { return null }
+            val sessionModel = args.labSession.stressModel() ?: return null
             return MechanicalCover(
-                testType = type,
-                model = stressModel ?: StressStrain.Model.of(
-                    type,
-                    args.crossSectionMm2,
-                    args.loadAxisX,
-                    args.geometry,
-                    args.curveCorrection,
-                ),
+                testType = args.testType,
+                model = stressModel ?: sessionModel,
                 loadN = args.loadsN.loadOfFrame(plannedAt(position)),
             )
         }

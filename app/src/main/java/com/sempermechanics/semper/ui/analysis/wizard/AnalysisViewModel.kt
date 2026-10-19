@@ -161,57 +161,21 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
 
     val defCount: Int get() = deformedFrames.size
 
-    // ── Lab test: what the load card records (logic in LabInputs.kt) ──────
-    // Chosen on Home before the media picker, so the wizard knows on open
-    // whether to ask for machine loads. A wizard reached without the extra (a
-    // stale launcher shortcut) is plain 2D DIC: Semper's wizard, no load card.
-    var testType: TestType = TestType.DIC_2D
-
-    /** Specimen cross-section in mm², typed on the load card; 0 until it is. */
-    var crossSectionMm2: Float = 0f
-
-    /** Strain axis for the stress–strain curve: Exx (true) or Eyy. */
-    var loadAxisX: Boolean = true
-
-    /** Bending dimensions typed on the load card; [SpecimenGeometry.NONE] until they are. */
-    var geometry: SpecimenGeometry = SpecimenGeometry.NONE
-
-    /**
-     * The machine's load log as read from the file, kept so a change to the
-     * deformed frames re-runs the match without re-reading the document.
-     * Null until a file is imported (or after Clear).
-     */
-    var parsedLoadCsv: ParsedLoadCsv? = null
-
-    /** Display name of the imported log; blank when none. */
-    var loadCsvName: String = ""
-
-    /** [parsedLoadCsv] matched to the current deformed frames; null when either is missing. */
-    var machineLoads: MachineLoadTable? = null
+    // ── Lab test: what the load card records, one value (LabWizardState) ──
+    /** The lab test's inputs; the eleven properties below each read and write one of its fields. */
+    var lab: LabWizardState = LabWizardState()
+    var testType: TestType by LabField({ it.testType }) { s, v -> s.copy(testType = v) }
+    var crossSectionMm2: Float by LabField({ it.crossSectionMm2 }) { s, v -> s.copy(crossSectionMm2 = v) }
+    var loadAxisX: Boolean by LabField({ it.loadAxisX }) { s, v -> s.copy(loadAxisX = v) }
+    var geometry: SpecimenGeometry by LabField({ it.geometry }) { s, v -> s.copy(geometry = v) }
+    var parsedLoadCsv: ParsedLoadCsv? by LabField({ it.parsedLoadCsv }) { s, v -> s.copy(parsedLoadCsv = v) }
+    var loadCsvName: String by LabField({ it.loadCsvName }) { s, v -> s.copy(loadCsvName = v) }
+    var machineLoads: MachineLoadTable? by LabField({ it.machineLoads }) { s, v -> s.copy(machineLoads = v) }
         internal set
-
-    /** EXIF capture time of the picked reference photo; null for a video frame or a photo without one. */
-    var refCaptureTimeMs: Long? = null
-
-    /**
-     * The video reference frame's time in its clip, ms; null for a photo. A
-     * video frame's time after the reference, which a timed load log is
-     * matched by, is its [DeformedFrame.timeMs] less this.
-     */
-    var refVideoTimeMs: Long? = null
-
-    /**
-     * Seconds after the reference frame at which the load log's first row was
-     * taken — the gap between pressing record and the machine starting its
-     * log. Only the time match reads it.
-     */
-    var loadLogStartS: Float = 0f
-
-    /**
-     * How the sheet reads its boxes: each photo's total, or what changed since
-     * the photo before. Only how they are typed; [typedLoadsKg] is always totals.
-     */
-    var typedLoadsEntry: TypedLoads.Entry = TypedLoads.Entry.ABSOLUTE
+    var refCaptureTimeMs: Long? by LabField({ it.refCaptureTimeMs }) { s, v -> s.copy(refCaptureTimeMs = v) }
+    var refVideoTimeMs: Long? by LabField({ it.refVideoTimeMs }) { s, v -> s.copy(refVideoTimeMs = v) }
+    var loadLogStartS: Float by LabField({ it.loadLogStartS }) { s, v -> s.copy(loadLogStartS = v) }
+    var typedLoadsEntry: TypedLoads.Entry by LabField({ it.typedLoadsEntry }) { s, v -> s.copy(typedLoadsEntry = v) }
 
     /** True when [roi] is one the user drew, rather than the whole frame. */
     var hasCustomRoi: Boolean = false

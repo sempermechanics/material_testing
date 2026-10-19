@@ -2,6 +2,7 @@ package com.sempermechanics.semper.data.session
 
 import com.sempermechanics.semper.data.cloud.SessionMetadataSync
 import com.sempermechanics.semper.data.mechanical.CurveCorrection
+import com.sempermechanics.semper.data.mechanical.LabSession
 import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.data.mechanical.TestType
 import kotlinx.serialization.KSerializer
@@ -184,6 +185,10 @@ data class SessionRecord(
 
     /** True when the frames are parameter combinations rather than images. */
     val isSweep: Boolean get() = sweepSteps.isNotEmpty()
+
+    /** The lab test as one value; its stress model is null on a plain DIC session. */
+    val labSession: LabSession
+        get() = LabSession(testType, crossSectionMm2, loadAxisX, geometry, curveCorrection)
 
     /** True when the frames were sampled from a video. */
     val isVideo: Boolean get() = videoName != null || frameTimesMs != null

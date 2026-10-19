@@ -3,6 +3,7 @@ package com.sempermechanics.semper.ui.viewer
 import android.content.Context
 import android.content.Intent
 import com.sempermechanics.semper.data.mechanical.CurveCorrection
+import com.sempermechanics.semper.data.mechanical.LabSession
 import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SkippedNode
@@ -84,6 +85,10 @@ data class ViewerArgs(
     /** A video's frame times in its clip (ms), index-aligned with [frameNames]; null for anything else. */
     val frameTimesMs: List<Long>? = null,
 ) {
+
+    /** The lab test as one value; its stress model is null on a plain DIC session. */
+    val labSession: LabSession
+        get() = LabSession(testType, crossSectionMm2, loadAxisX, geometry, curveCorrection)
 
     /**
      * A sweep opens on its lattice unless a node has already been picked
