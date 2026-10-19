@@ -1,6 +1,7 @@
 # ADR-016: Work that must outlive the Activity has one home per kind
 
-**Status:** Accepted, built (quality program, #311–#331)
+**Status:** Accepted, built (quality program, #311–#331). Amended 2026-10-19: a
+static check for rule 1 is proposed; see [Amendments](#amendments)
 **Date:** 2026-10-03
 **Deciders:** app owner
 
@@ -162,3 +163,43 @@ time, a `StateFlow`, and a consume.
    (`AccountDeletionMarker`, `AccountDeletionRun.resumeInterrupted`).
 5. [x] TD-168: the wizard's run outcome is held in the ViewModel until a
    screen consumes it (`PendingOutcome`).
+
+## Amendments
+
+**2026-10-19, a static check for rule 1 (proposed).** Rule 1 is enforced only by
+review, and two screens broke it:
+
+- **Home's restore.** `startRestore` clears the selection, then `queueRestores`
+  runs inside `lifecycleScope.launch`
+  (`ui/home/HomeActivity.kt:501-526`, launch at `:518`). That block looks up each
+  row's backup on the network (`CloudSync.resolveCloudIdFor`,
+  `data/cloud/CloudSync.kt:312-324`) and then enqueues the restores
+  (`RestoreStart.startAll`, `data/cloud/restore/RestoreStart.kt:34`). Home has no
+  `configChanges` (`app/src/main/AndroidManifest.xml:141`). A rotation during the
+  lookup cancels it after the selection is already gone, so nothing is queued and
+  the user is not told.
+- **Sign-in.** `AuthActivity.runAuth` (`ui/auth/AuthActivity.kt:299-304`), the
+  email-link send (`:197`) and Google sign-in (`:213`) all run on `lifecycleScope`,
+  and `mode` (`:47`) is not saved. A rotation in the middle of sign-in loses the
+  routing (`routeResult`, `:306-329`), the REGISTER form and the offer to save the
+  password.
+
+Both move to a ViewModel (the 2026-10-19 review's U7 and U8). To stop the rule
+depending on review, a check should flag any `lifecycleScope.launch` or `async` in an
+`Activity` (or `Fragment`) whose block directly calls a network entry point or
+enqueues work:
+
+- the `data/net` and `data/cloud` clients (`SemperApi`, `CloudApi`, `authed { }`,
+  `CloudSync`, `RestoreStart.start*`);
+- the `AuthRepository` sign-in calls;
+- `WorkManager.enqueue*`, `enqueueUnique` and `oneTimeWork`.
+
+An Android Lint check is the better fit, because UAST resolves calls through their
+declared types and packages; it would live in a `lint-rules` module wired in with
+`lintChecks`. A detekt rule can do the same with type resolution, or from a
+configured list of names; it would live in a rules module added with
+`detektPlugins`. Neither module exists yet (`app/build.gradle.kts:423-428` uses the
+default detekt rules). Findings are never baselined (CLAUDE.md). A refresh that the
+next `onResume` repeats anyway, such as Home's list refresh (`HomeActivity.kt:83`,
+run from `onResume` at `:356-358`), is not a request the user can lose, so it is
+suppressed with that reason given.
