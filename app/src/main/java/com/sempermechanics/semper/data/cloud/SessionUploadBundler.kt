@@ -307,6 +307,8 @@ object SessionUploadBundler {
                 strainWindow = params.strainWindow,
                 data = { data },
                 loadN = record.frameLoadN(index),
+                // [index] is the planned frame: frames without a `.dat` never get here.
+                plannedIndex = index,
             )
             csv?.appendFieldStats(frame, data)
             csv?.append(frame)

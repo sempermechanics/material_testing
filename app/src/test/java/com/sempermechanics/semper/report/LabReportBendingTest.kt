@@ -3,6 +3,7 @@
 package com.sempermechanics.semper.report
 
 import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.data.mechanical.TypedLoads
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -17,12 +18,13 @@ class LabReportBendingTest {
     private val labKg = floatArrayOf(4.28f, 5.24f, 6.92f, 8.68f, 10.06f, 11.92f)
     private val labMm = floatArrayOf(1.14f, 1.46f, 2.02f, 2.63f, 3.25f, 3.88f)
 
-    private fun document(): LabReport.Document {
+    /** [g]: the lab's own 9.81 by default; the app turns typed kg into N with [TypedLoads.G]. */
+    private fun document(g: Float = 9.81f): LabReport.Document {
         // 0.05 mm/px: 6.38 mm over 127.6 px.
         val taps = BeamEdgeTaps(0f, 0f, 0f, 127.6f)
         val model = StressStrain.Model.Flexural(935f, 150f, 6.38f, true, BeamDeflection.Probe(taps, 6.38f))
         val points = labKg.indices.map { i ->
-            val w = labKg[i] * 9.81f
+            val w = labKg[i] * g
             StressStrain.Point(i, w, model.stressMPa(w), 0f, labMm[i])
         }
         return LabReport.of(StressStrain.Curve(model, points.size, points), null)!!
@@ -81,10 +83,19 @@ class LabReportBendingTest {
         val calc = document().blocks.filterIsInstance<LabReport.Block.Calculation>().single()
 
         assertEquals("σb = M · y / I", calc.lines[0])
-        assertEquals("W = m·g = 4.28 kg × 9.81 m/s² = 41.99 N", calc.lines[1])
+        // The lab's loads were 4.28 kg × 9.81; the line prints the g the app uses.
+        assertEquals("W = m·g = 4.28 kg × 9.80665 m/s² = 41.99 N", calc.lines[1])
         assertEquals("M = W·L / 4 = 41.99 N × 0.935 m / 4 = 9.81 N·m", calc.lines[2])
         assertEquals("σb = 9.645 MPa", calc.lines[5])
         assertTrue(calc.lines[6], calc.lines[6].endsWith("E = 193.21 GPa"))
+    }
+
+    @Test
+    fun `the weight line prints the g the app multiplies by`() {
+        // Typed 4.28 kg × 9.80665 m/s² = 41.97 N; the line used to say × 9.81.
+        val calc = document(g = TypedLoads.G).blocks.filterIsInstance<LabReport.Block.Calculation>().single()
+
+        assertEquals("W = m·g = 4.28 kg × 9.80665 m/s² = 41.97 N", calc.lines[1])
     }
 
     @Test

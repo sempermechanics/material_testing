@@ -242,20 +242,30 @@ object StressStrain {
             get() = loadPeak ?: peak?.let { Peak(it.frame, it.loadN, it.stressMPa, onCurve = true) }
 
         /**
+         * Where the unloaded reference plots. Its strain, stress and δ are 0
+         * to the camera and the load cell, so under a correction each is its
+         * bias: (strain bias, stress bias) for tensile, (δ bias, 0) for bending
+         * on load–deflection; (0, 0) without one.
+         */
+        val origin: Pair<Float, Float>
+            get() = when {
+                model.plotsLoadDeflection -> BeamDeflection.Correction.of(model).apply(0f) to 0f
+                model is Model.Axial -> model.correction.strain(0f) to model.correction.stress(0f)
+                else -> 0f to 0f
+            }
+
+        /**
          * (strain, stress) pairs for plotting — (deflection mm, load N) when
          * the model [plots load on deflection][Model.plotsLoadDeflection] —
-         * led by the unloaded reference at the origin so the elastic line
-         * reads from zero; for bending at (bias, 0), where a deflection
-         * correction puts it. A point without a strain (NaN) is not drawn.
-         * Display only — it is not a solved frame and is not exported.
+         * led by the unloaded reference at [origin] so the elastic line reads
+         * from it. A point without a strain (NaN) is not drawn. Display only —
+         * the reference is not a solved frame and is not exported.
          */
         fun plotPoints(): List<Pair<Float, Float>> =
             if (model.plotsLoadDeflection) {
-                // The reference's δ is 0 to the camera, so under a correction it is the bias.
-                listOf(BeamDeflection.Correction.of(model).apply(0f) to 0f) +
-                    points.mapNotNull { p -> p.deflectionMm?.let { it to p.loadN } }
+                listOf(origin) + points.mapNotNull { p -> p.deflectionMm?.let { it to p.loadN } }
             } else {
-                listOf(0f to 0f) + points.filter { it.strainMilli.isFinite() }.map { it.strainMilli to it.stressMPa }
+                listOf(origin) + points.filter { it.strainMilli.isFinite() }.map { it.strainMilli to it.stressMPa }
             }
     }
 

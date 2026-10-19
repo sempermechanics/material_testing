@@ -3,6 +3,7 @@
 package com.sempermechanics.semper.report
 
 import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.data.mechanical.CurveCorrection
 import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.field.DicResult
 import org.junit.Assert.assertEquals
@@ -169,6 +170,21 @@ class StressStrainTest {
 
         assertEquals(listOf(0f to 0f, 1.5f to 10f), curve.plotPoints())
         assertTrue(StressStrain.Curve(StressStrain.Model.Axial(1f, true), 0, emptyList()).isEmpty)
+    }
+
+    @Test
+    fun `a tensile correction moves the plotted reference to its bias`() {
+        // ε = 1 × ε + 0.5 mε, σ = 1 × σ + 10 MPa: the unloaded reference plots at (0.5, 10), not (0, 0).
+        val correction = CurveCorrection(strainBiasMilli = 0.5f, stressBiasMPa = 10f)
+        val curve = StressStrain.build(
+            loadsN = listOf(50f),
+            model = StressStrain.Model.Axial(areaMm2 = 5f, axisX = false, correction = correction),
+            frameData = { field(0f, 0.0015f) },
+        )
+
+        assertEquals(0.5f to 10f, curve.plotPoints().first())
+        assertEquals(2f, curve.plotPoints()[1].first, 1e-4f)
+        assertEquals(20f, curve.plotPoints()[1].second, 1e-4f)
     }
 
     @Test

@@ -1,5 +1,7 @@
 package com.sempermechanics.semper.analysis
 
+import com.sempermechanics.semper.data.mechanical.CurveCorrection
+import com.sempermechanics.semper.data.mechanical.MechanicalTestInputs
 import com.sempermechanics.semper.data.session.SessionRecord.SyncState
 import com.sempermechanics.semper.data.session.SessionRecordSettings
 import com.sempermechanics.semper.fixtures.sessionRecord
@@ -48,6 +50,35 @@ class UnsavedRerunTest {
 
     private fun run(framesOnDisk: Int, stopCode: Int = -2) =
         UnsavedRerun(framesOnDisk, stopCode, plannedFrames = 12, settings = rerunSettings, defNames = listOf("a.png"))
+
+    @Test
+    fun `the row takes the re-run's specimen and loads, not the gone run's`() {
+        // The previous run was a 10 mm bar (78.54 mm²); the re-run's is 8 mm (50.27 mm²).
+        val old = previous(SyncState.LOCAL_ONLY).copy(
+            testType = "tensile",
+            crossSectionMm2 = 78.54f,
+            loadsN = listOf(100f, 200f),
+            loadSource = "old.csv",
+            curveCorrection = CurveCorrection(stressScale = 1.1f),
+        )
+        val mechanical = MechanicalTestInputs(
+            testType = "tensile",
+            crossSectionMm2 = 50.27f,
+            loadsN = listOf(10f, 20f, 30f),
+            loadSource = "new.csv",
+            loadMapping = "ONE_TO_ONE",
+        )
+
+        val after = afterUnsavedRerun(old, run(framesOnDisk = 1).copy(mechanical = mechanical))!!
+
+        assertEquals(50.27f, after.crossSectionMm2, 0f)
+        // One load per frame name on disk, as a saved run records them.
+        assertEquals(listOf(10f), after.loadsN)
+        assertEquals("new.csv", after.loadSource)
+        assertEquals("ONE_TO_ONE", after.loadMapping)
+        // The old curve's hand-typed match no longer describes these frames.
+        assertEquals(CurveCorrection.NONE, after.curveCorrection)
+    }
 
     @Test
     fun `nothing on disk and backed up keeps the row, which now opens the cloud copy`() {

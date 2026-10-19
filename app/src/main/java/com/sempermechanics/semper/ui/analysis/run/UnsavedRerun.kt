@@ -1,5 +1,7 @@
 package com.sempermechanics.semper.ui.analysis.run
 
+import com.sempermechanics.semper.data.mechanical.CurveCorrection
+import com.sempermechanics.semper.data.mechanical.MechanicalTestInputs
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionRecordSettings
 
@@ -11,6 +13,8 @@ import com.sempermechanics.semper.data.session.SessionRecordSettings
  * @property defNames the frame names on disk, as a saved run records them
  * @property videoName the clip the run's frames came from, when they did
  * @property frameTimesMs each frame's time in that clip, index-aligned with [defNames]
+ * @property mechanical the lab test the run solved with: its specimen and its
+ *   loads, which describe these frames and not the previous run's
  */
 internal data class UnsavedRerun(
     val framesOnDisk: Int,
@@ -20,6 +24,7 @@ internal data class UnsavedRerun(
     val defNames: List<String>,
     val videoName: String? = null,
     val frameTimesMs: List<Long>? = null,
+    val mechanical: MechanicalTestInputs = MechanicalTestInputs.NONE,
 )
 
 /**
@@ -32,9 +37,11 @@ internal data class UnsavedRerun(
  * - Nothing on disk and no cloud copy: null, the row goes. There is no
  *   analysis left anywhere for it to open.
  * - Some frames on disk: it describes those. They are this run's, so the row
- *   takes its settings, frame names and video fields, and is an ordinary
- *   analysis even if it was a sweep; it keeps no headline or stats from the
- *   run that is gone, and is not backed up.
+ *   takes its settings, frame names, video fields and lab test (type,
+ *   dimensions, loads, as a saved run records them, with no curve
+ *   correction), and is an ordinary analysis even if it was a sweep; it keeps
+ *   no headline or stats from the run that is gone, and is not backed up.
+ *   Upstream deleted this path (semperdic-app `6989327`); it goes at the next sync.
  */
 internal fun afterUnsavedRerun(previous: SessionRecord, run: UnsavedRerun): SessionRecord? = when {
     run.framesOnDisk == 0 && previous.syncState == SessionRecord.SyncState.SYNCED -> previous
@@ -53,6 +60,14 @@ internal fun afterUnsavedRerun(previous: SessionRecord, run: UnsavedRerun): Sess
         defNames = run.defNames,
         videoName = run.videoName,
         frameTimesMs = run.frameTimesMs,
+        testType = run.mechanical.testType,
+        crossSectionMm2 = run.mechanical.crossSectionMm2,
+        loadAxisX = run.mechanical.loadAxisX,
+        geometry = run.mechanical.geometry,
+        curveCorrection = CurveCorrection.NONE,
+        loadsN = run.mechanical.loadsN.take(run.defNames.size),
+        loadSource = run.mechanical.loadSource,
+        loadMapping = run.mechanical.loadMapping,
         stopCode = run.stopCode,
         plannedFrameCount = run.plannedFrames,
         headline = "",

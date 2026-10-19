@@ -399,6 +399,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
                 defNames,
                 videoName,
                 frameTimesMs,
+                spec.mechanical,
             ),
         )
         when {

@@ -72,6 +72,12 @@ object AnalysisCsvWriter {
         val data: () -> FloatArray?,
         /** The machine load logged for this frame, or null without a load log. */
         val loadN: Float? = null,
+        /**
+         * The frame's 0-based index in the run's plan, which the curve and the
+         * `# mechanical_results` trailer number frames by; null for the order
+         * the frames are appended in. A run that skipped a frame has a gap here.
+         */
+        val plannedIndex: Int? = null,
     )
 
     /** Semper's format, which a plain 2D DIC session keeps. */
@@ -263,6 +269,9 @@ object AnalysisCsvWriter {
         /** 0-based index of the next [append]ed frame — frames arrive in order. */
         private var frameIndex = 0
 
+        /** Frames the curve spans: one past the highest planned index appended. */
+        private var frameCount = 0
+
         /** The curve's points, collected as frames stream past; null when there is no trailer. */
         private val mechanical: StressStrain.Collector? =
             if (!sweep && metadata.isLabTest) StressStrain.Collector(metadata.stressModel) else null
@@ -304,7 +313,9 @@ object AnalysisCsvWriter {
          * every [ROWS_PER_REPORT] rows; it only watches.
          */
         fun append(frame: Frame, onRows: (fraction: Double) -> Unit = {}) {
-            val index = frameIndex++
+            val index = frame.plannedIndex ?: frameIndex
+            frameIndex++
+            frameCount = maxOf(frameCount, index + 1)
             val data = frame.data() ?: return
             writeFrame(
                 if (pointSectionStarted) writer else stagedWriter(),
@@ -329,7 +340,7 @@ object AnalysisCsvWriter {
         override fun close() {
             try {
                 startPointSection()
-                mechanical?.takeUnless { it.isEmpty }?.let { MechanicalCsv.writeResults(writer, it.curve(frameIndex)) }
+                mechanical?.takeUnless { it.isEmpty }?.let { MechanicalCsv.writeResults(writer, it.curve(frameCount)) }
             } finally {
                 staged?.close()
                 stagingFile.delete()

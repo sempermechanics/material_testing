@@ -208,12 +208,14 @@ class AnalysisCsvPreambleTest {
         assertTrue(text.lines().any { it.startsWith("frame_a.jpg,") && it.endsWith(",200.000,150.0000") })
     }
 
-    private fun tensileFile(sweep: Boolean, testType: String): String {
+    /** [planned]: the 0-based planned frames on disk, in order; a gap is a frame the run did not save. */
+    private fun tensileFile(sweep: Boolean, testType: String, planned: List<Int> = listOf(0, 1, 2, 3)): String {
         val out = File.createTempFile("semper_csv_results", ".csv")
         out.deleteOnExit()
         // E = 200 GPa: stress 100 MPa per 0.5 mε, stretched along x so the
         // extensometer's ΔL / L₀ reads it too.
-        val frames = (1..4).map { k ->
+        val frames = planned.map { p ->
+            val k = p + 1
             val data = stretchedGrid(exx = 0.0005f * k)
             AnalysisCsvWriter.Frame(
                 image = "frame_$k.jpg",
@@ -222,6 +224,7 @@ class AnalysisCsvPreambleTest {
                 strainWindow = 15,
                 data = { data },
                 loadN = 1250f * k,
+                plannedIndex = p,
             )
         }
         val metadata = AnalysisCsvWriter.Metadata(
@@ -253,6 +256,17 @@ class AnalysisCsvPreambleTest {
         assertEquals("", trailer[3])
         assertEquals(4, trailer.size)
         assertTrue(text.indexOf("# mechanical_results") > text.lastIndexOf("frame_4.jpg,"))
+    }
+
+    @Test
+    fun `the trailer numbers planned frames, so a skipped frame does not shift them`() {
+        // Planned frame 2 (the third) was not saved: the fit runs from frame 1
+        // to frame 5, not 1 to 4.
+        val text = tensileFile(sweep = false, testType = "tensile", planned = listOf(0, 1, 3, 4))
+
+        val trailer = text.substringAfter("# mechanical_results\n", missingDelimiterValue = "").lines()
+        assertEquals(200f, trailer[0].removePrefix("# elastic_modulus_gpa,").toFloat(), 0.01f)
+        assertEquals("# elastic_fit_frames,1,5", trailer[1])
     }
 
     /** A bending file: 100 px over 5 mm, 0.05 mm/px; each frame drops 10·k px = 0.5·k mm under 100·k N. */

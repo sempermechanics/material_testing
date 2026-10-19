@@ -98,6 +98,7 @@ internal class DataExport(
                 strainWindow = params.strainWindow,
                 data = { DicResult.decodeDatFile(file) },
                 loadN = s.loadAt(index),
+                plannedIndex = s.plannedAt(index),
             )
         }
         val roi = source.roi
