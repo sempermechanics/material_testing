@@ -22,6 +22,8 @@ import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.BatchAnalysisOutcome
 import com.sempermechanics.semper.ui.analysis.wizard.BatchProgressUpdate
 import com.sempermechanics.semper.ui.analysis.wizard.RunAdmission
+import com.sempermechanics.semper.ui.analysis.wizard.RunKind
+import com.sempermechanics.semper.ui.analysis.wizard.WorkingSession
 import com.sempermechanics.semper.ui.analysis.wizard.admitRun
 import kotlinx.coroutines.Job
 import org.junit.After
@@ -85,7 +87,7 @@ class BatchAnalysisLimitTest {
         assertEquals(RunStop.SessionLimit, outcome.stop)
         assertEquals(3, outcome.totalFrames)
         assertEquals("", outcome.batchDirPath)
-        assertNull("no session id is minted for a blocked run", vm.workingLocalId)
+        assertNull("no session id is minted for a blocked run", vm.working?.id)
         assertNull("nor one for the wizard to take", outcome.session)
         assertTrue(SessionStore.list(ctx).isEmpty())
     }
@@ -107,9 +109,9 @@ class BatchAnalysisLimitTest {
     fun `every run is a new analysis, so every run is checked`() {
         AccountCache.setQuota(ctx, used = 1)
         assertTrue(vm.admitRun(ctx, 3) is RunAdmission.Blocked)
-        vm.workingLocalId = "earlier_run"
+        vm.working = WorkingSession("earlier_run", RunKind.BATCH)
         assertTrue("no run is a free re-run of a saved one", vm.admitRun(ctx, 3) is RunAdmission.Blocked)
-        assertEquals("a blocked run keeps the working folder", "earlier_run", vm.workingLocalId)
+        assertEquals("a blocked run keeps the working folder", "earlier_run", vm.working?.id)
     }
 
     @Test

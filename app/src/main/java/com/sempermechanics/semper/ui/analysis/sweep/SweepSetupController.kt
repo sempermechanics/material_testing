@@ -94,7 +94,7 @@ class SweepSetupController(
     private var rangeFields: SweepRangeFields? = null
 
     private val framePicker = SweepFramePicker(activity, viewModel) { picked ->
-        viewModel.sweepFrameIndex = picked
+        viewModel.sweepFrame = SweepFrame.At(picked)
         refreshSweepPlan()
     }
 
@@ -275,18 +275,8 @@ class SweepSetupController(
         callbacks.checkReady()
     }
 
-    /** Defaults to the middle of the sequence (1-based frame n/2+1). */
-    fun resolvedSweepFrame(): Int {
-        val n = viewModel.defCount
-        if (n <= 0) return 0
-        val last = n - 1
-        val stored = viewModel.sweepFrameIndex
-        return if (stored < 0 || stored > last) {
-            (n / 2).coerceIn(0, last)
-        } else {
-            stored
-        }
-    }
+    /** The 0-based frame the sweep solves: the picked one while it exists, else the middle ([SweepFrame.resolve]). */
+    fun resolvedSweepFrame(): Int = viewModel.sweepFrame.resolve(viewModel.defCount)
 
     /** "N analyses · subset a–b px · window c–d points": the run overlay's status as a sweep starts. */
     fun planSummary(plan: List<SweepStudy.Point>): String = activity.resources.getQuantityString(

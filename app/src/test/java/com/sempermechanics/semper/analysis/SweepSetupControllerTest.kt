@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.widget.EditText
 import androidx.appcompat.app.AppCompatActivity
 import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
+import com.sempermechanics.semper.ui.analysis.sweep.SweepFrame
 import com.sempermechanics.semper.ui.analysis.sweep.SweepSetupController
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
@@ -52,7 +53,7 @@ class SweepSetupControllerTest {
 
     @Test
     fun `no frames resolves to frame zero`() {
-        vm.sweepFrameIndex = 3
+        vm.sweepFrame = SweepFrame.At(3)
         assertEquals(0, helper.resolvedSweepFrame())
     }
 
@@ -69,7 +70,7 @@ class SweepSetupControllerTest {
     @Test
     fun `a stored frame is kept while it exists and replaced once it does not`() {
         frames(5)
-        vm.sweepFrameIndex = 4
+        vm.sweepFrame = SweepFrame.At(4)
         assertEquals(4, helper.resolvedSweepFrame())
         frames(3) // the user removed frames after picking
         assertEquals(1, helper.resolvedSweepFrame())

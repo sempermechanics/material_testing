@@ -16,6 +16,7 @@ import com.sempermechanics.semper.ui.analysis.frames.FrameOrderMode
 import com.sempermechanics.semper.ui.analysis.run.RunInputs
 import com.sempermechanics.semper.ui.analysis.run.RunSpec
 import com.sempermechanics.semper.ui.analysis.run.snapshotRunInputs
+import com.sempermechanics.semper.ui.analysis.sweep.SweepFrame
 import com.sempermechanics.semper.ui.analysis.sweep.SweepRanges
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
@@ -156,7 +157,7 @@ class RerunInputsTest {
         assertFalse(vm.sweepMode)
         assertEquals("lands on the parameters page", WizardStep.SETTINGS, vm.step)
         assertTrue("the recommendation must not move the saved subset", vm.subsetUserModified)
-        assertNull("nothing names the saved analysis: the next run is a new one", vm.workingLocalId)
+        assertNull("nothing names the saved analysis: the next run is a new one", vm.working?.id)
         assertEquals("the saved analysis is untouched", before, hashes(dir))
     }
 
@@ -217,7 +218,7 @@ class RerunInputsTest {
         assertEquals(wizard.subsetOverlap, vm.subsetOverlap, 0.0)
         assertFalse(vm.lineCutHorizontal)
         assertEquals("its one frame, the one it solved against", listOf("clip_1.png"), vm.defOriginalNames)
-        assertEquals(0, vm.sweepFrameIndex)
+        assertEquals(SweepFrame.At(0), vm.sweepFrame)
         assertEquals(listOf("image 1"), vm.defFilePaths.map { File(it).readText() })
         assertArrayEquals(mask, vm.roiMaskBytes)
     }

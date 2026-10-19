@@ -89,7 +89,7 @@ private fun AnalysisViewModel.solveSweep(
     val sweep = checkNotNull(spec.sweep)
     val plan = sweep.plan
     // Its own session, never a single run's: a sweep after one is a new record.
-    val session = openRunSession(appContext, inputs.working, sweep = true)
+    val session = openRunSession(appContext, inputs.working, RunKind.SWEEP)
 
     val result = SweepStudyRunner.run(
         checkNotNull(inputs.reference.bytes),
@@ -145,7 +145,7 @@ internal fun AnalysisViewModel.endSweep(
             totalFrames = 0,
             executionTimeMs = run.executionTimeMs,
             batchDirPath = run.batchDir.absolutePath,
-            session = WorkingSession(run.localSessionId, sweep = true),
+            session = WorkingSession(run.localSessionId, RunKind.SWEEP),
             spec = run.spec,
             failedSweep = ViewerArgs.forFailedSweep(run),
         )
@@ -183,7 +183,7 @@ internal fun AnalysisViewModel.finishSolvedSweep(
         indexUnavailable = saved.after.indexUnavailable,
         // Once saved, that analysis is finished: the next run in this wizard
         // is a new one (applyRunOutcome).
-        session = WorkingSession(run.localSessionId, sweep = true),
+        session = WorkingSession(run.localSessionId, RunKind.SWEEP),
         spec = run.spec,
     )
     sweepEndEvent(appContext, outcome)

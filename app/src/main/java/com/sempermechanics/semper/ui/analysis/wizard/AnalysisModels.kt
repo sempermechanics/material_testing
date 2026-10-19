@@ -27,12 +27,15 @@ data class BatchProgressUpdate(
     val perFrameConvergence: FloatArray? = null,
 )
 
+/** What a run is: one solve per frame, or a parameter sweep. A single run and a sweep never share a session. */
+enum class RunKind { BATCH, SWEEP }
+
 /**
  * The session a run wrote, as the wizard's working session names it
  * (`AnalysisViewModel.working`): while no Home row names it, the next run of
- * the same kind ([sweep]) writes it again (`openRunSession`).
+ * the same [kind] writes it again (`openRunSession`).
  */
-data class WorkingSession(val id: String, val sweep: Boolean)
+data class WorkingSession(val id: String, val kind: RunKind)
 
 /**
  * How a batch run or a sweep ended, as the run reports it: what its

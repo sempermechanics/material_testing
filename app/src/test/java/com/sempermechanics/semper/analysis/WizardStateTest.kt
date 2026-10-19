@@ -14,9 +14,12 @@ import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
 import com.sempermechanics.semper.ui.analysis.frames.FrameImportHelper
 import com.sempermechanics.semper.ui.analysis.frames.FrameOrderDirection
 import com.sempermechanics.semper.ui.analysis.frames.FrameOrderMode
+import com.sempermechanics.semper.ui.analysis.sweep.SweepFrame
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.DraftRestore
+import com.sempermechanics.semper.ui.analysis.wizard.RunKind
 import com.sempermechanics.semper.ui.analysis.wizard.WizardState
+import com.sempermechanics.semper.ui.analysis.wizard.WorkingSession
 import com.sempermechanics.semper.ui.analysis.wizard.saveWizardState
 import com.sempermechanics.semper.ui.analysis.wizard.toDeformedFrames
 import kotlinx.coroutines.CoroutineScope
@@ -98,9 +101,8 @@ class WizardStateTest {
         stepDenominator = 4
         subsetOverlap = 0.75
         lineCutHorizontal = false
-        sweepFrameIndex = 1
-        workingLocalId = "abc123"
-        workingIsSweep = true
+        sweepFrame = SweepFrame.At(1)
+        working = WorkingSession("abc123", RunKind.SWEEP)
     }
 
     /** What the system hands back after the kill, with the draft the stop wrote. */
@@ -135,11 +137,10 @@ class WizardStateTest {
         )
         assertEquals(0.75, after.subsetOverlap, 0.0)
         assertFalse(after.lineCutHorizontal)
-        assertEquals(1, after.sweepFrameIndex)
+        assertEquals(SweepFrame.At(1), after.sweepFrame)
         // The re-run keeps its Home row instead of making a second one.
-        assertEquals("abc123", after.workingLocalId)
         // ...and its kind, so a single run after the sweep still makes its own.
-        assertTrue(after.workingIsSweep)
+        assertEquals(WorkingSession("abc123", RunKind.SWEEP), after.working)
         // Not yet: the heavy inputs wait for restoreDraft.
         assertNull(after.refBytes)
         assertTrue(after.defFilePaths.isEmpty())
@@ -200,7 +201,7 @@ class WizardStateTest {
         assertTrue(after.defFilePaths.isEmpty())
         assertEquals(0, after.realRefWidth)
         assertEquals(AnalysisViewModel.NO_REFERENCE_NAME, after.refName)
-        assertNull(after.workingLocalId)
+        assertNull(after.working)
         // The sweep ranges are choices, not inputs; they stay.
         assertEquals(21, after.subsetMin)
     }

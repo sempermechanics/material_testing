@@ -12,7 +12,9 @@ import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
 import com.sempermechanics.semper.ui.analysis.frames.FrameOrderDirection
 import com.sempermechanics.semper.ui.analysis.frames.FrameOrderMode
 import com.sempermechanics.semper.ui.analysis.recommend.SubsetRecommender
+import com.sempermechanics.semper.ui.analysis.roi.RoiResolveHelper
 import com.sempermechanics.semper.ui.analysis.run.RunEnd
+import com.sempermechanics.semper.ui.analysis.sweep.SweepFrame
 import com.sempermechanics.semper.ui.analysis.sweep.SweepRanges
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
@@ -281,11 +283,8 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
     /** True when the line cut runs along x; false for a cut along y. Editing state; a run reads its `RunSpec`. */
     var lineCutHorizontal: Boolean = true
 
-    /**
-     * Frame index the sweep is solved against; -1 means the middle of the
-     * sequence (1-based frame n/2+1, i.e. 0-based index n/2).
-     */
-    var sweepFrameIndex: Int = -1
+    /** The frame the sweep is solved against: the middle of the sequence until one is picked. */
+    var sweepFrame: SweepFrame = SweepFrame.Middle
 
     val sweepProgress: SharedFlow<SweepStudyRunner.Progress?> = runs.sweepProgress.asSharedFlow()
 
@@ -294,9 +293,26 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
 
     fun isReadyToCompute(): Boolean = refBytes != null && defFilePaths.isNotEmpty()
 
+    /** Largest odd subset the loaded image and ROI can hold. */
+    fun maxSubsetForRoi(): Int = RoiResolveHelper.maxSubsetForRoi(
+        hasCustomRoi = hasCustomRoi,
+        roiX = roiX,
+        roiY = roiY,
+        roiW = roiW,
+        roiH = roiH,
+        realRefWidth = realRefWidth,
+        realRefHeight = realRefHeight,
+    )
+
+    /** The sweep's step depth and the overlap it implies back to their defaults, as the settings' reset asks. */
+    fun resetSweepDepth() {
+        stepDenominator = SweepStudy.DEFAULT_STEP_DENOM
+        subsetOverlap = SweepStudy.overlapForDenominator(SweepStudy.DEFAULT_STEP_DENOM)
+    }
+
     /** New inputs: the next run starts in a new session folder. */
     fun clearPreviousResults() {
-        workingLocalId = null
+        working = null
     }
 
     /**
@@ -326,29 +342,16 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
     }
 
     /**
-     * The session folder the next run writes, while no Home row names it: the
-     * last run of [workingIsSweep]'s kind in this wizard saved nothing, and the
-     * next one of that kind writes there again (`openRunSession`). A run that
-     * saves clears it (`applyRunOutcome`): a saved analysis is never written
-     * over (owner decision, 2026-10-15). New inputs clear it too
-     * ([clearPreviousResults]).
+     * The session folder the next run of its kind writes, while no Home row
+     * names it: the last run of that kind in this wizard saved nothing, and
+     * the next one writes there again (`openRunSession`). Null for none, so
+     * the next run mints a new one. A run reads it once, on Main, as it is
+     * launched (`snapshotRunInputs`), and its outcome sets it there
+     * (`applyRunOutcome`): the run itself never touches it. A run that saves
+     * clears it: a saved analysis is never written over (owner decision,
+     * 2026-10-15). New inputs clear it too ([clearPreviousResults]).
      */
-    var workingLocalId: String? = null
-
-    /** Whether [workingLocalId] names a sweep's folder; meaningless while that is null. */
-    var workingIsSweep: Boolean = false
-
-    /**
-     * [workingLocalId] and its kind as one value. A run reads it once, on
-     * Main, as it is launched (`snapshotRunInputs`), and its outcome sets it
-     * there (`applyRunOutcome`): the run itself never touches it.
-     */
-    internal var working: WorkingSession?
-        get() = workingLocalId?.let { WorkingSession(it, workingIsSweep) }
-        set(value) {
-            workingLocalId = value?.id
-            workingIsSweep = value?.sweep ?: false
-        }
+    internal var working: WorkingSession? = null
 
     /**
      * Cooperative cancel: checked between frames here, and forwarded to the

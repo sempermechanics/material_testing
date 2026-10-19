@@ -104,7 +104,7 @@ class SweepStepsTest {
         dialog.getButton(DialogInterface.BUTTON_POSITIVE).performClick()
         bed.idle()
 
-        assertEquals(22, bed.viewModel.sweepFrameIndex)
+        assertEquals(SweepFrame.At(22), bed.viewModel.sweepFrame)
         assertEquals("steel_22.tif", view<EditText>(R.id.ddSweepFrame).text.toString())
         assertEquals("23 / 40", view<TextInputLayout>(R.id.tilSweepFrame).suffixText.toString())
     }

@@ -257,7 +257,7 @@ internal fun AnalysisViewModel.admitRun(appContext: Context, plannedFrames: Int)
 }
 
 /**
- * The session a run, a sweep when [sweep], writes, with an empty
+ * The session a run of [kind] writes, with an empty
  * [RunSession.staging] for its results. [working] is the wizard's working
  * session as the run was launched with it ([RunInputs.working]): this reads
  * no field of the wizard and writes none, so the native thread it runs on
@@ -271,8 +271,8 @@ internal fun AnalysisViewModel.admitRun(appContext: Context, plannedFrames: Int)
  * mints a new id. A single run and a sweep never share a session.
  */
 @WorkerThread
-internal fun openRunSession(appContext: Context, working: WorkingSession?, sweep: Boolean): RunSession {
-    val unsaved = working?.takeIf { it.sweep == sweep && SessionStore.get(appContext, it.id) == null }?.id
+internal fun openRunSession(appContext: Context, working: WorkingSession?, kind: RunKind): RunSession {
+    val unsaved = working?.takeIf { it.kind == kind && SessionStore.get(appContext, it.id) == null }?.id
     val id = unsaved ?: UUID.randomUUID().toString().take(SESSION_ID_LENGTH)
     val dir = SessionStore.dirFor(appContext, id)
     // A process that died mid-run left its staging behind; it is no one's results.
@@ -280,7 +280,7 @@ internal fun openRunSession(appContext: Context, working: WorkingSession?, sweep
         deleteRecursively()
         mkdirs()
     }
-    return RunSession(id, dir, staging, fresh = unsaved == null, sweep = sweep)
+    return RunSession(id, dir, staging, fresh = unsaved == null, kind = kind)
 }
 
 /**
@@ -305,17 +305,17 @@ internal fun AnalysisViewModel.applyRunOutcome(outcome: BatchAnalysisOutcome) {
  *
  * @property fresh whether this run minted [id]: a new session, which nothing
  *   saved before it
- * @property sweep whether the run is a sweep
+ * @property kind what the run is
  */
 internal class RunSession(
     val id: String,
     val dir: File,
     val staging: File = SessionPaths.runStaging(dir),
     val fresh: Boolean = false,
-    val sweep: Boolean = false,
+    val kind: RunKind = RunKind.BATCH,
 ) {
     /** This session as the wizard's working session names it. */
-    val working: WorkingSession get() = WorkingSession(id, sweep)
+    val working: WorkingSession get() = WorkingSession(id, kind)
 
     /**
      * Replaces the session's previous results with this run's: the old `.dat`

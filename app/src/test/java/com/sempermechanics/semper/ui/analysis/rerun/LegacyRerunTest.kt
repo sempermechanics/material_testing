@@ -12,6 +12,7 @@ import com.sempermechanics.semper.fixtures.CleanAppState
 import com.sempermechanics.semper.fixtures.sessionRecord
 import com.sempermechanics.semper.ui.analysis.frames.FrameImportHelper
 import com.sempermechanics.semper.ui.analysis.frames.FrameOrderMode
+import com.sempermechanics.semper.ui.analysis.sweep.SweepFrame
 import com.sempermechanics.semper.ui.analysis.sweep.SweepRanges
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
@@ -125,7 +126,7 @@ class LegacyRerunTest {
         assertTrue("the user is told", loaded.maskDropped)
         assertEquals(RerunInputs.Params(21, 7, SweepStudy.vsgFor(5, 7), true), loaded.inputs.params)
         assertEquals(WizardStep.SETTINGS, vm.step)
-        assertNull("nothing names the saved analysis", vm.workingLocalId)
+        assertNull("nothing names the saved analysis", vm.working?.id)
         assertEquals("the saved frames stay", 3, File(record.sessionDir, "raw_deformed").listFiles()?.size)
     }
 
@@ -178,7 +179,7 @@ class LegacyRerunTest {
         assertEquals(plan, vm.sweepRanges.plan(subsetCeiling = 99))
         assertFalse(vm.lineCutHorizontal)
         assertEquals(listOf("def.png"), vm.defOriginalNames)
-        assertEquals(0, vm.sweepFrameIndex)
+        assertEquals(SweepFrame.At(0), vm.sweepFrame)
         assertEquals(SweepStudy.overlapForDenominator(4), vm.subsetOverlap, 1e-9)
     }
 

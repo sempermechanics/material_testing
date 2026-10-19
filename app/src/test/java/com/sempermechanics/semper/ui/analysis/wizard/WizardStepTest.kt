@@ -37,6 +37,15 @@ class WizardStepTest {
     }
 
     @Test
+    fun `next goes one page on, and to the sweep page only in sweep mode`() {
+        assertEquals(WizardStep.SETTINGS, WizardStep.IMAGES.next(sweepMode = false))
+        assertEquals(WizardStep.SETTINGS, WizardStep.IMAGES.next(sweepMode = true))
+        assertNull(WizardStep.SETTINGS.next(sweepMode = false))
+        assertEquals(WizardStep.SWEEP, WizardStep.SETTINGS.next(sweepMode = true))
+        assertNull(WizardStep.SWEEP.next(sweepMode = true))
+    }
+
+    @Test
     fun `the view model's saved number follows its page`() {
         val vm = AnalysisViewModel()
         assertEquals(1, vm.wizardStep)

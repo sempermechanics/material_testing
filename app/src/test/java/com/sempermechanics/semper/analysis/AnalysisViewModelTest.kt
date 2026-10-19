@@ -8,14 +8,19 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.field.ImageSize
+import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.fixtures.CleanAppState
 import com.sempermechanics.semper.fixtures.sessionRecord
 import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
+import com.sempermechanics.semper.ui.analysis.roi.RoiResolveHelper
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.BatchAnalysisOutcome
+import com.sempermechanics.semper.ui.analysis.wizard.RunKind
 import com.sempermechanics.semper.ui.analysis.wizard.RunSession
 import com.sempermechanics.semper.ui.analysis.wizard.WizardStep
+import com.sempermechanics.semper.ui.analysis.wizard.WorkingSession
 import com.sempermechanics.semper.ui.analysis.wizard.applyRunOutcome
 import com.sempermechanics.semper.ui.analysis.wizard.openRunSession
 import com.sempermechanics.semper.ui.analysis.wizard.repointDeformedPathsOnMain
@@ -107,20 +112,20 @@ class AnalysisViewModelTest {
 
     @Test
     fun `a fresh view model's run opens a new session, which the view model takes from its outcome`() {
-        val session = openRunSession(ctx, vm.working, sweep = false)
+        val session = openRunSession(ctx, vm.working, RunKind.BATCH)
 
         assertTrue(session.fresh)
-        assertNull("the run itself writes none of the wizard's fields", vm.workingLocalId)
+        assertNull("the run itself writes none of the wizard's fields", vm.working?.id)
         vm.applyRunOutcome(ended(session))
-        assertEquals(session.id, vm.workingLocalId)
+        assertEquals(session.id, vm.working?.id)
     }
 
     @Test
     fun `a run after one that saved nothing writes that folder again`() {
-        val first = openRunSession(ctx, vm.working, sweep = false)
+        val first = openRunSession(ctx, vm.working, RunKind.BATCH)
         vm.applyRunOutcome(ended(first))
 
-        val next = openRunSession(ctx, vm.working, sweep = false)
+        val next = openRunSession(ctx, vm.working, RunKind.BATCH)
 
         assertEquals("no Home row names it: it holds no one's analysis", first.id, next.id)
         assertFalse(next.fresh)
@@ -128,11 +133,11 @@ class AnalysisViewModelTest {
 
     @Test
     fun `a saved analysis is never written over by the next run`() {
-        val first = openRunSession(ctx, vm.working, sweep = false)
+        val first = openRunSession(ctx, vm.working, RunKind.BATCH)
         vm.applyRunOutcome(ended(first))
         assertTrue(SessionStore.upsert(ctx, sessionRecord(id = first.id, sessionDir = first.dir.path), true))
 
-        val next = openRunSession(ctx, vm.working, sweep = false)
+        val next = openRunSession(ctx, vm.working, RunKind.BATCH)
 
         assertNotEquals(first.id, next.id)
         assertTrue(next.fresh)
@@ -140,46 +145,69 @@ class AnalysisViewModelTest {
 
     @Test
     fun `a saved run closes its session, so the next run is a new one`() {
-        val first = openRunSession(ctx, vm.working, sweep = false)
+        val first = openRunSession(ctx, vm.working, RunKind.BATCH)
         vm.applyRunOutcome(ended(first))
 
         vm.applyRunOutcome(ended(first, saved = true))
 
-        assertNull(vm.workingLocalId)
-        assertFalse(vm.workingIsSweep)
+        assertNull(vm.working)
     }
 
     @Test
     fun `a run that kept nothing or never started leaves the working session as it was`() {
-        val first = openRunSession(ctx, vm.working, sweep = false)
+        val first = openRunSession(ctx, vm.working, RunKind.BATCH)
         vm.applyRunOutcome(ended(first))
 
         vm.applyRunOutcome(ended(first).copy(engineErrorCode = RunStop.Cancelled.wireCode, session = null))
 
-        assertEquals(first.id, vm.workingLocalId)
+        assertEquals(first.id, vm.working?.id)
     }
 
     @Test
     fun `a run of the other kind opens its own session`() {
-        val single = openRunSession(ctx, vm.working, sweep = false)
+        val single = openRunSession(ctx, vm.working, RunKind.BATCH)
         vm.applyRunOutcome(ended(single))
 
-        val sweep = openRunSession(ctx, vm.working, sweep = true)
+        val sweep = openRunSession(ctx, vm.working, RunKind.SWEEP)
         vm.applyRunOutcome(ended(sweep))
 
         assertNotEquals("a sweep must not write a single run's folder", single.id, sweep.id)
-        assertTrue(vm.workingIsSweep)
+        assertEquals(RunKind.SWEEP, vm.working?.kind)
     }
 
     // -------------------------------------------------------------- reset logic
 
     @Test
     fun `clearPreviousResults starts the next run in a new session`() {
-        vm.workingLocalId = "abc123"
+        vm.working = WorkingSession("abc123", RunKind.BATCH)
 
         vm.clearPreviousResults()
 
-        assertNull(vm.workingLocalId)
+        assertNull(vm.working?.id)
+    }
+
+    // ------------------------------------------------------ sweep and ROI limits
+
+    @Test
+    fun `the settings' reset puts the sweep's step depth and overlap back`() {
+        vm.stepDenominator = 7
+        vm.subsetOverlap = 0.1
+
+        vm.resetSweepDepth()
+
+        assertEquals(SweepStudy.DEFAULT_STEP_DENOM, vm.stepDenominator)
+        assertEquals(SweepStudy.overlapForDenominator(SweepStudy.DEFAULT_STEP_DENOM), vm.subsetOverlap, 0.0)
+    }
+
+    @Test
+    fun `the largest subset is the drawn region's, or the whole image's`() {
+        vm.applyNewReference(ByteArray(8), "ref.png", ImageSize(640, 480))
+        val whole = RoiResolveHelper.maxSubsetForRoi(false, 0, 0, 640, 480, 640, 480)
+        assertEquals(whole, vm.maxSubsetForRoi())
+
+        vm.hasCustomRoi = true
+        vm.roi = Roi(100, 100, 60, 40)
+        assertEquals(RoiResolveHelper.maxSubsetForRoi(true, 100, 100, 60, 40, 640, 480), vm.maxSubsetForRoi())
     }
 
     // ------------------------------------------------------------ new reference
@@ -193,7 +221,7 @@ class AnalysisViewModelTest {
         roiW = 200
         roiH = 150
         roiMaskBytes = ByteArray(640 * 480)
-        workingLocalId = "abc123"
+        working = WorkingSession("abc123", RunKind.BATCH)
     }
 
     @Test
@@ -227,7 +255,7 @@ class AnalysisViewModelTest {
 
         vm.applyNewReference(ByteArray(8), "second.png", ImageSize(640, 480))
 
-        assertNull("a new reference wrote into the previous one's folder", vm.workingLocalId)
+        assertNull("a new reference wrote into the previous one's folder", vm.working?.id)
     }
 
     // ------------------------------------------------------- run on the native thread

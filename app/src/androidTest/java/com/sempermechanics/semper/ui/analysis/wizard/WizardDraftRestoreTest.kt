@@ -78,7 +78,7 @@ class WizardDraftRestoreTest {
             roiH = 440
             deformedFrames = paths.map { DeformedFrame(it, File(it).name, size = ImageSize(640, 480)) }
             wizardStep = 2
-            workingLocalId = "draft_device"
+            working = WorkingSession("draft_device", RunKind.BATCH)
         }
         awaitDraft("reference") { draft.readReference()?.contentEquals(REF) == true }
         awaitDraft("mask") { draft.readMask()?.contentEquals(MASK) == true }
@@ -94,7 +94,7 @@ class WizardDraftRestoreTest {
         assertEquals(before.defFrameSizes, after.defFrameSizes)
         assertEquals(listOf(16, 16, 600, 440), listOf(after.roiX, after.roiY, after.roiW, after.roiH))
         assertEquals(2, after.wizardStep)
-        assertEquals("draft_device", after.workingLocalId)
+        assertEquals("draft_device", after.working?.id)
         assertTrue(WizardDraft.isLive(context.filesDir))
     }
 

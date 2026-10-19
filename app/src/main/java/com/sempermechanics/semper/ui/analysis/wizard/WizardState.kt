@@ -8,6 +8,7 @@ import com.sempermechanics.semper.field.getRoi
 import com.sempermechanics.semper.field.putRoi
 import com.sempermechanics.semper.ui.analysis.frames.FrameOrderDirection
 import com.sempermechanics.semper.ui.analysis.frames.FrameOrderMode
+import com.sempermechanics.semper.ui.analysis.sweep.SweepFrame
 import com.sempermechanics.semper.ui.analysis.sweep.SweepRanges
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -105,9 +106,9 @@ internal object WizardState {
         putIntArray(SWEEP_RANGES, viewModel.sweepRanges.toIntArray())
         putDouble(SUBSET_OVERLAP, viewModel.subsetOverlap)
         putBoolean(LINE_CUT_HORIZONTAL, viewModel.lineCutHorizontal)
-        putInt(SWEEP_FRAME_INDEX, viewModel.sweepFrameIndex)
-        putString(WORKING_LOCAL_ID, viewModel.workingLocalId)
-        putBoolean(WORKING_IS_SWEEP, viewModel.workingIsSweep)
+        putInt(SWEEP_FRAME_INDEX, viewModel.sweepFrame.savedIndex)
+        putString(WORKING_LOCAL_ID, viewModel.working?.id)
+        putBoolean(WORKING_IS_SWEEP, viewModel.working?.kind == RunKind.SWEEP)
         putString(FRAMES_FINGERPRINT, fingerprint(framesJson))
     }
 
@@ -131,12 +132,13 @@ internal object WizardState {
         SweepRanges.fromIntArray(b.getIntArray(SWEEP_RANGES))?.let { viewModel.sweepRanges = it }
         viewModel.subsetOverlap = b.getDouble(SUBSET_OVERLAP, viewModel.subsetOverlap)
         viewModel.lineCutHorizontal = b.getBoolean(LINE_CUT_HORIZONTAL, true)
-        viewModel.sweepFrameIndex = b.getInt(SWEEP_FRAME_INDEX, -1)
+        viewModel.sweepFrame = SweepFrame.fromSaved(b.getInt(SWEEP_FRAME_INDEX, -1))
         // A Bundle from before the kind was saved cannot say whether its
         // session is a single run or a sweep, and a run of the other kind
         // must not write over it: the next run starts a new record instead.
-        viewModel.workingLocalId = b.getString(WORKING_LOCAL_ID)?.takeIf { b.containsKey(WORKING_IS_SWEEP) }
-        viewModel.workingIsSweep = b.getBoolean(WORKING_IS_SWEEP)
+        viewModel.working = b.getString(WORKING_LOCAL_ID)
+            ?.takeIf { b.containsKey(WORKING_IS_SWEEP) }
+            ?.let { WorkingSession(it, if (b.getBoolean(WORKING_IS_SWEEP)) RunKind.SWEEP else RunKind.BATCH) }
     }
 
     fun frames(viewModel: AnalysisViewModel): Frames = wizardFramesOf(viewModel.deformedFrames)

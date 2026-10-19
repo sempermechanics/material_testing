@@ -30,6 +30,7 @@ import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.BatchAnalysisOutcome
 import com.sempermechanics.semper.ui.analysis.wizard.BatchProgressUpdate
 import com.sempermechanics.semper.ui.analysis.wizard.RunAdmission
+import com.sempermechanics.semper.ui.analysis.wizard.RunKind
 import com.sempermechanics.semper.ui.analysis.wizard.admitRun
 import com.sempermechanics.semper.ui.analysis.wizard.openRunSession
 import com.sempermechanics.semper.ui.analysis.wizard.repointDeformedPathsOnMain
@@ -80,7 +81,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     // the OS may evict): one directory per Home-list session, never a sweep's.
     // The loop writes them to the session's staging folder; only a run that
     // is not cancelled moves them into the session (RunSession.commit).
-    val session = openRunSession(appContext, run.inputs.working, sweep = false)
+    val session = openRunSession(appContext, run.inputs.working, RunKind.BATCH)
     val localSessionId = session.id
     val batchDir = session.dir
     val resultsDir = session.staging

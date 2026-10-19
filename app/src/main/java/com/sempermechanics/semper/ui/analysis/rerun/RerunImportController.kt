@@ -10,6 +10,7 @@ import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.ui.analysis.frames.FrameOrderDirection
 import com.sempermechanics.semper.ui.analysis.frames.FrameOrderMode
 import com.sempermechanics.semper.ui.analysis.run.RunChrome
+import com.sempermechanics.semper.ui.analysis.sweep.SweepFrame
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.WizardStep
 import com.sempermechanics.semper.ui.common.dialog.Dialogs
@@ -131,7 +132,7 @@ internal fun AnalysisViewModel.applyRerun(loaded: LoadedRerun) {
         inputs.sweepRanges()?.let { sweepRanges = it }
         subsetOverlap = sweep.overlap
         lineCutHorizontal = sweep.lineCutHorizontal
-        sweepFrameIndex = sweep.frameIndex
+        sweepFrame = SweepFrame.At(sweep.frameIndex)
     }
     step = if (sweep != null) WizardStep.SWEEP else WizardStep.SETTINGS
 }

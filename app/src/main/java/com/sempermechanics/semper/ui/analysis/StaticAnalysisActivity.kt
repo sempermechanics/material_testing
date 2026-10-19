@@ -36,7 +36,6 @@ import com.sempermechanics.semper.ui.analysis.recommend.SubsetRecommendationCont
 import com.sempermechanics.semper.ui.analysis.rerun.PickedReference
 import com.sempermechanics.semper.ui.analysis.rerun.RerunImportController
 import com.sempermechanics.semper.ui.analysis.rerun.RerunInputs
-import com.sempermechanics.semper.ui.analysis.roi.RoiResolveHelper
 import com.sempermechanics.semper.ui.analysis.roi.RoiStudioLauncher
 import com.sempermechanics.semper.ui.analysis.run.BatchRunController
 import com.sempermechanics.semper.ui.analysis.run.ComputeOverlayController
@@ -44,7 +43,6 @@ import com.sempermechanics.semper.ui.analysis.run.RunChrome
 import com.sempermechanics.semper.ui.analysis.run.RunStatusLine
 import com.sempermechanics.semper.ui.analysis.run.WizardRunLauncher
 import com.sempermechanics.semper.ui.analysis.sweep.SweepSetupController
-import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisLeaveController
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisReadyGate
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
@@ -128,11 +126,7 @@ class StaticAnalysisActivity :
         buildImports()
 
         binding.btnNext.setOnClickListener {
-            when (viewModel.step) {
-                WizardStep.IMAGES -> goToStep(WizardStep.SETTINGS, animate = true)
-                WizardStep.SETTINGS -> if (viewModel.sweepMode) goToStep(WizardStep.SWEEP, animate = true)
-                WizardStep.SWEEP -> Unit
-            }
+            viewModel.step.next(viewModel.sweepMode)?.let { goToStep(it, animate = true) }
         }
         binding.btnBack.setOnClickListener {
             viewModel.step.previous?.let { goToStep(it, animate = true) }
@@ -303,16 +297,7 @@ class StaticAnalysisActivity :
 
     override fun currentSubsetSize(): Int = params.subsetSize()
 
-    /** Largest odd subset the loaded image and ROI can hold. */
-    override fun maxSubsetForRoi(): Int = RoiResolveHelper.maxSubsetForRoi(
-        hasCustomRoi = viewModel.hasCustomRoi,
-        roiX = viewModel.roiX,
-        roiY = viewModel.roiY,
-        roiW = viewModel.roiW,
-        roiH = viewModel.roiH,
-        realRefWidth = viewModel.realRefWidth,
-        realRefHeight = viewModel.realRefHeight,
-    )
+    override fun maxSubsetForRoi(): Int = viewModel.maxSubsetForRoi()
 
     /** Flushes any in-progress typing into the sliders (focus loss commits). */
     override fun commitParamFields() {
@@ -326,8 +311,7 @@ class StaticAnalysisActivity :
 
     override fun resetSweepInputs() {
         if (!::sweepController.isInitialized) return
-        viewModel.stepDenominator = SweepStudy.DEFAULT_STEP_DENOM
-        viewModel.subsetOverlap = SweepStudy.overlapForDenominator(SweepStudy.DEFAULT_STEP_DENOM)
+        viewModel.resetSweepDepth()
         sweepController.resetUserModified()
         sweepController.seedSweepSuggestions()
     }

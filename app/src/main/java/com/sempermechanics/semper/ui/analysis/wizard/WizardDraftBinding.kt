@@ -141,7 +141,7 @@ private fun AnalysisViewModel.clearInputs() {
     subsetRecommendation = null
     subsetRecommendationKey = null
     subsetUserModified = false
-    workingLocalId = null
+    working = null
 }
 
 /**

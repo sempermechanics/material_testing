@@ -133,7 +133,7 @@ class RerunWizardTest {
         assertEquals(params.subset, wizard.findViewById<Slider>(R.id.sliderSubsetSize).value.toInt())
         assertEquals(params.step, wizard.findViewById<Slider>(R.id.sliderStepSize).value.toInt())
         assertEquals(7, wizard.findViewById<Slider>(R.id.sliderStrainWindow).value.toInt())
-        assertNull("nothing names the saved analysis", vm.workingLocalId)
+        assertNull("nothing names the saved analysis", vm.working?.id)
         assertTrue("ready to Compute", vm.isReadyToCompute())
         assertTrue("the parameters page is shown", wizard.findViewById<View>(R.id.sliderSubsetSize).isShown)
         assertEquals("the speckle measurement was asked for", 1, measurements.size)
