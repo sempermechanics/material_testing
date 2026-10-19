@@ -498,7 +498,7 @@ def admin_license_device_history(
         raise HTTPException(404, errors.LICENSE_NOT_FOUND)
     return {
         "licenseId": license_id,
-        "events": audit.list_license_device_history(license_id, limit=limit),
+        "events": repo.list_license_device_history(license_id, limit=limit),
     }
 
 

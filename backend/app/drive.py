@@ -189,30 +189,8 @@ def _escape_q_value(value: str) -> str:
 
 
 def _find_or_create_folder(token: str, name: str, parent: str) -> str:
-    safe = _escape_q_value(name)
-    q = (
-        f"name='{safe}' and mimeType='{FOLDER_MIME}' and "
-        f"'{parent}' in parents and trashed=false"
-    )
-    r = _request_with_retry(
-        "GET",
-        f"{API}/files",
-        headers=_headers(token),
-        params={
-            "q": q,
-            "fields": "files(id)",
-            "supportsAllDrives": "true",
-            "includeItemsFromAllDrives": "true",
-            "corpora": "drive",
-            "driveId": settings.SHARED_DRIVE_ID,
-        },
-        timeout=30,
-    )
-    r.raise_for_status()
-    files = r.json().get("files", [])
-    if files:
-        return files[0]["id"]
-    return _create_folder(token, name, parent)
+    """The folder `name` under `parent`, created when there is none."""
+    return _find_folder(token, name, parent) or _create_folder(token, name, parent)
 
 
 def _create_folder(token: str, name: str, parent: str) -> str:
@@ -235,8 +213,9 @@ def _create_folder(token: str, name: str, parent: str) -> str:
     return r.json()["id"]
 
 
-def _find_folder(token: str, name: str, parent: str):
-    """Look a folder up WITHOUT creating it — used on the erasure path."""
+def _find_folder(token: str, name: str, parent: str) -> str | None:
+    """Look a folder up WITHOUT creating it: the erasure path, and the
+    lookup half of `_find_or_create_folder`."""
     safe = _escape_q_value(name)
     q = (
         f"name='{safe}' and mimeType='{FOLDER_MIME}' and "

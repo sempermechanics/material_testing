@@ -15,6 +15,14 @@ from ._base import (  # noqa: F401
     ping,
     get_license,
 )
+from .audit_log import (  # noqa: F401
+    DEVICE_HISTORY_ACTIONS,
+    MAX_AUDIT_PAGE,
+    SEAT_PATCH_ACTIONS,
+    add_audit_row,
+    list_license_device_history,
+    page_license_audit,
+)
 from .user_config import (  # noqa: F401
     INACTIVE_LICENCE_ENDED,
     INACTIVE_NO_SEAT,
@@ -172,6 +180,7 @@ from .sessions import (  # noqa: F401
 from . import (
     _base,
     account,
+    audit_log,
     activation,
     claims,
     deletion,
@@ -193,4 +202,4 @@ from . import (
 )
 
 #: Every module of the package, each after everything it imports.
-PACKAGE = (_base, user_config, devlock, claims, invites, holders, mint, activation, entitlement, license_admin, upgrade, deletion, institution_admin, devices, users, leases, seats, reconcile, account, sessions)
+PACKAGE = (_base, audit_log, user_config, devlock, claims, invites, holders, mint, activation, entitlement, license_admin, upgrade, deletion, institution_admin, devices, users, leases, seats, reconcile, account, sessions)

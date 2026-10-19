@@ -161,7 +161,7 @@ contain uploaded content, filenames, specimen names, email addresses, tokens,
 keys, or resumable URLs. They may retain the opaque uid/device id and event
 metadata only. Where an action needs to name an address it records
 `audit.address_tag` (`observability.short_hash`, a 12-hex hash;
-`backend/app/audit.py:35-47`): `emailLockHash` on an individual mint, and
+`backend/app/audit.py:18-30`): `emailLockHash` on an individual mint, and
 `adminEmailHashes` with `adminEmailCount` on an institution mint, a convert and an
 `adminEmails` edit (`backend/app/routers/admin.py:27-40`). A reader who already
 knows an address can match it. The hash is unkeyed (`backend/app/observability.py:192-199`),

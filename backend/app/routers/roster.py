@@ -297,8 +297,8 @@ def roster_router(tier: Tier) -> APIRouter:
             start, end = roster_io.audit_range(since, until)
         except roster_io.RosterRefused as e:
             raise HTTPException(400, e.code) from e
-        size = clamp_page_size(page_size, audit.MAX_AUDIT_PAGE)
-        events, next_token = audit.page_license_audit(
+        size = clamp_page_size(page_size, repo.MAX_AUDIT_PAGE)
+        events, next_token = repo.page_license_audit(
             license_id, limit=size, page_token=page_token or None, since=start, until=end,
         )
         if format == "json":

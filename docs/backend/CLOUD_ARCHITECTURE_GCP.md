@@ -788,7 +788,7 @@ the way it does.
 | Structured logging | [`backend/app/observability.py`](../../backend/app/observability.py) | JSON log records with request correlation (§17) |
 | Outbound mail | [`backend/app/notify.py`](../../backend/app/notify.py) | Resend, fire-and-forget |
 | Pydantic models | [`backend/app/models.py`](../../backend/app/models.py) | |
-| Audit trail | [`backend/app/audit.py`](../../backend/app/audit.py) | |
+| Audit trail | [`backend/app/audit.py`](../../backend/app/audit.py) (the row), [`backend/app/repo/audit_log.py`](../../backend/app/repo/audit_log.py) (its write and reads) | |
 | Config / env vars | [`backend/app/config.py`](../../backend/app/config.py) | Includes `DEV_INSECURE_AUTH`, `APP_CHECK_MODE`, `TASKS_*` |
 | Schema migrations | [`backend/scripts/migrate_schema.py`](../../backend/scripts/migrate_schema.py) | Versioned steps in `backend/scripts/migrations/` — see [FIRESTORE_SCHEMA_RUNBOOK.md](FIRESTORE_SCHEMA_RUNBOOK.md) |
 | Session app tag | [`backend/app/repo/sessions.py`](../../backend/app/repo/sessions.py), [`routers/sessions.py`](../../backend/app/routers/sessions.py), [`backend/scripts/tag_session_apps.py`](../../backend/scripts/tag_session_apps.py) | `session_app` (absent = `semper`), `create_session(…, app)`, `list_user_sessions(…, app=None)` filling pages in Python, the `/files` gate; the backfill (§5, [ADR-014](../adr/ADR-014-session-app-tag.md)) |
@@ -1389,7 +1389,7 @@ counts; tier bucket + `roster_import_bucket`), `GET …/seats/export` (text/csv,
 audited `…_ROSTER_EXPORT`), `GET …/summary` (counts from the reconciliation
 read: `users.lastSeenAt` for active-in-7-days, the revoked-still-running bucket
 for revocation pending, the licence's `expiresAt` for expiring) and
-`GET …/audit` (`audit.page_license_audit`: `audit_logs` where `licenseId ==`,
+`GET …/audit` (`repo.page_license_audit`, `backend/app/repo/audit_log.py`: `audit_logs` where `licenseId ==`,
 `ts` range, `ts` DESC, composite index in `firestore.indexes.json`; json or
 csv). `audit.record` stamps `licenseId` on `license`, `seat`, `invite` and
 `lease` targets from 2026-10-18; earlier events lack it and are not in that
