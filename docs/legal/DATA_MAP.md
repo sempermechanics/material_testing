@@ -89,7 +89,10 @@ Off in the manifest (`app/src/main/AndroidManifest.xml:28-38`) until the user
 agrees (`AppSettings.diagnosticsEnabled`, `data/prefs/AppSettings.kt:61`).
 Crash reports with device and app version; breadcrumbs and non-fatals only with
 consent (`diagnostics/CrashReportingTree.kt:23-41`); Analytics events with enum and
-bucket parameters only (CONTEXT.md, Invariants). Retention: Firebase project
+bucket parameters only (CONTEXT.md, Invariants). On a staff-made QC or CI test
+account only, and only with the same consent, the user property and Crashlytics
+key `account_type` (`test` or `ci`; `diagnostics/Diagnostics.kt`); a real
+account carries none. Retention: Firebase project
 settings, unverified (policy §4).
 
 ### Resend (email)
