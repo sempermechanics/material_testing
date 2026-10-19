@@ -3,6 +3,7 @@ package com.sempermechanics.semper.analysis
 import androidx.exifinterface.media.ExifInterface
 import com.sempermechanics.semper.ui.analysis.load.PhotoCaptureTime
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -72,6 +73,17 @@ class PhotoCaptureTimeTest {
         assertTrue(PhotoCaptureTime.relativeTimesMs(t0, listOf(t0 + 1_000L, null)).isEmpty())
         assertTrue(PhotoCaptureTime.relativeTimesMs(null, listOf(t0 + 1_000L)).isEmpty())
         assertTrue(PhotoCaptureTime.relativeTimesMs(t0, emptyList()).isEmpty())
+    }
+
+    @Test
+    fun `times are whole seconds only when the reference and every photo are`() {
+        // A camera that writes no SubSecTimeOriginal.
+        assertTrue(PhotoCaptureTime.wholeSeconds(t0, listOf(t0 + 1_000L, t0 + 2_000L)))
+        assertFalse(PhotoCaptureTime.wholeSeconds(t0, listOf(t0 + 1_000L, t0 + 2_250L)))
+        assertFalse(PhotoCaptureTime.wholeSeconds(t0 + 120L, listOf(t0 + 1_000L)))
+        // No time match at all is not a coarse one.
+        assertFalse(PhotoCaptureTime.wholeSeconds(null, listOf(t0 + 1_000L)))
+        assertFalse(PhotoCaptureTime.wholeSeconds(t0, listOf(t0 + 1_000L, null)))
     }
 
     @Test

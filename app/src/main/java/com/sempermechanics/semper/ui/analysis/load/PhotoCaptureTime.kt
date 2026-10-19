@@ -24,6 +24,7 @@ import java.util.TimeZone
 object PhotoCaptureTime {
 
     private const val MS_DIGITS = 3
+    private const val MS_PER_S = 1000L
 
     /** Milliseconds on the camera's clock, or null when [dateTime] is missing or not an EXIF date. */
     fun parse(dateTime: String?, subSec: String?): Long? {
@@ -58,6 +59,18 @@ object PhotoCaptureTime {
         val times = framesMs.filterNotNull()
         if (referenceMs == null || times.isEmpty() || times.size != framesMs.size) return emptyList()
         return times.map { it - referenceMs }
+    }
+
+    /**
+     * True when the reference and every frame have a capture time and each is
+     * a whole second: a camera that writes no `SubSecTimeOriginal`. Each such
+     * time is truncated, so a frame's time after the reference is good only to
+     * ±1 s. A camera that does write sub-seconds lands on .000 one time in a
+     * thousand, so every time being whole is the camera, not chance.
+     */
+    fun wholeSeconds(referenceMs: Long?, framesMs: List<Long?>): Boolean {
+        if (referenceMs == null || framesMs.isEmpty() || framesMs.any { it == null }) return false
+        return (framesMs + referenceMs).all { it != null && it % MS_PER_S == 0L }
     }
 
     /** The capture time in [file]'s EXIF, or null when it has none or cannot be read. */

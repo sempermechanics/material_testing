@@ -2,6 +2,7 @@ package com.sempermechanics.semper.ui.analysis.wizard
 
 import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
 import com.sempermechanics.semper.data.mechanical.LoadCsvParse
+import com.sempermechanics.semper.data.mechanical.LoadMapWarning
 import com.sempermechanics.semper.data.mechanical.LoadMapping
 import com.sempermechanics.semper.data.mechanical.MachineLoadCsv
 import com.sempermechanics.semper.data.mechanical.MechanicalTestInputs
@@ -98,6 +99,19 @@ class LabInputsTest {
         val table = vm.machineLoads!!
         assertEquals(LoadMapping.TIME_NEAREST, table.mapping)
         assertEquals(listOf(100f, 200f, 300f), table.loadsN)
+        // Every time here is a whole second: matched within 1 s, and the chip says so.
+        assertTrue(LoadMapWarning.TIME_COARSE in table.warnings)
+    }
+
+    @Test
+    fun `photos with sub-second capture times are matched within 100 ms`() {
+        timedPhotoBatch()
+        vm.defCaptureTimesMs = listOf(PHOTO_T0 + 1_020L, PHOTO_T0 + 2_000L, PHOTO_T0 + 3_000L)
+        vm.refreshMachineLoads()
+
+        val table = vm.machineLoads!!
+        assertEquals(listOf(100f, 200f, 300f), table.loadsN)
+        assertFalse(LoadMapWarning.TIME_COARSE in table.warnings)
     }
 
     @Test

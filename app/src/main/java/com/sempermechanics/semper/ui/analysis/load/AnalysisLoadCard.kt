@@ -18,7 +18,6 @@ import com.sempermechanics.semper.data.mechanical.LoadCsvWarning
 import com.sempermechanics.semper.data.mechanical.LoadMapWarning
 import com.sempermechanics.semper.data.mechanical.LoadMapping
 import com.sempermechanics.semper.data.mechanical.MachineLoadCsv
-import com.sempermechanics.semper.data.mechanical.MachineLoadMapper
 import com.sempermechanics.semper.data.mechanical.MachineLoadTable
 import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisReadyGate
@@ -269,10 +268,11 @@ class AnalysisLoadCard(
                 unmatched,
                 unmatched,
                 table.loadsN.size,
-                MachineLoadMapper.MATCH_TOLERANCE_MS.toInt(),
+                table.matchToleranceMs.toInt(),
             )
         }
         LoadMapWarning.SIGN_UNEXPECTED -> activity.getString(R.string.load_warn_sign_tensile)
+        LoadMapWarning.TIME_COARSE -> activity.getString(R.string.load_warn_time_coarse)
     }
 
     private fun mappingRes(mapping: LoadMapping): Int = when (mapping) {

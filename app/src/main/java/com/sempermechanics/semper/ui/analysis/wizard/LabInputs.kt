@@ -75,8 +75,14 @@ fun AnalysisViewModel.stressModel(): StressStrain.Model =
 fun AnalysisViewModel.refreshMachineLoads() {
     val parsed = parsedLoadCsv
     machineLoads = when {
-        parsed != null ->
-            MachineLoadMapper.map(parsed, defFilePaths.size, frameTimesForLoads(), testType, loadLogStartS)
+        parsed != null -> MachineLoadMapper.map(
+            parsed,
+            defFilePaths.size,
+            frameTimesForLoads(),
+            testType,
+            loadLogStartS,
+            wholeSecondTimes = photoTimesWholeSeconds(),
+        )
         testType == TestType.BENDING -> TypedLoads.toTable(typedLoadsKg, defFilePaths.size)
         else -> null
     }
@@ -105,6 +111,10 @@ fun AnalysisViewModel.clearTypedLoads() {
  */
 private fun AnalysisViewModel.frameTimesForLoads(): List<Long> =
     defTimesAfterRefMs.ifEmpty { PhotoCaptureTime.relativeTimesMs(refCaptureTimeMs, defCaptureTimesMs) }
+
+/** The frames' times are photo capture times read only to the whole second (a video's never are). */
+private fun AnalysisViewModel.photoTimesWholeSeconds(): Boolean =
+    defTimesAfterRefMs.isEmpty() && PhotoCaptureTime.wholeSeconds(refCaptureTimeMs, defCaptureTimesMs)
 
 /** An imported load log. Its [text] goes to the draft so a process death can parse it again. */
 fun AnalysisViewModel.setLoadLog(csv: ParsedLoadCsv, name: String, text: String) {
