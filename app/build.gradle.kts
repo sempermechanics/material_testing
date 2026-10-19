@@ -315,6 +315,19 @@ android {
                 // own state and the Kover agent's data make up most of the
                 // rest. 2 GB is headroom for the suite to grow, not a need.
                 test.maxHeapSize = "2g"
+                // The exit still recurs now and then with the same message and
+                // no failing test (full_ci run 39307512957, 2026-10-19; the same
+                // tree passed on the PR event 25 minutes before). So the worker
+                // leaves what ended it: a heap dump on an OutOfMemoryError, the
+                // JVM's error file on a crash. Both only on failure; CI uploads
+                // the folder with the test reports.
+                val crashDir = project.layout.buildDirectory.dir("test-crash").get().asFile
+                test.jvmArgs(
+                    "-XX:+HeapDumpOnOutOfMemoryError",
+                    "-XX:HeapDumpPath=$crashDir",
+                    "-XX:ErrorFile=$crashDir/hs_err_pid%p.log",
+                )
+                test.doFirst { crashDir.mkdirs() }
                 // Golden oracles (fixtures/Goldens.kt): `-PupdateGoldens`
                 // rewrites the committed files under src/test/resources/oracles
                 // instead of comparing against them. Never in CI.
