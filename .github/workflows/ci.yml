@@ -286,8 +286,9 @@ jobs:
               # The composite actions the light tiers run (setup-android-build,
               # backend-gate, prune-cache); a change to one matched nothing.
               - '.github/actions/**'
-              # Tier 1 reports its unit tests with it.
+              # Tier 1 reports its unit tests, and what ended their JVM, with these.
               - 'scripts/ci_test_report.py'
+              - 'scripts/ci_test_crash_report.py'
             android_test:
               - 'app/src/androidTest/**'
             packaging:
@@ -458,6 +459,14 @@ jobs:
         if: always()
         run: python3 scripts/ci_test_report.py app/build/test-results/testDebugUnitTest
 
+      # A worker that exits with no failing test says nothing in the Gradle
+      # output; its crash file, heap dump, GC log and last output do (TD-312).
+      - name: Report what ended the unit-test JVM
+        if: failure()
+        run: >
+          python3 scripts/ci_test_crash_report.py
+          app/build/test-crash app/build/test-results/testDebugUnitTest
+
       # koverVerify enforces the bounds in app/build.gradle.kts (TD-38);
       # koverLog prints the measured number so a raise has evidence.
       - name: Kotlin coverage floor
@@ -473,6 +482,7 @@ jobs:
           path: |
             app/build/test-results/testDebugUnitTest/**
             app/build/reports/kover/**
+            app/build/test-crash/**
           if-no-files-found: ignore
 
   # ===================================================================
