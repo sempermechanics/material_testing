@@ -2621,10 +2621,10 @@ that keep the phone from contradicting it.
   a live lease is not over any quota — a licensed account never is — so
   `SessionQuota.blocked` would let them through every existing
   gate. `LicenseEntitlements.isSeatRequiredToStart` is a separate predicate. It
-  gates the Home **+** before the source menu opens (`HomeActivity`) and both
-  compute paths (`AnalysisNavHelper`), guarded by
-  `AnalysisViewModel.wouldCreateNewSession()` so a run already in flight is
-  never aborted. `SeatRequiredActivity` is one button that asks again, because
+  gates the Home **+** before the source menu opens and Home's Re-run
+  (`HomeActivity.mayStartNewAnalysis`), and both compute paths
+  (`AnalysisNavHelper.ensureCanStart`). Only starting is checked, so a run
+  already in flight is never aborted. `SeatRequiredActivity` is one button that asks again, because
   seats free themselves.
 - **Floating seats renew in-process and release on sign-out.**
   `SeatHeartbeat` re-calls checkout every `seatHeartbeatMinutes` while the

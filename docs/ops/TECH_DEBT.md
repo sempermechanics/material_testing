@@ -19,7 +19,9 @@ the gates below were re-checked on 2026-10-14 at `main` @ `8ba7081c`, after #428
 closed TD-139, 153, 154, 163, 164, 169, 170, 173, 197 and 208.
 
 TD numbers are shared with material_testing; check both registers before taking
-one ([FORK_SYNC.md](FORK_SYNC.md)). The next free in both is TD-280 (TD-279 taken 2026-10-18 by the follow-up review, closed 2026-10-19; TD-269, TD-270 and TD-276 closed 2026-10-19; TD-274–TD-278 taken 2026-10-18 by the account-anchored
+one ([FORK_SYNC.md](FORK_SYNC.md)). The next free in both is TD-281 (TD-280 taken 2026-10-19 by
+material_testing's sync of `5b59cf3`, in its register only: its lab tests lose their type and
+loads on Re-run as a copy; TD-279 taken 2026-10-18 by the follow-up review, closed 2026-10-19; TD-269, TD-270 and TD-276 closed 2026-10-19; TD-274–TD-278 taken 2026-10-18 by the account-anchored
 entitlement decision, [ADR-024](../adr/ADR-024-account-anchored-entitlements.md); TD-270–TD-273 taken 2026-10-18 by the
 follow-ups below; TD-214–TD-269 taken 2026-10-18 by the
 readiness-framework cross-check, [PRODUCTION_READINESS_GATE.md](PRODUCTION_READINESS_GATE.md#framework-cross-check-2026-10-18);
