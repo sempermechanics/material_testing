@@ -17,7 +17,6 @@ import com.google.android.material.snackbar.Snackbar
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.cloud.CloudBackupListing
-import com.sempermechanics.semper.data.cloud.CloudSync
 import com.sempermechanics.semper.data.cloud.SessionDeletes
 import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.policy.AppPolicy
@@ -27,7 +26,6 @@ import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.isRestorable
 import com.sempermechanics.semper.databinding.ActivityHomeBinding
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisNavHelper
-import com.sempermechanics.semper.ui.common.ConflatedRefresh
 import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.auth.AuthRoute
 import com.sempermechanics.semper.ui.common.auth.SignOutRun
@@ -63,27 +61,8 @@ class HomeActivity : AppCompatActivity() {
     /** The list, queued deletes, offered backups and restores; kept across a rotation. */
     private val viewModel: HomeViewModel by viewModels()
 
-    /**
-     * The cloud check, one at a time: a burst of requests runs it at most once
-     * more, deep if any asked for deep. It is not cancelled mid-call, and it
-     * starts after the list read that was in flight when it began.
-     */
-    private val cloudCheck: ConflatedRefresh<Boolean> by lazy {
-        ConflatedRefresh<Boolean>(lifecycleScope, merge = { a, b -> a || b }) { deep ->
-            var completed = false
-            try {
-                viewModel.awaitListRead()
-                reconcileWithCloud(deep)
-                completed = true
-            } finally {
-                // The spinner tracks the cloud check, not the local list read —
-                // that's the part worth waiting for. After a check that ended
-                // normally it stays while a pull-to-refresh waits its turn; a
-                // check that threw or was cancelled takes the queue with it.
-                if (!completed || !cloudCheck.hasPending) binding.swipeRefresh.isRefreshing = false
-            }
-        }
-    }
+    /** The cloud check behind each [refresh], one at a time; built once [quotaCard] is. */
+    private lateinit var cloudCheck: HomeCloudCheck
 
     private val backCallback = object : androidx.activity.OnBackPressedCallback(false) {
         override fun handleOnBackPressed() = selection.clearSelection()
@@ -125,6 +104,14 @@ class HomeActivity : AppCompatActivity() {
             quotaView = binding.tvHomeQuota,
             licenseView = binding.tvHomeLicense,
             openSettings = { binding.btnHomeSettings.performClick() },
+        )
+        cloudCheck = HomeCloudCheck(
+            activity = this,
+            viewModel = viewModel,
+            quotaCard = quotaCard,
+            showsCloudState = ::showsCloudState,
+            onBackupsListed = ::updateCloudBackups,
+            stopSpinner = { binding.swipeRefresh.isRefreshing = false },
         )
         wireButtons()
 
@@ -321,41 +308,6 @@ class HomeActivity : AppCompatActivity() {
         // No quota count stored from here: these rows leave out the ones a
         // queued delete is about to remove, and the quota counts every row
         // the index holds, which SessionStore stores with each write.
-    }
-
-    /**
-     * Ask the backend what is actually backed up and repair any drift — a
-     * session whose cloud copy was deleted stops claiming "Synced" and is
-     * re-queued for upload.
-     *
-     * Offline and "not configured" stay silent (that's normal for an
-     * offline-first app), but a real backend fault is surfaced: otherwise the
-     * badges quietly go stale and the user trusts a backup that isn't there.
-     */
-    private suspend fun reconcileWithCloud(deep: Boolean) {
-        when (val outcome = CloudSync.reconcile(this@HomeActivity, deep = deep)) {
-            is CloudSync.Outcome.Ok -> {
-                // Record the account's quota; newly at the cap → open the
-                // persistent "email support" screen.
-                quotaCard.recordReconciled(outcome.quotaUsed)
-                // This check saved a fresh listing of the account's backups.
-                updateCloudBackups()
-                if (outcome.repaired > 0) {
-                    // The rows changed underneath us — show the corrected state.
-                    viewModel.refreshList()
-                    if (!showsCloudState()) return
-                    val repaired = outcome.repaired
-                    val text = resources.getQuantityString(R.plurals.cloud_resync_fmt, repaired, repaired)
-                    Feedback.toast(this, text, long = true)
-                }
-            }
-            is CloudSync.Outcome.Failed -> if (showsCloudState()) {
-                Feedback.toast(this, getString(R.string.cloud_check_failed_fmt, outcome.reason), long = true)
-            }
-            // Normal for an offline-first app — don't nag. Skipped = checked
-            // recently (reconcile is throttled to protect the Firestore budget).
-            CloudSync.Outcome.Offline, CloudSync.Outcome.Disabled, CloudSync.Outcome.Skipped -> Unit
-        }
     }
 
     /**
