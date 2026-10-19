@@ -530,6 +530,13 @@ a fresh non-admin, non-domain account: mail should land in support@ within
 seconds, and `gcloud run services logs read semper-api --region $REGION` should
 carry no `access-request mail` warning.
 
+**New-device mail to the holder (optional, TD-295).** Set `NOTIFY_SECURITY_FROM`
+to a verified Resend sender (for example `Semper security <security@yourdomain.com>`)
+and each account's holder is mailed, at their verified address, when a new device
+registers to the account: once per account and device, never for a key heal of
+the device already bound. Unset, that mail is off; the access-request mail is
+unaffected.
+
 > `--no-allow-unauthenticated` keeps Cloud Run private: only the service
 > accounts in C0 invoke it, and the API Gateway is the public door. **Auth is
 > still enforced in the app layer** (Firebase ID token + device signature).

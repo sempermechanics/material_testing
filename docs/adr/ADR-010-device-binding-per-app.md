@@ -179,5 +179,7 @@ notice needs a recipient, template and key of its own. The `DEVICE_REGISTER` /
       binding and app checks in `verified_device`, transactional registration.
 - [ ] Staff and IT phones re-register once with a second factor after the
       backend carrying the amendment deploys.
-- [ ] Mail the holder when a new device registers (needs `notify.py` to send
-      more than one kind of mail); TD-295.
+- [x] Mail the holder when a new device registers: `notify.device_registered`,
+      from `routers/devices.py` after the registration commits, once per
+      account and device, to the verified address; off until
+      `NOTIFY_SECURITY_FROM` is set (TD-295).

@@ -95,8 +95,11 @@ settings, unverified (policy §4).
 ### Resend (email)
 
 On a new PENDING account, one mail to the support address with the applicant's
-email, display name, sign-in provider and uid (`backend/app/notify.py:172-195`).
-Retention: Resend's, unverified.
+email, display name, sign-in provider and uid (`backend/app/notify.py:193-215`).
+When a new device registers to an account, one mail to the holder's verified
+address with the app, the device model and id and the time, once per account and
+device, and only while `NOTIFY_SECURITY_FROM` is set (`backend/app/notify.py:222-250`,
+TD-295). Retention: Resend's, unverified.
 
 ### On the device
 

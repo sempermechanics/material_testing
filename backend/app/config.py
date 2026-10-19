@@ -326,6 +326,12 @@ class Settings:
     # notification mail entirely: nothing is sent and nothing fails.
     NOTIFY_FROM = os.environ.get("NOTIFY_FROM", "")
     RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+    # Verified sender for the mail an account's holder gets when a new device
+    # registers to it (`notify.device_registered`, TD-295), e.g.
+    # "Semper security <security@sempermechanics.com>". Its own sender, so
+    # the holder's mail does not come from the support inbox's address.
+    # Empty (the default) leaves that mail off; it also needs RESEND_API_KEY.
+    NOTIFY_SECURITY_FROM = os.environ.get("NOTIFY_SECURITY_FROM", "")
 
     # The runtime service account email Cloud Run runs as. Used for the keyless
     # self-impersonation that mints Drive-scoped tokens.

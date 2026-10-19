@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
-from .. import apps, audit, errors, repo
+from .. import apps, audit, errors, notify, repo
 from .. import rate_limit
 from ..deps import current_user, request_app
 from ..step_up import second_factor
@@ -52,6 +52,9 @@ def register_device(body: DeviceReg, request: Request, user=Depends(current_user
     audit.record(user["uid"], body.deviceId,
                  action="DEVICE_REBIND" if healed else "DEVICE_REGISTER",
                  detail={"app": app, "stepUpEligible": eligible})
+    if not healed:  # A new device tells its holder (TD-295); a key heal is not one.
+        notify.device_registered(user["uid"], repo.verified_address(user), body.deviceId, app,
+                                 model=body.model)
     return {"deviceId": body.deviceId, "healed": healed}
 
 
