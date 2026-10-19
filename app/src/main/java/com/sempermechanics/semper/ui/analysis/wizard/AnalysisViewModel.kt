@@ -4,6 +4,7 @@ import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import com.sempermechanics.semper.SemperNativeLib
+import com.sempermechanics.semper.data.mechanical.CaptureStamp
 import com.sempermechanics.semper.data.mechanical.MachineLoadTable
 import com.sempermechanics.semper.data.mechanical.ParsedLoadCsv
 import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
@@ -170,7 +171,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
     var loadCsvName: String by LabField({ it.loadCsvName }) { s, v -> s.copy(loadCsvName = v) }
     var machineLoads: MachineLoadTable? by LabField({ it.machineLoads }) { s, v -> s.copy(machineLoads = v) }
         internal set
-    var refCaptureTimeMs: Long? by LabField({ it.refCaptureTimeMs }) { s, v -> s.copy(refCaptureTimeMs = v) }
+    var refCapture: CaptureStamp? by LabField({ it.refCapture }) { s, v -> s.copy(refCapture = v) }
     var refVideoTimeMs: Long? by LabField({ it.refVideoTimeMs }) { s, v -> s.copy(refVideoTimeMs = v) }
     var loadLogStartS: Float by LabField({ it.loadLogStartS }) { s, v -> s.copy(loadLogStartS = v) }
     var typedLoadsEntry: TypedLoads.Entry by LabField({ it.typedLoadsEntry }) { s, v -> s.copy(typedLoadsEntry = v) }

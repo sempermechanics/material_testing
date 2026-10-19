@@ -1,5 +1,6 @@
 package com.sempermechanics.semper.ui.analysis.wizard
 
+import com.sempermechanics.semper.data.mechanical.CaptureStamp
 import com.sempermechanics.semper.data.mechanical.TestType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -37,12 +38,12 @@ class LabWizardStateTest {
     fun `a new lab value resets every lab property at once`() {
         val vm = AnalysisViewModel()
         vm.testType = TestType.TENSILE
-        vm.refCaptureTimeMs = 1_000L
+        vm.refCapture = CaptureStamp(1_000L, subSeconds = true)
 
         vm.lab = LabWizardState()
 
         assertEquals(TestType.DIC_2D, vm.testType)
-        assertNull(vm.refCaptureTimeMs)
+        assertNull(vm.refCapture)
         assertNull(vm.machineLoads)
     }
 }

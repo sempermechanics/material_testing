@@ -118,9 +118,9 @@ becomes a **product flavour** of this repo. A general feature the fork built goe
 - `SweepPlotView.Mark` and `scrubShowsPoint`, so any plot can call out a point; the
   moved helpers (`SweepPlotBitmap`, `SweepPlotScrub`, `DocumentText`); the widened
   members, as the fork has them.
-- Frame capture times: `DeformedFrame.captureTimeMs`, the video reference's `timeMs`,
-  `AnalysisViewModel.refCaptureTimeMs` / `refVideoTimeMs`, and `PhotoCaptureTime`
-  (the EXIF read). Semper records them and passes them along, and does not use them
+- Frame capture times: `DeformedFrame.captureTimeMs` / `captureSubSec`, the video
+  reference's `timeMs`, `AnalysisViewModel.refCapture` / `refVideoTimeMs`,
+  `data/mechanical/CaptureStamp` and `PhotoCaptureTime` (the EXIF read). Semper records them and passes them along, and does not use them
   yet.
 
 Each one lands here as a Semper commit with its tests. After the next sync those fork

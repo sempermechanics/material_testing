@@ -33,7 +33,7 @@ So the copy is plain, the formulas are spelled out, and every number shown is on
 - **Timed log with a video, or with photos that carry a capture time:** always matched by time, even when the counts agree.
   Time 0 is the reference: the video's first frame, or when the reference photo was taken.
   A frame takes a row only within **100 ms** of it; a frame with none has no load and is left off the curve.
-  Photos whose capture times are whole seconds (a camera that writes no sub-seconds) are good only to about 1 s, so they take the row within **1 s**, and a chip says the match is coarse.
+  When the reference's or any photo's capture time has no sub-seconds (a camera that writes none, or a copy that lost them), every photo's time after the reference is good only to about 1 s, so the batch takes the row within **1 s**, and a chip says the match is coarse. Whether the sub-seconds were there is read from the EXIF, not guessed from the time (`CaptureStamp.coarse`).
   If the machine started logging later, enter the gap in **Log started after the reference** (s; negative if the log started first).
 - **Photos without capture times, or a log without a time column:** paired in order when the counts agree.
   A photo's time is its EXIF `DateTimeOriginal` (+ `SubSecTimeOriginal`); the reference and every photo need one.

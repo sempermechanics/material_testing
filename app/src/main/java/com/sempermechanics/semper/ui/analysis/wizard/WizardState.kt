@@ -2,6 +2,7 @@ package com.sempermechanics.semper.ui.analysis.wizard
 
 import android.os.Bundle
 import androidx.annotation.WorkerThread
+import com.sempermechanics.semper.data.mechanical.CaptureStamp
 import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.data.mechanical.TypedLoads
@@ -42,6 +43,9 @@ internal object WizardState {
     private const val REF_H = "refH"
     private const val REF_NAME = "refName"
     private const val REF_CAPTURE_MS = "refCaptureMs"
+
+    /** Whether [REF_CAPTURE_MS] carried sub-seconds; absent when unknown (a Bundle an older app saved). */
+    private const val REF_CAPTURE_SUB_SEC = "refCaptureSubSec"
     private const val REF_VIDEO_MS = "refVideoMs"
     private const val HAS_REFERENCE = "hasReference"
     private const val HAS_MASK = "hasMask"
@@ -80,7 +84,9 @@ internal object WizardState {
      * Index-aligned lists behind the deformed-frames card; `-1` = size not
      * measured. [timesMs] is each video frame's time in its clip: empty for
      * picked images, and for a draft an older app saved. [captureTimesMs] is
-     * empty unless the frames are photos (null: no EXIF time). [typedLoadsKg]
+     * empty unless the frames are photos (null: no EXIF time), and
+     * [captureSubSec] says whether each carried sub-seconds (empty, or null
+     * for a frame: not recorded, as in a draft an older app saved). [typedLoadsKg]
      * is bending's typed hanger mass per frame (null: blank).
      */
     @Serializable
@@ -93,6 +99,7 @@ internal object WizardState {
         val timesMs: List<Long> = emptyList(),
         val captureTimesMs: List<Long?> = emptyList(),
         val typedLoadsKg: List<Float?> = emptyList(),
+        val captureSubSec: List<Boolean?> = emptyList(),
     )
 
     /** What [readInputs] read back from the draft. */
@@ -108,7 +115,10 @@ internal object WizardState {
         putInt(REF_W, viewModel.refSize.width)
         putInt(REF_H, viewModel.refSize.height)
         putString(REF_NAME, viewModel.refName)
-        viewModel.refCaptureTimeMs?.let { putLong(REF_CAPTURE_MS, it) }
+        viewModel.refCapture?.let { stamp ->
+            putLong(REF_CAPTURE_MS, stamp.ms)
+            stamp.subSeconds?.let { putBoolean(REF_CAPTURE_SUB_SEC, it) }
+        }
         viewModel.refVideoTimeMs?.let { putLong(REF_VIDEO_MS, it) }
         putBoolean(HAS_REFERENCE, viewModel.refBytes != null)
         putBoolean(HAS_MASK, viewModel.roiMaskBytes != null)
@@ -145,7 +155,14 @@ internal object WizardState {
         viewModel.subsetUserModified = b.getBoolean(SUBSET_USER_MODIFIED)
         viewModel.refSize = ImageSize(b.getInt(REF_W), b.getInt(REF_H))
         b.getString(REF_NAME)?.let { viewModel.refName = it }
-        viewModel.refCaptureTimeMs = if (b.containsKey(REF_CAPTURE_MS)) b.getLong(REF_CAPTURE_MS) else null
+        viewModel.refCapture = if (b.containsKey(REF_CAPTURE_MS)) {
+            CaptureStamp(
+                b.getLong(REF_CAPTURE_MS),
+                subSeconds = if (b.containsKey(REF_CAPTURE_SUB_SEC)) b.getBoolean(REF_CAPTURE_SUB_SEC) else null,
+            )
+        } else {
+            null
+        }
         viewModel.refVideoTimeMs = if (b.containsKey(REF_VIDEO_MS)) b.getLong(REF_VIDEO_MS) else null
         viewModel.hasCustomRoi = b.getBoolean(HAS_CUSTOM_ROI)
         b.getRoi(ROI)?.let { viewModel.roi = it }

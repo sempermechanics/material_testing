@@ -863,7 +863,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="load_sync_body">Seconds from the reference (the video’s first frame, or when the reference photo was taken) to the log’s first row. Negative if the log started first.</string>
     <string name="load_warn_time_ignored">The log’s time column does not increase, so it was ignored.</string>
     <string name="load_warn_time_unit_assumed">The log’s time column names no unit (s, ms, min or h) — its times are taken as seconds.</string>
-    <string name="load_warn_time_coarse">The photos’ capture times are whole seconds (the camera writes no fraction), so each is good only to about 1 s: frames take the row logged within 1 s of them, and a fast-changing load may be read up to a second early or late. Shoot video, or log one row per photo, for a closer match.</string>
+    <string name="load_warn_time_coarse">Some capture times, the reference’s or a photo’s, were saved to the whole second (the camera writes no fraction, or the copy lost it), so each photo’s time is good only to about 1 s: frames take the row logged within 1 s of them, and a fast-changing load may be read up to a second early or late. Shoot video, or log one row per photo, for a closer match.</string>
     <string name="load_warn_sign_tensile">All loads are negative for a tensile test — check the machine’s sign convention.</string>
     <string name="load_err_title">Couldn’t read the load log</string>
     <string name="load_err_empty">The file has no load rows.</string>

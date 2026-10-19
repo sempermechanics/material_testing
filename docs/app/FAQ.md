@@ -344,9 +344,10 @@ matches one load to each deformed frame:
   than the reference, enter the gap under **Log started after the reference**
   (seconds; negative if the log started first). If no frame is within
   100 ms, **Next** stays disabled until the gap is right. Log at 10 rows a
-  second or faster so every frame has a row within reach. Photos whose EXIF
-  times are whole seconds (no sub-seconds) are only good to about 1 s: they
-  take the row within 1 s, and a chip says so.
+  second or faster so every frame has a row within reach. If the reference's
+  or any photo's EXIF time has no sub-seconds (a camera that writes none, an
+  edited copy), the batch is only good to about 1 s: its photos take the row
+  within 1 s, and a chip says so.
 - **Resampled** — any other row count. Frames are spread evenly through the
   log (reference ↔ first row, last frame ↔ last row). This is right when
   photos were taken at a steady rate through the whole test; otherwise export

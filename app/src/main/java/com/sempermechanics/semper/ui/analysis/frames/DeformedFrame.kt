@@ -1,5 +1,6 @@
 package com.sempermechanics.semper.ui.analysis.frames
 
+import com.sempermechanics.semper.data.mechanical.CaptureStamp
 import com.sempermechanics.semper.field.ImageSize
 
 /**
@@ -9,8 +10,9 @@ import com.sempermechanics.semper.field.ImageSize
  * frame sampled from a video, its time in the clip [timeMs] (null otherwise).
  *
  * The lab tests add what a load is matched by: a photo's EXIF
- * [captureTimeMs] (`PhotoCaptureTime`; null without one) and bending's
- * [typedLoadKg] (null: a box left blank). A video frame is matched by
+ * [captureTimeMs] (`PhotoCaptureTime`; null without one), whether it
+ * carried sub-seconds ([captureSubSec]; null when not recorded, a draft
+ * saved before it was), and bending's [typedLoadKg] (null: a box left blank). A video frame is matched by
  * [timeMs] less the reference's clip time (`AnalysisViewModel.refVideoTimeMs`).
  * They ride with the frame like the rest, so a load follows its photo when
  * the list is reordered.
@@ -28,7 +30,11 @@ data class DeformedFrame(
     val timeMs: Long? = null,
     val captureTimeMs: Long? = null,
     val typedLoadKg: Float? = null,
+    val captureSubSec: Boolean? = null,
 ) {
+
+    /** [captureTimeMs] with its precision; null without one. */
+    val captureStamp: CaptureStamp? get() = captureTimeMs?.let { CaptureStamp(it, captureSubSec) }
 
     /** The four parallel fields of a batch, in the view model's shapes. */
     data class Lists(

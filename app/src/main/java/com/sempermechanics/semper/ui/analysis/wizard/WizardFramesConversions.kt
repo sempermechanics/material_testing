@@ -26,6 +26,7 @@ internal fun WizardState.Frames.toDeformedFrames(): List<DeformedFrame> {
             timeMs = times?.get(i),
             captureTimeMs = captureTimesMs.getOrNull(i),
             typedLoadKg = typedLoadsKg.getOrNull(i),
+            captureSubSec = captureSubSec.getOrNull(i),
         )
     }
 }
@@ -40,4 +41,5 @@ internal fun wizardFramesOf(frames: List<DeformedFrame>): WizardState.Frames = W
     timesMs = DeformedFrame.timesOf(frames).orEmpty(),
     captureTimesMs = frames.map { it.captureTimeMs }.takeIf { t -> t.any { it != null } }.orEmpty(),
     typedLoadsKg = frames.map { it.typedLoadKg }.takeIf { kg -> kg.any { it != null } }.orEmpty(),
+    captureSubSec = frames.map { it.captureSubSec }.takeIf { f -> f.any { it != null } }.orEmpty(),
 )

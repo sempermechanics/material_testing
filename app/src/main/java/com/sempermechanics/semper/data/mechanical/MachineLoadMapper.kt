@@ -42,8 +42,9 @@ enum class LoadMapWarning {
     SIGN_UNEXPECTED,
 
     /**
-     * The photos' capture times are whole seconds (no EXIF sub-seconds), so
-     * each is good only to ±1 s and rows are matched within
+     * Some of the photos' capture times, the reference's or a photo's, were
+     * read without EXIF sub-seconds ([CaptureStamp.coarse]), so each frame's
+     * time is good only to ±1 s and rows are matched within
      * [MachineLoadMapper.COARSE_MATCH_TOLERANCE_MS].
      */
     TIME_COARSE,
@@ -123,7 +124,7 @@ object MachineLoadMapper {
      *   the reference frame; negative when the log started first. Used only
      *   by the time match.
      * @param wholeSecondTimes [frameTimesMs] are photo times read to the
-     *   whole second (`PhotoCaptureTime.wholeSeconds`): rows are matched within
+     *   whole second ([CaptureStamp.coarse]; [mapPhotos] decides it): rows are matched within
      *   [COARSE_MATCH_TOLERANCE_MS] and the table says so ([LoadMapWarning.TIME_COARSE]).
      */
     @Suppress("LongParameterList") // the log, the frames, and the two facts about their clocks
@@ -160,6 +161,29 @@ object MachineLoadMapper {
         if (signUnexpected(table.loadsN, testType)) warnings += LoadMapWarning.SIGN_UNEXPECTED
         return table
     }
+
+    /**
+     * [map] for a photo batch: each frame's time is its EXIF capture time less
+     * the [reference]'s, and the match is coarse when any of those times was
+     * read without sub-seconds ([CaptureStamp.coarse]). A batch where the
+     * reference or any photo has no capture time falls back to row order.
+     */
+    @Suppress("LongParameterList") // map's, with the reference's and the photos' stamps for the frame times
+    fun mapPhotos(
+        parsed: ParsedLoadCsv,
+        frameCount: Int,
+        reference: CaptureStamp?,
+        frames: List<CaptureStamp?>,
+        testType: TestType,
+        logStartS: Float = 0f,
+    ): MachineLoadTable? = map(
+        parsed,
+        frameCount,
+        CaptureStamp.relativeTimesMs(reference, frames),
+        testType,
+        logStartS,
+        wholeSecondTimes = CaptureStamp.coarse(reference, frames),
+    )
 
     /** The extra leading row is the reference only if nothing in the log is closer to zero. */
     private fun isUnloadedFirstRow(rows: List<Float>): Boolean {

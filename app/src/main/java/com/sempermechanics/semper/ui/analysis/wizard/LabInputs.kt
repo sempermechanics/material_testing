@@ -5,6 +5,7 @@
 package com.sempermechanics.semper.ui.analysis.wizard
 
 import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.data.mechanical.CaptureStamp
 import com.sempermechanics.semper.data.mechanical.LoadMapping
 import com.sempermechanics.semper.data.mechanical.MachineLoadMapper
 import com.sempermechanics.semper.data.mechanical.MechanicalTestInputs
@@ -14,7 +15,6 @@ import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.data.mechanical.TypedLoads
 import com.sempermechanics.semper.report.StressStrain
 import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
-import com.sempermechanics.semper.ui.analysis.load.PhotoCaptureTime
 
 /*
  * The lab test's inputs on the wizard's view model: the load log or typed
@@ -28,7 +28,7 @@ import com.sempermechanics.semper.ui.analysis.load.PhotoCaptureTime
  * Time of each deformed frame after the reference, index-aligned with
  * [defFilePaths]: a video frame's clip time ([DeformedFrame.timeMs]) less the
  * reference's ([refVideoTimeMs]; 0 when unknown). Image batches leave it
- * empty; their times come from [defCaptureTimesMs] and [refCaptureTimeMs].
+ * empty; their times come from [defCaptureStamps] and [AnalysisViewModel.refCapture].
  */
 var AnalysisViewModel.defTimesAfterRefMs: List<Long>
     get() {
@@ -41,14 +41,17 @@ var AnalysisViewModel.defTimesAfterRefMs: List<Long>
     }
 
 /**
- * EXIF capture time of each picked photo ([DeformedFrame.captureTimeMs]),
- * index-aligned with [defFilePaths]; null for a photo without one. Empty
- * for video frames.
+ * EXIF capture time of each picked photo, with its precision
+ * ([DeformedFrame.captureStamp]), index-aligned with [defFilePaths]; null for
+ * a photo without one. Empty for video frames.
  */
-var AnalysisViewModel.defCaptureTimesMs: List<Long?>
-    get() = if (defFromVideo) emptyList() else deformedFrames.map { it.captureTimeMs }
+var AnalysisViewModel.defCaptureStamps: List<CaptureStamp?>
+    get() = if (defFromVideo) emptyList() else deformedFrames.map { it.captureStamp }
     set(value) {
-        deformedFrames = deformedFrames.mapIndexed { i, f -> f.copy(captureTimeMs = value.getOrNull(i)) }
+        deformedFrames = deformedFrames.mapIndexed { i, f ->
+            val stamp = value.getOrNull(i)
+            f.copy(captureTimeMs = stamp?.ms, captureSubSec = stamp?.subSeconds)
+        }
     }
 
 /**
@@ -75,13 +78,17 @@ fun AnalysisViewModel.stressModel(): StressStrain.Model =
 fun AnalysisViewModel.refreshMachineLoads() {
     val parsed = parsedLoadCsv
     machineLoads = when {
-        parsed != null -> MachineLoadMapper.map(
+        // A video's frames carry clip times; a photo batch is matched from
+        // its capture times, coarse when any was read without sub-seconds.
+        parsed != null && defTimesAfterRefMs.isNotEmpty() ->
+            MachineLoadMapper.map(parsed, defFilePaths.size, defTimesAfterRefMs, testType, loadLogStartS)
+        parsed != null -> MachineLoadMapper.mapPhotos(
             parsed,
             defFilePaths.size,
-            frameTimesForLoads(),
+            refCapture,
+            defCaptureStamps,
             testType,
             loadLogStartS,
-            wholeSecondTimes = photoTimesWholeSeconds(),
         )
         testType == TestType.BENDING -> TypedLoads.toTable(typedLoadsKg, defFilePaths.size)
         else -> null
@@ -103,18 +110,6 @@ fun AnalysisViewModel.clearTypedLoads() {
     typedLoadsKg = emptyList()
     refreshMachineLoads()
 }
-
-/**
- * Each deformed frame's time after the reference: a video's own, else
- * the photos' capture times when the reference and every frame have one.
- * Empty when neither is known, which matches the log by row order.
- */
-private fun AnalysisViewModel.frameTimesForLoads(): List<Long> =
-    defTimesAfterRefMs.ifEmpty { PhotoCaptureTime.relativeTimesMs(refCaptureTimeMs, defCaptureTimesMs) }
-
-/** The frames' times are photo capture times read only to the whole second (a video's never are). */
-private fun AnalysisViewModel.photoTimesWholeSeconds(): Boolean =
-    defTimesAfterRefMs.isEmpty() && PhotoCaptureTime.wholeSeconds(refCaptureTimeMs, defCaptureTimesMs)
 
 /** An imported load log. Its [text] goes to the draft so a process death can parse it again. */
 fun AnalysisViewModel.setLoadLog(csv: ParsedLoadCsv, name: String, text: String) {
@@ -198,7 +193,7 @@ fun AnalysisViewModel.mechanicalInputs(forSweep: Boolean): MechanicalTestInputs 
 
 /** Back to no lab inputs: no load log, no dimensions. The test type stays. */
 fun AnalysisViewModel.clearLabInputs() {
-    refCaptureTimeMs = null
+    refCapture = null
     refVideoTimeMs = null
     clearMachineLoads()
     crossSectionMm2 = 0f

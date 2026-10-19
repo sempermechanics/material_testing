@@ -65,7 +65,7 @@ class ReferenceImportController(
                 viewModel.applyNewReference(loaded.bytes, name, loaded.size)
                 // The capture time a timed load log is matched from; the beam's
                 // taps were on the old reference.
-                viewModel.refCaptureTimeMs = captured
+                viewModel.refCapture = captured
                 viewModel.refVideoTimeMs = null
                 viewModel.onReferenceReplaced()
                 onLoaded(loaded.preview)

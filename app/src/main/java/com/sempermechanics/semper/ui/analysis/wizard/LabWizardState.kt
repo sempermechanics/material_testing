@@ -1,5 +1,6 @@
 package com.sempermechanics.semper.ui.analysis.wizard
 
+import com.sempermechanics.semper.data.mechanical.CaptureStamp
 import com.sempermechanics.semper.data.mechanical.MachineLoadTable
 import com.sempermechanics.semper.data.mechanical.ParsedLoadCsv
 import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
@@ -29,8 +30,9 @@ import kotlin.reflect.KProperty
  * @property loadCsvName display name of the imported log; blank when none.
  * @property machineLoads [parsedLoadCsv] matched to the current deformed
  *   frames (or bending's typed loads); null when either is missing.
- * @property refCaptureTimeMs EXIF capture time of the picked reference photo;
- *   null for a video frame or a photo without one.
+ * @property refCapture EXIF capture time of the picked reference photo,
+ *   with whether it carried sub-seconds; null for a video frame or a photo
+ *   without one.
  * @property refVideoTimeMs the video reference frame's time in its clip, ms;
  *   null for a photo. A video frame's time after the reference, which a timed
  *   load log is matched by, is its `DeformedFrame.timeMs` less this.
@@ -49,7 +51,7 @@ data class LabWizardState(
     val parsedLoadCsv: ParsedLoadCsv? = null,
     val loadCsvName: String = "",
     val machineLoads: MachineLoadTable? = null,
-    val refCaptureTimeMs: Long? = null,
+    val refCapture: CaptureStamp? = null,
     val refVideoTimeMs: Long? = null,
     val loadLogStartS: Float = 0f,
     val typedLoadsEntry: TypedLoads.Entry = TypedLoads.Entry.ABSOLUTE,
