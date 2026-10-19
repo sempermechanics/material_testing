@@ -10,7 +10,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.account.AuthRepository
 import com.sempermechanics.semper.data.account.DevAuth
 import com.sempermechanics.semper.data.cloud.CloudAccountExport
 import com.sempermechanics.semper.data.net.AccountCache
@@ -28,7 +27,6 @@ import com.sempermechanics.semper.ui.common.transfer.TransferBannerController
 import com.sempermechanics.semper.ui.viewer.share.SendToSheet
 import com.sempermechanics.semper.util.ProgressCount
 import kotlinx.coroutines.launch
-import timber.log.Timber
 
 /**
  * Export / erasure / diagnostics. Session restore / download / delete stay on
@@ -54,32 +52,19 @@ class SettingsYourDataSection(
             Diagnostics.setEnabled(activity, checked)
         }
         wireLegal()
+        observeConsent()
         observeAccountDeletion()
     }
 
     /**
      * The product-improvement consent, kept apart from diagnostics and from
      * the Terms: it is optional, off until granted, and withdrawable here at
-     * any time. The switch reflects the last value the server confirmed.
+     * any time. The switch shows the answer this phone holds, or the one being
+     * sent ([SettingsViewModel.setImprovementConsent], which a rotation does
+     * not cancel), and waits while it is sent.
      */
     private fun wireLegal() {
-        val switchImprove = views.switchImprovementConsent
-        switchImprove.isChecked = AccountCache.improvementConsent(activity) == true
-        switchImprove.setOnCheckedChangeListener { _, checked ->
-            switchImprove.isEnabled = false
-            activity.lifecycleScope.launch {
-                val result = AuthRepository(activity).setImprovementConsent(checked)
-                switchImprove.isEnabled = true
-                result.onFailure {
-                    Timber.w(it, "Improvement consent update failed")
-                    // Revert silently: the server still holds the previous answer.
-                    switchImprove.setOnCheckedChangeListener(null)
-                    switchImprove.isChecked = !checked
-                    wireLegal()
-                    Feedback.toast(activity, R.string.terms_error_generic, long = true)
-                }
-            }
-        }
+        showConsent(activity.viewModel.consentSending.value)
 
         val accepted = AccountCache.termsAcceptedVersion(activity)
         views.tvTermsAccepted.text =
@@ -90,6 +75,38 @@ class SettingsYourDataSection(
             }
         views.btnViewTerms.setOnClickListener {
             ExternalLinks.open(activity, activity.getString(R.string.legal_terms_url))
+        }
+    }
+
+    /**
+     * The switch at [sending] while that change is sent, and waiting; else at
+     * the answer this phone holds. Set with no listener, so showing a value
+     * never sends it.
+     */
+    private fun showConsent(sending: Boolean?) {
+        val switchImprove = views.switchImprovementConsent
+        switchImprove.setOnCheckedChangeListener(null)
+        switchImprove.isChecked = sending ?: (AccountCache.improvementConsent(activity) == true)
+        switchImprove.isEnabled = sending == null
+        switchImprove.setOnCheckedChangeListener { _, checked ->
+            switchImprove.isEnabled = false
+            activity.viewModel.setImprovementConsent(checked)
+        }
+    }
+
+    /**
+     * Each consent change's answer once, on whichever Settings is started.
+     * A change the server did not take is said; either way the switch shows
+     * the answer this phone holds, which the repository stores before sending.
+     */
+    private fun observeConsent() {
+        activity.lifecycleScope.launch {
+            activity.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                activity.viewModel.consentOutcomes.collect { answer ->
+                    showConsent(null)
+                    if (!answer.saved) Feedback.toast(activity, R.string.terms_error_generic, long = true)
+                }
+            }
         }
     }
 

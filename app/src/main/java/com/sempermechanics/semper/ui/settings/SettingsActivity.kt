@@ -11,11 +11,14 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.annotation.MainThread
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.cloud.CloudSync
@@ -42,7 +45,6 @@ import com.sempermechanics.semper.ui.common.dialog.Feedback
 import com.sempermechanics.semper.ui.common.transfer.DeleteFeedback
 import com.sempermechanics.semper.ui.common.transfer.RestoreRequest
 import com.sempermechanics.semper.ui.common.transfer.TransferBannerController
-import com.sempermechanics.semper.ui.common.transfer.request
 import com.sempermechanics.semper.ui.home.SessionOpenHelper
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -78,6 +80,9 @@ class SettingsActivity : AppCompatActivity() {
 
     /** Stashed while the SAF save-as picker is open. */
     private var pendingDownload: PendingBundleDownload? = null
+
+    /** Restores and the consent change, kept across a rotation (ADR-016). */
+    internal val viewModel: SettingsViewModel by viewModels()
 
     private lateinit var binding: ActivitySettingsBinding
 
@@ -140,6 +145,21 @@ class SettingsActivity : AppCompatActivity() {
         SettingsPreferencesSection(this, views).wire()
         SettingsHelpSupportSection(this, views).wire()
         SettingsFooterSection(this, views).wire()
+        observeViewModel()
+    }
+
+    /**
+     * A restore still being asked for keeps its row busy on a recreated
+     * screen, and each restore's outcome is said once, on whichever Settings
+     * is started.
+     */
+    private fun observeViewModel() {
+        viewModel.restoringKeys.forEach(analyses::markBusy)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.restoreOutcomes.collect(::showRestoreOutcome)
+            }
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -296,33 +316,35 @@ class SettingsActivity : AppCompatActivity() {
         val targetLocalId = entry.record?.id ?: CloudRestore.targetLocalId(cloud)
         // Marked before the IO hop: the restore can run and finish inside it.
         analyses.markBusy(key)
-        lifecycleScope.launch {
-            val target = RestoreStart.Target(cloud.sessionId, targetLocalId, entry.name)
-            val asked = RestoreStart.request(this@SettingsActivity, listOf(target))
-            val counts = (asked as? RestoreRequest.Queued)?.counts
-            if (counts != null && counts.alreadyRunning > 0) {
-                Feedback.toast(this@SettingsActivity, R.string.download_analysis_already)
-                return@launch
-            }
-            if (counts == null || counts.started == 0) {
-                analyses.unmarkBusy(key)
-                if (asked == RestoreRequest.Paused) {
-                    RestoreRequest.sayPaused(this@SettingsActivity)
-                } else {
-                    Feedback.toast(this@SettingsActivity, R.string.restore_failed_generic, long = true)
-                }
-                return@launch
-            }
-            transferBanner.upsert(
-                TransferBannerController.Transfer(
-                    id = key,
-                    title = entry.name.ifBlank { getString(R.string.transfer_banner_restore) },
-                    cancellable = false,
-                ),
-            )
-            Feedback.toast(this@SettingsActivity, R.string.restore_background_note)
-            wireAnalysesDataSection()
+        viewModel.restore(key, RestoreStart.Target(cloud.sessionId, targetLocalId, entry.name))
+    }
+
+    /** What a restore asked for in [SettingsViewModel] came to, said once on the current screen. */
+    private fun showRestoreOutcome(outcome: SettingsViewModel.RestoreAsked) {
+        val asked = outcome.request
+        val counts = (asked as? RestoreRequest.Queued)?.counts
+        if (counts != null && counts.alreadyRunning > 0) {
+            Feedback.toast(this, R.string.download_analysis_already)
+            return
         }
+        if (counts == null || counts.started == 0) {
+            analyses.unmarkBusy(outcome.key)
+            if (asked == RestoreRequest.Paused) {
+                RestoreRequest.sayPaused(this)
+            } else {
+                Feedback.toast(this, R.string.restore_failed_generic, long = true)
+            }
+            return
+        }
+        transferBanner.upsert(
+            TransferBannerController.Transfer(
+                id = outcome.key,
+                title = outcome.name.ifBlank { getString(R.string.transfer_banner_restore) },
+                cancellable = false,
+            ),
+        )
+        Feedback.toast(this, R.string.restore_background_note)
+        wireAnalysesDataSection()
     }
 
     internal fun deleteBackup(entry: AnalysisEntry) {
