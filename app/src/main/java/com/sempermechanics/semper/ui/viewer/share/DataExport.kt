@@ -145,14 +145,11 @@ internal class DataExport(
                 frameTitle = { index -> frameTitle(index) },
                 resources = resources,
             ).collect { progress ->
+                // A failed render throws out of collect, so the share job fails
+                // (and logs) instead of handing back an empty PDF.
                 when (progress) {
-                    // generateBatch reports failures as a Flow event rather than
-                    // throwing; surface it so the share job actually fails (and logs)
-                    // instead of silently handing back an empty PDF.
-                    is PdfReportGenerator.Progress.Error -> throw progress.ex
                     is PdfReportGenerator.Progress.Status ->
                         report(progress.percent.toDouble(), progress.text(resources))
-                    PdfReportGenerator.Progress.Complete -> Unit
                 }
             }
         }

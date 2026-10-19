@@ -2,25 +2,40 @@ package com.sempermechanics.semper.ui.common
 
 import java.util.Locale
 
+/** Each [ByteUnit] is this many of the one below it (1 KB = 1024 bytes). */
+private const val BINARY_STEP = 1024L
+
 /**
- * A byte count as Settings shows it: binary units (1 KB = 1024 bytes), always
- * in `Locale.US` digits — "1.5 GB", "120 MB", "64 KB".
- *
- * Ported from `SettingsActivity.humanSize`, the app's one hand-written byte
- * formatter. Home's backups card uses the platform's
- * `Formatter.formatShortFileSize` instead, which counts in powers of 1000,
- * follows the device locale and rounds differently, so the two disagree on
- * the same count; this does not replace that one.
+ * The unit every byte count in the app is shown in: binary (1 KB = 1024
+ * bytes), the largest that keeps the count at 1 or more, KB at least. Settings'
+ * sizes, Home's backups card and rows, the transfer banner and the export
+ * dialog all count through it, so one count reads the same on every screen.
+ */
+enum class ByteUnit(val bytes: Long, val label: String) {
+    KB(BINARY_STEP, "KB"),
+    MB(BINARY_STEP * BINARY_STEP, "MB"),
+    GB(BINARY_STEP * BINARY_STEP * BINARY_STEP, "GB"),
+    ;
+
+    /** [count] bytes counted in this unit. */
+    fun amount(count: Long): Double = count / bytes.toDouble()
+
+    companion object {
+        /** The unit [count] is shown in. */
+        fun of(count: Long): ByteUnit = entries.lastOrNull { count >= it.bytes } ?: KB
+    }
+}
+
+/**
+ * A byte count as Settings and Home show it: in its [ByteUnit], always in
+ * `Locale.US` digits, GB to one decimal and the smaller units whole —
+ * "1.5 GB", "120 MB", "64 KB".
  */
 object ByteSize {
 
-    private const val BYTES_PER_KB = 1024.0
-    private const val BYTES_PER_MB = 1_048_576L
-    private const val BYTES_PER_GB = 1_073_741_824L
-
-    fun format(bytes: Long): String = when {
-        bytes >= BYTES_PER_GB -> String.format(Locale.US, "%.1f GB", bytes / BYTES_PER_GB.toDouble())
-        bytes >= BYTES_PER_MB -> String.format(Locale.US, "%.0f MB", bytes / BYTES_PER_MB.toDouble())
-        else -> String.format(Locale.US, "%.0f KB", bytes / BYTES_PER_KB)
+    fun format(bytes: Long): String {
+        val unit = ByteUnit.of(bytes)
+        val pattern = if (unit == ByteUnit.GB) "%.1f %s" else "%.0f %s"
+        return String.format(Locale.US, pattern, unit.amount(bytes), unit.label)
     }
 }
