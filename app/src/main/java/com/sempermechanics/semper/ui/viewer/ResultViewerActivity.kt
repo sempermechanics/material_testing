@@ -23,6 +23,7 @@ import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.databinding.ActivityResultViewerBinding
 import com.sempermechanics.semper.field.DicParams
+import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.field.FrameParams
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.Roi
@@ -120,12 +121,6 @@ class ResultViewerActivity : AppCompatActivity() {
     /** The reference at display size. Exports and the report read it; it is never a frame's photo. */
     internal val cachedBaseImage: Bitmap? get() = images.cachedBaseImage
 
-    internal var currentTypeString: String
-        get() = viewModel.currentTypeString
-        set(value) {
-            viewModel.currentTypeString = value
-        }
-
     internal var batchFiles: List<File> = emptyList()
         private set
 
@@ -143,10 +138,11 @@ class ResultViewerActivity : AppCompatActivity() {
 
     internal val scrubCache = ScrubFrameCache()
 
-    internal var currentDataIndex: Int
-        get() = viewModel.currentDataIndex
+    /** The field on screen; kept by [viewModel], saved state included. */
+    internal var field: FieldKind
+        get() = viewModel.field
         set(value) {
-            viewModel.currentDataIndex = value
+            viewModel.field = value
         }
 
     internal lateinit var summary: ViewerSummaryController
@@ -173,8 +169,8 @@ class ResultViewerActivity : AppCompatActivity() {
         // the same ends instead of the hidden first frame's extrema.
         if (!isShowingSummary) return
         val data = rawData ?: return
-        val metrics = viewModel.fieldMetricsFor(currentFrameIndex, currentDataIndex, data)
-        captions.applyFieldMetrics(metrics, currentDataIndex)
+        val metrics = viewModel.fieldMetricsFor(currentFrameIndex, field.dataIndex, data)
+        captions.applyFieldMetrics(metrics, field.dataIndex)
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -267,7 +263,7 @@ class ResultViewerActivity : AppCompatActivity() {
         // five with the live field checked. The live field comes back from the
         // ViewModel after a rotation, so re-derive the label or it disagrees
         // with the heatmap.
-        binding.btnFieldFab.text = ViewerFieldPills.BY_ID[ViewerFieldPills.idFor(currentDataIndex)]?.first ?: "U"
+        binding.btnFieldFab.text = field.label
         binding.btnFieldFab.setOnClickListener {
             bumpChrome()
             fieldPopup.show(it)
@@ -406,7 +402,7 @@ class ResultViewerActivity : AppCompatActivity() {
         frameJump.syncFrameNumber()
         // updateVisualization warms this frame's stats off the main thread
         // and pushes them to the caption when the render completes.
-        scale.updateVisualization(currentDataIndex)
+        scale.updateVisualization(field.dataIndex)
         if (inspect.lastClosestIdx != -1) {
             inspect.refreshCrosshairs()
         }

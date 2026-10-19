@@ -7,6 +7,7 @@ package com.sempermechanics.semper.ui.viewer.summary
 
 import com.sempermechanics.semper.field.DatDecoder
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.report.FieldRangesStore
@@ -305,13 +306,11 @@ class SummaryAnimation(private val spec: Spec) {
         /** Below ~20 ms many viewers substitute a delay of their own. */
         const val MIN_CENTIS = 2
 
-        val FIELDS = listOf(
-            "U" to DicResult.IDX_U,
-            "V" to DicResult.IDX_V,
-            "Exx" to DicResult.IDX_EXX,
-            "Eyy" to DicResult.IDX_EYY,
-            "Exy" to DicResult.IDX_EXY,
-        )
+        /**
+         * Each field's (label, data index), from [FieldKind]: the backup
+         * bundler still walks these pairs. New code walks [FieldKind.entries].
+         */
+        val FIELDS: List<Pair<String, Int>> = FieldKind.entries.map { it.label to it.dataIndex }
 
         /**
          * How long each frame is shown, in hundredths of a second.
@@ -354,7 +353,7 @@ class SummaryAnimation(private val spec: Spec) {
             rangesFile: File? = null,
             onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
         ): Map<Int, Pair<Float, Float>> {
-            val indices = FIELDS.map { it.second }.toIntArray()
+            val indices = FieldKind.entries.map { it.dataIndex }.toIntArray()
             val total = batchFiles.size
 
             val cached = rangesFile?.let { FieldRangesStore.read(it, indices) }

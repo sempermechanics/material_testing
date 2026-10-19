@@ -3,6 +3,7 @@ package com.sempermechanics.semper.viewer
 import android.graphics.Bitmap
 import androidx.core.graphics.createBitmap
 import com.sempermechanics.semper.R
+import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.fixtures.idleUntil
 import com.sempermechanics.semper.fixtures.launchViewer
 import com.sempermechanics.semper.fixtures.viewerArgs
@@ -116,7 +117,7 @@ class ShareExportProgressTest {
     fun `the animations report each frame of each field`() {
         val activity = viewer()
         idleUntil("the summary ranges") {
-            ShareExportBuilder.FIELDS.all { (_, index) -> activity.summary.boundsFor(index) != null }
+            FieldKind.entries.all { activity.summary.boundsFor(it.dataIndex) != null }
         }
         val seen = activity.reports(ShareKind.GIFS)
 

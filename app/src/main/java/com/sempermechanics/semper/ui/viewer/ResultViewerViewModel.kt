@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.field.FieldStats
 import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.ui.viewer.share.ShareExportJobs
@@ -14,7 +15,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Survives configuration changes for the results browser: frame scrubber index,
- * active field type, the user's fixed colour scales, running exports and each
+ * the field on screen (also across process death), the user's fixed colour scales, running exports and each
  * visited field's stats. Heavy bitmaps stay in the Activity (they are bound to
  * view lifetime).
  */
@@ -23,8 +24,18 @@ class ResultViewerViewModel(
     private val state: SavedStateHandle,
 ) : AndroidViewModel(app) {
     var currentFrameIndex: Int = 0
-    var currentDataIndex: Int = 2
-    var currentTypeString: String = "U"
+
+    /**
+     * The field on screen. One value (it was a data index and a label, set
+     * one after the other), kept in the saved state so a restored viewer
+     * opens on it.
+     */
+    var field: FieldKind
+        get() = state.get<String>(KEY_FIELD)?.let { name -> FieldKind.entries.firstOrNull { it.name == name } }
+            ?: FieldKind.U
+        set(value) {
+            state[KEY_FIELD] = value.name
+        }
 
     /**
      * Fixed colour-scale bounds per field, set in the custom-scale dialog.
@@ -136,6 +147,7 @@ class ResultViewerViewModel(
     private companion object {
         const val KEY_SAVE_KIND = "pending_save_kind"
         const val KEY_SAVE_URI = "pending_save_uri"
+        const val KEY_FIELD = "field"
 
         /** Field metrics are tiny (5 floats + 2 ints); keep plenty across frames/fields. */
         const val FIELD_METRICS_CACHE_MAX = 64

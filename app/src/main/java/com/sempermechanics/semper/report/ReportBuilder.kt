@@ -17,6 +17,7 @@ import androidx.core.graphics.scale
 import com.sempermechanics.semper.BuildConfig
 import com.sempermechanics.semper.data.DicUploadWorker
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.field.ValueRange
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -30,15 +31,10 @@ import kotlin.math.sqrt
  */
 object ReportBuilder {
 
-    private val FIELD_NAMES = listOf(
-        "U Displacement",
-        "V Displacement",
-        "Exx Strain",
-        "Eyy Strain",
-        "Exy Shear",
-        "ZNSSD (Correlation Quality)",
-    )
-    private val FIELD_KEYS = listOf("U", "V", "Exx", "Eyy", "Exy", "ZNSSD")
+    // The report's blocks: the five fields (FieldKind's table), then ZNSSD,
+    // which follows Exy in a `.dat` point.
+    private val FIELD_NAMES = FieldKind.entries.map { it.title } + "ZNSSD (Correlation Quality)"
+    private val FIELD_KEYS = FieldKind.entries.map { it.label } + "ZNSSD"
 
     data class FieldExtrema(val maxIdx: Int, val minIdx: Int) {
         /**

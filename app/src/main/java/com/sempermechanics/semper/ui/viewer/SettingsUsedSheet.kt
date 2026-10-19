@@ -134,20 +134,20 @@ object SettingsUsedSheet {
             return
         }
         val data = host.rawData
-        val hist = data?.let { FieldHistogram.from(it, host.currentDataIndex) }
+        val hist = data?.let { FieldHistogram.from(it, host.field.dataIndex) }
         if (hist == null) {
             section.visibility = View.GONE
             return
         }
         section.visibility = View.VISIBLE
         val unit = host.getString(
-            if (DicResult.isStrainFieldIndex(host.currentDataIndex)) {
+            if (DicResult.isStrainFieldIndex(host.field.dataIndex)) {
                 R.string.scale_unit_strain
             } else {
                 R.string.scale_unit_px
             },
         )
-        sheetView.tvHistogramTitle.text = host.getString(R.string.viewer_histogram_title_fmt, host.currentTypeString)
+        sheetView.tvHistogramTitle.text = host.getString(R.string.viewer_histogram_title_fmt, host.field.label)
         val caption = sheetView.tvHistogramCaption
         val plot = sheetView.plotFieldHistogram
         plot.setHistogram(hist, unit)

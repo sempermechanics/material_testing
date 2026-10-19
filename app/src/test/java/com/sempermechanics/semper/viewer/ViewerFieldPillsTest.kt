@@ -2,7 +2,7 @@ package com.sempermechanics.semper.viewer
 
 import com.google.android.material.button.MaterialButton
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.fixtures.viewerArgs
 import com.sempermechanics.semper.fixtures.viewerController
 import com.sempermechanics.semper.fixtures.writeGridBatch
@@ -46,17 +46,13 @@ class ViewerFieldPillsTest {
     private fun ResultViewerActivity.fieldFab(): MaterialButton = findViewById(R.id.btnFieldFab)
 
     @Test
-    fun `every field index maps to its own pill`() {
-        assertEquals(R.id.rbFieldU, ViewerFieldPills.idFor(DicResult.IDX_U))
-        assertEquals(R.id.rbFieldV, ViewerFieldPills.idFor(DicResult.IDX_V))
-        assertEquals(R.id.rbFieldExx, ViewerFieldPills.idFor(DicResult.IDX_EXX))
-        assertEquals(R.id.rbFieldEyy, ViewerFieldPills.idFor(DicResult.IDX_EYY))
-        assertEquals(R.id.rbFieldExy, ViewerFieldPills.idFor(DicResult.IDX_EXY))
-    }
-
-    @Test
-    fun `an index off the map falls back to U rather than lighting nothing`() {
-        assertEquals(R.id.rbFieldU, ViewerFieldPills.idFor(-1))
+    fun `every field maps to its own pill`() {
+        assertEquals(R.id.rbFieldU, ViewerFieldPills.idFor(FieldKind.U))
+        assertEquals(R.id.rbFieldV, ViewerFieldPills.idFor(FieldKind.V))
+        assertEquals(R.id.rbFieldExx, ViewerFieldPills.idFor(FieldKind.EXX))
+        assertEquals(R.id.rbFieldEyy, ViewerFieldPills.idFor(FieldKind.EYY))
+        assertEquals(R.id.rbFieldExy, ViewerFieldPills.idFor(FieldKind.EXY))
+        assertEquals("one pill per field", FieldKind.entries.toSet(), ViewerFieldPills.BY_ID.values.toSet())
     }
 
     @Test
@@ -65,9 +61,9 @@ class ViewerFieldPillsTest {
         val activity = controller.get()
         shadowOf(activity.mainLooper).idle()
 
-        activity.currentDataIndex = DicResult.IDX_EXX
+        activity.field = FieldKind.EXX
         shadowOf(activity.mainLooper).idle()
-        assertEquals(DicResult.IDX_EXX, activity.currentDataIndex)
+        assertEquals(FieldKind.EXX, activity.field)
 
         val rebuilt = controller.recreate().get()
         shadowOf(rebuilt.mainLooper).idle()

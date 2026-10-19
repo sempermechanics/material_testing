@@ -60,7 +60,7 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
     }
 
     fun showCustomScaleDialog() {
-        val currentDataIndex = host.currentDataIndex
+        val currentDataIndex = host.field.dataIndex
         val dialog = DialogCustomScaleBinding.inflate(host.layoutInflater)
 
         val isStrain = DicResult.isStrainFieldIndex(currentDataIndex)
@@ -81,16 +81,16 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
         }
 
         MaterialAlertDialogBuilder(host)
-            .setTitle(host.getString(R.string.scale_dialog_title_fmt, host.currentTypeString))
+            .setTitle(host.getString(R.string.scale_dialog_title_fmt, host.field.label))
             .setView(dialog.root)
             .setPositiveButton(R.string.apply) { _, _ ->
                 val maxVal = dialog.etScaleMax.text?.toString()?.toFloatOrNull()
                 val minVal = dialog.etScaleMin.text?.toString()?.toFloatOrNull()
 
                 if (maxVal != null && minVal != null && maxVal > minVal) {
-                    customBoundsMap[host.currentDataIndex] = ValueRange(minVal / multiplier, maxVal / multiplier)
-                    updateVisualization(host.currentDataIndex)
-                    host.summary.onScaleChanged(host.currentDataIndex)
+                    customBoundsMap[host.field.dataIndex] = ValueRange(minVal / multiplier, maxVal / multiplier)
+                    updateVisualization(host.field.dataIndex)
+                    host.summary.onScaleChanged(host.field.dataIndex)
                 } else {
                     FaqRedirect.snackbar(
                         host,
@@ -100,9 +100,9 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
                 }
             }
             .setNeutralButton(R.string.auto_scale) { _, _ ->
-                customBoundsMap.remove(host.currentDataIndex)
-                updateVisualization(host.currentDataIndex)
-                host.summary.onScaleChanged(host.currentDataIndex)
+                customBoundsMap.remove(host.field.dataIndex)
+                updateVisualization(host.field.dataIndex)
+                host.summary.onScaleChanged(host.field.dataIndex)
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
@@ -155,7 +155,7 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
             host.scrubCache.putHeat(heatKey, heatmap)
 
             withContext(Dispatchers.Main) {
-                if (host.currentDataIndex != index || host.currentFrameIndex != frameAtStart) return@withContext
+                if (host.field.dataIndex != index || host.currentFrameIndex != frameAtStart) return@withContext
                 showHeatmap(heatmap, index)
                 host.captions.applyFieldMetrics(metrics, index)
             }

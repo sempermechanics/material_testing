@@ -6,6 +6,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.fixtures.idleUntil
 import com.sempermechanics.semper.fixtures.launchViewer
 import com.sempermechanics.semper.fixtures.viewerArgs
@@ -141,7 +142,7 @@ class ViewerControllersTest {
     @Test
     fun `a fixed scale is stored in the field's own unit and Auto clears it`() {
         val activity = viewer()
-        activity.currentDataIndex = DicResult.IDX_EXX
+        activity.field = FieldKind.EXX
         activity.idle()
 
         val dialog = activity.openScaleDialog()
@@ -171,7 +172,7 @@ class ViewerControllersTest {
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         activity.idle()
 
-        assertNull(activity.customBoundsFor(activity.currentDataIndex))
+        assertNull(activity.customBoundsFor(activity.field.dataIndex))
     }
 
     @Test
@@ -247,7 +248,7 @@ class ViewerControllersTest {
         val activity = viewer()
         // The GIFs take each field's sequence range; let the summary find them.
         idleUntil("the summary ranges") {
-            ShareExportBuilder.FIELDS.all { (_, index) -> activity.summary.boundsFor(index) != null }
+            FieldKind.entries.all { activity.summary.boundsFor(it.dataIndex) != null }
         }
         val (file, mime) = activity.produce(ShareKind.GIFS)
 

@@ -3,7 +3,7 @@ package com.sempermechanics.semper.ui.viewer
 import android.content.res.Resources
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.field.DicParams
-import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.imaging.video.VideoKeyframeHelper
 import com.sempermechanics.semper.report.ReportBuilder
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
@@ -68,7 +68,7 @@ internal class ViewerCaptions(private val host: ResultViewerActivity) {
     /** Edge title + peek-sheet stats for [index], from pre-computed [metrics]. Main thread only. */
     fun applyFieldMetrics(metrics: FieldMetrics, index: Int) {
         val binding = host.binding
-        val unit = if (DicResult.isStrainFieldIndex(index)) "mε" else "px"
+        val unit = FieldKind.unitOf(index)
         binding.tvFinding.text = title()
 
         if (host.isShowingSummary) {

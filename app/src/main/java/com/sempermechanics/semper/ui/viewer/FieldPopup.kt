@@ -23,24 +23,23 @@ internal class FieldPopup(private val host: ResultViewerActivity) {
             true,
         )
         window.isOutsideTouchable = true
-        ViewerFieldPills.BY_ID.forEach { (id, pair) ->
-            val (label, index) = pair
+        ViewerFieldPills.BY_ID.forEach { (id, field) ->
             // Looked up by id: the pills' id ↔ field map is ViewerFieldPills'.
             val button = popup.root.findViewById<MaterialButton>(id)
-            button.text = label
+            button.text = field.label
             button.isCheckable = true
-            button.isChecked = index == host.currentDataIndex
+            button.isChecked = field == host.field
             button.setOnClickListener {
-                if (index == host.currentDataIndex) {
+                if (field == host.field) {
                     window.dismiss()
                     return@setOnClickListener
                 }
-                host.currentTypeString = label
-                host.currentDataIndex = index
-                host.binding.btnFieldFab.text = label
+                // One value: the label and the data index can no longer disagree.
+                host.field = field
+                host.binding.btnFieldFab.text = field.label
                 // Caption + probe value are refreshed by updateVisualization once the
                 // new field's metrics are computed off the main thread.
-                host.scale.updateVisualization(host.currentDataIndex)
+                host.scale.updateVisualization(field.dataIndex)
                 host.summary.onFieldChanged()
                 if (host.isShowingSummary) host.binding.tvFrameCounter.text = host.summary.counterText()
                 host.inspect.refreshCrosshairs()

@@ -5,6 +5,7 @@ import android.view.View
 import android.widget.TextView
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.report.ReportBuilder
 import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
 
@@ -95,11 +96,10 @@ class ViewerInspectController(private val host: ResultViewerActivity) {
         }
         val data = host.rawData ?: return
 
-        val dataIndex = host.currentDataIndex
-        val typeString = host.currentTypeString
-        val isStrain = DicResult.isStrainFieldIndex(dataIndex)
+        val dataIndex = host.field.dataIndex
+        val typeString = host.field.label
         val multiplier = DicResult.strainMultiplier(dataIndex)
-        val unit = if (isStrain) "mε" else "px"
+        val unit = FieldKind.unitOf(dataIndex)
 
         glassShield.visibility = View.VISIBLE
         tvProbeReadout.visibility = View.VISIBLE

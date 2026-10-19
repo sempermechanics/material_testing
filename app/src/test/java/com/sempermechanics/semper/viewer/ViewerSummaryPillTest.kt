@@ -63,7 +63,7 @@ class ViewerSummaryPillTest {
             idleUntil("the viewer and the summary's ranges") {
                 activity.frameSetLoaded &&
                     activity.rawData != null &&
-                    activity.summary.boundsFor(activity.currentDataIndex) != null
+                    activity.summary.boundsFor(activity.field.dataIndex) != null
             }
         }
 
@@ -147,7 +147,7 @@ class ViewerSummaryPillTest {
         val activity = launchViewer(viewerArgs(single, GRID, STEP))
         idleUntil("the frame's heatmap") { activity.frameSetLoaded && activity.scale.cachedHeatmap != null }
         assertTrue("the frame labels its own ends", activity.scaleMax.startsWith("≥"))
-        assertNull(activity.summary.boundsFor(activity.currentDataIndex))
+        assertNull(activity.summary.boundsFor(activity.field.dataIndex))
 
         activity.enterSummary()
 
@@ -157,7 +157,7 @@ class ViewerSummaryPillTest {
         assertEquals(activity.getString(R.string.summary_scanning_fmt, 0, 1), activity.pillText)
         assertEquals("Reading frames · 0 of 1", activity.pillText)
 
-        idleUntil("the summary's ranges") { activity.summary.boundsFor(activity.currentDataIndex) != null }
+        idleUntil("the summary's ranges") { activity.summary.boundsFor(activity.field.dataIndex) != null }
         shadowOf(activity.mainLooper).idle()
         assertTrue(activity.scaleMax, activity.scaleMax.startsWith("≥"))
         assertTrue(activity.scaleMin, activity.scaleMin.startsWith("≤"))

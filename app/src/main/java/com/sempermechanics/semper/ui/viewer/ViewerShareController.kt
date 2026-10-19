@@ -4,10 +4,10 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.result.contract.ActivityResultContracts
+import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.ui.viewer.share.ShareCenter
 import com.sempermechanics.semper.ui.viewer.share.ShareKind
 import com.sempermechanics.semper.ui.viewer.share.ViewerReportFactory
-import com.sempermechanics.semper.ui.viewer.summary.SummaryAnimation
 
 /**
  * What the viewer hands its exports: the snapshot [ShareCenter] builds every
@@ -87,14 +87,15 @@ internal class ViewerShareController(private val host: ResultViewerActivity) {
             batchFiles = host.batchFiles,
             baseName = shareBaseName(),
             frameIndex = host.currentFrameIndex,
-            dataIndex = host.currentDataIndex,
-            typeString = host.currentTypeString,
+            dataIndex = host.field.dataIndex,
+            typeString = host.field.label,
             summary = if (isSweep) null else host.summary.animation,
             summaryBounds = if (isSweep) {
                 emptyMap()
             } else {
-                SummaryAnimation.FIELDS.mapNotNull { (_, index) -> host.summary.boundsFor(index)?.let { index to it } }
-                    .toMap()
+                FieldKind.entries.mapNotNull { field ->
+                    host.summary.boundsFor(field.dataIndex)?.let { field.dataIndex to it }
+                }.toMap()
             },
             reportSource = reportSource(),
         )

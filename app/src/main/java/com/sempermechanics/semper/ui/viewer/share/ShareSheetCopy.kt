@@ -4,6 +4,7 @@ import android.content.res.Resources
 import android.view.View
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.databinding.SheetShareBinding
+import com.sempermechanics.semper.field.FieldKind
 
 /**
  * What the share sheet says about the frame on screen: the header's position
@@ -24,7 +25,7 @@ internal data class ShareSheetCopy(
     val sourceName: String,
 ) {
     fun applyTo(v: SheetShareBinding, res: Resources) {
-        val fields = ShareExportBuilder.FIELDS.size
+        val fields = FieldKind.entries.size
         val positionFmt = if (isSweep) R.string.share_position_sweep_fmt else R.string.share_position_fmt
         v.tvSharePosition.text = res.getString(positionFmt, position + 1, frames)
 
