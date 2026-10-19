@@ -348,6 +348,7 @@ jobs:
             MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING=${{ vars.MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING || '0' }}
             RECOMMENDED_VERSION_CODE_MATERIAL_TESTING=${{ vars.RECOMMENDED_VERSION_CODE_MATERIAL_TESTING || '0' }}
             KILL_SWITCHES=${{ vars.KILL_SWITCHES }}
+            TEST_ACCOUNT_DOMAINS=${{ vars.TEST_ACCOUNT_DOMAINS }}
           # RESEND_API_KEY always; ENTITLEMENT_SIGNING_KEY when its secret exists
           # (runtime_secrets above).
           secrets: ${{ steps.runtime_secrets.outputs.secrets }}
