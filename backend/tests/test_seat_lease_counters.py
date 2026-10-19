@@ -152,6 +152,40 @@ def test_holding_a_seat_releases_its_lease(store):
     assert err == ""
 
 
+@pytest.mark.parametrize("enabled", [False, True])
+def test_a_hold_or_resume_writes_the_holder_in_the_seats_commit(store, monkeypatch, enabled):
+    """TD-294: the holder's mode moves in the same transaction as the seat.
+    It used to be a separate write after it, and a crash in between left a
+    held seat's holder licensed (or a resumed one's in Demo) until IT
+    pressed the button again. Any write outside the transaction now fails
+    the test."""
+    license_id = _leased_pool(store)
+    if enabled:
+        repo.set_seat_enabled(license_id, "u1", False)
+
+    def crash(*a, **k):
+        raise RuntimeError("the call died after the seat's commit")
+
+    repo.patch(monkeypatch, "_update_doc", crash)
+
+    assert attempt(repo.set_seat_enabled, license_id, "u1", enabled)[0] == ""
+
+    seat = store._data[f"licenses/{license_id}/seats"]["u1"]
+    assert seat["status"] == ("active" if enabled else "disabled")
+    assert store._data["users"]["u1"]["mode"] == ("licensed" if enabled else "demo")
+
+
+def test_a_hold_leaves_a_holder_who_moved_on_alone(store):
+    """Only a holder still pointed at this licence is dropped, as before."""
+    license_id = _leased_pool(store)
+    store._data["users"]["u1"].update({"licenseId": "elsewhere", "mode": "licensed"})
+
+    assert attempt(repo.set_seat_enabled, license_id, "u1", False)[0] == ""
+    assert store._data["users"]["u1"]["mode"] == "licensed"
+    assert attempt(repo.set_seat_enabled, license_id, "u1", True)[0] == ""
+    assert store._data["users"]["u1"]["licenseId"] == "elsewhere"
+
+
 def test_revoking_a_seat_clears_the_holders_lease_copy(store):
     license_id = _leased_pool(store)
     assert "leaseExpiresAt" in store._data["users"]["u1"]
