@@ -106,6 +106,25 @@ class _Snapshot:
         return dict(self._data) if self._data is not None else None
 
 
+def _project(data, field_paths):
+    """The fields of [data] a projection keeps, dotted paths included, as
+    Firestore's `select()` / `get_all(field_paths=...)` answer: a selected
+    field the document lacks is simply absent."""
+    if data is None or field_paths is None:
+        return data
+    out: dict = {}
+    for path in field_paths:
+        value, present = _Query._field_value(data, path)
+        if not present:
+            continue
+        *parents, leaf = path.split(".")
+        node = out
+        for part in parents:
+            node = node.setdefault(part, {})
+        node[leaf] = value
+    return out
+
+
 class _DocRef:
     def __init__(self, store, collection, doc_id):
         self._store = store
@@ -177,7 +196,7 @@ class _AggResult:
 
 class _Query:
     def __init__(self, store, collection, filters=None, limit=None, order_by=None, start_after=None,
-                 group=False):
+                 group=False, projection=None):
         self._store = store
         self._collection = collection
         self._filters = filters or []
@@ -187,10 +206,14 @@ class _Query:
         #: A collection-group query (`client.collection_group(name)`): every
         #: collection named `name`, top-level or under any document.
         self._group = group
+        #: `select(field_paths)`: the fields each result keeps. Filters and
+        #: the order still read the whole stored document.
+        self._projection = projection
 
     def _with(self, **changes):
         state = dict(filters=self._filters, limit=self._limit, order_by=self._order_by,
-                     start_after=self._start_after, group=self._group)
+                     start_after=self._start_after, group=self._group,
+                     projection=self._projection)
         state.update(changes)
         return _Query(self._store, self._collection, **state)
 
@@ -227,6 +250,9 @@ class _Query:
 
     def start_after(self, snapshot_or_doc):
         return self._with(start_after=snapshot_or_doc)
+
+    def select(self, field_paths):
+        return self._with(projection=list(field_paths))
 
     @classmethod
     def _field_value(cls, data: dict, field: str):
@@ -295,7 +321,11 @@ class _Query:
 
     def stream(self, *, retry=None, timeout=None):
         _note("stream", timeout, retry)
-        return iter(self._matching())
+        rows = self._matching()
+        if self._projection is not None:
+            rows = [_Snapshot(snap.id, _project(snap._data, self._projection), snap.reference)
+                    for snap in rows]
+        return iter(rows)
 
     def count(self):
         rows = self._matching()
@@ -383,11 +413,15 @@ class FakeClient:
     def collection_group(self, name):
         return _Query(self, name, group=True)
 
-    def get_all(self, references, transaction=None, *, retry=None, timeout=None):
+    def get_all(self, references, transaction=None, *, field_paths=None, retry=None, timeout=None):
         _note("get_all", timeout, retry)
         # The real client yields in arbitrary order; reversing keeps callers
         # honest about keying results by id rather than by position.
-        return [ref.get() for ref in reversed(list(references))]
+        out = []
+        for ref in reversed(list(references)):
+            snap = ref.get()
+            out.append(_Snapshot(snap.id, _project(snap._data, field_paths), ref))
+        return out
 
     def batch(self):
         return _Batch(self)

@@ -108,14 +108,44 @@ def route_template(path: str) -> str:
     return normalize_route_template(path)
 
 
-def classify_route(method: str, path: str) -> tuple[str, str]:
+def template_of(route) -> str:
+    """A matched route's template with every parameter as `{id}`."""
+    return _PARAM.sub("{id}", route.path_format)
+
+
+def routed_template(scope) -> str | None:
+    """The template of the route FastAPI already matched for this request, or
+    None when nothing was routed (a 404, a preflight answered at the edge).
+
+    A route under an included router is matched through its effective route
+    context, which carries the prefixed `path_format` (FastAPI 0.141 keeps the
+    router's own route, unprefixed, in `scope["route"]`). A route whose own
+    pattern matches the whole path (one declared on the app) is used as it
+    is. Anything else is left to `route_template`, so a FastAPI that moves the
+    context costs a re-match, never a wrong template (TD-198).
+    """
+    fastapi_scope = scope.get("fastapi")
+    context = fastapi_scope.get("effective_route_context") if isinstance(fastapi_scope, dict) else None
+    if getattr(context, "path_format", None):
+        return template_of(context)
+    route = scope.get("route")
+    regex = getattr(route, "path_regex", None)
+    if regex is not None and getattr(route, "path_format", None) and regex.match(scope.get("path") or ""):
+        return template_of(route)
+    return None
+
+
+def classify_route(method: str, path: str, template: str | None = None) -> tuple[str, str]:
     """Map method+path to (opClass, routeTemplate) for usage metering.
+
+    `template` is the route the request was matched to (`routed_template`);
+    without it the path is matched against the declared routes again.
 
     `attest` is dedicated to POST /v1/challenge so shared challenge traffic is
     not double-counted under login/backup/restore buckets.
     """
     method_u = (method or "GET").upper()
-    template = route_template(path or "/")
+    template = template or route_template(path or "/")
     raw = path or "/"
 
     if raw in {"/healthz", "/readyz"} or template in {"/healthz", "/readyz"}:

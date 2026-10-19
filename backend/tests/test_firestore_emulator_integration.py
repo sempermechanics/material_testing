@@ -906,3 +906,34 @@ def test_the_export_pairs_each_session_with_its_own_files(emulator_repo):
     assert sorted(s["sessionId"] for s in out) == sorted(f"{uid}-{sid}" for sid in sids)
     for s in out:
         assert [f["fileId"] for f in s["files"]] == [f"{s['sessionId']}-f{n}" for n in range(3)]
+
+
+def test_projected_listings_page_and_reconcile_against_the_real_store(emulator_repo):
+    """TD-198: `select()` and `get_all(field_paths=...)` as Firestore answers
+    them. A projected snapshot still positions the next page (the per-app
+    scan's cursor is one), and a holder that holds none of the projected
+    fields still exists: Firestore returns it with no fields, not as missing."""
+    uid = f"emu-{uuid.uuid4().hex[:8]}"
+    db = emulator_repo.db()
+    for n in range(5):
+        db.collection("sessions").document(f"{uid}-s{n}").set({
+            "uid": uid, "name": f"n{n}", "status": "SYNCED", "fileCount": n,
+            "app": "semper" if n % 2 == 0 else "material_testing", "notes": "x" * 500,
+        })
+    seen, token = [], None
+    while True:
+        page, token = emulator_repo.list_user_sessions(uid, limit=2, page_token=token, app="semper")
+        seen.extend(page)
+        if not token:
+            break
+    assert [s["sessionId"] for s in seen] == [f"{uid}-s{n}" for n in (0, 2, 4)]
+    assert [s["fileCount"] for s in seen] == [0, 2, 4] and seen[0]["name"] == "n0"
+
+    license_id = _emu_institution(emulator_repo, max_seats=3, seating="assigned")
+    bare = f"emu-bare-{uuid.uuid4().hex[:8]}"
+    db.collection("users").document(bare).set({"access_status": "APPROVED"})
+    emulator_repo._seat_ref(license_id, bare).set({"uid": bare, "status": "active"})
+    err, report = attempt(emulator_repo.reconcile_institution_seats, license_id)
+    assert err == ""
+    [row] = [r for r in report["seats"] if r["uid"] == bare]
+    assert row["reason"] == "moved_on"

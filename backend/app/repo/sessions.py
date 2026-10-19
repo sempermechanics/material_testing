@@ -309,6 +309,15 @@ def session_app(session: dict | None) -> str:
     return (session or {}).get("app") or apps.SEMPER
 
 
+#: The fields `_listed_session` reads, and all a listing fetches of a session
+#: (`select()`, TD-198): the document also holds the upload's bookkeeping,
+#: which a page of fifty would otherwise pull whole.
+LISTED_SESSION_FIELDS = (
+    "localSessionId", "specimen", "name", "status", "fileCount", "completedCount",
+    "totalBytes", "driveFolderId", "app",
+)
+
+
 def _listed_session(doc_id: str, s: dict) -> dict:
     """One entry of `GET /v1/sessions` (and of the export built on it)."""
     return {
@@ -348,16 +357,16 @@ def list_user_sessions(
     returned, and is issued only when another session (of any app) follows it.
     Worst case one call reads the whole account, which the quota bounds.
     """
+    col = db().collection("sessions")
+    query = col.where("uid", "==", uid).select(LISTED_SESSION_FIELDS)
     if app is None:
-        col = db().collection("sessions")
-        docs, next_token = _cursor_page(col, col.where("uid", "==", uid), limit, page_token)
+        docs, next_token = _cursor_page(col, query, limit, page_token)
         return [_listed_session(d.id, d.to_dict()) for d in docs], next_token
 
     out: list = []
     # limit + 1 per read, as `_cursor_page` reads: when every session is this
     # app's, the filtered page costs what the unfiltered one does.
-    col = db().collection("sessions")
-    scan = _scan(col, col.where("uid", "==", uid), page_token, chunk=limit + 1)
+    scan = _scan(col, query, page_token, chunk=limit + 1)
     for d in scan:
         s = d.to_dict()
         if session_app(s) != app:

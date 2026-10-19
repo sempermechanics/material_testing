@@ -1,5 +1,7 @@
 """Licence administration by Semper staff: listing, renewal fan-out, whole-key revoke.
 """
+from concurrent.futures import ThreadPoolExecutor
+
 from .. import errors
 from ..errors import Refusal
 from ..config import settings
@@ -84,17 +86,22 @@ def _search_licenses(col, q: str, include_demo: bool, include_revoked: bool) -> 
     """Exact-match lookups on the fields support is asked about.
 
     Single-field equality queries, so no composite index; the filters and the
-    order are applied here, over at most `3 * SEARCH_LIMIT` rows.
+    order are applied here, over at most `3 * SEARCH_LIMIT` rows. The lookups
+    run at once, each on its own thread (TD-198): the search costs the
+    slowest one's round trip, not the sum. A failed lookup fails the search.
     """
     text = q.strip()
     lookups = [("emailLock", normalize_email(text)), ("domainLock", text.lower())]
     if text.upper().startswith("SEMP"):
         lookups.append(("keyPrefix", key_prefix(text)))
+    queries = [col.where(field, "==", value).limit(SEARCH_LIMIT) for field, value in lookups if value]
+    with ThreadPoolExecutor(max_workers=max(1, len(queries)),
+                            thread_name_prefix="licence-search") as pool:
+        # map keeps the lookups' order, so the merge below is the serial one.
+        results = list(pool.map(_stream, queries))
     found = {}
-    for field, value in lookups:
-        if not value:
-            continue
-        for doc in _stream(col.where(field, "==", value).limit(SEARCH_LIMIT)):
+    for docs in results:
+        for doc in docs:
             found[doc.id] = doc.to_dict() or {}
     rows = [
         (doc_id, lic) for doc_id, lic in found.items()
