@@ -1,7 +1,8 @@
 # ADR-016: Work that must outlive the Activity has one home per kind
 
 **Status:** Accepted, built (quality program, #311–#331). Amended 2026-10-19: a
-static check for rule 1 is proposed; see [Amendments](#amendments)
+static check for rule 1, proposed and then built as a source check in CI (TD-291);
+see [Amendments](#amendments)
 **Date:** 2026-10-03
 **Deciders:** app owner
 
@@ -210,3 +211,46 @@ next `onResume` repeats anyway, such as Home's list refresh, is not a request th
 user can lose, so it is suppressed with that reason given. The cites above are at
 `763ed7a`, before the fix: #457 moved Home's restore to `HomeViewModel` and sign-in
 to `AuthViewModel` (U7, U8). The check itself is TD-291.
+
+**2026-10-19, the check is built (TD-291).** It is a Python source check,
+`scripts/check_activity_scope_work.py`, not the lint or detekt rule proposed above:
+it needs no rules module and runs in seconds on every event, in CI's `legal-pages`
+job ([CI.md](../ops/CI.md)). It reads `ui/` and flags:
+
+- a launch on a screen's scope: `lifecycleScope.launch` / `async` in an Activity or
+  Fragment, `receiver.lifecycleScope` in any `ui/` file (a scope handed to one of the
+  screen's parts, such as the `Settings*Section`s), a call that takes the scope and a
+  trailing lambda (`job.launch(activity.lifecycleScope) { }`), and the lambda handed
+  to a function that launches it (`runAuth { }`, as sign-in did before #457);
+- whose block reaches, directly or through a function of the same file, one of the
+  calls listed above: `api.<call>` / `SemperApi.get(…).<call>`, `authed { }`, the
+  `data/cloud` objects less their phone-only members, `SeatLease`, the
+  `AuthRepository` calls that reach Firebase or the backend, any `enqueue*( )` or
+  `oneTimeWork`.
+
+It matches names, not resolved types, so a client reached under another name or
+through another file is missed; the lint rule stays the way to close that gap.
+Exceptions live in `scripts/activity_scope_allowlist.txt` by file, function and call,
+each with its reason and a TD- or ADR- pointer; an entry that no longer matches
+fails. Run against `763ed7a` it flags Home's restore (`queueRestores`, through
+`CloudSync.resolveCloudIdFor` and `RestoreStart.startAll`) and every sign-in path
+through `runAuth`; on the tree after #457 it finds 17 calls, triaged in the allowlist:
+
+- **Refreshes the screen or the next tap repeats** (allowed, as above): Admin's list,
+  Pending's status check, Home's `cloudCheck`, the session-limit Recheck, Settings'
+  analyses list.
+- **Enqueues a cancel cannot lose** (allowed): Back up on Home and in Settings stamp
+  the row PENDING first, and the next reconcile re-queues it; a rename's metadata
+  send has no suspension point before it; the backfill offer enqueues from a dialog's
+  click handler, not from the coroutine.
+- **Still open** (allowed while open, each to move to a ViewModel or an
+  application-lifetime run): Home's multi-row `eraseLocally`
+  (`ui/home/SessionSelectionController.kt`), Settings' restore
+  (`SettingsActivity.restoreBackup`, the pattern #457 fixed on Home), the seat
+  checkout (`SeatRequiredActivity.takeSeat`), the Terms accept (`TermsActivity.onAgree`),
+  the improvement-consent switch (`SettingsYourDataSection.wireLegal`) and the admin
+  approve / deny (`AdminActivity.act`).
+
+Tests: `scripts/tests/test_check_activity_scope_work.py`, over the Kotlin fixtures in
+`scripts/tests/fixtures/activity_scope/` (a restore from `lifecycleScope` fails; from
+`viewModelScope` it passes).

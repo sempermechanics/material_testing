@@ -1,0 +1,41 @@
+# Network calls and enqueues allowed on a screen's lifecycleScope, checked by
+# scripts/check_activity_scope_work.py (TD-291, ADR-016 rule 1).
+#
+#   path (under app/src/main/java/com/sempermechanics/semper/) | function | call | reason
+#
+# `function` is the one holding the launch (or the property it initialises),
+# `call` as the check prints it. An entry that matches nothing fails the check,
+# so this list only shrinks. Every reason names a TD- or ADR- pointer.
+#
+# Triaged 2026-10-19, on the branch after #457 moved Home's restore and sign-in
+# to ViewModels.
+
+# ── Refreshes: a read the screen repeats on its own or on the next tap ──────
+# Not a request the user can lose (ADR-016 amendment): a rotation cancels it and
+# the recreated screen, or the user's next tap, asks again.
+
+ui/admin/AdminActivity.kt | load | api.listUsers | The pending-users list read; onCreate calls load() again after a rotation (ADR-016 amendment: a repeated refresh)
+ui/auth/PendingApprovalActivity.kt | checkStatusAgain | refreshStatus | Status read behind the "check again" button; a rotation stops it and the next tap repeats it, nothing is written (ADR-016 amendment: a repeated refresh)
+ui/home/HomeActivity.kt | cloudCheck | CloudSync.reconcile | Home's list refresh, the example the ADR-016 amendment names; every onResume requests it again
+ui/limit/SessionLimitActivity.kt | recheck | CloudSync.reconcile | The Recheck button's quota read; reconcile is re-runnable, and the next tap repeats it (ADR-016 amendment: a repeated refresh)
+ui/settings/SettingsAnalysesSection.kt | analysesRefresh | CloudRestore.listCompleted | The analyses list read; a recreated Settings loads it again (ADR-016 amendment: a repeated refresh)
+
+# ── Enqueues that cannot be lost by a cancel ─────────────────────────────────
+
+ui/settings/SettingsCloudSection.kt | maybeOfferBackfill | CloudSync.enqueueUpload | The enqueue runs in the confirm dialog's click handler, not in the coroutine that showed the dialog; nothing on the scope enqueues (TD-291 heuristic: lambdas are not told apart)
+ui/home/BackupBadgeActions.kt | enqueueBackup | CloudSync.enqueueUpload | The PENDING stamp is on disk before the enqueue, and the next reconcile re-queues a PENDING row (data/cloud/CloudReconcile.kt repairRows, requeue); ADR-016 rule 3 holds for the upload itself
+ui/settings/SettingsAnalysesSection.kt | startBackup | CloudSync.enqueueUpload | Same as Home's Back up: PENDING stamped first, re-queued by the next reconcile (CloudReconcile.repairRows); ADR-016 rule 3 holds for the upload itself
+ui/home/SessionSelectionController.kt | promptRename | SessionMetadataSync.enqueue | Rename and enqueue run on Dispatchers.IO with no suspension point between them, and metadataStale is on disk for the next reconcile to re-send (ADR-013, ADR-016)
+
+# ── Real ADR-016 rule-1 violations still open (TD-291 triage, 2026-10-19) ────
+# A write the user asked for, whose outcome a rotation loses. Each moves to the
+# screen's ViewModel (or an application-lifetime run) and its entry goes.
+
+ui/home/SessionSelectionController.kt | eraseLocally | CloudSync.eraseEverywhere | OPEN, TD-291 triage: a multi-row delete loops on Home's scope; a rotation stops it part-way with no toast and the selection gone. Move to HomeViewModel (ADR-016 rule 1)
+ui/settings/SettingsActivity.kt | restoreBackup | RestoreStart.request | OPEN, TD-291 triage: Settings' Download/restore, the pattern #457 fixed on Home (U7); the enqueue is one IO hop, but a cancel there loses the busy mark, banner and toast. Move to a Settings ViewModel (ADR-016 rule 1)
+ui/limit/SeatRequiredActivity.kt | takeSeat | api.checkoutLease | OPEN, TD-291 triage: a rotation after the checkout lands leaves the seat taken but the config unapplied and the screen still blocking (ADR-016 rule 1)
+ui/limit/SeatRequiredActivity.kt | takeSeat | SeatLease.refreshConfigAfterCheckout | OPEN, TD-291 triage: same takeSeat block as api.checkoutLease (ADR-016 rule 1)
+ui/limit/SeatRequiredActivity.kt | takeSeat | enqueue | OPEN, TD-291 triage: LicenseConfigWorker.enqueue in the same takeSeat block (ADR-016 rule 1)
+ui/auth/TermsActivity.kt | onAgree | acceptTerms | OPEN, TD-291 triage: the accept can land while a rotation drops the routing on; a second tap is idempotent but the user is not told (ADR-016 rule 1)
+ui/settings/SettingsYourDataSection.kt | wireLegal | setImprovementConsent | OPEN, TD-291 triage: a rotation mid-send redraws the switch from the cached answer, so the user's toggle may silently not reach the server (ADR-016 rule 1)
+ui/admin/AdminActivity.kt | act | api.setUserStatus | OPEN, TD-291 triage: an approve/deny can land while its toast and list refresh are lost; operator-only and idempotent on retry (ADR-016 rule 1)

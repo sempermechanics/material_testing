@@ -129,6 +129,7 @@ of them, and each blocks `ci-ok`:
 python scripts/render_legal_pages.py --check   # legal pages match docs/legal/
 python scripts/check_doc_paths.py              # docs reference files that exist
 python scripts/check_kotlin_file_size.py       # no main .kt file over ADR-015's 500 lines
+python scripts/check_activity_scope_work.py    # no network/enqueue on a screen's lifecycleScope (ADR-016)
 python scripts/check_console.py                # console wiring, CSP, gateway paths
 node --test "firebase-hosting/tests/*.test.mjs"  # console module tests
 gitleaks detect --config .gitleaks.toml        # secrets (full history; human PRs)

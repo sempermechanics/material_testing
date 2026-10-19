@@ -113,6 +113,13 @@ jobs:
       - name: Main Kotlin files within ADR-015's size budget
         run: python scripts/check_kotlin_file_size.py
 
+      # ADR-016 rule 1 (TD-291): no network call or WorkManager enqueue on a
+      # screen's lifecycleScope, which a rotation cancels. A source heuristic,
+      # not a lint rule; the triaged exceptions, each with its reason, are in
+      # scripts/activity_scope_allowlist.txt, and a stale entry fails.
+      - name: No user work on a screen's lifecycleScope (ADR-016)
+        run: python scripts/check_activity_scope_work.py
+
       # The tests of the checks above that live in scripts/tests (stdlib
       # unittest, nothing to install). The older checks' tests are in
       # backend/tests (test_script_*.py) and run in Tier 4.

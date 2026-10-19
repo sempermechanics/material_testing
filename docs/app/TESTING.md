@@ -399,6 +399,7 @@ Their tests are `unittest` modules in `scripts/tests`, run in the same job:
 
 ```bash
 python scripts/check_kotlin_file_size.py                   # ADR-015's 500-line file budget (TD-292)
+python scripts/check_activity_scope_work.py                # ADR-016 rule 1 on screens' lifecycleScope (TD-291)
 python -m unittest discover -s scripts/tests -p "test_*.py"
 ```
 
@@ -406,6 +407,14 @@ python -m unittest discover -s scripts/tests -p "test_*.py"
 ([ADR-015](../adr/ADR-015-package-layout.md#amendments)); an exception goes in
 `scripts/kotlin_file_size_allowlist.txt` with its ceiling and a TD/ADR pointer,
 and an entry that is no longer needed fails the check.
+
+`check_activity_scope_work.py` reads `ui/` for a `lifecycleScope` launch (or a
+lambda handed to a function that launches it, like the old `runAuth`) whose
+block reaches a `data/net` / `data/cloud` client, an `AuthRepository` network
+call or an enqueue, directly or through a function of the same file. Its tests
+copy the Kotlin fixtures in `scripts/tests/fixtures/activity_scope/` into a
+temporary tree: Home's restore on `lifecycleScope` fails, the same restore on
+`viewModelScope` passes.
 
 ## What not to test here
 
