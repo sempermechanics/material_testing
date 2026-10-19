@@ -814,9 +814,9 @@ rather than hardcoding its own.
 **The demo cap is counted per account and per device.** Both halves count
 analyses stored at once, less `PROVISION_FAILED`, so a delete frees a place
 (the product owner's choice, TD-275). The account half is `count_user_sessions`
-(`backend/app/repo/sessions.py:394-412`); for a demo account `create_session`
+(`backend/app/repo/sessions.py:433-451`); for a demo account `create_session`
 also refuses when the device's stored analyses, every account's, reach the cap
-(`count_device_sessions`, `:415-439`; `_device_cap_reached`,
+(`count_device_sessions`, `:454-478`; `_device_cap_reached`,
 `backend/app/services/sessions.py:81-94`, applied at `:138-139`), with a
 `409 device_quota_exceeded` that names neither the count nor the owners (its
 own code since TD-279, so the app does not lift it on the account's count). A
@@ -2688,7 +2688,7 @@ re-resolves the account (`get_or_create_user` → `ensure_entitlement`) and, wit
 
 **Kill switches are enforced.** `KILL_SWITCHES` is published on `/v1/config`
 *and* refused server-side by `deps.unless_paused`
-(`backend/app/deps.py:296-331`): after the token check, before the route's own
+(`backend/app/deps.py:295-330`): after the token check, before the route's own
 parameters, so a paused request reads nothing and leaves a signed request's
 nonce unspent. The answer is `503 feature_paused` with `Retry-After: 300`, logged
 `event="feature_paused"` with `switch` and `routeTemplate`. An upload keeps

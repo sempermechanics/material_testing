@@ -22,7 +22,7 @@ window, using the ID token of a signed-in session.
   [ENVIRONMENTS.md](../ops/ENVIRONMENTS.md)).
 - **Authentication:** `Authorization: Bearer <Firebase ID token>` from the Auth
   project. The gateway checks it and forwards it as `X-Forwarded-Authorization`;
-  the backend verifies it again (`backend/app/deps.py:56-70`).
+  the backend verifies it again (`backend/app/deps.py:55-69`).
 - **Errors:** JSON `{"detail": "<code>"}`, sometimes `"<code>: <suffix>"`. The
   code is stable; the status per code is `backend/app/errors.py:300-351`
   ([ADR-020](../adr/ADR-020-backend-refusal-model.md)). A 429 carries `Retry-After`.
@@ -38,7 +38,7 @@ window, using the ID token of a signed-in session.
 |---|---|---|---|
 | `user` | any approved account | ID token | 401 `invalid_token`, 403 `not_approved` |
 | `institution-stepup` | an address in this licence's `adminEmails`, verified | ID token + TOTP second factor on a sign-in younger than `ADMIN_WEB_REAUTH_SECONDS` (`backend/app/routers/institutions.py:58-74`) | 403 `email_not_verified`; 404 `license_not_found` for a licence that does not name the caller, exactly as for one that does not exist; then 403 `mfa_required` / `reauth_required` |
-| `admin` | Semper staff (`role: admin`, or a token proving an address in `ADMIN_EMAILS`) | ID token (`backend/app/deps.py:334-348`) | 403 `not_admin` |
+| `admin` | Semper staff (`role: admin`, or a token proving an address in `ADMIN_EMAILS`) | ID token (`backend/app/deps.py:333-347`) | 403 `not_admin` |
 | `admin-stepup` | staff | a signed request from the staff phone, registered from a sign-in that completed the second factor (`stepUpEligible`; [ADR-010](../adr/ADR-010-device-binding-per-app.md) amendment), or the browser step-up as above | as above; a phone registered without the second factor is 403 `mfa_required` |
 | `admin-stepup-fresh` | staff | as `admin-stepup`, with a sign-in younger than `ADMIN_WEB_REVOKE_REAUTH_SECONDS` (default 120 s) | `reauth_required` |
 
@@ -53,7 +53,7 @@ The consoles say "The server is busy checking sign-ins — wait a few seconds an
 **A paused feature.** While an operator has a kill switch on (`KILL_SWITCHES`,
 [ENVIRONMENTS.md](../ops/ENVIRONMENTS.md)), the routes it guards answer **503
 `feature_paused`** with `Retry-After: 300`, before any work and after the token
-check (`deps.unless_paused`, `backend/app/deps.py:293-331`): `upload` or `backup`
+check (`deps.unless_paused`, `backend/app/deps.py:292-330`): `upload` or `backup`
 refuse `POST /v1/sessions` and `POST /v1/files/{id}/complete`; `restore` refuses
 `GET /v1/files/{id}/content` and `GET /v1/sessions/{sid}/bundle`, the bundle being
 the one a script can call. Nothing is wrong with the request; send it again after
@@ -92,7 +92,7 @@ signed entitlement's `graceUntil` passes (at most 14 days by default,
 Every route in the table above is also mounted for staff under
 `/v1/admin/licenses/{license_id}` (in place of `/v1/institutions/licenses/{license_id}`),
 for any institution licence, whether or not the caller is in its `adminEmails`
-(`backend/app/routers/admin.py:535-567`). An individual licence answers 404
+(`backend/app/routers/admin.py:480-512`). An individual licence answers 404
 `license_not_found`. The request and response bodies are the same.
 
 | Routes | Tier |
@@ -118,8 +118,8 @@ pasted CSV does not survive the round trip: paste it and import again on return.
 | `POST /v1/admin/users/{uid}/revoke` | `admin-stepup` | Suspend an account and revoke the refresh tokens of every Auth user that signs in to it, linked subs included (best-effort until TD-214; the audit row says `sessionsRevoked`, `authUsers`, `authUsersRevoked`) |
 | `PATCH /v1/admin/users/{uid}/config` | `admin-stepup` | Per-user limit overrides |
 | `POST /v1/admin/device-releases` | `admin-stepup` | `{"email"}`: free a Demo account's registered phone |
-| `GET /v1/admin/licenses` | `admin` | Licences, newest first, paged (`limit` ≤ 200, `page_token`, `include_demo`, `include_revoked`). `q` (exact address, domain or key prefix) is **deprecated**: it puts an address in the URL, which request logs keep. It still answers for one release and logs `deprecated_query_search` with the caller's uid, never the value (`backend/app/routers/admin.py:141-163`; removal TD-273) |
-| `POST /v1/admin/licenses/search` | `admin` | The search with its terms in the body: `{"q", "limit", "page_token", "include_demo", "include_revoked"}`, `q` required (at most 320 characters; empty pages the listing), any other field 422. On `admin_bucket`, no step-up; the answer has the GET's shape (`backend/app/routers/admin.py:166-174`; `AdminLicenseSearch`, `backend/app/models.py:458-472`). Declared at the gateway ahead of `/{licenseId}` (`backend/gateway/openapi.yaml:650-668`). The operator desk searches with it |
+| `GET /v1/admin/licenses` | `admin` | Licences, newest first, paged (`limit` ≤ 200, `page_token`, `include_demo`, `include_revoked`). `q` (exact address, domain or key prefix) is **deprecated**: it puts an address in the URL, which request logs keep. It still answers for one release and logs `deprecated_query_search` with the caller's uid, never the value (`backend/app/routers/admin.py:136-158`; removal TD-273) |
+| `POST /v1/admin/licenses/search` | `admin` | The search with its terms in the body: `{"q", "limit", "page_token", "include_demo", "include_revoked"}`, `q` required (at most 320 characters; empty pages the listing), any other field 422. On `admin_bucket`, no step-up; the answer has the GET's shape (`backend/app/routers/admin.py:161-169`; `AdminLicenseSearch`, `backend/app/models.py:458-472`). Declared at the gateway ahead of `/{licenseId}` (`backend/gateway/openapi.yaml:650-668`). The operator desk searches with it |
 | `GET /v1/admin/licenses/{license_id}` | `admin` | One licence |
 | `POST /v1/admin/licenses` | `admin-stepup` | Mint; the plaintext key is returned once |
 | `PATCH /v1/admin/licenses/{license_id}` | `admin-stepup` | Terms, renewal, `clearDeviceLock` |

@@ -163,12 +163,12 @@ metadata only. Where an action needs to name an address it records
 `audit.address_tag` (`observability.short_hash`, a 12-hex hash;
 `backend/app/audit.py:18-30`): `emailLockHash` on an individual mint, and
 `adminEmailHashes` with `adminEmailCount` on an institution mint, a convert and an
-`adminEmails` edit (`backend/app/routers/admin.py:27-40`). A reader who already
+`adminEmails` edit (`backend/app/services/licenses.py:10-14`, `backend/app/routers/admin.py:29-40`). A reader who already
 knows an address can match it. The hash is unkeyed (`backend/app/observability.py:192-199`),
 so it keeps the address out of clear text; it does not stop someone with a list of
 candidate addresses from confirming one. A licence's free-text `note` is
 recorded by `ADMIN_LICENSE_EXTEND` only as changed and its length
-(`backend/app/routers/admin.py:34-45`). Access is server/admin-only under the deny-all client rules.
+(`backend/app/routers/admin.py:29-40`). Access is server/admin-only under the deny-all client rules.
 Legal/privacy owners must set and document the retention period and configure a
 Firestore TTL field before production launch; backups inherit the same approved
 retention/legal-hold policy.

@@ -250,7 +250,7 @@ stored analyses. That is one more read on each of the two routes: create is
 7 + N, the listing S + 3. The retry lookup became one query on 2026-10-05
 (TD-180), so create is 6 + N. On 2026-10-18 a demo account's create gained two
 counts, the device's stored analyses and its `PROVISION_FAILED` ones, for the
-per-device demo cap (`count_device_sessions`, `backend/app/repo/sessions.py:415-439`;
+per-device demo cap (`count_device_sessions`, `backend/app/repo/sessions.py:454-478`;
 [ADR-024](../adr/ADR-024-account-anchored-entitlements.md)): 8 + N for demo, so 11
 at N = 3 (`BUDGET` and `CREATE_READS` in `backend/tests/test_read_budget.py`, which
 measures a demo account); a licensed create stays 6 + N. The status write that ends an inline create stays a

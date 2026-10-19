@@ -18,7 +18,7 @@ Three ways of reaching a paid entitlement had grown up side by side:
    signs in and the backend attaches what they are owed on their first request
    (`ensure_entitlement`, `backend/app/repo/entitlement.py:181`, called for
    every authenticated request through `get_or_create_user`,
-   `backend/app/repo/users.py:169-173`). Nothing is typed.
+   `backend/app/repo/users.py:172-176`). Nothing is typed.
 2. **A typed key.** `POST /v1/licenses/activate` redeems a key for the calling
    account. The branch added an in-app screen for it (c748630, "Licence
    activation screen (TD-259)"); no released build ever had one: v1.2-beta.4
@@ -128,7 +128,7 @@ There is nothing to type, so the app has to ask:
 Every authenticated request re-resolves the account (`get_or_create_user` →
 `ensure_entitlement`) and, when it carries `X-Device-Id`, re-validates the
 licence or seat device lock and drops to Demo on a mismatch or revocation
-(`backend/app/deps.py:182-189`). On top of that:
+(`backend/app/deps.py:181-188`). On top of that:
 
 | Route | Caller | Gates, in order |
 |---|---|---|
@@ -143,7 +143,7 @@ licence or seat device lock and drops to Demo on a mismatch or revocation
 | Share (PNG, GIF, PDF, CSV, ZIP) | — | **No route.** The app checks the licence and the token (`LicenseEntitlements.shareLicensed`, `data/account/LicenseEntitlements.kt:85-86`; `ShareCenter.access`, `ui/viewer/share/ShareCenter.kt:208-209`) |
 
 **Kill switches are enforced, not only published.** `deps.unless_paused`
-(`backend/app/deps.py:296-331`) runs after the ID token and approval and before
+(`backend/app/deps.py:295-330`) runs after the ID token and approval and before
 the route's own parameters, so a paused request reads no record and, on a signed
 route, leaves its nonce unspent. The refusal is 503 `feature_paused` with
 `Retry-After: 300` (`:293`), logged `event="feature_paused"` with the switch and
@@ -159,7 +159,7 @@ route template; `feature_paused` is in `CLIENT_BRANCHED`
 `else -> Kind.TRANSIENT`). Tests `backend/tests/test_kill_switches.py`.
 
 **The demo device cap.** `repo.count_device_sessions`
-(`backend/app/repo/sessions.py:415-439`) counts sessions whose `deviceId` is
+(`backend/app/repo/sessions.py:454-478`) counts sessions whose `deviceId` is
 this device, across accounts, less `PROVISION_FAILED`, with two single-field
 counts (no composite index). `_device_cap_reached`
 (`backend/app/services/sessions.py:81-94`) applies it to demo accounts only; a

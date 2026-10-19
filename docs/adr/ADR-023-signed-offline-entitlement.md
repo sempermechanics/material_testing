@@ -56,11 +56,11 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
      carries `lic: null` and an uncapped grace (`:237`);
    - `mode` and `features` are read from the same resolved config the plain
      `/v1/config` JSON returns, so the token never grants more than the answer it
-     rides in (`backend/app/routers/account.py:147-191`).
+     rides in (`backend/app/routers/account.py:145-189`).
 3. **Delivery.** `GET /v1/config` adds `entitlement` when the service holds a
    key, the caller sent `X-Device-Id`, and that device is an active device of
    this account with a registered key (`entitlement_token.py:269-302`). Anything
-   else omits the field and fails nothing (`routers/account.py:177-191`). After
+   else omits the field and fails nothing (`routers/account.py:175-189`). After
    each floating-seat checkout or heartbeat the app fetches `/v1/config` again,
    so the token follows the lease; when that fetch fails it queues the one-off
    refresh, unique work `license-config-now`, expedited and retried with backoff
