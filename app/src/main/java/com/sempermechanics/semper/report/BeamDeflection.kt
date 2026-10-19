@@ -1,6 +1,7 @@
 package com.sempermechanics.semper.report
 
 import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.data.mechanical.LinearCorrection
 import com.sempermechanics.semper.field.DicResult
 import kotlin.math.abs
 import kotlin.math.max
@@ -132,9 +133,12 @@ object BeamDeflection {
      * per-step E but not the slope E, whose fit has a free intercept.
      */
     data class Correction(val scale: Float = 1f, val biasMm: Float = 0f) {
-        val isNone: Boolean get() = scale == 1f && biasMm == 0f
+        /** The same line in [LinearCorrection]'s terms, which does the arithmetic. */
+        private val line: LinearCorrection get() = LinearCorrection(scale, biasMm)
 
-        fun apply(deflectionMm: Float): Float = scale * deflectionMm + biasMm
+        val isNone: Boolean get() = line.isNone
+
+        fun apply(deflectionMm: Float): Float = line.apply(deflectionMm)
 
         /**
          * [points] with every δ corrected. Call it on [alongLoad]'s output:
@@ -145,7 +149,7 @@ object BeamDeflection {
             if (isNone) points else points.map { p -> p.copy(deflectionMm = p.deflectionMm?.let(::apply)) }
 
         /** The camera's δ back from a corrected one: the inverse of [apply]. */
-        fun remove(deflectionMm: Float): Float = (deflectionMm - biasMm) / scale
+        fun remove(deflectionMm: Float): Float = line.remove(deflectionMm)
 
         companion object {
             val NONE = Correction()
@@ -159,16 +163,10 @@ object BeamDeflection {
                 if (scale > 0f && scale.isFinite() && biasMm.isFinite()) Correction(scale, biasMm) else NONE
 
             /** A typed scale: blank is 1, a decimal comma is accepted; null unless a positive number. */
-            fun parseScale(text: String): Float? = typed(text, blank = 1f)?.takeIf { it > 0f }
+            fun parseScale(text: String): Float? = LinearCorrection.parseScale(text)
 
             /** A typed bias in mm: blank is 0, a decimal comma is accepted; null unless a number. */
-            fun parseBias(text: String): Float? = typed(text, blank = 0f)
-
-            private fun typed(text: String, blank: Float): Float? {
-                val trimmed = text.trim()
-                if (trimmed.isEmpty()) return blank
-                return trimmed.replace(',', '.').toFloatOrNull()?.takeIf { it.isFinite() }
-            }
+            fun parseBias(text: String): Float? = LinearCorrection.parseBias(text)
 
             /**
              * [curve] under [model]'s correction instead of its own: each δ taken

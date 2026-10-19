@@ -41,21 +41,21 @@ internal class LabExport(
         val curve = if (s.loadsN.isEmpty() || s.isSweep) null else sessionCurve(report)
         if (curve == null || curve.isEmpty) return null
         val axisLabels = ViewerStressStrainHelper.axisLabels(context, curve.model)
-        val modulus = ViewerStressStrainHelper.modulusOf(curve)
+        val results = ViewerStressStrainHelper.resultsOf(curve)
         // Bending without its edge taps has no strain to plot: the page keeps its table.
         val plot = if (!curve.model.measuresStrain) null else withContext(Dispatchers.Main) {
             val print = ViewerStressStrainHelper.printContext(context)
             SweepPlotView(print).run {
                 setData(
-                    ViewerStressStrainHelper.plotSeries(print, curve, modulus),
+                    ViewerStressStrainHelper.plotSeries(print, curve, results),
                     axisLabels.first,
                     axisLabels.second,
-                    marks = ViewerStressStrainHelper.plotMarks(print, curve, modulus),
+                    marks = ViewerStressStrainHelper.plotMarks(print, curve, results),
                 )
                 renderToBitmap(STRESS_STRAIN_PLOT_W, STRESS_STRAIN_PLOT_H)
             }
         }
-        return PdfReportGenerator.StressStrainPage(curve, plot, modulus)
+        return PdfReportGenerator.StressStrainPage(curve, plot, results?.modulus)
     }
 
     /** The student lab report: the handwritten journal layout, filled with this session. */

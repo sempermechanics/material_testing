@@ -54,13 +54,14 @@ internal object MechanicalPdfPages {
         layout.drawTitle(curve.model.curveTitle)
         layout.drawDimensions(curve.model)
         layout.drawKeyValue("Strain:", "${curve.model.strainName} ${curve.model.strainBasis}")
-        curve.peakStress?.let {
+        val results = TensileResults.of(curve, page.modulus)
+        results.peak?.let {
             val where = if (it.onCurve) "" else ", off the curve (no strain)"
             val value = "%.3f MPa at frame %d%s".format(Locale.US, it.stressMPa, it.frame + 1, where)
             layout.drawKeyValue("Peak Stress:", value)
         }
-        page.modulus?.let { layout.drawKeyValue("Modulus E (approx.):", LabReport.modulusSummary(it)) }
-        page.modulus?.let { YieldStrength.offset(curve, it) }?.let {
+        results.modulus?.let { layout.drawKeyValue("Modulus E (approx.):", LabReport.modulusSummary(it)) }
+        results.yieldPoint?.let {
             val value = "%.3f MPa at %.3f mε (0.2%% offset)".format(Locale.US, it.stressMPa, it.strainMilli)
             layout.drawKeyValue("Yield Strength Rp0.2:", value)
         }

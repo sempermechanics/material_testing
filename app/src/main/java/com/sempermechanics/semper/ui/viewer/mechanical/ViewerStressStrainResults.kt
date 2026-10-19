@@ -2,11 +2,10 @@ package com.sempermechanics.semper.ui.viewer.mechanical
 
 import android.content.Context
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.report.ElasticModulus
 import com.sempermechanics.semper.report.ElasticRegion
 import com.sempermechanics.semper.report.LabReportFormat
 import com.sempermechanics.semper.report.StressStrain
-import com.sempermechanics.semper.report.YieldStrength
+import com.sempermechanics.semper.report.TensileResults
 import com.sempermechanics.semper.ui.analysis.sweep.SweepPlotView
 import java.util.Locale
 
@@ -23,7 +22,7 @@ object ViewerStressStrainResults {
     fun plotSeries(
         context: Context,
         curve: StressStrain.Curve,
-        modulus: ElasticModulus.Fit?,
+        results: TensileResults?,
     ): List<SweepPlotView.Series> = buildList {
         add(
             SweepPlotView.Series(
@@ -32,15 +31,12 @@ object ViewerStressStrainResults {
                 points = curve.plotPoints(),
             ),
         )
-        val fitted = modulus?.let { fit -> curve.points.filter { fit.covers(it.frame) } }.orEmpty()
-        if (modulus != null && fitted.isNotEmpty()) {
-            val from = fitted.minOf { it.strainMilli }
-            val to = fitted.maxOf { it.strainMilli }
+        results?.fitLine?.let { line ->
             add(
                 SweepPlotView.Series(
                     label = context.getString(R.string.modulus_fit_label),
                     color = SweepPlotView.paletteColor(context, 1),
-                    points = listOf(from to modulus.stressAt(from), to to modulus.stressAt(to)),
+                    points = line,
                     markers = false,
                     muted = true,
                 ),
@@ -72,8 +68,8 @@ object ViewerStressStrainResults {
      * without a fit or before the curve yields. The plot drops it when the
      * view (the elastic region) does not reach it.
      */
-    fun yieldMark(context: Context, curve: StressStrain.Curve, modulus: ElasticModulus.Fit?): SweepPlotView.Mark? {
-        val point = modulus?.let { YieldStrength.offset(curve, it) } ?: return null
+    fun yieldMark(context: Context, results: TensileResults?): SweepPlotView.Mark? {
+        val point = results?.yieldPoint ?: return null
         return SweepPlotView.Mark(
             x = point.strainMilli,
             y = point.stressMPa,
@@ -82,7 +78,8 @@ object ViewerStressStrainResults {
         )
     }
 
-    fun resultsText(context: Context, curve: StressStrain.Curve, modulus: ElasticModulus.Fit?): String = buildList {
+    fun resultsText(context: Context, curve: StressStrain.Curve, results: TensileResults?): String = buildList {
+        val modulus = results?.modulus
         if (curve.model is StressStrain.Model.Axial) {
             add(
                 if (modulus == null) {
@@ -100,7 +97,7 @@ object ViewerStressStrainResults {
             if (modulus != null && modulus.modulusGPa <= 0f) {
                 add(context.getString(R.string.modulus_sign_caution))
             }
-            modulus?.let { yieldText(context, curve, it) }?.let(::add)
+            results?.let { yieldText(context, it) }?.let(::add)
         }
         curve.peakStress?.let { peak ->
             add(
@@ -113,10 +110,11 @@ object ViewerStressStrainResults {
         }
     }.joinToString("\n")
 
-    /** Rp0.2 with the frames it lies between, or why there is none; null when E is not positive. */
-    private fun yieldText(context: Context, curve: StressStrain.Curve, modulus: ElasticModulus.Fit): String? {
-        if (modulus.modulusGPa <= 0f) return null
-        return YieldStrength.offset(curve, modulus)?.let { point ->
+    /** Rp0.2 with the frames it lies between, or why there is none; null without a positive E. */
+    private fun yieldText(context: Context, results: TensileResults): String? {
+        val modulus = results.modulus
+        if (modulus == null || modulus.modulusGPa <= 0f) return null
+        return results.yieldPoint?.let { point ->
             context.getString(
                 R.string.results_yield_fmt,
                 one(point.stressMPa),

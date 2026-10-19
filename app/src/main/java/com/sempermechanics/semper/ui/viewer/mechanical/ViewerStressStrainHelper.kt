@@ -16,6 +16,7 @@ import com.sempermechanics.semper.report.BeamDeflection
 import com.sempermechanics.semper.report.ElasticModulus
 import com.sempermechanics.semper.report.ElasticRegion
 import com.sempermechanics.semper.report.StressStrain
+import com.sempermechanics.semper.report.TensileResults
 import com.sempermechanics.semper.ui.analysis.sweep.SweepPlotView
 import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
 import com.sempermechanics.semper.ui.viewer.ResultViewerViewModel
@@ -181,22 +182,24 @@ class ViewerStressStrainHelper(
         // The summary is the whole test, so no frame is highlighted there.
         val current = if (host.isShowingSummary) null else curve.at(host.plannedFrameIndex(host.currentFrameIndex))
         val (xAxis, yAxis) = axisLabels(host, curve.model)
-        val modulus = modulusOf(curve)
+        // E, Rp0.2, the peak and the fit line, worked out once for the plot, marks and text.
+        val results = resultsOf(curve)
+        val modulus = results?.modulus
         val region = modulus?.let { ElasticRegion.of(curve, it) }
         bindRange(views, shown = region != null)
         val zoomed = region?.takeIf { vm.showElasticRegion }
         plot.setData(
-            zoomed?.let { ViewerStressStrainResults.elasticPlotSeries(host, it) } ?: plotSeries(host, curve, modulus),
+            zoomed?.let { ViewerStressStrainResults.elasticPlotSeries(host, it) } ?: plotSeries(host, curve, results),
             xAxis,
             yAxis,
             highlightX = if (bending) current?.deflectionMm else current?.strainMilli,
             xUnit = if (bending) ViewerBendingResults.UNIT_DEFLECTION else StressStrain.UNIT_STRAIN,
             yUnit = if (bending) ViewerBendingResults.UNIT_LOAD else StressStrain.UNIT_STRESS,
-            marks = plotMarks(host, curve, modulus),
+            marks = plotMarks(host, curve, results),
         )
         views.caption.text = caption(curve, current, modulus?.takeIf { zoomed != null })
         result.isVisible = true
-        result.text = resultsText(host, curve, modulus)
+        result.text = resultsText(host, curve, results)
     }
 
     /**
@@ -275,9 +278,11 @@ class ViewerStressStrainHelper(
             return context.createConfigurationContext(light)
         }
 
+        /** The tensile results ([TensileResults]), or null for a model that has none. */
+        fun resultsOf(curve: StressStrain.Curve): TensileResults? = TensileResults.of(curve)
+
         /** The tensile modulus fit, or null for a model that has none. */
-        fun modulusOf(curve: StressStrain.Curve): ElasticModulus.Fit? =
-            if (curve.model is StressStrain.Model.Axial) ElasticModulus.fit(curve) else null
+        fun modulusOf(curve: StressStrain.Curve): ElasticModulus.Fit? = resultsOf(curve)?.modulus
 
         /**
          * The curve, plus — when there is a fit — the fitted elastic line as a
@@ -287,23 +292,23 @@ class ViewerStressStrainHelper(
         fun plotSeries(
             context: Context,
             curve: StressStrain.Curve,
-            modulus: ElasticModulus.Fit?,
+            results: TensileResults?,
         ): List<SweepPlotView.Series> = if (curve.model.plotsLoadDeflection) {
             ViewerBendingResults.plotSeries(context, curve)
         } else {
-            ViewerStressStrainResults.plotSeries(context, curve, modulus)
+            ViewerStressStrainResults.plotSeries(context, curve, results)
         }
 
         /** The yield point on a tensile curve's plot; none for bending. */
         fun plotMarks(
             context: Context,
             curve: StressStrain.Curve,
-            modulus: ElasticModulus.Fit?,
+            results: TensileResults?,
         ): List<SweepPlotView.Mark> =
             if (curve.model.plotsLoadDeflection) {
                 emptyList()
             } else {
-                listOfNotNull(ViewerStressStrainResults.yieldMark(context, curve, modulus))
+                listOfNotNull(ViewerStressStrainResults.yieldMark(context, results))
             }
 
         /**
@@ -311,11 +316,11 @@ class ViewerStressStrainHelper(
          * section asks for: E with the frames it came from, and the peak stress;
          * for bending with a load point, [ViewerBendingResults.resultsText].
          */
-        fun resultsText(context: Context, curve: StressStrain.Curve, modulus: ElasticModulus.Fit?): String =
+        fun resultsText(context: Context, curve: StressStrain.Curve, results: TensileResults?): String =
             if (curve.model.plotsLoadDeflection) {
                 ViewerBendingResults.resultsText(context, curve)
             } else {
-                ViewerStressStrainResults.resultsText(context, curve, modulus)
+                ViewerStressStrainResults.resultsText(context, curve, results)
             }
 
         /** Plot axis titles (x, y) worded for the model: strain and stress, or deflection and load. */

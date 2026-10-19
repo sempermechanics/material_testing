@@ -131,7 +131,7 @@ Typed loads and a CSV are never combined; ✕ on one brings back the choice. Ten
 
 It's offered once the thickness is tapped.
 - **CSV:** a `# mechanical_results` trailer after the point rows.
-  - **Tensile:** `# elastic_modulus_gpa`, `# elastic_fit_frames` and `# elastic_fit_r2`.
+  - **Tensile:** `# elastic_modulus_gpa`, `# elastic_fit_frames`, `# elastic_fit_r2`, `# yield_rp02_mpa` (empty when there is none) and `# peak_stress_mpa,<MPa>,<frame>,<on_curve>` (`false` for a peak frame off the curve), the same Results the viewer and the report quote (`TensileResults`).
   - **Bending:** one `# bending_step` row per frame, `# e_mean_gpa`, the slope and its R², and `# e_slope_gpa`. The last three are over the load steps.
 - **DIC PDF report:** its closing page is the stress–strain or load–deflection page, with E. Bending's table carries the outer-fibre strain; without the edge taps it has no strain column.
 

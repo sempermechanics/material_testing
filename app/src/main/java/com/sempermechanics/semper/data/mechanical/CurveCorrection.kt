@@ -23,15 +23,21 @@ data class CurveCorrection(
 ) {
     val isNone: Boolean get() = this == NONE
 
-    fun strain(cameraMilli: Float): Float = strainScale * cameraMilli + strainBiasMilli
+    /** The strain's line, in millistrain. */
+    val strainLine: LinearCorrection get() = LinearCorrection(strainScale, strainBiasMilli)
 
-    fun stress(loadMPa: Float): Float = stressScale * loadMPa + stressBiasMPa
+    /** The stress's line, in MPa. */
+    val stressLine: LinearCorrection get() = LinearCorrection(stressScale, stressBiasMPa)
+
+    fun strain(cameraMilli: Float): Float = strainLine.apply(cameraMilli)
+
+    fun stress(loadMPa: Float): Float = stressLine.apply(loadMPa)
 
     /** The camera's strain back from a corrected one: the inverse of [strain]. */
-    fun removeStrain(correctedMilli: Float): Float = (correctedMilli - strainBiasMilli) / strainScale
+    fun removeStrain(correctedMilli: Float): Float = strainLine.remove(correctedMilli)
 
     /** The load's stress back from a corrected one: the inverse of [stress]. */
-    fun removeStress(correctedMPa: Float): Float = (correctedMPa - stressBiasMPa) / stressScale
+    fun removeStress(correctedMPa: Float): Float = stressLine.remove(correctedMPa)
 
     /** Intent-extra form; the order is fixed by [fromArray]. */
     fun toArray(): FloatArray = floatArrayOf(strainScale, strainBiasMilli, stressScale, stressBiasMPa)
@@ -63,15 +69,9 @@ data class CurveCorrection(
             }
 
         /** A typed scale: blank is 1, a decimal comma is accepted; null unless a positive number. */
-        fun parseScale(text: String): Float? = typed(text, blank = 1f)?.takeIf { it > 0f }
+        fun parseScale(text: String): Float? = LinearCorrection.parseScale(text)
 
         /** A typed bias: blank is 0, a decimal comma is accepted; null unless a number. */
-        fun parseBias(text: String): Float? = typed(text, blank = 0f)
-
-        private fun typed(text: String, blank: Float): Float? {
-            val trimmed = text.trim()
-            if (trimmed.isEmpty()) return blank
-            return trimmed.replace(',', '.').toFloatOrNull()?.takeIf { it.isFinite() }
-        }
+        fun parseBias(text: String): Float? = LinearCorrection.parseBias(text)
     }
 }
