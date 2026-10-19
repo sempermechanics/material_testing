@@ -6,6 +6,7 @@ import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
 import com.sempermechanics.semper.data.mechanical.CurveCorrection
 import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.ui.analysis.load.BeamTapPlacement
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -285,6 +286,51 @@ class StressStrainTest {
 
             assertEquals("tilt $degrees°", 1.0f, strain, 0.02f)
         }
+    }
+
+    /** [taps] as the tap editor places them: the top edge tapped, then the bottom. */
+    private fun editorTaps(taps: BeamEdgeTaps): BeamEdgeTaps {
+        val first = BeamTapPlacement.place(BeamTapPlacement.Marks(), taps.topX, taps.topY)
+        val placed = BeamTapPlacement.place(first, taps.bottomX, taps.bottomY)
+        val top = placed.top!!
+        val bottom = placed.bottom!!
+        return BeamEdgeTaps(top.x, top.y, bottom.x, bottom.y)
+    }
+
+    @Test
+    fun `a tilted beam tapped in the editor reads its strain along the beam and its true thickness`() {
+        // TD-310. The editor keeps a pair tapped square to a 10° or 30° beam as
+        // tapped, so the probe is the one above: 1.000 mε (numpy, the same lattice
+        // and section) and 10 mm over 100 px.
+        listOf(10.0, -10.0, 30.0).forEach { degrees ->
+            val (data, square) = tiltedBend(degrees)
+            val taps = editorTaps(square)
+            val model = bending(taps)
+
+            assertEquals("tilt $degrees°", square, taps)
+            assertEquals("outer-fibre strain along the beam", model.strainName)
+            assertEquals("tilt $degrees°", 1.0f, model.strainMilli(data, gauge = null)!!, 0.002f)
+            assertEquals("tilt $degrees°", 0.1f, model.probe!!.mmPerPx, 1e-6f)
+        }
+    }
+
+    @Test
+    fun `a nearly level beam tapped in the editor is read as level, within its snap`() {
+        // A 2° beam tapped square to itself snaps to the top mark's vertical line:
+        // Exx over 99.939 px, which numpy reads as 0.9972 mε (−0.28 %) and
+        // 10 / 99.939 = 0.100061 mm/px (+0.06 %). At 0° the pair is exact.
+        val (level, levelTaps) = tiltedBend(0.0)
+        assertEquals(1.0f, bending(editorTaps(levelTaps)).strainMilli(level, gauge = null)!!, 0.002f)
+
+        val (data, square) = tiltedBend(2.0)
+        val taps = editorTaps(square)
+        val model = bending(taps)
+
+        assertEquals(taps.topX, taps.bottomX, 0f)
+        assertEquals(square.bottomY, taps.bottomY, 0f)
+        assertEquals("outer-fibre Exx", model.strainName)
+        assertEquals(0.9972f, model.strainMilli(data, gauge = null)!!, 0.001f)
+        assertEquals(0.100061f, model.probe!!.mmPerPx, 1e-6f)
     }
 
     @Test

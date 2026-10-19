@@ -31,13 +31,16 @@ import kotlin.math.roundToInt
 /**
  * Bending's scale and load point: the student taps the beam's top edge and
  * then its bottom edge, right under the loading nose, on the reference photo.
- * Each mark is drawn as full-length crosshair lines, so the horizontal one can
- * be laid along the edge. The bottom mark is held on the top mark's vertical
- * line ([BeamTapPlacement]). The thickness they measured over the tapped
- * pixels is the photo's mm per pixel, and the midpoint is where
- * [com.sempermechanics.semper.report.BeamDeflection] reads δ. Pinch and pan to
- * zoom in; a tap after both are placed moves the mark nearer in height. Returns
- * [IntentKeys.BEAM_EDGE_TAPS] in true reference pixels.
+ * Each mark is drawn as full-length crosshair lines, so one can be laid along
+ * the edge; once both are placed the lines turn with the tap line. A bottom
+ * mark near the top mark's vertical line snaps onto it, and one further off
+ * stays where it was tapped, for a beam tilted in the photo
+ * ([BeamTapPlacement]); the readout then gives the tilt. The thickness they
+ * measured over the tapped pixels is the photo's mm per pixel, and the
+ * midpoint is where [com.sempermechanics.semper.report.BeamDeflection] reads δ
+ * and, square to the tap line, the strain along the beam. Pinch and pan to
+ * zoom in; a tap after both are placed moves the mark nearer along the tap
+ * line. Returns [IntentKeys.BEAM_EDGE_TAPS] in true reference pixels.
  */
 @MainThread
 class BeamEdgeTapActivity : AppCompatActivity() {
@@ -153,16 +156,25 @@ class BeamEdgeTapActivity : AppCompatActivity() {
 
     private fun readout(taps: BeamEdgeTaps): String {
         val px = taps.thicknessPx
-        val line = getString(
-            R.string.beam_tap_readout_fmt,
-            format(thicknessMm),
-            px.roundToInt(),
-            String.format(Locale.US, "%.4f", thicknessMm / px),
+        val lines = mutableListOf(
+            getString(
+                R.string.beam_tap_readout_fmt,
+                format(thicknessMm),
+                px.roundToInt(),
+                String.format(Locale.US, "%.4f", thicknessMm / px),
+            ),
         )
-        if (px >= BeamEdgeTaps.PRECISE_THICKNESS_PX) return line
-        // One pixel of slip moves the scale, and so δ, by 1/px; E goes as 1/δ: ~100/px %.
-        val slipPercent = (PERCENT / px).roundToInt()
-        return line + "\n" + getString(R.string.beam_tap_precision_warn_fmt, px.roundToInt(), slipPercent)
+        val tilt = BeamTapPlacement.tiltDegrees(
+            BeamTapPlacement.Mark(taps.topX, taps.topY),
+            BeamTapPlacement.Mark(taps.bottomX, taps.bottomY),
+        )
+        if (tilt > 0.0) lines += getString(R.string.beam_tap_tilt_fmt, tilt.roundToInt())
+        if (px < BeamEdgeTaps.PRECISE_THICKNESS_PX) {
+            // One pixel of slip moves the scale, and so δ, by 1/px; E goes as 1/δ: ~100/px %.
+            val slipPercent = (PERCENT / px).roundToInt()
+            lines += getString(R.string.beam_tap_precision_warn_fmt, px.roundToInt(), slipPercent)
+        }
+        return lines.joinToString("\n")
     }
 
     private fun saveAndFinish() {

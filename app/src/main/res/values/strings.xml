@@ -818,12 +818,13 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="beam_tap_save">Save</string>
     <string name="beam_tap_canvas">Reference photo of the beam</string>
     <string name="beam_tap_step_top">Tap the beam’s top edge, right under the load, so the crosshair’s horizontal line lies along the edge. Pinch or double-tap to zoom in first; drag to move around.</string>
-    <string name="beam_tap_step_bottom">Now tap the bottom edge. The mark stays on the vertical line, so only its height follows your tap.</string>
-    <string name="beam_tap_step_done">Tap near a line to move it: the top mark also moves the vertical line. Save when both horizontal lines sit on the edges.</string>
+    <string name="beam_tap_step_bottom">Now tap the bottom edge, straight across the beam from the top mark. Near the vertical line it snaps onto it; on a beam tilted in the photo, tap square to the beam.</string>
+    <string name="beam_tap_step_done">Tap near a mark to move it: the top mark carries the bottom one sideways with it. Save when the lines across the tap line sit on both edges.</string>
     <string name="beam_tap_readout_empty">Thickness %1$s mm — tap both edges</string>
     <string name="beam_tap_too_close">The marks are on top of each other — tap the other edge.</string>
     <!-- thickness mm, pixels, mm per pixel -->
     <string name="beam_tap_readout_fmt">%1$s mm over %2$d px · %3$s mm/px</string>
+    <string name="beam_tap_tilt_fmt">Tilted %1$d° in the photo: the thickness is read along the tap line, the strain along the beam.</string>
     <string name="beam_tap_precision_warn_fmt">Only %1$d px across: a 1 px slip changes E by about %2$d%%. Zoom in, or photograph the middle of the beam closer.</string>
     <string name="info_load_title">Machine load</string>
     <string name="info_load_csv_heading">The machine’s CSV</string>

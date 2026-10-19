@@ -15,10 +15,12 @@ import kotlin.math.max
 
 /**
  * Draws the bending edge taps over the reference in [BeamEdgeTapActivity]:
- * full-length crosshair lines through each tapped edge (the horizontal one is
- * laid along the edge; the top's vertical one is the line the bottom mark is
- * held to), the thickness between them, and the circle the deflection is
- * averaged over. Points are in true reference pixels;
+ * full-length crosshair lines through each tapped edge, the thickness between
+ * them, and the circle the deflection is averaged over. A lone mark's lines
+ * are the image's axes; once both are placed they turn with the tap line, one
+ * along it and one square to it, which is laid along the edge — so on a beam
+ * tilted in the photo the pair is square to the beam when both of those lie
+ * on its edges. A pair one above the other draws exactly the axis lines. Points are in true reference pixels;
  * [imageToView] (the photo's zoom matrix) places them on screen. Never takes
  * touches — the photo under it does.
  */
@@ -83,9 +85,21 @@ class BeamEdgeTapOverlay @JvmOverloads constructor(
         super.onDraw(canvas)
         val topImage = top
         val bottomImage = bottom
-        if (topImage != null && bottomImage != null) span(canvas, topImage, bottomImage)
-        topImage?.let { cross(canvas, toView(it)) }
-        bottomImage?.let { cross(canvas, toView(it)) }
+        // The tap line's direction on screen; the image's vertical until both are placed.
+        var alongX = 0f
+        var alongY = 1f
+        if (topImage != null && bottomImage != null) {
+            span(canvas, topImage, bottomImage)
+            val t = toView(topImage)
+            val b = toView(bottomImage)
+            val length = PointF.length(b.x - t.x, b.y - t.y)
+            if (length > 0f) {
+                alongX = (b.x - t.x) / length
+                alongY = (b.y - t.y) / length
+            }
+        }
+        topImage?.let { cross(canvas, toView(it), alongX, alongY) }
+        bottomImage?.let { cross(canvas, toView(it), alongX, alongY) }
     }
 
     /** The thickness line and the probe circle, sized in image px like [BeamDeflection.Probe]. */
@@ -101,13 +115,18 @@ class BeamEdgeTapOverlay @JvmOverloads constructor(
         canvas.drawCircle((t.x + b.x) / 2f, (t.y + b.y) / 2f, radius, probe)
     }
 
-    /** Crosshair lines across the whole view, and a ring on the mark itself. */
-    private fun cross(canvas: Canvas, c: PointF) {
-        val w = width.toFloat()
-        val h = height.toFloat()
+    /**
+     * Crosshair lines across the whole view, one along ([alongX], [alongY])
+     * and one square to it, and a ring on the mark itself.
+     */
+    private fun cross(canvas: Canvas, c: PointF, alongX: Float, alongY: Float) {
+        // Long enough to cross the view from any point in it, at any angle.
+        val reach = PointF.length(width.toFloat(), height.toFloat())
+        val ax = alongX * reach
+        val ay = alongY * reach
         for (paint in listOf(guideHalo, guide)) {
-            canvas.drawLine(0f, c.y, w, c.y, paint)
-            canvas.drawLine(c.x, 0f, c.x, h, paint)
+            canvas.drawLine(c.x + ay, c.y - ax, c.x - ay, c.y + ax, paint)
+            canvas.drawLine(c.x - ax, c.y - ay, c.x + ax, c.y + ay, paint)
         }
         val ring = RING_DP * density
         canvas.drawCircle(c.x, c.y, ring, halo)

@@ -30,9 +30,10 @@ import kotlin.random.Random
 
 /**
  * The bending tap editor under real touches: a tap on the top edge and one on
- * the bottom edge give the taps it saves, the bottom mark is held to the top
- * mark's x however far the finger slips sideways (`BeamTapPlacement`), and a
- * pinch-zoom survives the next tap (the photo stays still between taps).
+ * the bottom edge give the taps it saves, the bottom mark snaps to the top
+ * mark's x when the finger slips a little sideways and keeps its own on a
+ * tilted beam (`BeamTapPlacement`, TD-310), and a pinch-zoom survives the next
+ * tap (the photo stays still between taps).
  */
 @RunWith(AndroidJUnit4::class)
 class BeamTapEditorGestureTest {
@@ -73,16 +74,29 @@ class BeamTapEditorGestureTest {
     }
 
     @Test
-    fun theBottomTapIsHeldToTheTopTapsX() {
+    fun aSlightlySlippedBottomTapSnapsToTheTopTapsX() {
         launch().use { scenario ->
-            tapImage(scenario, TOP_X, TOP_Y)
-            tapImage(scenario, TOP_X + SLIP_PX, BOTTOM_Y)
+            tapImage(scenario, TOP_X, WIDE_TOP_Y)
+            tapImage(scenario, TOP_X + SLIP_PX, WIDE_BOTTOM_Y)
             val taps = save(scenario)
 
             assertEquals(TOP_X, taps.topX, TOLERANCE_PX)
-            assertEquals(TOP_Y, taps.topY, TOLERANCE_PX)
-            assertEquals("the bottom mark left the top mark's x", taps.topX, taps.bottomX, 0.01f)
-            assertEquals(BOTTOM_Y, taps.bottomY, TOLERANCE_PX)
+            assertEquals(WIDE_TOP_Y, taps.topY, TOLERANCE_PX)
+            assertEquals("the bottom mark left the top mark's x", taps.topX, taps.bottomX, 0f)
+            assertEquals(WIDE_BOTTOM_Y, taps.bottomY, TOLERANCE_PX)
+        }
+    }
+
+    @Test
+    fun aBottomTapAcrossATiltedBeamKeepsItsX() {
+        launch().use { scenario ->
+            tapImage(scenario, TOP_X, WIDE_TOP_Y)
+            tapImage(scenario, TOP_X + TILT_PX, WIDE_BOTTOM_Y)
+            val taps = save(scenario)
+
+            assertEquals(TOP_X, taps.topX, TOLERANCE_PX)
+            assertEquals("the bottom mark was moved", TOP_X + TILT_PX, taps.bottomX, TOLERANCE_PX)
+            assertEquals(WIDE_BOTTOM_Y, taps.bottomY, TOLERANCE_PX)
         }
     }
 
@@ -177,7 +191,13 @@ class BeamTapEditorGestureTest {
         const val TOP_X = 200f
         const val TOP_Y = 80f
         const val BOTTOM_Y = 160f
-        const val SLIP_PX = 40f
+
+        // The snap and tilt taps, 160 px apart: there the snap (3°) reaches 8.4 px, so a
+        // 2 px slip lands on the vertical even off by TOLERANCE_PX; 40 px is a 14° tilt, kept.
+        const val WIDE_TOP_Y = 40f
+        const val WIDE_BOTTOM_Y = 200f
+        const val SLIP_PX = 2f
+        const val TILT_PX = 40f
 
         // One screen pixel is under one image pixel at these sizes; allow for rounding.
         const val TOLERANCE_PX = 3f
