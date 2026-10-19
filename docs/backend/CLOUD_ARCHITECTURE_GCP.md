@@ -1909,6 +1909,10 @@ and only while it is verified. The invite claim, IT membership, the IT
 licence list, a claim code and the mint's attach to an existing holder all
 read it, and one test, `_eligible_holder`, decides whether an existing account
 may be seated now, so a roster add and a staff mint cannot disagree.
+The seat keeps its own copy of the address for the roster and reconcile to
+show; when the holder signs in with a new verified address, the seat on their
+current institution licence takes it (`_refresh_seat_address`,
+`backend/app/repo/users.py`, TD-297). Nothing is decided on the copy.
 
 The invite path exists because IT works from a list of addresses and cannot
 make people sign up on cue. Refusing with `user_not_found` until they had was

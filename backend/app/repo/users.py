@@ -2,15 +2,17 @@
 """
 from datetime import datetime, timedelta, timezone
 
-from google.api_core.exceptions import AlreadyExists
+from google.api_core.exceptions import AlreadyExists, NotFound
 
 from .. import apps, errors, notify, statuses
 from ..errors import Refusal
 from ..config import settings
 from ..licenses import (
+    KIND_INSTITUTION,
     MODE_LICENSED,
     as_utc,
     normalize_email,
+    normalize_kind,
 )
 
 from . import _base
@@ -25,6 +27,7 @@ from ._base import (
     _set_doc,
     _create_doc,
     _update_doc,
+    _seat_ref,
 )
 from .devices import (
     _release_devices,
@@ -202,7 +205,29 @@ def _touch_existing(cur: dict, claims: dict, device_id: str | None) -> dict:
 
     patch = {**changed, "lastSeenAt": _base.firestore.SERVER_TIMESTAMP}
     _update_doc(ref, patch)
+    if "email" in changed and verified:
+        _refresh_seat_address(cur, changed["email"])
     return ensure_entitlement({**cur, **patch, "uid": uid}, device_id)
+
+
+def _refresh_seat_address(user: dict, email: str) -> None:
+    """Give the seat `user` holds on their institution licence their new
+    verified address (TD-297).
+
+    The seat keeps a copy of the address it was claimed with, and the roster
+    and reconcile show that copy. An unverified address is not copied: it is
+    no address (`holders.verified_address`), and the seat keeps the one that
+    was proved. Display only; nothing is decided on the copy. Seats on
+    licences the account has left keep the address it had there. A seat that
+    is gone is left gone.
+    """
+    license_id = user.get("licenseId")
+    if not license_id or normalize_kind(user.get("licenseKind")) != KIND_INSTITUTION:
+        return
+    try:
+        _update_doc(_seat_ref(license_id, user["uid"]), {"email": normalize_email(email)})
+    except NotFound:
+        pass
 
 
 def get_or_create_user(claims: dict, device_id: str | None = None) -> dict:

@@ -403,3 +403,53 @@ def test_an_unverified_address_is_no_address():
     assert repo.verified_address({"email": "a@uni.edu", "emailVerified": False}) == ""
     assert repo.verified_address({"email": "a@uni.edu"}) == ""
     assert repo.verified_address({"emailVerified": True}) == ""
+
+
+# ---------------- the seat's copy of the address (TD-297) ----------------
+def _seated_member(monkeypatch, store):
+    """`u1` signed in as old@uni.edu and seated on an institution licence."""
+    monkeypatch.setattr(repo.settings, "ADMIN_EMAILS", set())
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE", True)
+    lic = repo.create_institution_license(
+        domain_lock="uni.edu", admin_emails=["it@uni.edu"], created_by_uid="staff")
+    license_id = lic["license"]["id"]
+    repo.invite_institution_member(license_id, "old@uni.edu", "it")
+    user = repo.get_or_create_user(_claims(email="old@uni.edu"))
+    assert user["licenseId"] == license_id
+    seats = store._data[f"licenses/{license_id}/seats"]
+    assert seats["u1"]["email"] == "old@uni.edu"
+    return license_id, seats
+
+
+def test_a_verified_email_change_reaches_the_seat(monkeypatch, store):
+    """The roster and reconcile read the seat's copy: it follows the account's
+    verified address, as the account's own `email` does."""
+    license_id, seats = _seated_member(monkeypatch, store)
+
+    repo.get_or_create_user(_claims(email="New@Uni.edu"))
+
+    assert seats["u1"]["email"] == "new@uni.edu"
+    roster, _ = repo.page_institution_seats(license_id, 10)
+    assert [s["email"] for s in roster] == ["new@uni.edu"]
+
+
+def test_an_unverified_email_change_leaves_the_seat(monkeypatch, store):
+    """An address nobody has proved is no address (`verified_address`): the
+    seat keeps the one that was."""
+    _, seats = _seated_member(monkeypatch, store)
+
+    repo.get_or_create_user(_claims(email="someone@else.example", verified=False))
+
+    assert seats["u1"]["email"] == "old@uni.edu"
+
+
+def test_an_email_change_without_a_seat_writes_no_seat(monkeypatch, store):
+    monkeypatch.setattr(repo.settings, "ADMIN_EMAILS", set())
+    store._data["users"] = {"u1": {"email": "a@b.com", "emailVerified": True,
+                                   "access_status": "APPROVED", "role": "user",
+                                   "licenseId": "gone", "licenseKind": "institution"}}
+
+    repo.get_or_create_user(_claims(email="c@d.com"))
+
+    assert store._data["users"]["u1"]["email"] == "c@d.com"
+    assert not store._data.get("licenses/gone/seats")
