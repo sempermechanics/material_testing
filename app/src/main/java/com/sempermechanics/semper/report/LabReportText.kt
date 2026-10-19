@@ -153,6 +153,7 @@ object LabReportText {
         val TABLE_WEIGHTS = listOf(0.08f, 0.10f, 0.15f, 0.23f, 0.29f, 0.15f)
 
         const val SIGMA_FORMULA = "σb = M · y / I"
+
         // The g that TypedLoads.G multiplies by, so the line's arithmetic is the app's.
         fun weightLine(loadKg: String, loadN: String) = "W = m·g = $loadKg kg × 9.80665 m/s² = $loadN N"
         fun momentLine(loadN: String, spanM: String, momentNm: String) =

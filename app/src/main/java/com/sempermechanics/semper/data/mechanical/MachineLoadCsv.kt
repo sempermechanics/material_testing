@@ -172,14 +172,7 @@ object MachineLoadCsv {
                 ?: return LoadCsvParse.Failed(LoadCsvError.NonNumeric(line.number, columns.load + 1, cell))
             loads.add(value * unit.toNewton)
         }
-        val times = columns.time?.let { column ->
-            readTimes(data, column, numberOf, warnings)?.let { values ->
-                val unitText = listOfNotNull(layout.units?.getOrNull(column), layout.header?.getOrNull(column))
-                val timeUnit = LogTimeUnit.of(unitText.joinToString(" "))
-                    ?: LogTimeUnit.S.also { warnings += LoadCsvWarning.TIME_UNIT_ASSUMED_S }
-                values.map(timeUnit::toSeconds)
-            }
-        }
+        val times = columns.time?.let { column -> readTimes(data, column, layout, numberOf, warnings) }
 
         return LoadCsvParse.Ok(
             ParsedLoadCsv(
@@ -330,10 +323,15 @@ object MachineLoadCsv {
         }
     }
 
-    /** Times are optional: a bad or non-increasing column is dropped, not fatal. */
+    /**
+     * Times are optional: a bad or non-increasing column is dropped, not
+     * fatal. The rest are converted to seconds from the unit the header or
+     * units row names (ms, min, h); none named is taken as seconds and says so.
+     */
     private fun readTimes(
         data: List<Line>,
         column: Int,
+        layout: Layout,
         numberOf: (String) -> Float?,
         warnings: MutableList<LoadCsvWarning>,
     ): List<Float>? {
@@ -343,6 +341,9 @@ object MachineLoadCsv {
             warnings += LoadCsvWarning.TIME_IGNORED
             return null
         }
-        return times
+        val unitText = listOfNotNull(layout.units?.getOrNull(column), layout.header?.getOrNull(column))
+        val timeUnit = LogTimeUnit.of(unitText.joinToString(" "))
+            ?: LogTimeUnit.S.also { warnings += LoadCsvWarning.TIME_UNIT_ASSUMED_S }
+        return times.map(timeUnit::toSeconds)
     }
 }
