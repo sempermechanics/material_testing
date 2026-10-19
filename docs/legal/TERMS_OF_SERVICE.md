@@ -1,6 +1,6 @@
 # Semper — Terms of Service
 
-**Last updated:** 2026-09-15  
+**Last updated:** 2026-10-19  
 **Version:** 2026-09-15  
 **Product:** Semper (IndicVision DIC) — Android application, optional cloud services, and web console  
 **Operator:** [OPERATOR LEGAL NAME], [REGISTERED ADDRESS], Chennai, Tamil Nadu, India ("**we**", "**us**", "**IndicVision**")
@@ -51,8 +51,8 @@ sync, restore, licensing and entitlement checks, operator approval and
 administration, and a web console.
 
 **2.3 Plans and licences.** The App may be offered on a **Demo** plan (limited
-features, sessions, or duration) and a **Professional** plan activated by a
-licence key or an institution seat. Plan limits, feature flags, quotas, and
+features, sessions, or duration) and a **Professional** plan attached to your
+account as section 6.2 describes. Plan limits, feature flags, quotas, and
 file-size limits are set by us, may differ by deployment, and may change as
 described in section 17.
 
@@ -71,7 +71,7 @@ administrator may move an account to **APPROVED** (full access) or
 for any reason.
 
 **3.3 Credentials and security.** You are responsible for keeping your sign-in
-credentials, second factors, and licence keys confidential, and for all activity
+credentials, second factors, and claim codes confidential, and for all activity
 under your account. Tell us immediately if you suspect unauthorised use.
 
 **3.4 Device attestation.** High-consequence actions are bound to a registered
@@ -124,7 +124,7 @@ You must not, and must not permit or assist anyone else to:
   security or access-control mechanism, or use the App or the Service without a
   valid entitlement;
 - share, lend, resell, sublicense, rent, lease, transfer, or publish any
-  account, credential, licence key, seat, or entitlement, or use a key or seat
+  account, credential, claim code, seat, or entitlement, or use a code or seat
   you are not authorised to use;
 - access the Service by any automated means (including bots, scrapers, or
   crawlers), extract data from it other than through the functions we provide,
@@ -152,8 +152,10 @@ and cooperate with law enforcement and rights holders.
 features, sessions, files, frames, or duration, and may be changed, suspended,
 or withdrawn at any time without liability.
 
-**6.2 Professional plan.** Professional access requires a valid licence key or
-institution seat. Fees, term, seat counts, and renewal are as stated in your
+**6.2 Professional plan.** Professional access is attached to your account: by
+a seat your institution assigns to it, by a licence issued to your account's
+email address, or by a claim code you redeem on your account page at
+app.sempermechanics.com. Fees, term, seat counts, and renewal are as stated in your
 order, invoice, or licence document. Fees exclude taxes; you are responsible
 for all applicable taxes, duties, and withholding other than taxes on our
 income.
@@ -170,6 +172,11 @@ sessions, but access to them may be limited by Demo plan limits.
 **6.5 Price changes.** We may change fees for future terms on notice. Continued
 use or renewal after the effective date constitutes acceptance of the new
 fees.
+
+**6.6 No purchases in the App.** The App does not sell, price, or take payment
+for any plan, feature, or content. Professional access is arranged with us or
+with your institution outside the App, and the App uses only the access your
+account already holds.
 
 ## 7. Your content and product improvement
 

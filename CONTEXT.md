@@ -182,7 +182,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   staff roster tools and the account page's licence facts and claim-code card. Those, the
   indexes and the dashboards deploy only from semperdic-app, in its order (indexes,
   backend, gateway, Hosting, monitoring); the console files here are for parity, so never
-  deploy Hosting from this repo. Owed as well: counsel on the Terms' fees (TD-277).
+  deploy Hosting from this repo. Owed as well: counsel on the aligned Terms (TD-277).
 - **Lab outputs, all merged (#1–#21).** Tensile: stress–strain (strain is the virtual
   extensometer's ΔL / L₀ since ADR-012), E from the
   longest straight leading run, Rp0.2 by the 0.2% offset (#100), the elastic-region
