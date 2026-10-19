@@ -1,27 +1,21 @@
 package com.sempermechanics.semper.data
 
 import android.app.Application
-import androidx.test.core.app.ApplicationProvider
 import androidx.work.ListenableWorker
 import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.workDataOf
-import com.sempermechanics.semper.cloud.FakeCloudApi
 import com.sempermechanics.semper.cloud.FakeTokens
 import com.sempermechanics.semper.data.cloud.RebuildBudget
 import com.sempermechanics.semper.data.cloud.SessionUploadBundlerTest
 import com.sempermechanics.semper.data.cloud.UploadErrors
 import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.ApiException
-import com.sempermechanics.semper.data.net.CloudApi
 import com.sempermechanics.semper.data.net.DeviceConflictException
 import com.sempermechanics.semper.data.net.DeviceNotActiveException
-import com.sempermechanics.semper.data.net.FileCompleteRequest
 import com.sempermechanics.semper.data.net.PendingUploadDto
-import com.sempermechanics.semper.data.net.SemperApi
 import com.sempermechanics.semper.data.net.SessionCreateRequest
 import com.sempermechanics.semper.data.net.SessionCreateResponse
 import com.sempermechanics.semper.data.net.SessionUploadsResponse
-import com.sempermechanics.semper.data.net.TokenProvider
 import com.sempermechanics.semper.data.net.TokenSource
 import com.sempermechanics.semper.data.net.UploadLinkExpiredException
 import com.sempermechanics.semper.data.session.SessionPaths
@@ -33,13 +27,11 @@ import com.sempermechanics.semper.util.Digests
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
-import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -47,9 +39,6 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.zip.ZipEntry
-import java.util.zip.ZipFile
-import java.util.zip.ZipOutputStream
 
 /**
  * [DicUploadWorker.doWork] end to end against a scripted backend
@@ -62,165 +51,7 @@ import java.util.zip.ZipOutputStream
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
-class DicUploadWorkerTest {
-
-    private val context: Application = ApplicationProvider.getApplicationContext()
-    private val api = UploadApi()
-    private lateinit var sessionDir: File
-    private lateinit var staging: File
-    private val realForeground = DicUploadSeams.inForeground
-
-    @Before
-    fun setUp() {
-        DicUploadSeams.api = { api }
-        DicUploadSeams.tokens = FakeTokens("tok")
-        DicUploadSeams.inForeground = { false }
-    }
-
-    @After
-    fun tearDown() {
-        DicUploadSeams.api = { SemperApi.get(it) }
-        DicUploadSeams.tokens = TokenProvider
-        DicUploadSeams.inForeground = realForeground
-        SessionStore.deleteAll(context)
-    }
-
-    // ── harness ──────────────────────────────────────────────────────────────
-
-    /**
-     * [FakeCloudApi] plus the upload calls, scripted the same way. Thread-safe
-     * lists: the worker uploads and completes several files at once.
-     */
-    private class UploadApi(val base: FakeCloudApi = FakeCloudApi()) : CloudApi by base {
-        val calls = CopyOnWriteArrayList<String>()
-        val deleted = CopyOnWriteArrayList<String>()
-        val completed = CopyOnWriteArrayList<FileCompleteRequest>()
-        var created: SessionCreateRequest? = null
-
-        var onCreateSession: suspend (SessionCreateRequest) -> SessionCreateResponse = {
-            throw AssertionError("unexpected CloudApi.createSession call")
-        }
-        var onSessionUploads: suspend (String) -> SessionUploadsResponse = {
-            throw AssertionError("unexpected CloudApi.listSessionUploads call")
-        }
-        var onUpload: suspend (File) -> Pair<String, String> = { it.name to Digests.md5Hex(it) }
-        var onComplete: suspend (String, FileCompleteRequest) -> Unit = { _, req -> completed += req }
-
-        init {
-            base.onDeleteSession = { _, sid -> deleted += sid }
-        }
-
-        override suspend fun createSession(idToken: String, request: SessionCreateRequest): SessionCreateResponse {
-            calls += "createSession"
-            created = request
-            return onCreateSession(request)
-        }
-
-        override suspend fun listSessionUploads(idToken: String, sessionId: String): SessionUploadsResponse {
-            calls += "listSessionUploads"
-            return onSessionUploads(sessionId)
-        }
-
-        override suspend fun uploadResumable(
-            uploadUrl: String,
-            file: File,
-            chunkSize: Int,
-            onBytes: (Long) -> Unit,
-        ): Pair<String, String> {
-            calls += "uploadResumable"
-            return onUpload(file)
-        }
-
-        override suspend fun completeFile(idToken: String, fileId: String, request: FileCompleteRequest) {
-            calls += "completeFile"
-            onComplete(fileId, request)
-        }
-    }
-
-    private fun zip(file: File, entry: String) {
-        ZipOutputStream(file.outputStream()).use { zos ->
-            zos.putNextEntry(ZipEntry(entry))
-            zos.write(byteArrayOf(1, 2, 3, 4))
-            zos.closeEntry()
-        }
-        File(file.parentFile, "${file.name}.sha256").writeText(Digests.sha256Hex(file))
-    }
-
-    /**
-     * One saved single-frame analysis whose staging is complete and verified,
-     * so the run goes straight to the cloud. [cloudSessionId] is the pointer a
-     * previous run left (blank = never created).
-     */
-    private fun seed(cloudSessionId: String = ""): SessionRecord {
-        sessionDir = SessionStore.dirFor(context, ID)
-        val ref = File(sessionDir, "reference.png").apply { writeBytes(byteArrayOf(9, 9, 9)) }
-        File(sessionDir, SessionPaths.RAW_DEFORMED_SUBDIR).mkdirs()
-        File(sessionDir, "${SessionPaths.RAW_DEFORMED_SUBDIR}/def.png").writeBytes(byteArrayOf(8, 8))
-        SessionPaths.frameDat(sessionDir, 0).writeBytes(ByteArray(32))
-
-        staging = File(sessionDir, "upload_staging").apply { mkdirs() }
-        File(staging, "metadata.json").writeText("""{"schema":"test"}""")
-        File(staging, "analysis_data.csv").writeText("image\n")
-        File(staging, "reports").mkdirs()
-        File(staging, "reports/Master_Report_Frame_1.pdf").writeText("%PDF")
-        File(staging, "processed/Frame_1").mkdirs()
-        File(staging, "processed/Frame_1/exx.png").writeText("png")
-        zip(File(staging, "Session.zip"), "raw/Reference.png")
-        zip(File(staging, "Extras.zip"), "csv/analysis_data.csv")
-        File(staging, ".bundles_done").createNewFile()
-
-        val record = SessionRecord(
-            id = ID, name = "n", createdAt = 1L, updatedAt = 1L, frameCount = 1,
-            subset = 41, step = 5, strainWindow = 15,
-            imgW = 64, imgH = 64, roiX = 0, roiY = 0, roiW = 64, roiH = 64,
-            refPath = ref.path, refName = "ref.png", sessionDir = sessionDir.path,
-            defNames = listOf("def.png"),
-            cloudSessionId = cloudSessionId,
-            syncState = SessionRecord.SyncState.PENDING,
-        )
-        assertTrue(SessionStore.upsert(context, record, allowOverLimit = true))
-        return record
-    }
-
-    /** The three staged files as the backend would list them pending. */
-    private fun pendingAll(): List<PendingUploadDto> = listOf(
-        PendingUploadDto(
-            "f_meta",
-            "u_meta",
-            name = "metadata.json",
-            role = "metadata",
-            sizeBytes = File(staging, "metadata.json").length(),
-        ),
-        PendingUploadDto(
-            "f_bundle",
-            "u_bundle",
-            name = "Session.zip",
-            role = "bundle",
-            sizeBytes = File(staging, "Session.zip").length(),
-        ),
-        PendingUploadDto(
-            "f_extras",
-            "u_extras",
-            name = "Extras.zip",
-            role = "extras",
-            sizeBytes = File(staging, "Extras.zip").length(),
-        ),
-    )
-
-    private fun uploading(sid: String, uploads: List<PendingUploadDto> = pendingAll()) =
-        SessionUploadsResponse(sessionId = sid, status = "UPLOADING", uploads = uploads)
-
-    private fun run(): ListenableWorker.Result = runBlocking {
-        TestListenableWorkerBuilder<DicUploadWorker>(context)
-            .setInputData(workDataOf(IntentKeys.SESSION_LOCAL_ID to ID))
-            .build()
-            .doWork()
-    }
-
-    private fun row(): SessionRecord = SessionStore.get(context, ID)!!
-
-    private fun apiError(code: Int, detail: String) =
-        ApiException(code, """{"detail":"$detail"}""", "req-1")
+class DicUploadWorkerTest : UploadWorkerHarness() {
 
     // ── tests ────────────────────────────────────────────────────────────────
 
@@ -513,11 +344,6 @@ class DicUploadWorkerTest {
 
     // ── the paths doWork's steps must keep ──────────────────────────────────
 
-    private fun failReason(result: ListenableWorker.Result): String? =
-        (result as? ListenableWorker.Result.Failure)?.outputData?.getString(IntentKeys.UPLOAD_FAIL_REASON)
-
-    private fun string(id: Int) = context.getString(id)
-
     @Test
     fun `a build with no backend settles the waiting rows and succeeds`() {
         seed()
@@ -653,11 +479,6 @@ class DicUploadWorkerTest {
         assertEquals(string(com.sempermechanics.semper.R.string.cloud_backup_failed_oom), failReason(result))
         assertEquals(SessionRecord.SyncState.FAILED, row().syncState)
         assertFalse(staging.exists())
-    }
-
-    /** Empties the staging, so the run has to prepare it again. */
-    private fun unstage() {
-        staging.deleteRecursively()
     }
 
     @Test
@@ -797,160 +618,5 @@ class DicUploadWorkerTest {
 
         assertEquals("cs1", row().cloudSessionId)
         assertFalse(File(sessionDir, RebuildBudget.STALE_SESSION.marker).exists())
-    }
-
-    // ── a staging that is not the one the cloud session declared ────────────
-
-    @Test
-    fun `a restage under a live session deletes that session first and never completes into it`() {
-        seed(cloudSessionId = "cs1")
-        dropArchive("Session.zip")
-        dropArchive("Extras.zip")
-        api.onSessionUploads = { uploading(it) }
-        api.onCreateSession = { SessionCreateResponse(sessionId = "cs2", status = "UPLOADING") }
-        val uploaded = CopyOnWriteArrayList<String>()
-        api.onUpload = { file ->
-            if (file.name == "Session.zip") uploaded += Digests.sha256Hex(file)
-            file.name to Digests.md5Hex(file)
-        }
-
-        assertEquals(ListenableWorker.Result.success(), run())
-
-        // The rebuilt zips have new timestamps: the same size as before, other
-        // bytes. Resumed, cs1 would keep the old sha256 and every restore fail.
-        assertEquals(listOf("cs1"), api.deleted)
-        assertEquals(setOf("cs2"), api.completed.map { it.sessionId }.toSet())
-        assertEquals(api.created!!.files.single { it.name == "Session.zip" }.sha256, uploaded.single())
-        assertEquals("cs2", row().cloudSessionId)
-        assertEquals(SessionRecord.SyncState.SYNCED, row().syncState)
-    }
-
-    @Test
-    fun `a restage whose session delete fails builds nothing and keeps the pointer`() {
-        seed(cloudSessionId = "cs1")
-        dropArchive("Session.zip")
-        dropArchive("Extras.zip")
-        api.onSessionUploads = { uploading(it) }
-        api.base.onDeleteSession = { _, _ -> throw apiError(503, "firestore_unreachable") }
-
-        assertEquals(ListenableWorker.Result.retry(), run())
-
-        assertEquals("cs1", row().cloudSessionId)
-        // Built now, the next run would find the staging whole and resume cs1 with it.
-        assertFalse(File(staging, "Session.zip").exists())
-        assertTrue(api.calls.none { it == "createSession" || it == "uploadResumable" || it == "completeFile" })
-    }
-
-    @Test
-    fun `a restage the backend cannot answer for keeps the session and builds nothing`() {
-        seed(cloudSessionId = "cs1")
-        dropArchive("Session.zip")
-        dropArchive("Extras.zip")
-        api.onSessionUploads = { throw apiError(503, "firestore_unreachable") }
-
-        assertEquals(ListenableWorker.Result.retry(), run())
-
-        assertTrue(api.deleted.isEmpty())
-        assertEquals("cs1", row().cloudSessionId)
-        assertFalse(File(staging, "Session.zip").exists())
-    }
-
-    @Test
-    fun `a lost staging under a session already complete records the sync and keeps the backup`() {
-        seed(cloudSessionId = "cs1")
-        dropArchive("Session.zip")
-        dropArchive("Extras.zip")
-        api.onSessionUploads = { SessionUploadsResponse(sessionId = it, status = "COMPLETED") }
-
-        assertEquals(ListenableWorker.Result.success(), run())
-
-        assertTrue("a finished backup is never deleted to restage it", api.deleted.isEmpty())
-        assertEquals("cs1", row().cloudSessionId)
-        assertEquals(SessionRecord.SyncState.SYNCED, row().syncState)
-    }
-
-    // ── archives built on one run, reused on the next ───────────────────────
-
-    /** Drops the staged archive [name] and its sidecar, so the run has to build it. */
-    private fun dropArchive(name: String) {
-        File(staging, name).delete()
-        File(staging, "$name.sha256").delete()
-    }
-
-    private fun entries(zip: File): List<String> = ZipFile(zip).use { z -> z.entries().toList().map { it.name } }
-
-    private fun staged(name: String) = File(staging, name).readBytes()
-
-    @Test
-    fun `archives built on one run are reused byte for byte and declared once`() {
-        seed(cloudSessionId = "gone")
-        dropArchive("Session.zip")
-        dropArchive("Extras.zip")
-        api.onSessionUploads = { sid ->
-            if (sid == "gone") throw apiError(404, "session_not_found")
-            uploading(sid)
-        }
-        api.onCreateSession = { SessionCreateResponse(sessionId = "cs9", status = "UPLOADING") }
-        api.onComplete = { _, _ -> throw apiError(503, "firestore_unreachable") }
-
-        // Run 1 finds its old session gone and drops the pointer, builds both
-        // archives from the staged files, and declares them in a new session.
-        assertEquals(ListenableWorker.Result.retry(), run())
-        assertEquals(listOf("gone"), api.deleted)
-        val names = listOf("Session.zip", "Extras.zip")
-        val built = names.associateWith { staged(it) }
-        for (name in names) {
-            assertEquals(name, Digests.sha256Hex(File(staging, name)), File(staging, "$name.sha256").readText())
-        }
-        val restore = entries(File(staging, "Session.zip"))
-        assertTrue(restore.toString(), restore.any { it.startsWith("raw/") } && restore.any { it.startsWith("dat/") })
-        val extras = entries(File(staging, "Extras.zip"))
-        for (role in listOf("csv/", "reports/", "processed/")) {
-            assertTrue("$role in $extras", extras.any { it.startsWith(role) })
-        }
-
-        // Runs 2 and 3 resume that session with the archives run 1 built.
-        assertEquals(ListenableWorker.Result.retry(), run())
-        val declared = api.created!!.files.associateBy { it.name }
-        for (name in names) {
-            assertTrue("$name reused as built", built.getValue(name).contentEquals(staged(name)))
-            assertEquals(name, Digests.sha256Hex(File(staging, name)), declared.getValue(name).sha256)
-            assertEquals(name, File(staging, name).length(), declared.getValue(name).bytes)
-        }
-        assertEquals(ListenableWorker.Result.retry(), run())
-
-        for (name in names) assertTrue("$name unchanged", built.getValue(name).contentEquals(staged(name)))
-        assertEquals(listOf("createSession"), api.calls.filter { it == "createSession" })
-    }
-
-    @Test
-    fun `a staging with only Extras zip rebuilds both archives from the staged files`() {
-        seed(cloudSessionId = "cs1")
-        dropArchive("Session.zip")
-        val seeded = staged("Extras.zip")
-        api.onSessionUploads = { uploading(it) }
-        api.onCreateSession = { SessionCreateResponse(sessionId = "cs2", status = "UPLOADING") }
-        api.onComplete = { _, _ -> throw apiError(503, "firestore_unreachable") }
-
-        assertEquals(ListenableWorker.Result.retry(), run())
-        // cs1 declared the archives that are gone; the rebuilt ones go into a new session.
-        assertEquals(listOf("cs1"), api.deleted)
-        assertEquals("cs2", row().cloudSessionId)
-
-        // Not reusable without Session.zip, so Extras.zip is packed again from
-        // what is staged, with a sidecar that matches it.
-        val extras = File(staging, "Extras.zip")
-        assertFalse(seeded.contentEquals(extras.readBytes()))
-        assertTrue(entries(extras).any { it.startsWith("reports/") })
-        assertEquals(Digests.sha256Hex(extras), File(staging, "Extras.zip.sha256").readText())
-        val built = listOf("Session.zip", "Extras.zip").associateWith { staged(it) }
-
-        assertEquals(ListenableWorker.Result.retry(), run())
-
-        for ((name, bytes) in built) assertTrue("$name reused as built", bytes.contentEquals(staged(name)))
-    }
-
-    private companion object {
-        const val ID = "s_upload"
     }
 }
