@@ -184,7 +184,11 @@ What the code holds (TD-237):
 - A migration that walks `audit_logs` must say why, in a module-level
   `rewrites_append_only` (`backend/scripts/migrations/__init__.py`, `APPEND_ONLY`);
   the loader refuses one that does not. `001_stamp_schema_version` is the one
-  that did, before the guard.
+  that did, before the guard. The one other rewrite written,
+  `backend/scripts/stamp_audit_licence_ids.py` (TD-246: adds `licenseId` to
+  rows from before 2026-10-18 so a licence's export reaches them, and nothing
+  else), refuses `--apply` without `--decision` and records it in
+  `_migrations`. It has not been run; running it is the owner's call.
 - Clients cannot read or write it: `firestore.rules` denies everything, and
   `firestore-rules-tests/rules.test.mjs` tries an update, a merge, an
   overwrite and a delete of an audit row as each caller, an Org Owner's claims
