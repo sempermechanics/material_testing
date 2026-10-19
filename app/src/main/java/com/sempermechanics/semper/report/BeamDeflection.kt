@@ -48,6 +48,9 @@ object BeamDeflection {
     /** Smallest probe radius, so a thin beam still averages some points. */
     const val MIN_PROBE_RADIUS_PX = 8f
 
+    /** Fewest points across the section that give the outer-fibre strain a line. */
+    const val MIN_SECTION_POINTS = 3
+
     private const val MPA_PER_GPA = 1000f
     private const val TWELVE = 12f
     private const val FORTY_EIGHT = 48f
@@ -70,6 +73,51 @@ object BeamDeflection {
         val downX: Float = (taps.bottomX - taps.topX) / taps.thicknessPx
         val downY: Float = (taps.bottomY - taps.topY) / taps.thicknessPx
         val radiusPx: Float = max(taps.thicknessPx / 2f, MIN_PROBE_RADIUS_PX)
+
+        /**
+         * The bending strain at the outer fibre under the load point, in
+         * millistrain. Filmed from the side face, the strain along the beam
+         * (Exx, or Eyy when [axisX] is false) is linear through the thickness
+         * and zero on the neutral axis. So a line is fitted to it against each
+         * point's distance from the taps' midpoint along the tap line, and its
+         * slope times half the tapped thickness is the strain at the face the
+         * second tap marks. The points are the accepted ones with a strain in
+         * the section: within half the thickness of the midpoint across the
+         * beam and [radiusPx] along it. The faces themselves are usually
+         * beyond the strain window's reach, which is why the gradient is read,
+         * not the edge values. Signed by tap order like
+         * [BeamDeflection.deflectionPx]; [BeamDeflection.alongLoad] turns it to
+         * the tension face. Null with fewer than [MIN_SECTION_POINTS] points or
+         * none spread across the section.
+         */
+        fun outerFibreStrainMilli(data: FloatArray, axisX: Boolean): Float? {
+            val cx = taps.midX
+            val cy = taps.midY
+            val half = taps.thicknessPx / 2f
+            val strainIndex = if (axisX) DicResult.IDX_EXX else DicResult.IDX_EYY
+            val across = ArrayList<Double>()
+            val strain = ArrayList<Double>()
+            var i = 0
+            while (i + DicResult.STRIDE <= data.size) {
+                val dx = data[i + DicResult.IDX_X] - cx
+                val dy = data[i + DicResult.IDX_Y] - cy
+                val s = dx * downX + dy * downY
+                val along = dy * downX - dx * downY
+                val value = data[i + strainIndex]
+                val inSection = abs(s) <= half && abs(along) <= radiusPx
+                if (inSection && value.isFinite() && DicResult.isAcceptedPoint(data[i + DicResult.IDX_ZNSSD])) {
+                    across += s.toDouble()
+                    strain += value.toDouble() * DicResult.STRAIN_TO_MILLISTRAIN
+                }
+                i += DicResult.STRIDE
+            }
+            val line = if (across.size < MIN_SECTION_POINTS) {
+                null
+            } else {
+                LinearFit.fit(across.toDoubleArray(), strain.toDoubleArray())
+            }
+            return line?.let { (it.slope * half).toFloat() }
+        }
 
         companion object {
             /** A probe when the taps are set and the thickness entered; else null. */
@@ -174,15 +222,23 @@ object BeamDeflection {
      * student who taps the bottom edge first — or a camera mounted upside
      * down — would otherwise flip δ, the slope and both E. A central load
      * bends the beam its own way, so the sign comes from the test, not the
-     * taps, and a session saved with its taps reversed reads right. Points
-     * without a δ, and a curve with none (tensile), come back as they are.
+     * taps, and a session saved with its taps reversed reads right. The
+     * outer-fibre strain ([Probe.outerFibreStrainMilli]) was read at the second
+     * tap's face, so it flips with δ and is then the tension face's, the side
+     * the load pushes towards. Points without a δ, and a curve with none
+     * (tensile), come back as they are.
      */
     fun alongLoad(points: List<StressStrain.Point>): List<StressStrain.Point> {
         val work = points.sumOf { p ->
             val d = p.deflectionMm
             if (d == null || !p.loadN.isFinite()) 0.0 else p.loadN.toDouble() * d
         }
-        return if (work < 0.0) points.map { p -> p.copy(deflectionMm = p.deflectionMm?.let { -it }) } else points
+        // 0f − x, not −x: a zero strain stays +0 (a data class tells −0f from 0f).
+        return if (work < 0.0) {
+            points.map { p -> p.copy(deflectionMm = p.deflectionMm?.let { -it }, strainMilli = 0f - p.strainMilli) }
+        } else {
+            points
+        }
     }
 
     /** I = b t³ / 12, mm⁴. */

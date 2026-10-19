@@ -8,6 +8,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.PI
+import kotlin.math.pow
 
 class ElasticModulusTest {
 
@@ -43,6 +44,41 @@ class ElasticModulusTest {
         assertEquals(0.99887f, fit.r2, 1e-4f)
         assertEquals(0, fit.firstFrame)
         assertEquals(11, fit.lastFrame)
+        assertEquals(12, fit.points)
+    }
+
+    @Test
+    fun `a gradual yield is refitted between 10 and 40 percent of Rp0_2`() {
+        // Ramberg–Osgood steel, ε = σ / E + 0.002 (σ / 250 MPa)⁸ with E = 200 GPa,
+        // 200 frames to 325 MPa. The longest leading run with R² ≥ 0.995 runs
+        // into the knee (frames 1–108) and reads 185.3 GPa; ISO 6892-1 Annex G's
+        // window, 25.1–100.5 MPa (10–40 % of its Rp0.2 of 251.2 MPa), reads 199.5.
+        val points = (1..200).map { i ->
+            val stress = 325.0 * i / 200
+            val strainMilli = (stress / 200_000.0 + 0.002 * (stress / 250.0).pow(8)) * 1000.0
+            strainMilli.toFloat() to stress.toFloat()
+        }
+        val ro = curve(points)
+
+        val fit = ElasticModulus.fit(ro)!!
+
+        assertEquals(200f, fit.modulusGPa, 4f)
+        assertEquals(199.55f, fit.modulusGPa, 0.05f)
+        assertEquals(15, fit.firstFrame)
+        assertEquals(60, fit.lastFrame)
+        assertEquals(46, fit.points)
+        assertTrue(fit.r2 >= ElasticModulus.MIN_R2)
+        // Rp0.2 off the refitted line is the material's own 250 MPa.
+        assertEquals(250.03f, YieldStrength.offset(ro, fit)!!.stressMPa, 0.05f)
+    }
+
+    @Test
+    fun `a curve with no Rp0_2 keeps its longest straight run`() {
+        // Exp. 2's table never leaves the line by 0.2 %: all twelve rows stay
+        // (a 10–50 %-of-peak window would keep three and read 210.5 GPa).
+        val fit = ElasticModulus.fit(labCurve())!!
+
+        assertNull(YieldStrength.offset(labCurve(), fit))
         assertEquals(12, fit.points)
     }
 

@@ -42,7 +42,8 @@ internal class LabExport(
         if (curve == null || curve.isEmpty) return null
         val axisLabels = ViewerStressStrainHelper.axisLabels(context, curve.model)
         val modulus = ViewerStressStrainHelper.modulusOf(curve)
-        val plot = withContext(Dispatchers.Main) {
+        // Bending without its edge taps has no strain to plot: the page keeps its table.
+        val plot = if (!curve.model.measuresStrain) null else withContext(Dispatchers.Main) {
             val print = ViewerStressStrainHelper.printContext(context)
             SweepPlotView(print).run {
                 setData(

@@ -2,6 +2,7 @@
 
 package com.sempermechanics.semper.report
 
+import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
 import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.field.DicResult
 import org.junit.Assert.assertEquals
@@ -178,8 +179,70 @@ class StressStrainTest {
         assertTrue(model.isComplete)
         assertEquals(150f, model.stressMPa(200f), 1e-3f)
         assertEquals(-150f, model.stressMPa(-200f), 1e-3f)
-        assertEquals(2f, model.strainMilli(field(exx = 0.002f, eyy = -0.0006f), gauge = null)!!, 1e-3f)
         assertEquals(listOf(80f, 10f, 4f), model.dimensions.map { it.second })
+    }
+
+    /**
+     * The beam's side face, 100 px thick between taps at y = 0 and y = 100 and
+     * 100 px along it: Exx = [k] (y − 50), linear through the thickness and zero
+     * on the neutral axis, and every point moved [vPx] down.
+     */
+    private fun bentField(k: Float, vPx: Float): FloatArray {
+        val data = FloatArray(11 * 11 * DicResult.STRIDE)
+        var i = 0
+        for (row in 0..10) {
+            for (col in 0..10) {
+                data[i + DicResult.IDX_X] = col * 10f
+                data[i + DicResult.IDX_Y] = row * 10f
+                data[i + DicResult.IDX_V] = vPx
+                data[i + DicResult.IDX_EXX] = k * (row * 10f - 50f)
+                data[i + DicResult.IDX_ZNSSD] = 0.05f
+                i += DicResult.STRIDE
+            }
+        }
+        return data
+    }
+
+    private fun bending(taps: BeamEdgeTaps) =
+        StressStrain.Model.Flexural(200f, 10f, 10f, axisX = true, probe = BeamDeflection.Probe(taps, 10f))
+
+    @Test
+    fun `bending strain is the outer fibre's, from the gradient through the thickness`() {
+        // ±1 mε at the two faces (k = 2×10⁻⁵ per px over ±50 px). The field's
+        // mean, which the curve plotted before, is 0.
+        val data = bentField(k = 2e-5f, vPx = 0f)
+
+        assertEquals(1.0f, bending(BeamEdgeTaps(50f, 0f, 50f, 100f)).strainMilli(data, gauge = null)!!, 0.05f)
+        assertEquals(0f, DicResult.fieldStats(data, DicResult.IDX_EXX)!![2], 1e-6f)
+    }
+
+    @Test
+    fun `the bending strain is the tension face's whichever edge was tapped first`() {
+        // Loads push the beam down the photo (+v), so the bottom face is in tension.
+        val loads = listOf(10f, 20f)
+        val frames = { f: Int -> bentField(k = 2e-5f * (f + 1), vPx = 2f * (f + 1)) }
+
+        val topFirst = StressStrain.build(loads, bending(BeamEdgeTaps(50f, 0f, 50f, 100f)), frames)
+        val bottomFirst = StressStrain.build(loads, bending(BeamEdgeTaps(50f, 100f, 50f, 0f)), frames)
+
+        listOf(topFirst, bottomFirst).forEach { curve ->
+            assertEquals(listOf(1f, 2f), curve.points.map { Math.round(it.strainMilli * 100f) / 100f })
+            assertEquals(listOf(0.2f, 0.4f), curve.points.map { Math.round(it.deflectionMm!! * 100f) / 100f })
+        }
+    }
+
+    @Test
+    fun `bending without the edge taps measures no strain but keeps its stress`() {
+        val model = StressStrain.Model.Flexural(spanMm = 80f, widthMm = 10f, thicknessMm = 4f, axisX = true)
+        val curve = StressStrain.build(listOf(200f), model, { field(exx = 0.002f, eyy = -0.0006f) })
+
+        assertFalse(model.measuresStrain)
+        assertTrue(model.strainMilli(field(exx = 0.002f, eyy = -0.0006f), gauge = null)!!.isNaN())
+        assertEquals(150f, curve.points.single().stressMPa, 1e-3f)
+        // Only the origin: no strain to plot against.
+        assertEquals(listOf(0f to 0f), curve.plotPoints())
+        assertTrue(StressStrain.Model.Axial(1f, true).measuresStrain)
+        assertTrue(bending(BeamEdgeTaps(50f, 0f, 50f, 100f)).measuresStrain)
     }
 
     @Test

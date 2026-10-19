@@ -839,6 +839,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="stress_strain_caption_fmt">Frame %1$d · %2$s N · %3$s MPa · %4$s mε</string>
     <string name="stress_strain_frame_skipped">This frame has no accepted points, so it is not on the curve.</string>
     <string name="stress_strain_empty">No frame has accepted points, so there is no curve.</string>
+    <string name="stress_strain_no_strain">The beam’s edges were not tapped for this analysis, so there is no deflection or bending strain to plot the loads against. Set the beam height on the reference and run it again for δ, E and the outer-fibre strain.</string>
     <plurals name="results_summary_caption_fmt">
         <item quantity="one">The whole test: %1$d of %2$d photo on the curve. Tap › to see its strain.</item>
         <item quantity="other">The whole test: %1$d of %2$d photos on the curve. Tap › to see each photo’s strain.</item>

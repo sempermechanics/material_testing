@@ -165,11 +165,14 @@ class ViewerStressStrainHelper(
         views.adjust.setOnClickListener {
             if (bending) ViewerDeflectionCorrection.show(host) else ViewerCurveCorrection.show(host)
         }
-        if (curve.isEmpty) {
+        if (curve.isEmpty || !curve.model.measuresStrain) {
+            // Bending without its edge taps has stresses but no strain or δ to
+            // plot them against: no plot, a caption that says why, the peak.
             plot.isVisible = false
-            result.isVisible = false
             (views.range.parent as View).isVisible = false
-            views.caption.setText(R.string.stress_strain_empty)
+            views.caption.setText(if (curve.isEmpty) R.string.stress_strain_empty else R.string.stress_strain_no_strain)
+            result.isVisible = !curve.isEmpty
+            if (!curve.isEmpty) result.text = resultsText(host, curve, null)
             return
         }
         plot.isVisible = true

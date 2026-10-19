@@ -11,9 +11,10 @@ import kotlin.math.abs
  * stress a load becomes, and which strain component pairs with it, is the
  * test's [Model]: load over cross-section for tensile, three-point flexural
  * stress for bending. Tensile strain is the virtual extensometer's ΔL / L₀
- * ([Extensometer], ADR-012); bending's is the mean over the frame's accepted
- * points. Both in millistrain. Pure — the viewer, the CSV and the PDF all
- * read one [Curve].
+ * ([Extensometer], ADR-012); bending's is the outer fibre's, from the strain
+ * gradient through the thickness under the tapped load point
+ * ([BeamDeflection.Probe.outerFibreStrainMilli]), and none without the taps. Both in
+ * millistrain. Pure — the viewer, the CSV and the PDF all read one [Curve].
  *
  * Loads keep the sign they were logged with, so a test logged negative plots
  * in the third quadrant. Nothing here takes an absolute value.
@@ -41,17 +42,27 @@ object StressStrain {
         val wireName: String,
         /** Report wording, e.g. "Engineering stress". */
         val stressName: String,
-        /** Report wording for the strain, e.g. "mean Exx". */
+        /** Report wording for the strain, e.g. "outer-fibre Exx". */
         val strainName: String,
     ) {
         abstract val isComplete: Boolean
         abstract fun stressMPa(loadN: Float): Float
 
         /**
-         * The frame's strain in millistrain, or null when it has none. [gauge]
-         * is the curve's [Extensometer] gauge; only [Axial] reads it.
+         * The frame's strain in millistrain, or null when it has none and is
+         * left off the curve. NaN keeps the frame on the curve (its stress and
+         * deflection stand) without a strain: bending without its edge taps,
+         * or a section too sparse to read. [gauge] is the curve's
+         * [Extensometer] gauge; only [Axial] reads it.
          */
         abstract fun strainMilli(data: FloatArray, gauge: Extensometer.Gauge?): Float?
+
+        /**
+         * Whether this model reads a strain at all. False for bending without
+         * its edge taps: every point's strain is NaN, and the plot and the
+         * report's strain column are left out.
+         */
+        open val measuresStrain: Boolean get() = true
 
         /** Report wording for where the strain is read, after [strainName]. */
         open val strainBasis: String get() = "over accepted points"
@@ -102,13 +113,17 @@ object StressStrain {
         }
 
         /**
-         * Three-point bending: outer-fibre stress σ = 3 P L / (2 b h²), with
-         * strain along the beam. The surface the camera sees is the outer
-         * fibre, so the DIC strain there is the flexural strain directly.
-         * With a [probe] — the tapped load point — each frame also reads the
-         * deflection there, and the curve is load on deflection
-         * ([BeamDeflection]). [isComplete] stays dimensions-only, so a session
-         * from before the tap keeps its stress.
+         * Three-point bending: outer-fibre stress σ = 3 P L / (2 b h²). The
+         * camera films the beam's side face, where the strain along the beam
+         * runs linearly through the thickness from compression at the top to
+         * tension at the bottom, so its mean is about zero. With a [probe] —
+         * the tapped load point — the outer fibre's strain is read from that
+         * gradient across the tapped thickness ([BeamDeflection.Probe.outerFibreStrainMilli]),
+         * signed with the load like δ, and each frame also reads the deflection
+         * there: the curve is load on deflection ([BeamDeflection]). Without
+         * the taps there is no thickness in pixels and no neutral axis, so no
+         * strain ([measuresStrain] is false). [isComplete] stays
+         * dimensions-only, so a session from before the tap keeps its stress.
          */
         data class Flexural(
             val spanMm: Float,
@@ -116,12 +131,25 @@ object StressStrain {
             val thicknessMm: Float,
             val axisX: Boolean,
             val probe: BeamDeflection.Probe? = null,
-        ) : Model("flexural", "Flexural stress", axisStrainName(axisX)) {
+        ) : Model("flexural", "Flexural stress", flexuralStrainName(axisX, probe != null)) {
             override val isComplete: Boolean get() = spanMm > 0f && widthMm > 0f && thicknessMm > 0f
             override fun stressMPa(loadN: Float): Float =
                 if (isComplete) THREE * loadN * spanMm / (2f * widthMm * thicknessMm * thicknessMm) else Float.NaN
-            override fun strainMilli(data: FloatArray, gauge: Extensometer.Gauge?): Float? =
-                axisStrainMilli(data, axisX)
+
+            // A frame with no accepted point is left off, as before; one with
+            // points keeps its stress and δ even when its strain cannot be read.
+            override fun strainMilli(data: FloatArray, gauge: Extensometer.Gauge?): Float? = when {
+                axisStrainMilli(data, axisX) == null -> null
+                probe == null -> Float.NaN
+                else -> probe.outerFibreStrainMilli(data, axisX) ?: Float.NaN
+            }
+            override val measuresStrain: Boolean get() = probe != null
+            override val strainBasis: String
+                get() = if (probe != null) {
+                    "on the tension face, from its gradient through the tapped thickness at the load point"
+                } else {
+                    "(the beam's edges were not tapped, so there is no thickness to read it across)"
+                }
             override val dimensions get() = listOf(
                 Dimension.SPAN to spanMm,
                 Dimension.WIDTH to widthMm,
@@ -218,8 +246,8 @@ object StressStrain {
          * the model [plots load on deflection][Model.plotsLoadDeflection] —
          * led by the unloaded reference at the origin so the elastic line
          * reads from zero; for bending at (bias, 0), where a deflection
-         * correction puts it. Display only — it is not a solved frame and is
-         * not exported.
+         * correction puts it. A point without a strain (NaN) is not drawn.
+         * Display only — it is not a solved frame and is not exported.
          */
         fun plotPoints(): List<Pair<Float, Float>> =
             if (model.plotsLoadDeflection) {
@@ -227,7 +255,7 @@ object StressStrain {
                 listOf(BeamDeflection.Correction.of(model).apply(0f) to 0f) +
                     points.mapNotNull { p -> p.deflectionMm?.let { it to p.loadN } }
             } else {
-                listOf(0f to 0f) + points.map { it.strainMilli to it.stressMPa }
+                listOf(0f to 0f) + points.filter { it.strainMilli.isFinite() }.map { it.strainMilli to it.stressMPa }
             }
     }
 
@@ -313,7 +341,11 @@ object StressStrain {
     private fun axisStrainMilli(data: FloatArray, axisX: Boolean): Float? =
         DicResult.fieldStats(data, if (axisX) DicResult.IDX_EXX else DicResult.IDX_EYY)?.get(MEAN)
 
-    private fun axisStrainName(axisX: Boolean): String = if (axisX) "mean Exx" else "mean Eyy"
+    private fun flexuralStrainName(axisX: Boolean, tapped: Boolean): String = when {
+        !tapped -> "no strain"
+        axisX -> "outer-fibre Exx"
+        else -> "outer-fibre Eyy"
+    }
 
     private const val MEAN = 2
     private const val THREE = 3f

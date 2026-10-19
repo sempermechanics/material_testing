@@ -54,6 +54,7 @@ Typed loads and a CSV are never combined; ✕ on one brings back the choice. Ten
 - **E** is the slope of the straight early part.
   - The fit takes the longest leading run up to the peak whose line keeps R² ≥ 0.995, with a free intercept.
   - Every run length is tried, so noisy first photos don't stop it.
+  - On a metal that yields gradually that run reaches into the knee and reads low (185 GPa on a 200 GPa Ramberg–Osgood curve). So, as in ISO 6892-1 Annex G, the line is fitted again over the photos between 10 % and 40 % of the Rp0.2 the first line gives (199.5 GPa there). The refit is kept only with at least 3 photos and R² ≥ 0.995 in that window; otherwise, or with no Rp0.2, the first line stands (Exp. 2's twelve rows never yield, so they keep 194.0 GPa; the steel case's window reads R² 0.978, so it keeps 148.9).
   - MPa ÷ mε = GPa.
 - **The reference is not forced onto the line.** Labs zero the gauge under a preload. Through the origin, Exp. 2 would read 218 GPa, not 194.
 - **Yield strength Rp0.2** (0.2 % offset): where the curve meets the E line moved 0.2 % (2 mε) along the strain axis, read between the two photos either side (`YieldStrength`). It is marked with a diamond, with its value in the legend, on the viewer's curve and the report's full curve graph. Without E, or when the curve peaks before it reaches the offset line, there is none, and the viewer and the report say so. Photos far apart around yield make it coarse.
@@ -75,6 +76,7 @@ Typed loads and a CSV are never combined; ✕ on one brings back the choice. Ten
 
 - **σb = M·y/I**, where M = WL/4, y = t/2 and I = bt³/12. This equals 3PL/(2bh²).
 - **δ** is the DIC deflection at the load point, in place of the dial gauge.
+- **Strain** (the DIC PDF's table): the camera films the side face, where the strain along the beam runs linearly through the thickness, compression at the top and tension at the bottom, so the face's mean is about zero and says nothing. The app reads the outer fibre's instead: under the load point it fits a line to Exx against the distance from the midpoint of the two taps, and multiplies its slope by half the tapped thickness (`BeamDeflection.Probe.outerFibreStrainMilli`). It is the tension face's, signed with the load like δ. Without the taps there is no thickness in pixels to read it across, so a bending analysis without them shows no strain: the PDF leaves the column out and says why, and the viewer draws no curve.
 - **E = WL³/(48·δ·I)** is given for each load step and averaged, and also from the load–deflection slope. The report asks for both.
 - **Scale:** mm/px = t ÷ the thickness in px.
   - The editor zooms (pinch or double-tap) and pans, and the zoom holds while you mark.
@@ -82,7 +84,7 @@ Typed loads and a CSV are never combined; ✕ on one brings back the choice. Ten
   - The second mark stays on the first mark's vertical line, so the thickness is measured straight down.
   - Either edge can be tapped first. δ is read along the line between the marks and then signed the way the load pushes (`BeamDeflection.alongLoad`), so the order never flips δ or E.
 - **Units:** loads read in kg wherever the student sees them (graph, table, captions, the report, slope in kg/mm); the report's calculation shows W = m·g in N. The maths, the CSV and the JSON stay in N.
-- **Strain window:** bending starts at 9 points, not 5: a 41 px VSG at step 5, not 21 px. δ and E come from displacement, so strain only draws the maps, and at about 45 px they are about 2.5× less noisy. The cost is a band about 20 px wide along the ROI's edges with no strain (the outer fibres), which also lowers the "converged" figure. On a thin beam, lower it or frame closer.
+- **Strain window:** bending starts at 9 points, not 5: a 41 px VSG at step 5, not 21 px. δ and E come from displacement, so strain draws the maps and the outer-fibre strain above, and at about 45 px they are about 2.5× less noisy. The cost is a band about 20 px wide along the ROI's edges with no strain (the outer fibres themselves, which is why the outer-fibre strain comes from the gradient through the points between them), which also lowers the "converged" figure. On a thin beam, lower it or frame closer.
 - **Load steps:**
   - Frames within 0.5% of the largest load of each other form one averaged row, so a 1 fps video gives the same six rows as six photos.
   - Frames under 1% of the largest load (the reference, and frames before the hanger went on) are left out of the table, the average and the slope.
@@ -131,7 +133,7 @@ It's offered once the thickness is tapped.
 - **CSV:** a `# mechanical_results` trailer after the point rows.
   - **Tensile:** `# elastic_modulus_gpa`, `# elastic_fit_frames` and `# elastic_fit_r2`.
   - **Bending:** one `# bending_step` row per frame, `# e_mean_gpa`, the slope and its R², and `# e_slope_gpa`. The last three are over the load steps.
-- **DIC PDF report:** its closing page is the stress–strain or load–deflection page, with E.
+- **DIC PDF report:** its closing page is the stress–strain or load–deflection page, with E. Bending's table carries the outer-fibre strain; without the edge taps it has no strain column.
 
 ## Capture checklist
 
