@@ -143,13 +143,14 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   type or loads yet (TD-280). Metadata schema `/7` here (ours past `/3` are not the
   parent's numbers). Lab inputs ride its seams: `RunSpec.mechanical` (ADR-004),
   `ViewerArgs` (ADR-003), `WizardDraft` (ADR-005). ADR and TD numbers are shared; the
-  next TD free in both is TD-306.
-- **Open: #140** (`ccr-603fe346-1bw2fa`, the 2026-10-19 review; `main` merged in): load
-  logs in kgf/tf, decimal commas after a long preamble and logged time units; whole-second
-  photo times matched within 1 s; E refitted over 10–40 % of Rp0.2; bending strain from
-  the thickness gradient (none without taps); planned frame numbers, Rp0.2 and peak in the
-  CSV trailer; one `LabWizardState`, `LabSession`, `TensileResults` and Results panel; and
-  semperdic-app #457's upload, download and ui-4 commits. Left: TD-300–TD-305.
+  next TD free in both is TD-311.
+- **Open: #140** (`ccr-603fe346-1bw2fa`, the 2026-10-19 review; `main` merged in): load logs
+  in kgf/tf, decimal commas and the delimiter read after a long preamble, logged time units;
+  photo times matched within 1 s when any lacks EXIF sub-seconds; E refitted over 10–40 % of
+  Rp0.2; bending strain along the beam from the thickness gradient (none without taps); Rp0.2
+  and peak in the CSV trailer; one `LabWizardState`, `LabSession` and Results panel; #457's
+  upload, download and ui-4 commits. Left: TD-300, TD-301 (`ViewerArgs`), TD-305 (the rest of
+  #457, now with its TD-281–TD-297 batch, at the next sync) and TD-310 (taps held vertical).
 - **Readiness port, merged 2026-10-19, not deployed** (#137, #138: semperdic-app's
   #448/#449; TD-214–TD-279, FI-17–FI-24): **minSdk 30**, the signed offline entitlement
   ([ADR-023](docs/adr/ADR-023-signed-offline-entitlement.md); tokens name `materialtesting`),
