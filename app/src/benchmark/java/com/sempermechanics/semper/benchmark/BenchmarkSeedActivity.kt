@@ -9,11 +9,11 @@ import android.os.Bundle
 import androidx.core.graphics.createBitmap
 import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.FieldRangesStore
 import com.sempermechanics.semper.report.VisualizationEngine
 import com.sempermechanics.semper.ui.viewer.ViewerArgs
-import com.sempermechanics.semper.ui.viewer.summary.SummaryAnimation
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.ByteBuffer
@@ -88,7 +88,7 @@ class BenchmarkSeedActivity : Activity() {
         val photoDir = File(dir, SessionPaths.RAW_DEFORMED_SUBDIR)
         val photosSeeded = photoNames == null || File(photoDir, photoNames.last()).isFile
         if (expected.exists() && rangesFile.exists() && photosSeeded) return dir // already seeded
-        val fieldIndices = SummaryAnimation.FIELDS.map { it.second }.toIntArray()
+        val fieldIndices = FieldKind.entries.map { it.dataIndex }.toIntArray()
         val perFrameRanges = ArrayList<Map<Int, ValueRange?>>(frameCount)
         val floats = FloatArray(COLS * ROWS * DicResult.STRIDE)
         val buf = ByteBuffer.allocate(floats.size * 4).order(ByteOrder.nativeOrder())

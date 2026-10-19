@@ -299,7 +299,9 @@ were done in part (their rows say what), and TD-210 was looked at and left for a
   are unchanged. `ValueRange.toPair` and `of(pair)` are deleted (`field/ValueRange.kt`).
   Tests `FieldRangesStoreTest`, `SummaryGifOracleTest`, `VisualizationEngineTest`. `e0ae47c`.
 - **TD-289** (`SummaryAnimation.FIELDS`). Deleted; the bundler's GIF loop walks
-  `FieldKind.entries` (`data/cloud/SessionUploadBundler.kt:245`), same order and names.
+  `FieldKind.entries` (`data/cloud/SessionUploadBundler.kt:245`), same order and names,
+  as does the benchmark seeder (`app/src/benchmark/java/com/sempermechanics/semper/benchmark/BenchmarkSeedActivity.kt:91`, missed
+  by `56ee4c0` and caught by Kover's benchmark-variant compile).
   Test `SummaryAnimationTest`. `56ee4c0`.
 - **TD-290** (`HomeActivity.kt` 434 lines). Its cloud check moved to `HomeCloudCheck`
   (`ui/home/HomeCloudCheck.kt:21`, `request` `:50`; built at `ui/home/HomeActivity.kt:108`),
