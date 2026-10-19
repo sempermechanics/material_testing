@@ -134,7 +134,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   No release built from it. Owed at deploy, in [checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md)
   order: indexes, backend, gateway, Hosting, monitoring; also TD-214, TD-215, TD-219, TD-226,
   TD-229–TD-232, counsel on the Terms (TD-277).
-- **Open: #457** (`ccr-603fe346-1bw2fa` @ `9aa8cd1`: the 2026-10-19 review and two tech-debt
+- **#457 merged, not deployed** (`main` @ `f5396c2`: the 2026-10-19 review and two tech-debt
   rounds; closed TD-171, 198, 207, 281–293, 295–297, 306–308). Backend: device trust levels
   (ADR-010 amendment), `step_up.py` and `services/`, a new-device mail, projected listings, a
   licence fan-out finished by a Cloud Task ([ADR-026](docs/adr/ADR-026-licence-fanout-marker.md)),
@@ -145,6 +145,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   At deploy ([checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md)): TOTP re-registration, C1/C2,
   `NOTIFY_SECURITY_FROM` (TD-309), `TASKS_QUEUE` (TD-294), the audit bucket lock (TD-237).
   Left: TD-237, TD-246, TD-294, TD-298, TD-299, TD-309.
+- **Open: `ccr-603fe346-1bw2fa`** merges #443/#444: Advanced → Reference, the engine's
+  `IncrementalSession` every N frames (a video's in seconds of the clip); fixed stays the
+  default, its path unchanged. Pin unchanged. Not yet run on a device or emulator.
 - **Engine: semper-dic-engine#9 open** (0.5.0, the review's engine fixes). The pin stays
   `23034fe` (0.4.2) until it is released; the bump, with re-captured oracles, is TD-299.
 - **material_testing** merges this `main` (last `17d7bc8`, material_testing#139,
