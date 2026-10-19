@@ -76,12 +76,12 @@ _BY_ID = (("__name__", ASC),)
 #: function whose filters depend on its arguments lists one shape per
 #: combination it can send.
 QUERY_SHAPES: dict[str, list[Shape]] = {
-    "app/audit.py::list_license_device_history": [
+    "app/repo/audit_log.py::list_license_device_history": [
         _q("audit_logs", ("target.id", "==")),
         _q("audit_logs", ("target.id", ">="), ("target.id", "<")),
     ],
     # One licence's audit log, newest first, optionally within dates.
-    "app/audit.py::page_license_audit": [
+    "app/repo/audit_log.py::page_license_audit": [
         _q("audit_logs", ("licenseId", "=="), order=(("ts", DESC),), note="no range"),
         _q("audit_logs", ("licenseId", "=="), ("ts", ">="), order=(("ts", DESC),)),
         _q("audit_logs", ("licenseId", "=="), ("ts", "<"), order=(("ts", DESC),)),
@@ -154,6 +154,7 @@ QUERY_SHAPES: dict[str, list[Shape]] = {
         _q("users", ("access_status", "=="), order=_BY_ID),
     ],
     "app/repo/users.py::set_user_status": [_q("devices", ("uid", "=="))],
+    "app/repo/users.py::sign_in_uids": [_q("auth_links", ("uid", "=="))],
 }
 
 #: Functions that order a query their caller built; the caller declares the shape.

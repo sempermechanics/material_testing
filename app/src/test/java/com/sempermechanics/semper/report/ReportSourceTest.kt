@@ -6,8 +6,11 @@ import android.graphics.Bitmap
 import androidx.core.graphics.createBitmap
 import com.sempermechanics.semper.data.cloud.SessionUploadBundler
 import com.sempermechanics.semper.data.session.SessionRecord
+import com.sempermechanics.semper.field.DicParams
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FrameParams
 import com.sempermechanics.semper.field.ImageSize
+import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.fixtures.sessionRecord
 import com.sempermechanics.semper.ui.viewer.ViewerArgs
 import com.sempermechanics.semper.ui.viewer.ViewerSweepArgs
@@ -149,7 +152,7 @@ class ReportSourceTest {
                 assertEquals("$id frame $i", id, params.sessionId)
                 assertEquals("spec", params.specimenName)
                 assertEquals("spec.tif", params.referenceImageName)
-                assertEquals(RoiData(3, 4, 40, 30), params.roiData)
+                assertEquals(Roi(3, 4, 40, 30), params.roi)
             }
         }
         // What the bundle prints, spelled out: the MAX marker only, the default
@@ -212,7 +215,7 @@ class ReportSourceTest {
 
     /** What a report prints, without its bitmaps or its clock. */
     private fun printed(r: ReportData) = listOf(
-        r.sessionId, r.specimenName, r.subsetSize, r.stepSize, r.strainWindow, r.strainMethod, r.roiData,
+        r.sessionId, r.specimenName, r.subsetSize, r.stepSize, r.strainWindow, r.strainMethod, r.roi,
         r.referenceImageName, r.deformedImageName, r.engineStats, r.globalAvgZnssd, r.znssdAcceptedPoints,
         r.fieldResults.map {
             listOf(it.fieldKey, it.minValue, it.maxValue, it.meanValue, it.stdDevValue, it.minCoordX, it.maxCoordY)
@@ -247,21 +250,17 @@ class ReportSourceTest {
             sessionId = "s",
             refName = "r.png",
             frameNames = emptyList(),
-            imgW = 1,
-            imgH = 1,
-            roi = RoiData(0, 0, 1, 1),
+            size = ImageSize(1, 1),
+            roi = Roi(0, 0, 1, 1),
             strainMethod = "VSG",
-            subset = 41,
-            step = 5,
-            strainWindow = 15,
-            subsetPerFrame = listOf(21),
-            stepPerFrame = listOf(3, 4),
+            frameParams = FrameParams(DicParams(41, 5, 15), subsets = listOf(21), steps = listOf(3, 4)),
         )
-        assertEquals(21, source.subsetAt(0))
-        assertEquals(41, source.subsetAt(1))
-        assertEquals(4, source.stepAt(1))
-        assertEquals(5, source.stepAt(2))
-        assertEquals(15, source.strainWindowAt(0))
+        fun printed(frame: Int) = source.forFrame(frame, FloatArray(0), base, cover, analysisDate = date)
+            .let { listOf(it.subsetSize, it.step, it.strainWindow) }
+        assertEquals(listOf(21, 3, 15), printed(0))
+        assertEquals(listOf(41, 4, 15), printed(1))
+        assertEquals(listOf(41, 5, 15), printed(2))
+        assertEquals(1, source.forFrame(0, FloatArray(0), base, cover).imgW)
         assertEquals("Frame_3", source.forFrame(2, FloatArray(0), base, cover, analysisDate = date).deformedImageName)
     }
 }

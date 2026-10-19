@@ -7,6 +7,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.fixtures.idleUntil
 import com.sempermechanics.semper.fixtures.viewerArgs
@@ -15,6 +16,7 @@ import com.sempermechanics.semper.fixtures.writeGridBatch
 import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
 import kotlinx.coroutines.asCoroutineDispatcher
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -66,7 +68,26 @@ class ViewerRotationTest {
         idleUntil("the frame listing") { activity.frameSetLoaded }
         assertEquals(FRAMES, activity.frameCount())
         idleUntil("the first frame") { activity.rawData != null }
-        assertEquals(0, activity.currentFrameIndex)
+        assertEquals(0, activity.viewModel.currentFrameIndex)
+    }
+
+    @Test
+    fun `a rotation keeps the listed frames, the frame and the field rather than listing again`() {
+        val controller = viewerController(viewerArgs(batchDir, GRID, STEP))
+        val activity = controller.get()
+        idleUntil("the first frame") { activity.rawData != null }
+        activity.viewModel.currentFrameIndex = 1
+        activity.viewModel.field = FieldKind.EXY
+        val listed = checkNotNull(activity.viewModel.state.value.frameSet)
+
+        val rebuilt = controller.recreate().get()
+        idleUntil("the rebuilt viewer's frames") { rebuilt.frameSetLoaded }
+
+        // The same listing object: the rebuilt viewer did not read the batch again.
+        assertSame(listed, rebuilt.viewModel.state.value.frameSet)
+        assertEquals(FRAMES, rebuilt.frameCount())
+        assertEquals(1, rebuilt.viewModel.currentFrameIndex)
+        assertEquals(FieldKind.EXY, rebuilt.viewModel.state.value.field)
     }
 
     @Test
@@ -82,11 +103,11 @@ class ViewerRotationTest {
         dialog.findViewById<EditText>(R.id.etScaleMax)!!.setText("3")
         dialog.getButton(DialogInterface.BUTTON_POSITIVE).performClick()
         shadowOf(activity.mainLooper).idle()
-        assertEquals(ValueRange(-2f, 3f), activity.customBoundsFor(DicResult.IDX_U))
+        assertEquals(ValueRange(-2f, 3f), activity.viewModel.customBounds[DicResult.IDX_U])
 
         val rebuilt = controller.recreate().get()
         idleUntil("the rebuilt viewer's frame") { rebuilt.rawData != null }
 
-        assertEquals(ValueRange(-2f, 3f), rebuilt.customBoundsFor(DicResult.IDX_U))
+        assertEquals(ValueRange(-2f, 3f), rebuilt.viewModel.customBounds[DicResult.IDX_U])
     }
 }

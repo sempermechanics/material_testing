@@ -1,6 +1,8 @@
 package com.sempermechanics.semper.results
 
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.ImageSize
+import com.sempermechanics.semper.report.HeatmapRequest
 import com.sempermechanics.semper.report.VisualizationEngine
 import com.sempermechanics.semper.ui.viewer.inspect.PointSpatialIndex
 import com.sempermechanics.semper.ui.viewer.inspect.ViewerInspectController
@@ -47,10 +49,25 @@ class DeformedHeatmapTest {
     private fun VisualizationEngine.IndexPlane.at(x: Int, y: Int): Int = indices[y * width + x].toInt() and 0xFF
 
     private fun reference(data: FloatArray) =
-        VisualizationEngine.generateHeatmapIndices(data, w, h, DicResult.IDX_EXX, step)
+        VisualizationEngine.indices(
+            HeatmapRequest(
+                data = data,
+                size = ImageSize(w, h),
+                valIndex = DicResult.IDX_EXX,
+                step = step,
+            ),
+        )
 
     private fun deformed(data: FloatArray) =
-        VisualizationEngine.generateDeformedHeatmapIndices(data, w, h, DicResult.IDX_EXX, step)
+        VisualizationEngine.indices(
+            HeatmapRequest(
+                data = data,
+                size = ImageSize(w, h),
+                valIndex = DicResult.IDX_EXX,
+                step = step,
+                displaced = true,
+            ),
+        )
 
     @Test
     fun `with no displacement it is the reference render`() {
@@ -112,7 +129,15 @@ class DeformedHeatmapTest {
     fun `the bitmap is the index plane in viewer colours`() {
         val data = field(u = 2.5f, v = 1.5f)
         val plane = deformed(data)
-        val (bitmap, min, max) = VisualizationEngine.generateDeformedHeatmap(data, w, h, DicResult.IDX_EXX, step)
+        val (bitmap, min, max) = VisualizationEngine.render(
+            HeatmapRequest(
+                data = data,
+                size = ImageSize(w, h),
+                valIndex = DicResult.IDX_EXX,
+                step = step,
+                displaced = true,
+            ),
+        )
 
         assertEquals(plane.min, min, 0f)
         assertEquals(plane.max, max, 0f)
@@ -133,13 +158,15 @@ class DeformedHeatmapTest {
     @Test
     fun `a display cap scales the moved positions with the image`() {
         val data = field(u = 8f, v = 4f)
-        val plane = VisualizationEngine.generateDeformedHeatmapIndices(
-            data,
-            w,
-            h,
-            DicResult.IDX_EXX,
-            step,
-            maxLongEdge = w / 2,
+        val plane = VisualizationEngine.indices(
+            HeatmapRequest(
+                data = data,
+                size = ImageSize(w, h),
+                valIndex = DicResult.IDX_EXX,
+                step = step,
+                maxLongEdge = w / 2,
+                displaced = true,
+            ),
         )
         assertEquals(w / 2, plane.width)
         assertEquals(h / 2, plane.height)
@@ -188,10 +215,25 @@ class DeformedHeatmapTest {
         val data = field(u = 6f, v = 3f)
         fun pixels(bitmap: android.graphics.Bitmap) = IntArray(w * h).also { bitmap.getPixels(it, 0, w, 0, 0, w, h) }
         val displaced = VisualizationEngine.generateFrameHeatmap(true, data, w, h, DicResult.IDX_EXX, step)
-        val deformed = VisualizationEngine.generateDeformedHeatmap(data, w, h, DicResult.IDX_EXX, step)
+        val deformed = VisualizationEngine.render(
+            HeatmapRequest(
+                data = data,
+                size = ImageSize(w, h),
+                valIndex = DicResult.IDX_EXX,
+                step = step,
+                displaced = true,
+            ),
+        )
         assertArrayEquals(pixels(deformed.bitmap), pixels(displaced.bitmap))
         val onReference = VisualizationEngine.generateFrameHeatmap(false, data, w, h, DicResult.IDX_EXX, step)
-        val reference = VisualizationEngine.generateHeatmap(data, w, h, DicResult.IDX_EXX, step)
+        val reference = VisualizationEngine.render(
+            HeatmapRequest(
+                data = data,
+                size = ImageSize(w, h),
+                valIndex = DicResult.IDX_EXX,
+                step = step,
+            ),
+        )
         assertArrayEquals(pixels(reference.bitmap), pixels(onReference.bitmap))
         assertTrue(!pixels(displaced.bitmap).contentEquals(pixels(onReference.bitmap)))
     }

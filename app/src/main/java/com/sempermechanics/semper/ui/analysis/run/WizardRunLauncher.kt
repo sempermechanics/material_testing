@@ -35,7 +35,7 @@ class WizardRunLauncher(
         val spec = RunSpec.of(
             params = params,
             roi = roi,
-            mask = viewModel.roiMaskBytes,
+            mask = viewModel.inputs.value.roiMaskBytes,
             use6x6 = use6x6,
             debugDir = EngineDebug.dirFor(activity.cacheDir),
         )
@@ -73,11 +73,11 @@ class WizardRunLauncher(
             RunSpec.Sweep(
                 plan = plan,
                 labels = plan.map { sweep.combinationLabel(it) },
-                lineCutHorizontal = viewModel.lineCutHorizontal,
+                lineCutHorizontal = viewModel.inputs.value.lineCutHorizontal,
                 frameIndex = sweep.resolvedSweepFrame(),
             ),
             roi = roi,
-            mask = viewModel.roiMaskBytes,
+            mask = viewModel.inputs.value.roiMaskBytes,
             use6x6 = use6x6,
             debugDir = EngineDebug.dirFor(activity.cacheDir),
         )
@@ -109,7 +109,7 @@ class WizardRunLauncher(
      * subset.
      */
     private fun resolveRoi(subset: Int): Roi? {
-        val roi = Roi.forSolve(subset, viewModel.hasCustomRoi, viewModel.roi, viewModel.refSize)
+        val roi = viewModel.inputs.value.let { Roi.forSolve(subset, it.hasCustomRoi, it.roi, it.refSize) }
         if (roi == null) {
             FaqRedirect.snackbar(activity, R.string.roi_too_small, R.string.url_faq_roi_too_small)
         }

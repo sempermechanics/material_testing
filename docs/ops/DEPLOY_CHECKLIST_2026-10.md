@@ -24,6 +24,11 @@ material_testing: any Hosting deploy replaces the whole site.
       `SEMPER_ENTITLEMENT_PUBKEYS`. The deploy checks the runtime SA's grant
       (`scripts/check_secret_access.sh`) and stops with the command to run when it
       is missing. Without a key the backend behaves as today and issues no token.
+- [ ] **New-device mail (TD-295, TD-309)**, optional, and only once #457 is merged.
+      Verify a sender in Resend (for example `Semper security <security@yourdomain.com>`),
+      add `NOTIFY_SECURITY_FROM` to `deploy-backend.yml`'s `env_vars` block (it is not
+      passed today, TD-309), then set the repo variable. Unset, that mail is off and the
+      access-request mail is unaffected ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md)).
 
 ## 1. Firestore indexes (TD-216, TD-271)
 
@@ -48,6 +53,17 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
 - [ ] **Production:** `environment=production`, first `gateway_mode=dry-run`,
       then `apply`. The candidate revision is smoke-tested on `/readyz` before
       traffic moves, and rolls back on failure.
+- [ ] **Licence fan-out task (TD-294, [ADR-026](../adr/ADR-026-licence-fanout-marker.md))**,
+      once #457 is merged. A staff revoke or terms edit schedules a Cloud Task on
+      `TASKS_QUEUE`, so check that the environment's `TASKS_QUEUE` and
+      `TASKS_TARGET_BASE_URL` are set (provisioning already uses them); unset, no task
+      is scheduled and the action relies on its inline run alone. The callback
+      `POST /v1/tasks/license-fanout` is reached by Cloud Tasks straight on Cloud Run
+      with the invoker SA's OIDC token, like `/v1/tasks/provision-session`, and is
+      kept off the gateway (`backend/tests/test_gateway_parity.py:45`): the gateway
+      diff must not add it. On staging, a revoke of a test licence leaves a
+      `license-fanout-<id>` task that runs about 6 minutes later and finds nothing
+      pending.
 - [ ] For the first deploy, leave unset (or 0): `MIN_SUPPORTED_VERSION_CODE`,
       `RECOMMENDED_VERSION_CODE`, their `_MATERIAL_TESTING` pair, and
       `KILL_SWITCHES`.
@@ -83,12 +99,32 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
 
 ## 6. After the deploy
 
+- [ ] **Staff and IT phones re-register with a second factor** (ADR-010
+      amendment, device trust). A device registered before this backend has no
+      `stepUpEligible`, so its signed staff or IT calls answer `403
+      mfa_required`. On each such phone: sign out, sign in completing the TOTP
+      second factor (that registers the device again, stamped). Holders are not
+      affected; the browser consoles are not affected.
+
 - [ ] 24 h log watch: `feature_not_licensed` only from restore and bundle;
       `app_check_required` = 0; the rate of `session_quota_exceeded` and
       `device_quota_exceeded`; `feature_paused` only if a kill switch was set;
-      5xx rate; Cloud Tasks backlog.
+      5xx rate; Cloud Tasks backlog. Once #457 is in: `license_fanout_enqueue_failed`
+      = 0, and each `license_fanout_finished_late` is a revoke or edit whose call died
+      part-way and the task finished (TD-294).
 - [ ] One erasure of a test account: its `ACCOUNT_DELETE` row says
       `seatScanComplete: true` (TD-271).
+- [ ] **Audit trail lock (TD-237)**, once #457 is deployed (it writes the `audit_row`
+      lines) and the legal/privacy owners have set the retention period: create the
+      `audit-trail` log bucket at that retention, the sink on
+      `jsonPayload.event="audit_row"`, then lock the bucket (irreversible), by the
+      commands in [FIRESTORE_DATA_PROTECTION.md](../backend/FIRESTORE_DATA_PROTECTION.md),
+      "The audit trail is append-only". Check: a staff licence edit's row reaches the
+      bucket, and lowering its retention is refused. Then the Firestore TTL the
+      retention asks for. Needs `roles/logging.configWriter` (§0).
+- [ ] **Audit rows before 2026-10-18 (TD-246)**, only if the owner chooses the
+      backfill: `backend/scripts/stamp_audit_licence_ids.py` dry-run, then `--apply
+      --decision "…"`, after the backend that stamps new rows is live.
 - [ ] Move the merged-and-deployed entries from [CONTEXT.md](../../CONTEXT.md)
       "Current state" into [CHANGELOG.md](CHANGELOG.md), in both repos.
 

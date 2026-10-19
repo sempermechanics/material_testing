@@ -27,14 +27,16 @@ from app.config import settings
 from app.deps import (
     admin_user,
     any_status_user,
-    attested_or_mfa_admin,
-    attested_or_mfa_admin_fresh,
-    attested_or_mfa_user,
     current_user,
     token_uid,
     verified_device,
 )
 from app.main import app
+from app.step_up import (
+    attested_or_mfa_admin,
+    attested_or_mfa_admin_fresh,
+    attested_or_mfa_user,
+)
 from app.routers.institutions import institution_admin_context, institution_admin_stepup
 from app.tasks import tasks_caller
 
@@ -177,6 +179,7 @@ EXPECTED = {
     ("GET", "/v1/institutions/licenses/{license_id}/summary"): INSTITUTION_STEPUP,
     ("GET", "/v1/institutions/licenses/{license_id}/audit"): INSTITUTION_STEPUP,
     ("POST", "/v1/tasks/provision-session"): TASK,
+    ("POST", "/v1/tasks/license-fanout"): TASK,
 }
 
 

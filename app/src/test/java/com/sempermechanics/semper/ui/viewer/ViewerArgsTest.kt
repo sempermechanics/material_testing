@@ -177,13 +177,14 @@ class ViewerArgsTest {
     }
 
     @Test
-    fun `Home's Intent reads back as the arguments Home built`() {
+    fun `a row's Intent reads back as the arguments built from the row, from Home or a run alike`() {
         val session = record(sweepSteps = listOf(5, 7))
 
         assertEquals(
-            SessionOpenHelper.argsFor(session),
+            ViewerArgs.of(session),
             ViewerArgs.from(SessionOpenHelper.intentFor(context, session), ::noRecord),
         )
+        assertEquals(ViewerArgs.of(record()), ViewerArgs.from(ViewerArgs.of(record()).toIntent(context), ::noRecord))
     }
 
     @Test

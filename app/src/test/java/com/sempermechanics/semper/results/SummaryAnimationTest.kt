@@ -1,6 +1,8 @@
 package com.sempermechanics.semper.results
 
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FieldKind
+import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.FieldRangesStore
 import com.sempermechanics.semper.report.VisualizationEngine
 import com.sempermechanics.semper.ui.viewer.summary.SummaryAnimation
@@ -122,8 +124,8 @@ class SummaryAnimationTest {
 
         val exx = runBlocking { SummaryAnimation.globalRanges(files) }.getValue(DicResult.IDX_EXX)
 
-        assertTrue("low ${exx.first} should come from the second frame", exx.first < -4f)
-        assertTrue("high ${exx.second} should come from the third frame", exx.second > 8f)
+        assertTrue("low ${exx.min} should come from the second frame", exx.min < -4f)
+        assertTrue("high ${exx.max} should come from the third frame", exx.max > 8f)
     }
 
     @Test
@@ -150,18 +152,18 @@ class SummaryAnimationTest {
 
         val exx = runBlocking { SummaryAnimation.globalRanges(files) }.getValue(DicResult.IDX_EXX)
 
-        assertEquals(minOf(early.first, late.first), exx.first, 0f)
-        assertEquals(maxOf(early.second, late.second), exx.second, 0f)
-        assertTrue("later frame should raise the sequence max", exx.second > early.second)
-        assertTrue("earlier frame should keep the sequence min", exx.first < late.first)
+        assertEquals(minOf(early.min, late.min), exx.min, 0f)
+        assertEquals(maxOf(early.max, late.max), exx.max, 0f)
+        assertTrue("later frame should raise the sequence max", exx.max > early.max)
+        assertTrue("earlier frame should keep the sequence min", exx.min < late.min)
     }
 
     @Test
     fun `all five fields come back from one pass`() {
         val ranges = runBlocking { SummaryAnimation.globalRanges(listOf(frame("a.dat", 0f, 1f))) }
 
-        for ((label, index) in SummaryAnimation.FIELDS) {
-            assertTrue("$label missing", ranges.containsKey(index))
+        for (field in FieldKind.entries) {
+            assertTrue("${field.label} missing", ranges.containsKey(field.dataIndex))
         }
     }
 
@@ -172,7 +174,7 @@ class SummaryAnimationTest {
 
         val exx = runBlocking { SummaryAnimation.globalRanges(files) }.getValue(DicResult.IDX_EXX)
 
-        assertTrue("high ${exx.second} should still reflect the good frame", exx.second > 3f)
+        assertTrue("high ${exx.max} should still reflect the good frame", exx.max > 3f)
     }
 
     @Test
@@ -251,7 +253,7 @@ class SummaryAnimationTest {
 
         assertEquals(decoded, withStaleCache)
         // Not the vacuous case — the stale cache really did omit the third frame's range.
-        assertTrue(decoded.getValue(DicResult.IDX_EXX).second > 8f)
+        assertTrue(decoded.getValue(DicResult.IDX_EXX).max > 8f)
     }
 
     @Test
@@ -264,7 +266,7 @@ class SummaryAnimationTest {
             frame("small.dat", 0f, 9f, points = 40),
             frame("bigger.dat", -8f, 1f, points = 500),
         )
-        val expected = mutableMapOf<Int, Pair<Float, Float>>()
+        val expected = mutableMapOf<Int, ValueRange>()
         for (file in files) {
             val data = requireNotNull(DicResult.decodeDatFile(file))
             VisualizationEngine.valueRanges(data, summaryFieldIndices).forEach { (valIndex, range) ->
@@ -273,7 +275,7 @@ class SummaryAnimationTest {
                     expected[valIndex] = if (seen == null) {
                         range
                     } else {
-                        minOf(seen.first, range.first) to maxOf(seen.second, range.second)
+                        ValueRange(minOf(seen.min, range.min), maxOf(seen.max, range.max))
                     }
                 }
             }

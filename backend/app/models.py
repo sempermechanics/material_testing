@@ -148,6 +148,12 @@ class FileComplete(BaseModel):
         return v
 
 
+class LicenseFanoutTask(BaseModel):
+    """Body of the Cloud Tasks callback that finishes a licence's pending
+    fan-out (ADR-026)."""
+    licenseId: DocumentId
+
+
 class ProvisionTask(BaseModel):
     """Body of the Cloud Tasks provisioning callback. Validated like any other
     input — the queue is trusted to be Google, not to be well-behaved."""

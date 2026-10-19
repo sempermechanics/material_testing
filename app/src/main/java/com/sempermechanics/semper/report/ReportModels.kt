@@ -1,6 +1,7 @@
 package com.sempermechanics.semper.report
 
 import android.graphics.Bitmap
+import com.sempermechanics.semper.field.Roi
 
 data class ReportData(
     val sessionId: String,
@@ -11,8 +12,8 @@ data class ReportData(
     val strainWindow: Int,
     val strainMethod: String,
 
-    // Region of Interest Details
-    val roiData: RoiData,
+    /** The ROI the frame was solved over. */
+    val roi: Roi,
 
     // DOWN-SCALED IMAGES (300 DPI max) for the page-1 preview card
     val referenceImage: Bitmap,
@@ -38,14 +39,6 @@ data class ReportData(
      * when too few points converged to fit it — see [RigidBodyFit.MIN_POINTS].
      */
     val rigidBody: RigidBodyFit.Fit? = null,
-)
-
-// Dedicated Data Class for ROI
-data class RoiData(
-    val startX: Int,
-    val startY: Int,
-    val width: Int,
-    val height: Int,
 )
 
 data class FieldResult(

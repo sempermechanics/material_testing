@@ -5,6 +5,7 @@ package com.sempermechanics.semper.report
 
 import android.graphics.Color
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.ValueRange
 
 /**
  * The heatmap's colour scale: the jet ramp every render maps values onto, and
@@ -37,8 +38,8 @@ internal object HeatmapColorScale {
      * total order as `List<Float>.sort()`, so the p02/p98 picks are identical to the
      * boxed collector this replaced.
      */
-    internal fun computeSigmaClampedRange(values: FloatArray, count: Int, valIndex: Int): Pair<Float, Float> {
-        if (count == 0) return Pair(0f, 1f)
+    internal fun computeSigmaClampedRange(values: FloatArray, count: Int, valIndex: Int): ValueRange {
+        if (count == 0) return ValueRange(0f, 1f)
 
         val p02Index = (count * 0.02).toInt().coerceIn(0, count - 1)
         val p98Index = (count * 0.98).toInt().coerceIn(0, count - 1)
@@ -141,7 +142,7 @@ internal object HeatmapColorScale {
     }
 
     /** Shared min-span floor for [computeSigmaClampedRange]. */
-    private fun clampSpan(p02: Float, p98: Float, valIndex: Int): Pair<Float, Float> {
+    private fun clampSpan(p02: Float, p98: Float, valIndex: Int): ValueRange {
         var finalMin = p02
         var finalMax = p98
 
@@ -153,7 +154,7 @@ internal object HeatmapColorScale {
             finalMax = mid + (minSpan / 2f)
         }
 
-        return Pair(finalMin, finalMax)
+        return ValueRange(finalMin, finalMax)
     }
 
     /**
@@ -167,7 +168,7 @@ internal object HeatmapColorScale {
         floatCount: Int,
         valIndices: IntArray,
         scratch: Array<FloatArray>?,
-    ): Map<Int, Pair<Float, Float>?> {
+    ): Map<Int, ValueRange?> {
         // One primitive column per field, holding the same values in the same order as
         // the boxed MutableList<Float> collectors this replaced — so the sort and the
         // p02/p98 pick below are bit-identical. Five boxed columns cost ~20 B/value
@@ -184,7 +185,7 @@ internal object HeatmapColorScale {
             count++
         }
         // Every column has the same accepted-point count, so one emptiness test covers all.
-        val ranges = LinkedHashMap<Int, Pair<Float, Float>?>(valIndices.size)
+        val ranges = LinkedHashMap<Int, ValueRange?>(valIndices.size)
         for (c in valIndices.indices) {
             val valIndex = valIndices[c]
             ranges[valIndex] = if (count == 0) null else computeSigmaClampedRange(columns[c], count, valIndex)

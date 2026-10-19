@@ -3,11 +3,10 @@
 import logging
 from datetime import timedelta
 
-from .. import errors, statuses
+from .. import errors
 from ..licenses import (
     MODE_DEMO,
     as_utc,
-    normalize_email,
 )
 
 from . import _base
@@ -27,6 +26,10 @@ from .claims import (
     claim_individual_license,
     claim_seat,
     _member_patch,
+)
+from .holders import (
+    _eligible_holder,
+    verified_address,
 )
 from .invites import (
     _invite_ref,
@@ -107,11 +110,9 @@ def _claim_pending_invite(user: dict) -> tuple[dict, str]:
         return user, ""
     if user.get("licenseId") and not _invite_retry_due(user):
         return user, ""
-    if user.get("access_status") != statuses.ACCESS_APPROVED or not user.get("emailVerified"):
+    if not _eligible_holder(user):
         return user, ""
-    address = normalize_email(user.get("email"))
-    if not address:
-        return user, ""
+    address = verified_address(user)
 
     ref = _invite_ref(address)
     snap = _get(ref)

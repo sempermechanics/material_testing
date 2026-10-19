@@ -37,8 +37,9 @@ Firebase Analytics' `AD_ID` permission is unchecked (TD-232).
 
 Email address, display name, sign-in provider, password hash (password accounts),
 TOTP enrolment (staff and console users). Purpose: identity. Retention: until the
-account is erased; `DELETE /v1/me` deletes the Auth user once the runtime SA holds
-Firebase Auth admin (`backend/app/routers/account.py:350`; TD-214). Both apps sign in to this one Auth project, so deleting the account removes the sign-in for both, consistent with the account-wide erase ([ADR-023](../adr/ADR-023-signed-offline-entitlement.md), decision note).
+account is erased; `DELETE /v1/me` deletes the Auth user, and every other Auth
+user linked to the account (`linkedAuthUids`, `auth_links`; `repo.sign_in_uids`), once
+the runtime SA holds Firebase Auth admin (`backend/app/services/account.py:124`; TD-214). Both apps sign in to this one Auth project, so deleting the account removes the sign-in for both, consistent with the account-wide erase ([ADR-023](../adr/ADR-023-signed-offline-entitlement.md), decision note).
 
 ### Firestore (project `indicvision-dic-app`; location unrecorded, TD-227)
 
@@ -48,17 +49,17 @@ no client can read or write any of them (`firestore.rules:7-9`).
 
 | Collection | Personal data | Purpose | Retention |
 |---|---|---|---|
-| `users/{uid}` | `email`, `emailVerified`, `displayName`, `signInProvider`, `role`, `access_status`, `claimedDeviceId`, per-app `activeDeviceId`, `linkedAuthUids`, licence mirror (`licenseId`, mode, terms), `termsAccepted` and `improvementConsent` records (each with a device id and source), `createdAt`, `lastSeenAt` (`backend/app/repo/users.py:200-217`; schema `docs/backend/CLOUD_ARCHITECTURE_GCP.md:544-579`) | Identity, access, licensing, consent records | Until erasure (`backend/app/repo/account.py:206-244`) |
-| `auth_links/{firebaseSub}` | the canonical uid a Firebase subject maps to (`backend/app/repo/users.py:93`) | Merging sign-in methods | Until erasure: every row whose `uid` is the account is deleted (`backend/app/repo/account.py:237-239`). Rows left by erasures before that change stay until a sweep (TD-271) |
+| `users/{uid}` | `email`, `emailVerified`, `displayName`, `signInProvider`, `role`, `access_status`, `claimedDeviceId`, per-app `activeDeviceId`, `linkedAuthUids`, licence mirror (`licenseId`, mode, terms), `termsAccepted` and `improvementConsent` records (each with a device id and source), `createdAt`, `lastSeenAt` (`backend/app/repo/users.py:260-280`; schema `docs/backend/CLOUD_ARCHITECTURE_GCP.md:544-579`) | Identity, access, licensing, consent records | Until erasure (`backend/app/repo/account.py:206-244`) |
+| `auth_links/{firebaseSub}` | the canonical uid a Firebase subject maps to (`backend/app/repo/users.py:96`) | Merging sign-in methods | Until erasure: every row whose `uid` is the account is deleted (`backend/app/repo/account.py:237-239`). Rows left by erasures before that change stay until a sweep (TD-271) |
 | `devices/{deviceId}` | `uid`, `app`, `publicKeyPem`, `model`, `osVersion`, `appVersion`, `status`, registration and last-assertion times (`backend/app/repo/devices.py:80-92`) | Device binding, request signatures | Until erasure |
 | `challenges/{nonce}` | `uid`, `deviceId` | Replay protection | TTL on `expireAt` (`backend/firestore.indexes.json:104-122`); deleted on use |
-| `sessions/{sid}` | `uid`, `deviceId`, `app`, `specimen` (the reference image's file name), `name` (the analysis name), small run metrics, Drive folder id (`backend/app/repo/sessions.py:481-499`) | Cloud backup index; `deviceId` also counts a demo device's stored analyses across accounts (`count_device_sessions`, `:415-439`) | Until the session or account is erased |
+| `sessions/{sid}` | `uid`, `deviceId`, `app`, `specimen` (the reference image's file name), `name` (the analysis name), small run metrics, Drive folder id (`backend/app/repo/sessions.py:531-551`) | Cloud backup index; `deviceId` also counts a demo device's stored analyses across accounts (`count_device_sessions`, `:415-439`) | Until the session or account is erased |
 | `files/{fileId}` | `uid`, `sessionId`, file `name`, size, `sha256`, Drive ids | Upload tracking | Until the session or account is erased |
 | `licenses/{id}` | `emailLock` and `redeemedByUid` (individual); `adminEmails`, `domainLock` (institution); per-app `deviceIdLock`; `createdByUid` | Licensing | Until deleted; then 30 days in `deleted_licenses` |
-| `licenses/{id}/seats/{uid}` | `uid`, `email`, per-app `deviceIdLock`, lease fields (`backend/app/repo/claims.py:246-254`) | Institution roster | A revoked seat keeps `email` until its holder's account is erased, which blanks it on every seat the account held, live seats revoked first (`_blank_seat_addresses`, `backend/app/repo/account.py:186-203`). Seats on other licences are found by a collection-group query whose index must be deployed first (TD-271) |
+| `licenses/{id}/seats/{uid}` | `uid`, `email`, per-app `deviceIdLock`, lease fields (`backend/app/repo/claims.py:246-254`) | Institution roster | The current seat's `email` follows its holder's verified sign-in address (TD-297). A revoked seat keeps `email` until its holder's account is erased, which blanks it on every seat the account held, live seats revoked first (`_blank_seat_addresses`, `backend/app/repo/account.py:186-203`). Seats on other licences are found by a collection-group query whose index must be deployed first (TD-271) |
 | `licenseInvites/{id}` | `email`, `licenseId`, `invitedByUid` (`backend/app/repo/invites.py:155-163`) | Promise of a seat before sign-up | Until redeemed or withdrawn; an individual licence is re-invited to its address after its holder's erasure (`backend/app/repo/account.py:146-148`) |
 | `deleted_licenses/{id}`, `…/deleted_seats/{uid}` | copies of the above | 30-day hold for restore | TTL on `purgeAt` (`backend/firestore.indexes.json:123-160`); a held seat's `email` is blanked on its holder's erasure |
-| `audit_logs/{autoId}` | `uid`, `deviceId`, `action`, `target`, `detail`, `licenseId` (`backend/app/audit.py:64-78`). An `ip` field exists but no caller sets it. `detail` holds no address: mint, convert and an `adminEmails` edit record hashes (`emailLockHash`, `adminEmailHashes`, `adminEmailCount`; `audit.address_tag`, `backend/app/audit.py:35-47`). A licence edit records only that its free-text `note` changed and its length (`noteChanged`, `noteLength`; `backend/app/routers/admin.py:34-45`). A claim-code redemption (`POST /v1/me/claim`, since 2026-10-18) writes `LICENSE_CLAIM_CODE` with the account's `uid`, the device id when a signed device redeemed it (none from a browser), `outcome` `OK` or `DENIED`, and `detail` holding `keyPrefix` (`SEMP-` and the code's first group, never the code), `via` (`web` or `app`) and `mode` or `errorCode`; an `OK` row's `target` is the licence id (`backend/app/routers/licenses.py:239-255`) | Security and accountability; customer-visible per licence | **Kept after erasure, no TTL** (TD-237) |
+| `audit_logs/{autoId}` | `uid`, `deviceId`, `action`, `target`, `detail`, `licenseId` (`backend/app/audit.py:71-83`, written by `backend/app/repo/audit_log.py`). An `ip` field exists but no caller sets it. `detail` holds no address: mint, convert and an `adminEmails` edit record hashes (`emailLockHash`, `adminEmailHashes`, `adminEmailCount`; `audit.address_tag`, `backend/app/audit.py:27-38`). A licence edit records only that its free-text `note` changed and its length (`noteChanged`, `noteLength`; `backend/app/routers/admin.py:29-40`). A claim-code redemption (`POST /v1/me/claim`, since 2026-10-18) writes `LICENSE_CLAIM_CODE` with the account's `uid`, the device id when a signed device redeemed it (none from a browser), `outcome` `OK` or `DENIED`, and `detail` holding `keyPrefix` (`SEMP-` and the code's first group, never the code), `via` (`web` or `app`) and `mode` or `errorCode`; an `OK` row's `target` is the licence id (`backend/app/routers/licenses.py:239-255`) | Security and accountability; customer-visible per licence | **Kept after erasure, no TTL** (TD-237) |
 
 ### Google Drive (Shared Drive, runtime SA as Manager)
 
@@ -66,7 +67,7 @@ Per user and session folders holding what the app uploads: reference and deforme
 images, `.dat` results, reports, CSV, `metadata.json` (analysis name, specimen,
 parameters). Purpose: backup and restore. Retention: deleted with the session or
 account (`DELETE /v1/me` removes the user folder first,
-`backend/app/routers/account.py:294-362`); Shared Drive trash per Workspace policy.
+`backend/app/services/account.py:71-142`); Shared Drive trash per Workspace policy.
 
 ### Cloud Logging (project `indicvision-dic-app`)
 
@@ -76,7 +77,7 @@ account (`DELETE /v1/me` removes the user folder first,
   that must be logged is a 12-hex hash (`short_hash`, `:189-196`).
 - uvicorn's access line and the Cloud Run / API Gateway request logs carry the full
   URL. The staff licence search sends its address in a POST body
-  (`POST /v1/admin/licenses/search`, `backend/app/routers/admin.py:166-174`); the
+  (`POST /v1/admin/licenses/search`, `backend/app/routers/admin.py:161-169`); the
   GET's `?q=` still answers for one release and would put an address in the URL
   (TD-273).
 - Retention: the project's log bucket setting, unverified (policy §4 lists it
@@ -94,8 +95,11 @@ settings, unverified (policy §4).
 ### Resend (email)
 
 On a new PENDING account, one mail to the support address with the applicant's
-email, display name, sign-in provider and uid (`backend/app/notify.py:172-195`).
-Retention: Resend's, unverified.
+email, display name, sign-in provider and uid (`backend/app/notify.py:193-215`).
+When a new device registers to an account, one mail to the holder's verified
+address with the app, the device model and id and the time, once per account and
+device, and only while `NOTIFY_SECURITY_FROM` is set (`backend/app/notify.py:222-250`,
+TD-295). Retention: Resend's, unverified.
 
 ### On the device
 

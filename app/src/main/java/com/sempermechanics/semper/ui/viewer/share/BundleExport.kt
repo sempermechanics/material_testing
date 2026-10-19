@@ -8,8 +8,8 @@ import android.content.res.Resources
 import android.graphics.Bitmap
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.imaging.ImageEncoder
-import com.sempermechanics.semper.ui.viewer.share.ShareExportBuilder.Companion.FIELDS
 import com.sempermechanics.semper.util.Zips
 import timber.log.Timber
 import java.io.File
@@ -148,7 +148,9 @@ internal class BundleExport(
         folder: String,
         baseCache: FieldImageExport.FrameBaseCache,
     ) {
-        for ((label, idx) in FIELDS) {
+        for (field in FieldKind.entries) {
+            val label = field.label
+            val idx = field.dataIndex
             var bmp: Bitmap? = null
             try {
                 bmp = images.renderAnnotated(data, idx, label, index, baseCache)

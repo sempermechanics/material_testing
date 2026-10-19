@@ -230,7 +230,7 @@ class Settings:
     APP_CHECK_MODE = os.environ.get("APP_CHECK_MODE", "off").strip().lower()
 
     # --- revocation on the browser step-up (A3.4) ---------------------------
-    # On: a browser caller on the second-factor path (`deps.step_up_check`,
+    # On: a browser caller on the second-factor path (`step_up.step_up_check`,
     # via="mfa") has its ID token re-verified with check_revoked=True, so a
     # user revoked or disabled in Firebase Auth stops changing anything at
     # once rather than when the token expires (up to an hour). The device-
@@ -326,6 +326,12 @@ class Settings:
     # notification mail entirely: nothing is sent and nothing fails.
     NOTIFY_FROM = os.environ.get("NOTIFY_FROM", "")
     RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+    # Verified sender for the mail an account's holder gets when a new device
+    # registers to it (`notify.device_registered`, TD-295), e.g.
+    # "Semper security <security@sempermechanics.com>". Its own sender, so
+    # the holder's mail does not come from the support inbox's address.
+    # Empty (the default) leaves that mail off; it also needs RESEND_API_KEY.
+    NOTIFY_SECURITY_FROM = os.environ.get("NOTIFY_SECURITY_FROM", "")
 
     # The runtime service account email Cloud Run runs as. Used for the keyless
     # self-impersonation that mints Drive-scoped tokens.

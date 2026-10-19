@@ -1,5 +1,6 @@
 package com.sempermechanics.semper.results
 
+import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.FieldRangesStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -24,8 +25,14 @@ class FieldRangesStoreTest {
     fun `round-trips per-frame ranges exactly, including absent fields`() {
         val file = temp.newFile("ranges.bin")
         val data = listOf(
-            mapOf(2 to (0f to 1f), 3 to (-2f to 2f), 4 to null, 5 to (0.001f to 0.002f), 6 to (-1f to 1f)),
-            mapOf(2 to (5f to 9f), 3 to null, 4 to null, 5 to null, 6 to null),
+            mapOf(
+                2 to ValueRange(0f, 1f),
+                3 to ValueRange(-2f, 2f),
+                4 to null,
+                5 to ValueRange(0.001f, 0.002f),
+                6 to ValueRange(-1f, 1f),
+            ),
+            mapOf(2 to ValueRange(5f, 9f), 3 to null, 4 to null, 5 to null, 6 to null),
         )
 
         FieldRangesStore.write(file, fields, data)
@@ -38,7 +45,7 @@ class FieldRangesStoreTest {
     fun `an empty frame list round-trips to an empty list, not null`() {
         val file = temp.newFile("ranges.bin")
         FieldRangesStore.write(file, fields, emptyList())
-        assertEquals(emptyList<Map<Int, Pair<Float, Float>?>>(), FieldRangesStore.read(file, fields))
+        assertEquals(emptyList<Map<Int, ValueRange?>>(), FieldRangesStore.read(file, fields))
     }
 
     @Test
@@ -50,7 +57,7 @@ class FieldRangesStoreTest {
     @Test
     fun `truncated content reads as null instead of throwing`() {
         val file = temp.newFile("ranges.bin")
-        FieldRangesStore.write(file, fields, listOf(mapOf(2 to (0f to 1f))))
+        FieldRangesStore.write(file, fields, listOf(mapOf(2 to ValueRange(0f, 1f))))
         file.writeBytes(file.readBytes().copyOf(file.length().toInt() - 3))
 
         assertNull(FieldRangesStore.read(file, fields))
@@ -59,7 +66,7 @@ class FieldRangesStoreTest {
     @Test
     fun `a different field COUNT reads as null`() {
         val file = temp.newFile("ranges.bin")
-        FieldRangesStore.write(file, fields, listOf(mapOf(2 to (0f to 1f))))
+        FieldRangesStore.write(file, fields, listOf(mapOf(2 to ValueRange(0f, 1f))))
 
         assertNull(FieldRangesStore.read(file, intArrayOf(2, 3)))
     }
@@ -70,7 +77,7 @@ class FieldRangesStoreTest {
         // stored indices themselves (not just the count), this would silently hand
         // back field N's range under field M's key.
         val file = temp.newFile("ranges.bin")
-        FieldRangesStore.write(file, fields, listOf(mapOf(2 to (0f to 1f), 3 to (10f to 20f))))
+        FieldRangesStore.write(file, fields, listOf(mapOf(2 to ValueRange(0f, 1f), 3 to ValueRange(10f, 20f))))
 
         val reordered = intArrayOf(3, 2, 4, 5, 6)
         assertNull(FieldRangesStore.read(file, reordered))

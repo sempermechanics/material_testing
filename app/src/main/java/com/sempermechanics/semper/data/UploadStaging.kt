@@ -57,7 +57,11 @@ internal class UploadStaging(private val context: Context, private val record: S
 
     val layout: StagingLayout = session.staging
 
-    /** Whether a finished staging is reused as it is; [prepare] decides. */
+    /**
+     * Whether a finished staging is reused as it is; [prepare] decides from
+     * what is on disk: the staging itself and, under a cloud session, the
+     * [StagingBinding] that says it was declared to that session.
+     */
     var reuse: Boolean = false
         private set
 
@@ -67,13 +71,21 @@ internal class UploadStaging(private val context: Context, private val record: S
      * Only incomplete staging is wiped. A blank cloudSessionId after Rebuild /
      * provision failure must NOT destroy a finished Session.zip — that was
      * forcing a full prepare loop on every WorkManager retry.
+     *
+     * Under a pointer, a finished staging is reused only when its binding
+     * ([StagingLayout.declared]) names that session and the bytes it declared
+     * (TD-282). One with no binding (an older build's, or a run that died
+     * between storing the pointer and the binding) or another session's is
+     * not: the caller releases the session and declares the staging afresh.
      */
     fun prepare() {
         if (record.cloudSessionId.isBlank() && !UploadWorkOutcomes.isStagingReusable(layout.dir)) {
             layout.dir.deleteRecursively()
         }
         layout.dir.mkdirs()
-        reuse = UploadWorkOutcomes.isStagingReusable(layout.dir)
+        val pointer = record.cloudSessionId
+        reuse = UploadWorkOutcomes.isStagingReusable(layout.dir) &&
+            (pointer.isBlank() || StagingBinding.read(layout)?.declares(pointer, layout) == true)
     }
 
     /**

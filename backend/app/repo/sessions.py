@@ -163,6 +163,9 @@ def upload_target(file_id: str, url: str, f: dict) -> dict:
         "name": f.get("name"),
         "role": f.get("role"),
         "sizeBytes": f.get("sizeBytes", 0),
+        # The hash the file was declared with: the app resumes a pending upload
+        # only with bytes that hash to it, not just the same size (TD-281).
+        "sha256": f.get("sha256"),
     }
 
 
@@ -222,6 +225,45 @@ def set_session_status(sid: str, status: str, error_code: str | None = None) -> 
     _run_tx(_set, on_contended=_guarded_write)
 
 
+def start_provisioning(sid: str) -> dict | None:
+    """The session a provisioning attempt is about to work on, or None if it
+    is gone; a session still PROVISIONING has its `updatedAt` stamped first.
+
+    `DELETE /v1/sessions/{sid}` refuses a PROVISIONING session written within
+    `PROVISIONING_GRACE` (`session_provision.provisioning_in_progress`). A
+    Cloud Tasks retry can start long after the session's last write, and
+    without the stamp a delete during its Drive work went ahead and left the
+    folder it then created (TD-296). Read and stamp share a transaction, so a
+    delete that lands first wins and the retry finds nothing; any other
+    status is read back untouched.
+    """
+    ref = db().collection("sessions").document(sid)
+    stamp = {"updatedAt": _base.firestore.SERVER_TIMESTAMP}
+
+    def _read(snap) -> dict | None:
+        return {**(snap.to_dict() or {}), "sessionId": sid} if snap.exists else None
+
+    @_base.firestore.transactional
+    def _start(tx) -> dict | None:
+        session = _read(_get(ref, tx))
+        if session and session.get("status") == statuses.SESSION_PROVISIONING:
+            tx.update(ref, stamp)
+        return session
+
+    def _guarded_stamp() -> dict | None:
+        # Every attempt lost: files are being written to this session right
+        # now. A plain guarded stamp still beats leaving the delete unguarded.
+        session = _read(_get(ref))
+        if session and session.get("status") == statuses.SESSION_PROVISIONING:
+            try:
+                _update_doc(ref, stamp)
+            except NotFound:
+                return None
+        return session
+
+    return _run_tx(_start, on_contended=_guarded_stamp)
+
+
 def set_new_session_status(sid: str, status: str) -> None:
     """`set_session_status` for a session this request created, as a plain
     write: its upload targets have not left the request yet, so nothing can
@@ -242,7 +284,7 @@ def iter_unprovisioned_files(sid: str):
     for d in _session_file_docs(sid):
         f = d.to_dict()
         if f.get("status") != statuses.FILE_COMPLETED and not f.get("uploadUrl"):
-            yield _file_view(d.id, f)
+            yield _file_view(d.id, f, "sha256")
 
 
 def set_file_upload_urls(opened: list[tuple[str, str]]) -> None:
@@ -265,6 +307,15 @@ def session_app(session: dict | None) -> str:
     the Material Testing ones before this is relied on.
     """
     return (session or {}).get("app") or apps.SEMPER
+
+
+#: The fields `_listed_session` reads, and all a listing fetches of a session
+#: (`select()`, TD-198): the document also holds the upload's bookkeeping,
+#: which a page of fifty would otherwise pull whole.
+LISTED_SESSION_FIELDS = (
+    "localSessionId", "specimen", "name", "status", "fileCount", "completedCount",
+    "totalBytes", "driveFolderId", "app",
+)
 
 
 def _listed_session(doc_id: str, s: dict) -> dict:
@@ -306,16 +357,16 @@ def list_user_sessions(
     returned, and is issued only when another session (of any app) follows it.
     Worst case one call reads the whole account, which the quota bounds.
     """
+    col = db().collection("sessions")
+    query = col.where("uid", "==", uid).select(LISTED_SESSION_FIELDS)
     if app is None:
-        col = db().collection("sessions")
-        docs, next_token = _cursor_page(col, col.where("uid", "==", uid), limit, page_token)
+        docs, next_token = _cursor_page(col, query, limit, page_token)
         return [_listed_session(d.id, d.to_dict()) for d in docs], next_token
 
     out: list = []
     # limit + 1 per read, as `_cursor_page` reads: when every session is this
     # app's, the filtered page costs what the unfiltered one does.
-    col = db().collection("sessions")
-    scan = _scan(col, col.where("uid", "==", uid), page_token, chunk=limit + 1)
+    scan = _scan(col, query, page_token, chunk=limit + 1)
     for d in scan:
         s = d.to_dict()
         if session_app(s) != app:

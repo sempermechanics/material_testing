@@ -2,17 +2,18 @@ package com.sempermechanics.semper.ui.limit
 
 import android.os.Bundle
 import android.view.View
+import androidx.activity.viewModels
 import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.DeviceKeys
 import com.sempermechanics.semper.data.account.LicenseEntitlements
-import com.sempermechanics.semper.data.cloud.CloudSync
 import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.session.SessionQuota
-import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.databinding.ActivitySessionLimitBinding
 import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.auth.SupportMail
@@ -32,6 +33,8 @@ import kotlinx.coroutines.launch
 @MainThread
 class SessionLimitActivity : AppCompatActivity() {
 
+    private val viewModel: SessionLimitViewModel by viewModels()
+
     private lateinit var binding: ActivitySessionLimitBinding
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,9 +46,10 @@ class SessionLimitActivity : AppCompatActivity() {
         renderQuota()
 
         binding.btnEmailSupport.setOnClickListener { emailSupport() }
-        binding.btnRecheckLimit.setOnClickListener { recheck() }
-        binding.btnRefreshLicense.setOnClickListener { refreshLicense() }
+        binding.btnRecheckLimit.setOnClickListener { viewModel.recheck() }
+        binding.btnRefreshLicense.setOnClickListener { viewModel.refreshLicense() }
         binding.tvLimitBack.setOnClickListener { finish() }
+        observeViewModel()
     }
 
     /**
@@ -86,58 +90,33 @@ class SessionLimitActivity : AppCompatActivity() {
     }
 
     /**
-     * For an account that expects a seat or a licence: ask `/v1/config` now
-     * ([LicenseRefresh]), say what it found, and when the licence changed run
-     * the limit check again, which closes this screen once there is room.
+     * The buttons wait while a check is out, and each check's outcome is said
+     * once, on whichever screen is started. Re-check and Refresh licence run
+     * in [SessionLimitViewModel], so a rotation does not cancel them.
      */
-    private fun refreshLicense() {
-        setLoading(true)
+    private fun observeViewModel() {
         lifecycleScope.launch {
-            val outcome = LicenseRefresh.run(this@SessionLimitActivity)
-            setLoading(false)
-            Feedback.toast(this@SessionLimitActivity, outcome.result.messageRes, long = true)
-            if (outcome.changed) recheck() else renderQuota()
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch { viewModel.busy.collect(::setLoading) }
+                viewModel.outcomes.collect(::showOutcome)
+            }
         }
     }
 
-    /**
-     * Re-query the backend; if the account is under the limit again, dismiss.
-     * The device's stop outlives it: the reconcile reports the account's count
-     * only, and lifting the stop on it let the next upload be refused again.
-     */
-    private fun recheck() {
-        setLoading(true)
-        lifecycleScope.launch {
-            // deep=true: the user explicitly tapped Recheck, so bypass the
-            // reconcile throttle — a silently skipped check would report
-            // "still full" from stale data.
-            val outcome = CloudSync.reconcile(this@SessionLimitActivity, deep = true)
-            // The rows after the reconcile, which may have repaired some.
-            val localCount = SessionStore.listOnIo(this@SessionLimitActivity).size
-            when (outcome) {
-                is CloudSync.Outcome.Ok -> {
-                    // Ceiling is owned by AppRemoteConfig (refreshed by the same
-                    // reconcile's config fetch); only the used count is stored here.
-                    AccountCache.setQuota(
-                        this@SessionLimitActivity,
-                        outcome.quotaUsed,
-                        localCount,
-                    )
-                }
-                else -> Unit
+    private fun showOutcome(outcome: SessionLimitViewModel.Outcome) {
+        when (outcome) {
+            is SessionLimitViewModel.Outcome.Refreshed -> {
+                Feedback.toast(this, outcome.message, long = true)
+                // A changed licence is checked again next, which renders.
+                if (!outcome.changed) renderQuota()
             }
-            setLoading(false)
-            if (!SessionQuota.blocked(this@SessionLimitActivity, localCount)) {
-                Feedback.toast(this@SessionLimitActivity, R.string.limit_cleared)
+            SessionLimitViewModel.Outcome.Cleared -> {
+                Feedback.toast(this, R.string.limit_cleared)
                 finish()
-            } else {
+            }
+            is SessionLimitViewModel.Outcome.StillFull -> {
                 renderQuota()
-                val still = if (SessionQuota.deviceStop(this@SessionLimitActivity)) {
-                    R.string.limit_still_full_device
-                } else {
-                    R.string.limit_still_full
-                }
-                Feedback.toast(this@SessionLimitActivity, still, long = true)
+                Feedback.toast(this, outcome.message, long = true)
             }
         }
     }

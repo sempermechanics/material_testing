@@ -2,17 +2,27 @@ package com.sempermechanics.semper.ui.viewer
 
 import android.view.View
 import android.view.ViewTreeObserver
+import com.sempermechanics.semper.databinding.ActivityResultViewerBinding
+
+/**
+ * The viewer's views, which each of its controllers draws into. Set in
+ * onCreate, after the controllers are built, so a controller reads [binding]
+ * when it draws, never when it is made.
+ */
+internal interface ViewerViews {
+    val binding: ActivityResultViewerBinding
+}
 
 /**
  * The viewer's edge chrome: the top bar, the scrubber, the field button and the
  * colour scale. Any interaction brings them back and schedules their auto-hide;
  * the image is fitted to the space between the bars.
  *
- * Constructed before onCreate; reads [ResultViewerActivity.binding] lazily.
+ * Constructed before onCreate; reads [ViewerViews.binding] lazily.
  */
-internal class ViewerChromeController(private val host: ResultViewerActivity) {
+internal class ViewerChromeController(private val views: ViewerViews) {
 
-    private val binding get() = host.binding
+    private val binding get() = views.binding
 
     private var chromeVisible = true
 

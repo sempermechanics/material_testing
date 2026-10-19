@@ -36,16 +36,13 @@ import com.sempermechanics.semper.ui.analysis.recommend.SubsetRecommendationCont
 import com.sempermechanics.semper.ui.analysis.rerun.PickedReference
 import com.sempermechanics.semper.ui.analysis.rerun.RerunImportController
 import com.sempermechanics.semper.ui.analysis.rerun.RerunInputs
-import com.sempermechanics.semper.ui.analysis.roi.RoiResolveHelper
 import com.sempermechanics.semper.ui.analysis.roi.RoiStudioLauncher
 import com.sempermechanics.semper.ui.analysis.run.BatchRunController
 import com.sempermechanics.semper.ui.analysis.run.ComputeOverlayController
 import com.sempermechanics.semper.ui.analysis.run.RunChrome
 import com.sempermechanics.semper.ui.analysis.run.RunStatusLine
 import com.sempermechanics.semper.ui.analysis.run.WizardRunLauncher
-import com.sempermechanics.semper.ui.analysis.run.WizardRunOutcomes
 import com.sempermechanics.semper.ui.analysis.sweep.SweepSetupController
-import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisLeaveController
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisReadyGate
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
@@ -99,7 +96,14 @@ class StaticAnalysisActivity :
     private lateinit var wizardChrome: AnalysisWizardChrome
     private lateinit var wizardSlots: AnalysisWizardSlots
     private lateinit var wizardCoach: AnalysisWizardCoach
-    private lateinit var sweepController: SweepSetupController
+
+    // Built on first use rather than in buildPages: the sliders and the subset
+    // suggestion call back into it as they bind, before it is set up. Until
+    // setup() finds its views, each of its calls is a no-op. Not at
+    // construction: it takes the view model, which exists from onCreate on.
+    private val sweepController by lazy(LazyThreadSafetyMode.NONE) {
+        SweepSetupController(activity = this, viewModel = viewModel, callbacks = this)
+    }
     private lateinit var frameOrder: FrameOrderController
     private lateinit var subsets: SubsetRecommendationController
     private lateinit var params: WizardParamFields
@@ -125,20 +129,17 @@ class StaticAnalysisActivity :
         status = RunStatusLine(this, chrome, settings.tvStaticResult, settings.btnEngineFailFaq)
         clearRunStatus()
         buildPages()
-        val outcomes = buildRuns()
+        runs = WizardRunLauncher(this, viewModel, chrome, sweepController, ::checkReady)
         buildImports()
 
         binding.btnNext.setOnClickListener {
-            when (viewModel.step) {
-                WizardStep.IMAGES -> goToStep(WizardStep.SETTINGS, animate = true)
-                WizardStep.SETTINGS -> if (viewModel.sweepMode) goToStep(WizardStep.SWEEP, animate = true)
-                WizardStep.SWEEP -> Unit
-            }
+            val inputs = viewModel.inputs.value
+            inputs.step.next(inputs.sweepMode)?.let { goToStep(it, animate = true) }
         }
         binding.btnBack.setOnClickListener {
-            viewModel.step.previous?.let { goToStep(it, animate = true) }
+            viewModel.inputs.value.step.previous?.let { goToStep(it, animate = true) }
         }
-        goToStep(viewModel.step, animate = false)
+        goToStep(viewModel.inputs.value.step, animate = false)
 
         // Hand-off from Home's media picker: the selection type already
         // decided the branch — image becomes the reference, video enters
@@ -150,7 +151,7 @@ class StaticAnalysisActivity :
         if (savedInstanceState == null) Motion.enterStaggered(binding.contentColumn)
 
         restoreUiFromViewModel()
-        BatchRunController(this, viewModel, chrome, settings.tvStaticResult, host = outcomes).observe()
+        BatchRunController(this, viewModel, chrome, status, recheck = ::checkReady).observe()
         wireButtons()
     }
 
@@ -170,7 +171,6 @@ class StaticAnalysisActivity :
 
         wizardChrome = AnalysisWizardChrome(this, binding, settingsPage, sweepPage)
         wizardCoach = AnalysisWizardCoach(this, CoachMarkController(this), binding, settings, sweepPage)
-        sweepController = SweepSetupController(activity = this, viewModel = viewModel, callbacks = this)
         // After the wizard views exist: the sweep controls call checkReady().
         sweepController.setup()
         wizardSlots = AnalysisWizardSlots(
@@ -180,11 +180,6 @@ class StaticAnalysisActivity :
             frameOrderAdapter = frameOrder.adapter,
             onLineCutPreview = { sweepController.refreshLineCutPreview() },
         )
-    }
-
-    private fun buildRuns(): WizardRunOutcomes {
-        runs = WizardRunLauncher(this, viewModel, chrome, sweepController, ::checkReady)
-        return WizardRunOutcomes(this, viewModel, chrome, status, sweepController, ::checkReady)
     }
 
     private fun buildImports() {
@@ -216,7 +211,9 @@ class StaticAnalysisActivity :
         binding.btnCalculateFullField.setOnClickListener {
             // A field still holding focus has not committed its typed value yet.
             commitParamFields()
-            if (!viewModel.sweepMode) runs.startBatch(params.dicParams(), params.isKeysInterpolatorSelected())
+            if (!viewModel.inputs.value.sweepMode) {
+                runs.startBatch(params.dicParams(), params.isKeysInterpolatorSelected())
+            }
         }
     }
 
@@ -309,31 +306,20 @@ class StaticAnalysisActivity :
 
     override fun currentSubsetSize(): Int = params.subsetSize()
 
-    /** Largest odd subset the loaded image and ROI can hold. */
-    override fun maxSubsetForRoi(): Int = RoiResolveHelper.maxSubsetForRoi(
-        hasCustomRoi = viewModel.hasCustomRoi,
-        roiX = viewModel.roiX,
-        roiY = viewModel.roiY,
-        roiW = viewModel.roiW,
-        roiH = viewModel.roiH,
-        realRefWidth = viewModel.realRefWidth,
-        realRefHeight = viewModel.realRefHeight,
-    )
+    override fun maxSubsetForRoi(): Int = viewModel.maxSubsetForRoi()
 
     /** Flushes any in-progress typing into the sliders (focus loss commits). */
     override fun commitParamFields() {
         params.commit()
-        if (::sweepController.isInitialized) sweepController.clearSweepFieldFocus()
+        sweepController.clearSweepFieldFocus()
     }
 
     override fun onSweepInputsChanged() {
-        if (::sweepController.isInitialized) sweepController.onRecommendationChanged()
+        sweepController.onRecommendationChanged()
     }
 
     override fun resetSweepInputs() {
-        if (!::sweepController.isInitialized) return
-        viewModel.stepDenominator = SweepStudy.DEFAULT_STEP_DENOM
-        viewModel.subsetOverlap = SweepStudy.overlapForDenominator(SweepStudy.DEFAULT_STEP_DENOM)
+        viewModel.resetSweepDepth()
         sweepController.resetUserModified()
         sweepController.seedSweepSuggestions()
     }
@@ -347,7 +333,8 @@ class StaticAnalysisActivity :
     // ------------------------------------------------------------------
     // Wizard navigation: page 1 (images) → page 2 (settings) → page 3 (sweep)
     // ------------------------------------------------------------------
-    override fun updateWizardChrome() = wizardChrome.updateBottomNav(viewModel.step, viewModel.sweepMode)
+    override fun updateWizardChrome() =
+        viewModel.inputs.value.let { wizardChrome.updateBottomNav(it.step, it.sweepMode) }
 
     override fun refPreviewBitmap(): Bitmap? = refPreviewBmp
 
@@ -355,17 +342,17 @@ class StaticAnalysisActivity :
 
     /** Shows page [step]: also the sweep setup's way back to settings, and how the smoke test moves the wizard. */
     override fun goToStep(step: WizardStep, animate: Boolean) {
+        val inputs = viewModel.inputs.value
         val target = wizardChrome.applyStep(
-            previous = viewModel.step,
+            previous = inputs.step,
             requested = step,
-            sweepMode = viewModel.sweepMode,
+            sweepMode = inputs.sweepMode,
             animate = animate,
         )
-        viewModel.step = target
-
         // Reaching the settings page counts as reviewing the parameters —
         // they are all visible here — which satisfies the Compute gate.
-        if (target >= WizardStep.SETTINGS) viewModel.settingsReviewed = true
+        val reviewed = target >= WizardStep.SETTINGS
+        viewModel.edit { it.copy(step = target, settingsReviewed = it.settingsReviewed || reviewed) }
 
         if (target == WizardStep.SETTINGS) {
             wizardSlots.updateRoiThumbnail()
@@ -382,7 +369,7 @@ class StaticAnalysisActivity :
     }
 
     override fun checkReady() {
-        readyGate.apply(chrome.isBusy, sweepController = if (::sweepController.isInitialized) sweepController else null)
+        readyGate.apply(chrome.isBusy, sweepController)
     }
 
     private fun consumePickerHandOff() {
@@ -416,12 +403,12 @@ class StaticAnalysisActivity :
      * ranges, then the parameters page (or the sweep's), ready to Compute.
      */
     private suspend fun showRerun(inputs: RerunInputs) {
-        refPreviewBmp = viewModel.refBytes?.let { decodeRefPreview(it) }
+        refPreviewBmp = viewModel.inputs.value.refBytes?.let { decodeRefPreview(it) }
         val run = inputs.params
         params.applyRerun(run.subset, run.step, run.strainWindow, run.use6x6)
         sweepController.showRerun()
         onImagesChanged(newReference = true, newFrames = true)
-        goToStep(viewModel.step, animate = false)
+        goToStep(viewModel.inputs.value.step, animate = false)
     }
 
     /**
@@ -432,8 +419,8 @@ class StaticAnalysisActivity :
     private suspend fun decodeRefPreview(bytes: ByteArray): Bitmap? = ReferencePreviewLoader.load(
         ReferencePreviewLoader.Request(
             bytes = bytes,
-            intentWidth = viewModel.realRefWidth,
-            intentHeight = viewModel.realRefHeight,
+            intentWidth = viewModel.inputs.value.refSize.width,
+            intentHeight = viewModel.inputs.value.refSize.height,
             previewMaxEdge = BitmapDecoder.PREVIEW_MAX_EDGE,
         ),
     ).bitmap
@@ -446,12 +433,12 @@ class StaticAnalysisActivity :
     private fun restoreUiFromViewModel() {
         lifecycleScope.launch {
             val restore = viewModel.restoreDraft()
-            viewModel.refBytes?.let { refPreviewBmp = decodeRefPreview(it) }
+            viewModel.inputs.value.refBytes?.let { refPreviewBmp = decodeRefPreview(it) }
             wizardSlots.refreshRefSlot(refPreviewBmp)
             wizardSlots.refreshDefSlot()
             when (restore) {
                 // Re-enter the page so it re-measures what it shows.
-                DraftRestore.RESTORED -> goToStep(viewModel.step, animate = false)
+                DraftRestore.RESTORED -> goToStep(viewModel.inputs.value.step, animate = false)
                 DraftRestore.LOST -> {
                     goToStep(WizardStep.IMAGES, animate = false)
                     val lost = getString(R.string.wizard_draft_lost)

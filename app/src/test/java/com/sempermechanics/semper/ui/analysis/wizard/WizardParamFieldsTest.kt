@@ -66,15 +66,14 @@ class WizardParamFieldsTest {
         bed.settings.etSubsetValue.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_DONE)
 
         assertEquals(snapToSlider(bed.settings.sliderSubsetSize, 52), bed.settings.sliderSubsetSize.value.toInt())
-        assertTrue(bed.viewModel.subsetUserModified)
+        assertTrue(bed.viewModel.inputs.value.subsetUserModified)
         assertTrue(bed.host.count("clearRunStatus") > 0)
     }
 
     @Test
     fun `Reset goes back to the recommendation and the default step, window and interpolator`() {
-        bed.viewModel.subsetRecommendation =
-            SubsetRecommender.Recommendation(subsetSize = 25, samples = 10, cappedSamples = 0)
-        bed.viewModel.subsetUserModified = true
+        val rec = SubsetRecommender.Recommendation(subsetSize = 25, samples = 10, cappedSamples = 0)
+        bed.viewModel.edit { it.copy(subsetRecommendation = rec, subsetUserModified = true) }
         bed.settings.sliderSubsetSize.value = 61f
         bed.settings.sliderStepSize.value = 9f
         bed.settings.sliderStrainWindow.value = 11f
@@ -88,7 +87,7 @@ class WizardParamFieldsTest {
         assertEquals(DicParams.DEFAULT_STEP, bed.settings.sliderStepSize.value.toInt())
         assertEquals(SweepStudy.DEFAULT_WINDOW_POINTS, bed.settings.sliderStrainWindow.value.toInt())
         assertFalse(fields.isKeysInterpolatorSelected())
-        assertFalse(bed.viewModel.subsetUserModified)
+        assertFalse(bed.viewModel.inputs.value.subsetUserModified)
         assertEquals(listOf("commitParamFields", "resetSweepInputs", "clearRunStatus"), bed.host.calls)
     }
 
@@ -151,6 +150,6 @@ class WizardParamFieldsTest {
 
         assertEquals(run, fields.dicParams())
         assertTrue(fields.isKeysInterpolatorSelected())
-        assertTrue("the recommendation must not move it", bed.viewModel.subsetUserModified)
+        assertTrue("the recommendation must not move it", bed.viewModel.inputs.value.subsetUserModified)
     }
 }

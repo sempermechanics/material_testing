@@ -34,7 +34,7 @@ def _mint_floating(max_seats=2):
 
 def _roster(store, *uids):
     store._data["users"] = {
-        uid: {"email": f"{uid}@university.edu", "access_status": "APPROVED", "mode": "demo"}
+        uid: {"email": f"{uid}@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"}
         for uid in uids
     }
 
@@ -426,7 +426,7 @@ async def test_checkout_and_release_over_http(client, monkeypatch):
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, "mode": "demo", "plan": "demo"})
     store._data["users"] = {
-        "dev-user": {"email": "dev@university.edu", "access_status": "APPROVED", "mode": "demo"},
+        "dev-user": {"email": "dev@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"},
     }
     minted = _mint_floating(max_seats=1)
     license_id = minted["license"]["id"]
@@ -454,8 +454,8 @@ async def test_checkout_on_a_full_pool_is_409_over_http(client, monkeypatch):
     store = fake_firestore.install(monkeypatch)
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     store._data["users"] = {
-        "dev-user": {"email": "dev@university.edu", "access_status": "APPROVED", "mode": "demo"},
-        "other": {"email": "other@university.edu", "access_status": "APPROVED", "mode": "demo"},
+        "dev-user": {"email": "dev@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"},
+        "other": {"email": "other@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"},
     }
     minted = _mint_floating(max_seats=1)
     license_id = minted["license"]["id"]
@@ -479,8 +479,8 @@ async def test_add_member_over_http(client, monkeypatch):
     store = fake_firestore.install(monkeypatch)
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     store._data["users"] = {
-        "dev-user": {"email": "it@university.edu", "access_status": "APPROVED", "mode": "demo"},
-        "student": {"email": "s@university.edu", "access_status": "APPROVED", "mode": "demo"},
+        "dev-user": {"email": "it@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"},
+        "student": {"email": "s@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"},
     }
     minted = _mint_floating()
     license_id = minted["license"]["id"]

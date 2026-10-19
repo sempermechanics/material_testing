@@ -204,9 +204,9 @@ sequenceDiagram
     participant F as Firestore
     A->>A: generateKeyPair(EC P-256, StrongBox, user-auth optional)
     A->>R: POST /v1/devices/register {deviceId, publicKeyPem, model, osVer}\n(Authorization: ID token)
-    R->>F: users/{uid} exists? one active device already bound?
+    R->>F: one transaction: users/{uid} bound to another device? devices/{deviceId} another account's?
     alt no active device
-        R->>F: devices/{deviceId} = {uid, publicKeyPem, status: ACTIVE}
+        R->>F: devices/{deviceId} = {uid, app, publicKeyPem, status: ACTIVE, stepUpEligible}
         R-->>A: 201 registered
     else already bound to another device
         R-->>A: 409 device_conflict (needs admin re-bind)
@@ -228,7 +228,15 @@ the stored public key and returns `201` with `healed: true` (see
 `register_device` in `backend/app/routers/devices.py`). Registering a *different* second device for a
 `uid` that already has one returns `409 device_conflict`; moving to genuinely
 new hardware means an admin revokes the prior device first. (There is no
-`:rebind` endpoint — that was a design idea, not something implemented.)
+`:rebind` endpoint — that was a design idea, not something implemented.) Both
+checks run inside `repo.register_device`'s transaction, so two phones
+registering at once cannot both stay ACTIVE. A signed request is accepted only
+from the device the account binds for the asking app (`activeDeviceId`, else
+`409 device_not_active`) and registered under that app (else `401
+bad_signature`, which the app recovers from as below). Staff and IT step-up
+also need the device's `stepUpEligible`, set when it registered from a
+second-factor sign-in ([ADR-010](../adr/ADR-010-device-binding-per-app.md)
+amendment).
 
 **One key per device id.** `devices/{deviceId}` holds one public key and names
 no app in its id (`repo/devices.py` `register_device`). Apps signed with the
@@ -771,6 +779,8 @@ the way it does.
 | Institution IT self-service routes | [`backend/app/routers/institutions.py`](../../backend/app/routers/institutions.py) | Token + adminEmails auth; the surface behind `/console/institution`, and equally usable from a script (§20.4). The `/v1/campus/*` aliases were retired (§20.5) |
 | Session provision / purge | [`backend/app/session_provision.py`](../../backend/app/session_provision.py) | `provision_session` / `purge_session` |
 | Auth + device dependencies | [`backend/app/deps.py`](../../backend/app/deps.py) | Bearer verify, device-signature check (§4) |
+| Step-up tiers | [`backend/app/step_up.py`](../../backend/app/step_up.py) | `attested_or_mfa_admin`, `attested_or_mfa_admin_fresh`, `attested_or_mfa_user`, `step_up_check`: an attested device or a second factor on a recent sign-in; built on `deps`, never imported by it (TD-293) |
+| Multi-step flows | [`backend/app/services/`](../../backend/app/services/__init__.py), one module per aggregate | Account erasure and export, recording an analysis and its bundle, licence mint: what a route does in several steps across Drive, Firestore, Auth and the audit log; the router checks and answers (TD-293, `tests/test_layering.py`) |
 | ID-token verify, keyless Drive token | [`backend/app/google_auth.py`](../../backend/app/google_auth.py) | Self-impersonation to add the Drive scope (§2) |
 | Drive folders, resumable init, blob probe | [`backend/app/drive.py`](../../backend/app/drive.py) | Returns the opaque upload URI, and `ALIVE`/`MISSING`/`UNKNOWN` (§4) |
 | Async provisioning | [`backend/app/tasks.py`](../../backend/app/tasks.py) | Cloud Tasks enqueue + OIDC callback auth (§4.1) |
@@ -780,7 +790,7 @@ the way it does.
 | Structured logging | [`backend/app/observability.py`](../../backend/app/observability.py) | JSON log records with request correlation (§17) |
 | Outbound mail | [`backend/app/notify.py`](../../backend/app/notify.py) | Resend, fire-and-forget |
 | Pydantic models | [`backend/app/models.py`](../../backend/app/models.py) | |
-| Audit trail | [`backend/app/audit.py`](../../backend/app/audit.py) | |
+| Audit trail | [`backend/app/audit.py`](../../backend/app/audit.py) (the row), [`backend/app/repo/audit_log.py`](../../backend/app/repo/audit_log.py) (its write and reads) | |
 | Config / env vars | [`backend/app/config.py`](../../backend/app/config.py) | Includes `DEV_INSECURE_AUTH`, `APP_CHECK_MODE`, `TASKS_*` |
 | Schema migrations | [`backend/scripts/migrate_schema.py`](../../backend/scripts/migrate_schema.py) | Versioned steps in `backend/scripts/migrations/` — see [FIRESTORE_SCHEMA_RUNBOOK.md](FIRESTORE_SCHEMA_RUNBOOK.md) |
 | Session app tag | [`backend/app/repo/sessions.py`](../../backend/app/repo/sessions.py), [`routers/sessions.py`](../../backend/app/routers/sessions.py), [`backend/scripts/tag_session_apps.py`](../../backend/scripts/tag_session_apps.py) | `session_app` (absent = `semper`), `create_session(…, app)`, `list_user_sessions(…, app=None)` filling pages in Python, the `/files` gate; the backfill (§5, [ADR-014](../adr/ADR-014-session-app-tag.md)) |
@@ -804,10 +814,10 @@ rather than hardcoding its own.
 **The demo cap is counted per account and per device.** Both halves count
 analyses stored at once, less `PROVISION_FAILED`, so a delete frees a place
 (the product owner's choice, TD-275). The account half is `count_user_sessions`
-(`backend/app/repo/sessions.py:394-412`); for a demo account `create_session`
+(`backend/app/repo/sessions.py:445-463`); for a demo account `create_session`
 also refuses when the device's stored analyses, every account's, reach the cap
-(`count_device_sessions`, `:415-439`; `_device_cap_reached`,
-`backend/app/routers/sessions.py:473-486`, applied at `:546-547`), with a
+(`count_device_sessions`, `:454-478`; `_device_cap_reached`,
+`backend/app/services/sessions.py:81-94`, applied at `:138-139`), with a
 `409 device_quota_exceeded` that names neither the count nor the owners (its
 own code since TD-279, so the app does not lift it on the account's count). A
 session with no `deviceId` counts toward no device. `GET /v1/sessions`
@@ -1381,7 +1391,7 @@ counts; tier bucket + `roster_import_bucket`), `GET …/seats/export` (text/csv,
 audited `…_ROSTER_EXPORT`), `GET …/summary` (counts from the reconciliation
 read: `users.lastSeenAt` for active-in-7-days, the revoked-still-running bucket
 for revocation pending, the licence's `expiresAt` for expiring) and
-`GET …/audit` (`audit.page_license_audit`: `audit_logs` where `licenseId ==`,
+`GET …/audit` (`repo.page_license_audit`, `backend/app/repo/audit_log.py`: `audit_logs` where `licenseId ==`,
 `ts` range, `ts` DESC, composite index in `firestore.indexes.json`; json or
 csv). `audit.record` stamps `licenseId` on `license`, `seat`, `invite` and
 `lease` targets from 2026-10-18; earlier events lack it and are not in that
@@ -1724,6 +1734,17 @@ every non-revoked institution seat.
   licence already revoked keeps its `revokedAt` (reconciliation dates a seat
   revoke from it), and every seat's holder is re-checked, so running revoke
   again repairs a seat revoke whose demotion never landed.
+- **A fan-out that dies part-way is finished by a Cloud Task** ([ADR-026](../adr/ADR-026-licence-fanout-marker.md)).
+  Revoke and a terms edit write the licence together with `fanoutId`,
+  `fanoutOps` (`revoke`, `terms`, `leases`) and `fanoutAt`, after enqueueing
+  a task due 360 s later on `TASKS_QUEUE` (`POST /v1/tasks/license-fanout`,
+  OIDC like the provisioning callback, absent from the gateway). The call
+  runs the fan-out from the licence as it then stands and clears the marker
+  only if it is still its own; overtaken by a newer action, it runs again (up
+  to three passes). The task finds nothing in the ordinary case; when it
+  finds work it logs `license_fanout_finished_late`. Reconciliation reports
+  `fanoutPending`. Without a queue there is no task and the inline run is the
+  only one, as before.
 - **A claim writes the terms it read in its own transaction.** `claim_seat`
   and `claim_individual_license` rebuild the mirror in the caller's patch from
   the licence snapshot the transaction read (`_claim_terms`). The callers read
@@ -1887,9 +1908,22 @@ for a member to type. Seats are uid-keyed — they have to be, since a uid is
 what every entitlement check has in hand — so the backend resolves the address
 first:
 
-- **the address has an account** → a seat is claimed immediately;
-- **it does not** → a **pending invite** is written instead, and redeemed
-  automatically the first time that person signs in.
+- **the address has an account that is approved and has verified it** → a
+  seat is claimed immediately;
+- **it does not** (no account, or one that is pending or has not proved the
+  address) → a **pending invite** is written instead, and redeemed
+  automatically on that person's first request once their account qualifies.
+
+"Its address" is `repo.verified_address` (`backend/app/repo/holders.py`):
+the stored `email`, which follows the sign-in token like `emailVerified` does,
+and only while it is verified. The invite claim, IT membership, the IT
+licence list, a claim code and the mint's attach to an existing holder all
+read it, and one test, `_eligible_holder`, decides whether an existing account
+may be seated now, so a roster add and a staff mint cannot disagree.
+The seat keeps its own copy of the address for the roster and reconcile to
+show; when the holder signs in with a new verified address, the seat on their
+current institution licence takes it (`_refresh_seat_address`,
+`backend/app/repo/users.py`, TD-297). Nothing is decided on the copy.
 
 The invite path exists because IT works from a list of addresses and cannot
 make people sign up on cue. Refusing with `user_not_found` until they had was
@@ -2200,8 +2234,11 @@ the auth continue-URLs — keeps the strict `default-src 'self'`, with
 `script-src 'self'` and no `'unsafe-inline'` since 2026-10-08 (check 11 of
 `scripts/check_console.py` keeps every policy, and every page, that way). `connect-src` is
 widened for the API and Firebase Auth's token endpoints. `script-src` is
-widened to exactly two origins and never to `'unsafe-inline'`:
-`https://www.gstatic.com` for the SDK modules and `https://apis.google.com`
+widened to exactly two sources and never to `'unsafe-inline'`:
+`https://www.gstatic.com/firebasejs/12.4.0/` for the SDK modules (the SDK's
+path, not the whole host, which serves scripts for every Google product;
+check 12 of `scripts/check_console.py` holds it to the version `auth.js`
+imports, so an SDK bump changes both together) and `https://apis.google.com`
 for the gapi loader the auth iframe pulls in. Both SDK modules come from
 gstatic rather than Hosting's `/__/firebase/` copies — Hosting's
 `firebase-auth.js` imports `@firebase/app` from gstatic anyway, and mixing the
@@ -2662,7 +2699,7 @@ re-resolves the account (`get_or_create_user` → `ensure_entitlement`) and, wit
 
 **Kill switches are enforced.** `KILL_SWITCHES` is published on `/v1/config`
 *and* refused server-side by `deps.unless_paused`
-(`backend/app/deps.py:296-331`): after the token check, before the route's own
+(`backend/app/deps.py:295-330`): after the token check, before the route's own
 parameters, so a paused request reads nothing and leaves a signed request's
 nonce unspent. The answer is `503 feature_paused` with `Retry-After: 300`, logged
 `event="feature_paused"` with `switch` and `routeTemplate`. An upload keeps

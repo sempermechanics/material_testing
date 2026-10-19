@@ -3,7 +3,7 @@
  * naming its address. The front door routes on these (router.js) and every
  * page's dashboard switch is built from them (switcher.js). No DOM here.
  */
-import { api } from "./auth.js";
+import { api } from "./api.js";
 
 /**
  * The institution licences this address administers, and whether the

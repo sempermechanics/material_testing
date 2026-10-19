@@ -27,7 +27,8 @@ class FrameOrderControllerTest {
     fun setUp() {
         bed = WizardTestBed()
         order = FrameOrderController(bed.activity, bed.viewModel, bed.binding, onReordered = { redraws++ })
-        bed.viewModel.deformedFrames = listOf("a", "b", "c").map { DeformedFrame("/c/$it.png", "$it.png") }
+        val picked = listOf("a", "b", "c").map { DeformedFrame("/c/$it.png", "$it.png") }
+        bed.viewModel.edit { it.copy(deformedFrames = picked) }
     }
 
     @After
@@ -38,7 +39,7 @@ class FrameOrderControllerTest {
         order.applyManualOrder(listOf("/c/c.png", "/c/a.png", "/c/b.png"))
 
         assertEquals(listOf("/c/c.png", "/c/a.png", "/c/b.png"), bed.viewModel.defFilePaths)
-        assertEquals(FrameOrderMode.MANUAL, bed.viewModel.defOrderMode)
+        assertEquals(FrameOrderMode.MANUAL, bed.viewModel.inputs.value.defOrderMode)
     }
 
     @Test
@@ -52,15 +53,15 @@ class FrameOrderControllerTest {
         order.applyMode(FrameOrderMode.MANUAL, FrameOrderDirection.ASCENDING)
 
         assertTrue(order.adapter.dragEnabled)
-        assertEquals(FrameOrderMode.MANUAL, bed.viewModel.defOrderMode)
+        assertEquals(FrameOrderMode.MANUAL, bed.viewModel.inputs.value.defOrderMode)
         assertEquals(0, redraws)
     }
 
     @Test
     fun `a single frame has no order to change`() {
-        bed.viewModel.deformedFrames = listOf(DeformedFrame("/c/a.png", "a.png"))
-        val before = bed.viewModel.defOrderMode
+        bed.viewModel.edit { it.copy(deformedFrames = listOf(DeformedFrame("/c/a.png", "a.png"))) }
+        val before = bed.viewModel.inputs.value.defOrderMode
         order.applyMode(FrameOrderMode.NAME, FrameOrderDirection.DESCENDING)
-        assertEquals(before, bed.viewModel.defOrderMode)
+        assertEquals(before, bed.viewModel.inputs.value.defOrderMode)
     }
 }

@@ -184,3 +184,9 @@ derived field for field; the proof is mechanical (identical `.dat` hashes).
   `RunResult.sessionId`, and `wouldCreateNewSession` is gone. The JNI call stays in the one loop; only the
   directory it writes to changed, so the `.dat` bytes (and oracles) are
   unchanged.
+- *Later (2026-10-19, #457):* `RunResult` is gone. A run hands its outcome back
+  (`BatchAnalysisOutcome`: the `spec` it solved, the session it wrote and the saved
+  row, `record`), the view model takes it once on Main (`applyRunOutcome`), and the
+  result opens through `ViewerArgs.of(record)`, the builder Home uses, so the viewer
+  reads what the saved row holds. A sweep that solved nothing opens through
+  `ViewerArgs.forFailedSweep`. The run no longer writes the `last*` fields.

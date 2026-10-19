@@ -2,8 +2,11 @@ package com.sempermechanics.semper.ui.viewer
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.ImageSize
+import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.imaging.BitmapDecoder
 import com.sempermechanics.semper.report.VisualizationEngine
 import com.sempermechanics.semper.ui.common.SerialJob
@@ -12,14 +15,35 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
 
+/** What [ViewerImageLoader] needs from the viewer. */
+internal interface ImageHost : ViewerViews {
+    /** Holds the frame on screen ([ResultViewerViewModel.currentFrameIndex]). */
+    val viewModel: ResultViewerViewModel
+    val imageSize: ImageSize
+    val roi: Roi
+
+    /** The frame on screen's data; null until one is decoded. */
+    val rawData: FloatArray?
+
+    /** The deformed image behind the frame at [position], or null when it is not on disk. Disk only. */
+    fun deformedImagePathAt(position: Int): String?
+
+    /** Puts frame [index], decoded as [data], on screen again: its photo would not decode. Main thread. */
+    fun applyLoadedFrame(index: Int, data: FloatArray)
+}
+
 /**
  * The image under the viewer's heatmap: the reference, decoded once at display
  * size, or the frame's own photo when it is on disk. Owns both bitmaps and the
- * rest-fit box the image is framed to.
+ * rest-fit box the image is framed to. Its decodes run in [activity]'s scope
+ * and are dropped once it is finishing.
  *
- * Constructed before onCreate; reads [ResultViewerActivity.binding] lazily.
+ * Constructed before onCreate; reads [ViewerViews.binding] lazily.
  */
-internal class ViewerImageLoader(private val host: ResultViewerActivity) {
+internal class ViewerImageLoader(
+    private val activity: AppCompatActivity,
+    private val host: ImageHost,
+) {
 
     /** The reference at display size. Exports and the report read it; it is never a frame's photo. */
     var cachedBaseImage: Bitmap? = null
@@ -64,7 +88,7 @@ internal class ViewerImageLoader(private val host: ResultViewerActivity) {
             val viewH = image.height.coerceAtLeast(1)
             val reqW = viewW.coerceAtMost(VisualizationEngine.DISPLAY_MAX_EDGE)
             val reqH = viewH.coerceAtMost(VisualizationEngine.DISPLAY_MAX_EDGE)
-            refDecodeJob.launch(host.lifecycleScope, Dispatchers.IO) {
+            refDecodeJob.launch(activity.lifecycleScope, Dispatchers.IO) {
                 val bmp = BitmapDecoder.decodeFileForView(
                     refPath,
                     reqW,
@@ -73,7 +97,7 @@ internal class ViewerImageLoader(private val host: ResultViewerActivity) {
                     rawHeight = host.imageSize.height,
                 )
                 withContext(Dispatchers.Main) {
-                    if (host.isDestroyed || host.isFinishing) {
+                    if (activity.isDestroyed || activity.isFinishing) {
                         bmp?.recycle()
                         return@withContext
                     }
@@ -128,7 +152,7 @@ internal class ViewerImageLoader(private val host: ResultViewerActivity) {
      * reference-position map: a frame whose photo is gone (a restore without
      * it, storage reclaim) still lines up.
      */
-    val onFramePhoto: Boolean get() = framePhotoPathFor(host.currentFrameIndex) != null
+    val onFramePhoto: Boolean get() = framePhotoPathFor(host.viewModel.currentFrameIndex) != null
 
     /**
      * Puts the photo of the frame at [index] under its map — or the reference,
@@ -149,7 +173,7 @@ internal class ViewerImageLoader(private val host: ResultViewerActivity) {
             ?: VisualizationEngine.DISPLAY_MAX_EDGE
         val reqH = image.height.takeIf { it > 0 }?.coerceAtMost(VisualizationEngine.DISPLAY_MAX_EDGE)
             ?: VisualizationEngine.DISPLAY_MAX_EDGE
-        framePhotoJob.launch(host.lifecycleScope) {
+        framePhotoJob.launch(activity.lifecycleScope) {
             val bmp = withContext(Dispatchers.IO) {
                 BitmapDecoder.decodeFileForView(
                     path,
@@ -159,7 +183,7 @@ internal class ViewerImageLoader(private val host: ResultViewerActivity) {
                     rawHeight = host.imageSize.height,
                 )
             }
-            if (host.isDestroyed || host.isFinishing) {
+            if (activity.isDestroyed || activity.isFinishing) {
                 bmp?.recycle()
                 return@launch
             }
@@ -167,10 +191,10 @@ internal class ViewerImageLoader(private val host: ResultViewerActivity) {
                 Timber.w("Frame %d photo did not decode; showing it on the reference", index)
                 framePhotos[index] = ""
                 val data = host.rawData
-                if (host.currentFrameIndex == index && data != null) host.applyLoadedFrame(index, data)
+                if (host.viewModel.currentFrameIndex == index && data != null) host.applyLoadedFrame(index, data)
                 return@launch
             }
-            if (framePhotoPathFor(host.currentFrameIndex) != path) {
+            if (framePhotoPathFor(host.viewModel.currentFrameIndex) != path) {
                 bmp.recycle()
                 return@launch
             }

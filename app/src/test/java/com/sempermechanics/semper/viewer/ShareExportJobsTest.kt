@@ -159,6 +159,27 @@ class ShareExportJobsTest {
     }
 
     @Test
+    fun `a save-as job that lands no bytes is not reported saved`() = runBlocking {
+        val empty = jobs.newId("csv")
+        jobs.start(empty, "CSV", Uri.fromFile(File(temp.root, "empty.csv")), direct = false) {
+            file("") to "text/csv"
+        }
+        assertEquals(
+            ShareExportJobs.Outcome.Saved(empty, ok = false),
+            withTimeout(TIMEOUT_MS) { jobs.outcomes.first() },
+        )
+
+        val unwritable = jobs.newId("csv")
+        jobs.start(unwritable, "CSV", Uri.fromFile(File(temp.root, "missing/dir/x.csv")), direct = false) {
+            file("a") to "text/csv"
+        }
+        assertEquals(
+            ShareExportJobs.Outcome.Saved(unwritable, ok = false),
+            withTimeout(TIMEOUT_MS) { jobs.outcomes.first() },
+        )
+    }
+
+    @Test
     fun `a build that throws is a failure, not a crash`() = runBlocking {
         val id = jobs.newId("zip")
 

@@ -130,7 +130,7 @@ LICENSING_IMPORTS = {
     "holders": {"_base", "invites"},
     "mint": {"_base", "claims", "holders", "invites"},
     "activation": {"_base", "claims", "devlock", "holders", "user_config"},
-    "entitlement": {"_base", "claims", "invites", "mint"},
+    "entitlement": {"_base", "claims", "holders", "invites", "mint"},
     "license_admin": {"_base", "claims", "invites", "mint"},
     "upgrade": {"_base", "claims", "invites", "mint", "license_admin"},
     "deletion": {"_base", "claims", "holders", "invites", "mint", "license_admin"},
@@ -153,3 +153,28 @@ def test_the_licensing_modules_import_only_their_layer():
         if _package_imports(by_name[name]) - allowed
     }
     assert extra == {}
+
+
+def test_no_module_outside_repo_queries_firestore():
+    """Firestore is read and written from `app.repo` alone (ADR-021): a module
+    outside it reaches the database through the package's names, never the
+    client. `audit.py` queried `audit_logs` itself until the reads moved to
+    `repo/audit_log.py`."""
+    offenders = []
+    for path in sorted(APP_DIR.rglob("*.py")):
+        if REPO_DIR in path.parents:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module and (
+                node.module.endswith("repo._base") or node.module.startswith("google.cloud")
+                and any(a.name == "firestore" for a in node.names)
+            ):
+                offenders.append(f"{path.relative_to(APP_DIR)}:{node.lineno} imports {node.module}")
+            if (isinstance(node, ast.ImportFrom) and node.module == "repo"
+                    and any(a.name == "_base" for a in node.names)):
+                offenders.append(f"{path.relative_to(APP_DIR)}:{node.lineno} imports repo._base")
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr in {"collection", "collection_group"}):
+                offenders.append(f"{path.relative_to(APP_DIR)}:{node.lineno} calls .{node.func.attr}()")
+    assert offenders == []

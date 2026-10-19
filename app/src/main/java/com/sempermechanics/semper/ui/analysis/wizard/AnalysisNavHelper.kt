@@ -5,17 +5,15 @@ import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.policy.AppPolicy
 import com.sempermechanics.semper.data.session.SessionQuota
 import com.sempermechanics.semper.data.session.SessionStore
-import com.sempermechanics.semper.data.session.SkippedNode
 import com.sempermechanics.semper.navigation.AppIntents
 import com.sempermechanics.semper.ui.analysis.StaticAnalysisActivity
-import com.sempermechanics.semper.ui.viewer.ViewerArgs
-import com.sempermechanics.semper.ui.viewer.ViewerSweepArgs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Navigation helpers extracted from [StaticAnalysisActivity] so limit-gate and
- * result-open flows do not keep growing the Activity.
+ * Navigation helpers extracted from [StaticAnalysisActivity] so the limit
+ * gates do not keep growing the Activity. A finished run opens its results
+ * from its saved row (`BatchRunController`, `ViewerArgs.of`).
  */
 object AnalysisNavHelper {
 
@@ -86,61 +84,5 @@ object AnalysisNavHelper {
         if (!SessionQuota.blocked(host, localCount)) return true
         openSessionLimit(host)
         return false
-    }
-
-    fun openResults(
-        host: Activity,
-        viewModel: AnalysisViewModel,
-        sweep: Boolean,
-        frameNames: ArrayList<String>,
-    ) {
-        host.startActivity(resultArgs(viewModel, sweep, frameNames).toIntent(host))
-    }
-
-    /**
-     * The viewer arguments for the run that just finished (TD-61). Settings and
-     * ROI come from the run itself ([RunResult]): the ones the
-     * saved session recorded, so opening from here and reopening from Home show
-     * the same values. The session id is the local one Home opens with: the
-     * one the run wrote ([RunResult.sessionId]).
-     */
-    fun resultArgs(viewModel: AnalysisViewModel, sweep: Boolean, frameNames: List<String>): ViewerArgs {
-        val run = viewModel.runResult.value
-        val settings = checkNotNull(run.viewerSettings()) { "no run to show" }
-        val plan = viewModel.sweepPlan
-        return ViewerArgs(
-            imgW = viewModel.realRefWidth,
-            imgH = viewModel.realRefHeight,
-            step = settings.step,
-            refName = viewModel.refName,
-            refPath = run.refPath ?: "",
-            batchDirPath = run.batchDirPath,
-            frameNames = frameNames,
-            stopCode = run.stop.wireCode,
-            plannedFrames = run.plannedFrames,
-            sessionId = run.sessionId,
-            sessionLocalId = run.sessionId,
-            subsetSize = settings.subset,
-            strainWindow = settings.strainWin,
-            engineStats = run.engineStats?.toList(),
-            roiX = settings.roiX,
-            roiY = settings.roiY,
-            roiW = settings.roiW,
-            roiH = settings.roiH,
-            sweep = if (sweep) {
-                ViewerSweepArgs(
-                    subsets = plan.map { it.subset },
-                    steps = plan.map { it.step },
-                    strainWindows = plan.map { it.vsg },
-                    lineCutHorizontal = run.spec?.sweep?.lineCutHorizontal ?: viewModel.lineCutHorizontal,
-                    skippedJson = SkippedNode.encodeJson(viewModel.sweepSkippedNodes),
-                )
-            } else {
-                null
-            },
-            defPath = run.defPath,
-            defFilePaths = viewModel.defFilePaths,
-            frameTimesMs = viewModel.defFrameTimesMs.takeUnless { sweep },
-        )
     }
 }

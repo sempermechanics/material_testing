@@ -10,9 +10,9 @@
  * acts, so an answer that arrives after another licence was opened still
  * goes to the one asked on.
  */
-import { api, apiBlob, saveBlob, esc } from "./auth.js";
+import { api, apiBlob, saveBlob } from "./api.js";
 import { explain } from "./messages.js";
-import { MAX_IMPORT_ROWS, importRowCount } from "./util.js";
+import { esc, MAX_IMPORT_ROWS, importRowCount } from "./util.js";
 
 /** The tiles, in order: the count's key, its label, and whether a non-zero count wants attention. */
 const TILES = [

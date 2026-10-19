@@ -11,6 +11,7 @@
 package com.sempermechanics.semper.report
 
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.HeatmapColorScale.computeSigmaClampedRange
 import com.sempermechanics.semper.report.VisualizationEngine.IndexPlane
 import com.sempermechanics.semper.report.VisualizationEngine.LAST_COLOR
@@ -25,13 +26,13 @@ import kotlin.math.sqrt
 
 /**
  * The deformed-configuration heatmap: each point drawn where it moved to.
- * [VisualizationEngine.generateDeformedHeatmap] and
- * [VisualizationEngine.generateDeformedHeatmapIndices] are its public face.
+ * [VisualizationEngine.render] and
+ * [VisualizationEngine.indices] are its public face.
  */
 internal object DeformedHeatmap {
 
     /**
-     * The index plane behind [VisualizationEngine.generateDeformedHeatmap]. The point grid is the one
+     * The index plane behind [VisualizationEngine.render]. The point grid is the one
      * [HeatmapRenderer.generateHeatmapIndices] builds. Each cell with four solved corners becomes
      * the quad through their displaced positions, and every pixel inside it takes
      * the bilinear value at its inverse-bilinear (s, t). With no displacement
@@ -73,7 +74,7 @@ internal object DeformedHeatmap {
         }
 
         val (minV, maxV) = if (customMin != null && customMax != null) {
-            customMin to customMax
+            ValueRange(customMin, customMax)
         } else {
             computeSigmaClampedRange(validValues, validCount, valIndex)
         }

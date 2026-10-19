@@ -84,6 +84,8 @@
     <string name="failed_load_reference">Failed to load reference image. Please try another file.</string>
     <string name="roi_too_small">ROI is too small. It must be larger than the subset size.</string>
     <string name="analysis_failed_title">Analysis failed</string>
+    <!-- The run-status line under Compute after a run that kept nothing; %1$s is why. -->
+    <string name="run_failed_status_fmt">❌ Error: %1$s</string>
     <string name="analysis_unexpected_title">Analysis stopped unexpectedly</string>
     <string name="analysis_not_saved_title">Couldn\'t save results</string>
     <string name="analysis_index_unavailable_body">The list of analyses couldn\'t be updated. Free up space and run again.</string>
@@ -526,7 +528,6 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- W is the strain window in data points; with St it fixes the VSG,
          (W − 1) × St + 1 px, so the label needs no VSG of its own. -->
     <string name="sweep_frame_label_fmt">S%1$d · St%2$d · W%3$d</string>
-    <string name="sweep_failed">The parameter sweep could not run.</string>
     
     <string name="sweep_fail_features">The engine couldn\'t match the two images: it found no starting point (phase correlation could not lock and no anchor solved). \n\nThe image pair: during the test the specimen might have moved, or too much deformation could have decorrelated it from the reference.</string>
     <string name="sweep_fail_roi">The region of interest contains no valid points. Redraw it over the speckled area or use a different image.</string>

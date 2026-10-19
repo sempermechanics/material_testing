@@ -2,25 +2,18 @@ package com.sempermechanics.semper.ui.limit
 
 import android.os.Bundle
 import android.view.View
+import androidx.activity.viewModels
 import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.LicenseConfigWorker
-import com.sempermechanics.semper.data.account.SeatLease
-import com.sempermechanics.semper.data.net.ApiErrors
-import com.sempermechanics.semper.data.net.ApiException
-import com.sempermechanics.semper.data.net.AppRemoteConfig
-import com.sempermechanics.semper.data.net.NoSeatAvailableException
-import com.sempermechanics.semper.data.net.SemperApi
-import com.sempermechanics.semper.data.net.TokenProvider
 import com.sempermechanics.semper.databinding.ActivitySeatRequiredBinding
 import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.dialog.Feedback
 import com.sempermechanics.semper.ui.common.setBusy
-import com.sempermechanics.semper.util.suspendRunCatching
 import kotlinx.coroutines.launch
-import timber.log.Timber
 
 /**
  * Gate shown when every seat on a floating institution license is in use.
@@ -37,6 +30,8 @@ import timber.log.Timber
 @MainThread
 class SeatRequiredActivity : AppCompatActivity() {
 
+    private val viewModel: SeatRequiredViewModel by viewModels()
+
     private lateinit var binding: ActivitySeatRequiredBinding
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,63 +41,32 @@ class SeatRequiredActivity : AppCompatActivity() {
         Insets.padVertical(binding.seatRoot)
 
         binding.tvSeatBody.setText(R.string.seat_body)
-        binding.btnTakeSeat.setOnClickListener { takeSeat() }
+        // In the view model, so a rotation cannot cancel the request.
+        binding.btnTakeSeat.setOnClickListener { viewModel.takeSeat() }
         binding.tvSeatBack.setOnClickListener { finish() }
+        observeViewModel()
     }
 
-    /**
-     * Ask for a seat. On success the backend's response already carries the
-     * new entitlement, so it is applied straight to the cache rather than
-     * waiting for the next config fetch — otherwise the user would return to
-     * Home still looking blocked.
-     */
-    private fun takeSeat() {
-        setLoading(true)
+    /** The spinner while a seat request is out, and what each came to once, on whichever screen is current. */
+    private fun observeViewModel() {
         lifecycleScope.launch {
-            val api = SemperApi.get(this@SeatRequiredActivity)
-            val token = TokenProvider.usableIdToken()
-            if (!api.enabled || token == null) {
-                setLoading(false)
-                Feedback.toast(this@SeatRequiredActivity, R.string.seat_offline, long = true)
-                return@launch
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch { viewModel.busy.collect(::setLoading) }
+                viewModel.outcomes.collect(::showOutcome)
             }
-            val outcome = suspendRunCatching { api.checkoutLease(token) }
-            setLoading(false)
-            outcome
-                .onSuccess { config ->
-                    AppRemoteConfig.apply(this@SeatRequiredActivity, config)
-                    // The checkout answer has no entitlement token; /v1/config
-                    // does, and a failed fetch is retried in the background.
-                    SeatLease.refreshConfigAfterCheckout(this@SeatRequiredActivity)
-                    LicenseConfigWorker.enqueue(this@SeatRequiredActivity)
-                    Feedback.toast(this@SeatRequiredActivity, R.string.seat_taken)
-                    finish()
-                }
-                .onFailure { error ->
-                    // A full pool is the expected answer, not a fault: say so
-                    // plainly and leave the screen up to try again.
-                    val message = when {
-                        error is NoSeatAvailableException -> R.string.seat_still_full
-                        // Past RetryOnTransient's three attempts, so this is a
-                        // sustained throttle, not a blip — blaming the
-                        // connection would send the user to their wifi settings
-                        // for a limit that clears on its own.
-                        error.hasApiCode(ApiErrors.RATE_LIMITED) -> R.string.error_rate_limited
-                        error.hasApiCode(ApiErrors.APP_CHECK_REQUIRED) ->
-                            R.string.error_app_check_required
-                        else -> {
-                            Timber.w(error, "Could not take a seat")
-                            R.string.seat_error
-                        }
-                    }
-                    Feedback.toast(this@SeatRequiredActivity, message, long = true)
-                }
         }
     }
 
-    /** True when this failure is the backend answering with [code]. */
-    private fun Throwable.hasApiCode(code: String): Boolean =
-        this is ApiException && ApiErrors.isCode(parsedDetail, code)
+    private fun showOutcome(outcome: SeatRequiredViewModel.Outcome) {
+        when (outcome) {
+            SeatRequiredViewModel.Outcome.Taken -> {
+                Feedback.toast(this, R.string.seat_taken)
+                finish()
+            }
+            // A full pool or no connection: leave the screen up to try again.
+            is SeatRequiredViewModel.Outcome.NotTaken -> Feedback.toast(this, outcome.message, long = true)
+        }
+    }
 
     /** INVISIBLE, not GONE, so the layout does not jump while it spins. */
     private fun setLoading(loading: Boolean) {

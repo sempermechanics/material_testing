@@ -26,8 +26,7 @@ class SweepModeToggleTest {
     /** The page calls the host made after the mode was switched to single on page [on]. */
     private fun stepsAfterLeavingSweepMode(on: WizardStep): List<String> {
         bed.binding.stubStepSweep.inflate()
-        bed.viewModel.sweepMode = true
-        bed.viewModel.step = on
+        bed.viewModel.edit { it.copy(sweepMode = true, step = on) }
         SweepSetupController(bed.activity, bed.viewModel, bed.host).setup()
 
         bed.activity.findViewById<MaterialButtonToggleGroup>(R.id.rgAnalysisMode).check(R.id.rbModeSingle)
@@ -49,7 +48,7 @@ class SweepModeToggleTest {
     @Test
     fun `switching to sweep after a single run drops its status line`() {
         bed.binding.stubStepSweep.inflate()
-        bed.viewModel.step = WizardStep.SETTINGS
+        bed.viewModel.edit { it.copy(step = WizardStep.SETTINGS) }
         SweepSetupController(bed.activity, bed.viewModel, bed.host).setup()
         bed.host.calls.clear()
 
@@ -57,7 +56,7 @@ class SweepModeToggleTest {
         bed.idle()
 
         assertEquals(1, bed.host.count("clearRunStatus"))
-        assertTrue(bed.viewModel.sweepMode)
+        assertTrue(bed.viewModel.inputs.value.sweepMode)
         // The re-check redraws the ROI row, which drops its point count in sweep mode.
         assertTrue(bed.host.count("checkReady") >= 1)
     }

@@ -3,6 +3,8 @@ package com.sempermechanics.semper.ui.viewer.share
 import android.content.res.Resources
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FieldKind
+import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.AnalysisCsvWriter
 import com.sempermechanics.semper.report.FieldRangesStore
 import com.sempermechanics.semper.report.PdfReportGenerator
@@ -39,14 +41,16 @@ internal class DataExport(
      */
     suspend fun fieldAnimations(report: ExportReport = NO_REPORT): List<File> {
         val animation = s.summary ?: return emptyList()
-        val fields = SummaryAnimation.FIELDS
+        val fields = FieldKind.entries
         // What the viewer knew when the job started: a fixed scale, else the sequence range.
-        val known = fields.all { it.second in s.summaryBounds }
+        val known = fields.all { it.dataIndex in s.summaryBounds }
         val parts = fields.size + if (known) 0 else 1
         val bounds = if (known) s.summaryBounds else readBounds(report.part(0, parts))
         val firstField = parts - fields.size
         val frames = s.batchFiles.size
-        return fields.mapIndexedNotNull { i, (label, index) ->
+        return fields.mapIndexedNotNull { i, kind ->
+            val label = kind.label
+            val index = kind.dataIndex
             val fieldBounds = bounds[index] ?: return@mapIndexedNotNull null
             val field = report.part(firstField + i, parts)
             field.step(resources, 0, frames, R.string.share_progress_gif_fmt, label)
@@ -62,7 +66,7 @@ internal class DataExport(
      * ranges itself (from the sidecar when there is one), rather than leaving
      * the fields out.
      */
-    private suspend fun readBounds(report: ExportReport): Map<Int, Pair<Float, Float>> {
+    private suspend fun readBounds(report: ExportReport): Map<Int, ValueRange> {
         val rangesFile = s.batchFiles.firstOrNull()?.parentFile?.let { File(it, FieldRangesStore.FILE_NAME) }
         report.step(resources, 0, s.batchFiles.size, R.string.share_progress_gif_ranges_fmt)
         return SummaryAnimation.globalRanges(s.batchFiles, rangesFile) { done, total ->
@@ -145,14 +149,11 @@ internal class DataExport(
                 frameTitle = { index -> frameTitle(index) },
                 resources = resources,
             ).collect { progress ->
+                // A failed render throws out of collect, so the share job fails
+                // (and logs) instead of handing back an empty PDF.
                 when (progress) {
-                    // generateBatch reports failures as a Flow event rather than
-                    // throwing; surface it so the share job actually fails (and logs)
-                    // instead of silently handing back an empty PDF.
-                    is PdfReportGenerator.Progress.Error -> throw progress.ex
                     is PdfReportGenerator.Progress.Status ->
                         report(progress.percent.toDouble(), progress.text(resources))
-                    PdfReportGenerator.Progress.Complete -> Unit
                 }
             }
         }

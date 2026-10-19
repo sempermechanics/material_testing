@@ -47,6 +47,17 @@ ON_HOLD = "on_hold"
 DEMOTED = "demoted"
 
 
+#: What reconciliation reads of a seat and of its holder, and all it fetches
+#: of either (TD-198): a user document also holds consents, terms and the
+#: device lock, none of which a roster report needs. `licenseGraceDays` and
+#: `licenseExpiresAt` feed `_expiry_state`; `mode` and `plan`, `_license_mode`.
+SEAT_FIELDS = ("uid", "email", "status", "revokedAt", "updatedAt")
+HOLDER_FIELDS = (
+    "email", "licenseId", "mode", "plan", "lastSeenAt",
+    "licenseExpiresAt", "licenseGraceDays",
+)
+
+
 def _seat_revoked_at(seat: dict):
     """When the seat was revoked, as well as we can know it.
 
@@ -102,20 +113,24 @@ def reconcile_institution_seats(license_id: str) -> dict:
         (seat_doc.to_dict() or {}, seat_doc.id)
         for seat_doc in _stream(
             db().collection("licenses").document(license_id).collection("seats")
+            .select(SEAT_FIELDS)
         )
     ]
     uids = [seat.get("uid") or seat_id for seat, seat_id in roster]
     users_ref = db().collection("users")
-    # get_all yields snapshots in no particular order; key them by id.
+    # get_all yields snapshots in no particular order; key them by id. A
+    # projected holder holding none of HOLDER_FIELDS comes back as {}: the
+    # account exists, so "no account" below is `user is None`, never `not user`.
     holders = {
-        snap.id: snap.to_dict()
-        for snap in _get_all([users_ref.document(uid) for uid in dict.fromkeys(uids)])
+        snap.id: snap.to_dict() or {}
+        for snap in _get_all([users_ref.document(uid) for uid in dict.fromkeys(uids)],
+                             field_paths=HOLDER_FIELDS)
         if snap.exists
     } if uids else {}
     for (seat, _seat_id), uid in zip(roster, uids):
         user = holders.get(uid)
 
-        on_this_license = bool(user) and user.get("licenseId") == license_id
+        on_this_license = user is not None and user.get("licenseId") == license_id
         holds = on_this_license and _license_mode(user) == MODE_LICENSED
         revoked_at = _seat_revoked_at(seat)
         last_seen = user.get("lastSeenAt") if user else None
@@ -126,7 +141,7 @@ def reconcile_institution_seats(license_id: str) -> dict:
                 counts["notEntitled"] += 1
         elif holds:
             bucket, reason = "revokedStillRunning", STILL_LICENSED
-        elif not user:
+        elif user is None:
             bucket, reason = "revokedConfirmed", NO_ACCOUNT
         elif not on_this_license:
             bucket, reason = "revokedConfirmed", MOVED_ON
@@ -149,7 +164,7 @@ def reconcile_institution_seats(license_id: str) -> dict:
             "reason": reason,
             "revokedAt": revoked_at if _is_revoked(seat) else None,
             "lastSeenAt": last_seen,
-            "userMode": _license_mode(user) if user else "",
+            "userMode": _license_mode(user) if user is not None else "",
             "userLicenseId": (user or {}).get("licenseId") or "",
         })
 
@@ -171,6 +186,9 @@ def reconcile_institution_seats(license_id: str) -> dict:
         "entitled": entitled,
         "counts": counts,
         "seats": seats,
+        # A revoke or terms edit whose holder writes have not all landed
+        # (ADR-026): its Cloud Task, or a repeat of the action, finishes it.
+        "fanoutPending": sorted(lic.get("fanoutOps") or []),
     }
 
 
@@ -184,7 +202,7 @@ def _idle_reason(seat: dict, user: dict | None, on_this_license: bool, holds: bo
         return ""
     if seat.get("status") == "disabled":
         return ON_HOLD
-    if not user:
+    if user is None:
         return NO_ACCOUNT
     if not on_this_license:
         return MOVED_ON

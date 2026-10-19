@@ -12,6 +12,8 @@ import android.view.View
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.annotation.StringRes
+import androidx.annotation.VisibleForTesting
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
@@ -19,16 +21,38 @@ import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.session.CacheJanitor
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FrameParams
+import com.sempermechanics.semper.field.ImageSize
+import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.FieldRangesStore
 import com.sempermechanics.semper.report.ReportBuilder
 import com.sempermechanics.semper.ui.common.SerialJob
-import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
+import com.sempermechanics.semper.ui.viewer.ResultViewerViewModel
+import com.sempermechanics.semper.ui.viewer.ViewerViews
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
+
+/** What [ViewerSummaryController] needs from the viewer. */
+internal interface SummaryHost : ViewerViews {
+    /** The field on screen and its fixed scale, if the user set one. */
+    val viewModel: ResultViewerViewModel
+
+    /** The opened frame set's `.dat` files; empty until it is read. */
+    val batchFiles: List<File>
+    val imageSize: ImageSize
+    val frameParams: FrameParams
+
+    /** The box the animation is framed to, or null to fit its accepted points. */
+    fun summaryFitBounds(): FloatArray?
+
+    /** The whole-sequence ranges are known: the ⓘ caption may quote them now. */
+    fun onSequenceRangesReady()
+}
 
 /**
  * Drives the viewer's summary slot — the looping animation that sits before
@@ -42,19 +66,33 @@ import java.io.File
  * The pill is not part of the auto-hiding chrome
  * ([com.sempermechanics.semper.ui.viewer.ViewerChromeController]): it stays up
  * while the summary builds, since that is what the user is waiting on.
+ *
+ * Its passes run in [activity]'s scope. Constructed before onCreate; reads
+ * [ViewerViews.binding] lazily, and [wire] once the views are there.
  */
-class ViewerSummaryController(private val host: ResultViewerActivity) {
+internal class ViewerSummaryController(
+    private val activity: AppCompatActivity,
+    private val host: SummaryHost,
+) {
 
-    private val layer: View = host.binding.summaryLayer
-    private val image: ImageView = host.binding.imgSummary
-    private val statusPanel: View = host.binding.summaryStatus
-    private val progress: LinearProgressIndicator = host.binding.progressSummary
-    private val status: TextView = host.binding.tvSummaryStatus
-    private val cancelButton: View = host.binding.btnSummaryCancel
+    private val layer: View get() = host.binding.summaryLayer
+    private val image: ImageView get() = host.binding.imgSummary
+    private val statusPanel: View get() = host.binding.summaryStatus
+    private val progress: LinearProgressIndicator get() = host.binding.progressSummary
+    private val status: TextView get() = host.binding.tvSummaryStatus
+    private val cancelButton: View get() = host.binding.btnSummaryCancel
 
     /** Value range per field over the whole sequence; empty until the pass finishes. */
-    private var ranges: Map<Int, Pair<Float, Float>> = emptyMap()
+    private var ranges: Map<Int, ValueRange> = emptyMap()
     private val rangesJob = SerialJob()
+
+    /**
+     * Where the range pass reads the frames. A test holds it: on a small batch
+     * the pass can finish before [start]'s `withContext` suspends, and then its
+     * result lands in the same main-thread task as the click that asked for it.
+     */
+    @VisibleForTesting
+    internal var rangesDispatcher: CoroutineDispatcher = Dispatchers.Default
     private val buildJob = SerialJob()
 
     /** Which field the on-screen animation belongs to, so a re-show can skip work. */
@@ -72,18 +110,19 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
         val frameParams = host.frameParams
         SummaryAnimation(
             SummaryAnimation.Spec(
-                batchFiles = host.summaryBatchFiles(),
+                batchFiles = host.batchFiles,
                 imgW = host.imageSize.width,
                 imgH = host.imageSize.height,
                 stepAt = { index -> frameParams.at(index).step },
-                outputDir = CacheJanitor.shareDir(host.cacheDir),
-                backgroundColor = ContextCompat.getColor(host, R.color.viewer_canvas),
+                outputDir = CacheJanitor.shareDir(activity.cacheDir),
+                backgroundColor = ContextCompat.getColor(activity, R.color.viewer_canvas),
                 fitBounds = host.summaryFitBounds(),
             ),
         )
     }
 
-    init {
+    /** The pill's close button cancels; once, from onCreate. */
+    fun wire() {
         cancelButton.setOnClickListener { cancel() }
     }
 
@@ -99,17 +138,17 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
      * which set the 150-frame heap (TD-87).
      */
     fun start() {
-        if (host.summaryBatchFiles().isEmpty()) return
+        if (host.batchFiles.isEmpty()) return
         if (rangesJob.isActive || ranges.isNotEmpty()) return
-        rangesJob.launch(host.lifecycleScope) {
-            val files = host.summaryBatchFiles()
+        rangesJob.launch(activity.lifecycleScope) {
+            val files = host.batchFiles
             val computed = try {
-                withContext(Dispatchers.Default) {
+                withContext(rangesDispatcher) {
                     val rangesFile = files.firstOrNull()?.parentFile?.let {
                         File(it, FieldRangesStore.FILE_NAME)
                     }
                     SummaryAnimation.globalRanges(files, rangesFile) { done, total ->
-                        host.lifecycleScope.launch(Dispatchers.Main.immediate) {
+                        activity.lifecycleScope.launch(Dispatchers.Main.immediate) {
                             if (!isShowing || !rangesJob.isActive) return@launch
                             showProgress(R.string.summary_scanning_fmt, done, total)
                         }
@@ -121,7 +160,7 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
             }
             ranges = computed
             host.onSequenceRangesReady()
-            if (isShowing) render(host.currentDataIndex)
+            if (isShowing) render(host.viewModel.field.dataIndex)
         }
     }
 
@@ -130,7 +169,7 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
         layer.isVisible = true
         // The colour-scale scan is only needed once the summary is actually on screen.
         start()
-        render(host.currentDataIndex)
+        render(host.viewModel.field.dataIndex)
     }
 
     fun hide() {
@@ -142,13 +181,13 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
 
     /** The field toggle moved; re-render if the summary is the thing on screen. */
     fun onFieldChanged() {
-        if (isShowing) render(host.currentDataIndex)
+        if (isShowing) render(host.viewModel.field.dataIndex)
     }
 
     /** A changed fixed scale invalidates the baked-in colours for that field. */
     fun onScaleChanged(dataIndex: Int) {
         if (shownField == dataIndex) shownField = null
-        if (isShowing) render(host.currentDataIndex)
+        if (isShowing) render(host.viewModel.field.dataIndex)
     }
 
     /** The pill's close button, and the viewer going away: stop both passes and drop the pill. */
@@ -160,20 +199,20 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
     }
 
     /** Bounds for [dataIndex]: a user-set fixed scale wins, else the global range. */
-    fun boundsFor(dataIndex: Int): Pair<Float, Float>? =
-        host.customBoundsFor(dataIndex)?.toPair() ?: ranges[dataIndex]
+    fun boundsFor(dataIndex: Int): ValueRange? =
+        host.viewModel.customBounds[dataIndex] ?: ranges[dataIndex]
 
     /** The label the frame counter shows while the summary is up: how many frames it plays, "5 frames". */
     fun counterText(): String {
-        val frames = host.frameCount()
-        return host.resources.getQuantityString(R.plurals.session_frames_fmt, frames, frames)
+        val frames = host.batchFiles.size
+        return activity.resources.getQuantityString(R.plurals.session_frames_fmt, frames, frames)
     }
 
     private fun render(dataIndex: Int) {
         val bounds = boundsFor(dataIndex)
         if (shownField == dataIndex && image.drawable != null) {
             // Back from a frame, whose own labels replaced the summary's.
-            bounds?.let { host.refreshSummaryScaleLabels(dataIndex, it) }
+            bounds?.let { showScaleLabels(dataIndex, it) }
             startPlayback()
             return
         }
@@ -183,19 +222,19 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
         }
 
         // The range is known: the scale shows the ends the animation is built on.
-        host.refreshSummaryScaleLabels(dataIndex, bounds)
-        val label = host.currentTypeString
-        val total = host.summaryBatchFiles().size
+        showScaleLabels(dataIndex, bounds)
+        val label = host.viewModel.field.label
+        val total = host.batchFiles.size
         buildJob.cancel()
         stopPlayback()
         showProgress(R.string.summary_building_fmt, 0, total)
-        buildJob.launch(host.lifecycleScope) {
+        buildJob.launch(activity.lifecycleScope) {
             val file = try {
                 withContext(Dispatchers.Default) {
                     animation.build(dataIndex, label, bounds) { done, count ->
-                        host.lifecycleScope.launch {
+                        activity.lifecycleScope.launch {
                             // showProgress itself skips a slot that is no longer up.
-                            if (host.currentDataIndex != dataIndex || !buildJob.isActive) return@launch
+                            if (host.viewModel.field.dataIndex != dataIndex || !buildJob.isActive) return@launch
                             showProgress(R.string.summary_building_fmt, done, count)
                         }
                     }
@@ -206,14 +245,14 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
                 Timber.e(e, "Summary animation for %s failed", label)
                 null
             }
-            if (host.currentDataIndex != dataIndex || !isShowing) return@launch
+            if (host.viewModel.field.dataIndex != dataIndex || !isShowing) return@launch
             if (file == null) {
                 showMessage(R.string.summary_failed)
                 return@launch
             }
             val decoded = decodeForDisplay(file)
             // The decode suspended: the field or the slot may have moved on.
-            if (host.currentDataIndex != dataIndex || !isShowing) return@launch
+            if (host.viewModel.field.dataIndex != dataIndex || !isShowing) return@launch
             shownField = dataIndex
             display(decoded)
         }
@@ -227,7 +266,7 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
         // already pushes — a static "Preparing files…" looked hung on PLC.
         if (rangesJob.isActive) {
             if (!statusPanel.isVisible) {
-                showProgress(R.string.summary_scanning_fmt, 0, host.summaryBatchFiles().size)
+                showProgress(R.string.summary_scanning_fmt, 0, host.batchFiles.size)
             }
         } else {
             showMessage(R.string.summary_no_data)
@@ -271,7 +310,7 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
     private fun showProgress(@StringRes format: Int, done: Int, total: Int) {
         if (!isShowing) return
         statusPanel.isVisible = true
-        status.text = host.getString(format, done, total)
+        status.text = activity.getString(format, done, total)
         progress.isVisible = true
         if (done <= 0) {
             progress.isIndeterminate = true
@@ -286,7 +325,7 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
     private fun showMessage(@StringRes message: Int) {
         if (!isShowing) return
         statusPanel.isVisible = true
-        status.text = host.getString(message)
+        status.text = activity.getString(message)
         progress.isVisible = false
         cancelButton.isVisible = false
     }
@@ -295,8 +334,20 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
         statusPanel.isVisible = false
     }
 
+    /** The colour scale's ends for [bounds] of field [dataIndex], as the animation colours them. */
+    private fun showScaleLabels(dataIndex: Int, bounds: ValueRange) {
+        val multiplier = DicResult.strainMultiplier(dataIndex)
+        val unit = activity.getString(
+            if (DicResult.isStrainFieldIndex(dataIndex)) R.string.scale_unit_strain else R.string.scale_unit_px,
+        )
+        host.binding.tvScaleMax.text =
+            activity.getString(R.string.scale_max_fmt, ReportBuilder.formatMetric(bounds.max * multiplier), unit)
+        host.binding.tvScaleMin.text =
+            activity.getString(R.string.scale_min_fmt, ReportBuilder.formatMetric(bounds.min * multiplier), unit)
+    }
+
     private fun showScalePending() {
-        val pending = host.getString(R.string.scale_label_pending)
+        val pending = activity.getString(R.string.scale_label_pending)
         host.binding.tvScaleMax.text = pending
         host.binding.tvScaleMin.text = pending
     }
@@ -304,16 +355,4 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
     private companion object {
         const val PERCENT = 100
     }
-}
-
-/** Formats a field's animation bounds for the viewer's colour-scale labels. */
-internal fun ResultViewerActivity.refreshSummaryScaleLabels(dataIndex: Int, bounds: Pair<Float, Float>) {
-    val multiplier = DicResult.strainMultiplier(dataIndex)
-    val unit = getString(
-        if (DicResult.isStrainFieldIndex(dataIndex)) R.string.scale_unit_strain else R.string.scale_unit_px,
-    )
-    binding.tvScaleMax.text =
-        getString(R.string.scale_max_fmt, ReportBuilder.formatMetric(bounds.second * multiplier), unit)
-    binding.tvScaleMin.text =
-        getString(R.string.scale_min_fmt, ReportBuilder.formatMetric(bounds.first * multiplier), unit)
 }

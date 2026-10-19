@@ -34,8 +34,8 @@ Engine pipeline (`engine/docs/ARCHITECTURE.md`): anchor-lattice seeds (phase cor
 ## Layout
 
 ```
-app/          Android UI (Kotlin). Gradle builds ../engine/CMakeLists.txt;
-              app/src/main/cpp/ holds only a redirect CMakeLists.txt
+app/          Android UI (Kotlin). Gradle builds ../engine/CMakeLists.txt
+              (app/build.gradle.kts externalNativeBuild); no app/src/main/cpp/
 engine/       Pinned submodule: sempermechanics/semper-dic-engine (solver, tests,
               docs, and the JNI adapter in engine/adapters/android/)
 backend/      FastAPI on Cloud Run — routers in backend/app/routers/, Firestore
@@ -118,40 +118,45 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 - **Deployed.** Cloud Run `semper-api` behind API Gateway `semper-gw`, and staging
   `semper-api-staging` behind `semper-gw-staging`, from `c295639d` (2026-10-14; gateways
-  unchanged): every Firestore call has a deadline (#432; transaction begin and commit
-  do not, TD-210), and backups list by the analysis's name (#429). Licensing
+  unchanged; Firestore deadlines #432, TD-210; backups by name #429). Licensing
   ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)), device binding per app
   ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md)) and sessions tagged by app
   ([ADR-014](docs/adr/ADR-014-session-app-tag.md)) are live; consoles on
-  `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md)). What went out
-  when, the monthly restore drill included: [CHANGELOG](docs/ops/CHANGELOG.md). Project
-  IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
-- **App id `com.sempermechanics.semper`** ([ADR-019](docs/adr/ADR-019-sempermechanics-app-id.md));
-  material_testing becomes `com.sempermechanics.materialtesting` when it merges this code.
-- **App release `v1.2-beta.4`** (beta, versionCode 1036, from `33dce87d`, 2026-10-17;
-  engine `23034fe`, 0.4.2). It is the first release under the new app id, so it installs
-  beside the old app, not over it. Contents and install steps: the GitHub Release and
-  [CHANGELOG](docs/ops/CHANGELOG.md). `main` has moved past it (the readiness change below).
-- **Readiness change merged, not deployed** (#448 and #449, 2026-10-19; `main` @ `5b59cf3`):
-  the cross-check ([gate](docs/ops/PRODUCTION_READINESS_GATE.md#framework-cross-check-2026-10-18),
-  TD-214–TD-278, FI-17–FI-24), signed offline entitlement ([ADR-023](docs/adr/ADR-023-signed-offline-entitlement.md)),
-  **minSdk 30**, version gate, EMM config, IT roster tools and audit export, rules tests, APK
-  inspection, AAB, monitoring as code, the Auth Admin budget, hashed audit addresses, wider
-  erasure and account-anchored entitlements ([ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md):
-  nothing entered or sold in the app, Refresh licence, locked-not-hidden features, claim codes on
-  the web account page, kill switches refused server-side, a per-device demo cap). No release
-  is built from it yet. Owed at deploy, in order ([checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md)): indexes (TD-216, TD-271), backend, gateway,
-  Hosting (with the aligned Terms), monitoring (TD-217); also TD-214, TD-215, a device smoke
-  (TD-219), TD-226, TD-229–TD-232, and counsel on the Terms (TD-277).
-- **material_testing** merges this `main` (last `8ba7081`, material_testing#133,
-  [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); it released `v1.4-beta.2` (`d08aae07`) 2026-10-17.
+  `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md)). Project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
+- **App id `com.sempermechanics.semper`** ([ADR-019](docs/adr/ADR-019-sempermechanics-app-id.md)).
+  **Release `v1.2-beta.4`** (versionCode 1036, `33dce87d`, 2026-10-17; engine `23034fe`,
+  0.4.2), the first under this id, so it installs beside the old app. `main` has moved past it.
+- **Readiness change merged, not deployed** (#448, #449; `main` @ `763ed7a` with the
+  docs-only #454–#456): the cross-check ([gate](docs/ops/PRODUCTION_READINESS_GATE.md#framework-cross-check-2026-10-18),
+  TD-214–TD-278, FI-17–FI-24), [ADR-023](docs/adr/ADR-023-signed-offline-entitlement.md),
+  **minSdk 30**, version gate, EMM config, IT roster tools, audit export, AAB, monitoring as
+  code and account-anchored entitlements ([ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md)).
+  No release built from it. Owed at deploy, in [checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md)
+  order: indexes, backend, gateway, Hosting, monitoring; also TD-214, TD-215, TD-219, TD-226,
+  TD-229–TD-232, counsel on the Terms (TD-277).
+- **Open: #457** (`ccr-603fe346-1bw2fa` @ `9aa8cd1`: the 2026-10-19 review and two tech-debt
+  rounds; closed TD-171, 198, 207, 281–293, 295–297, 306–308). Backend: device trust levels
+  (ADR-010 amendment), `step_up.py` and `services/`, a new-device mail, projected listings, a
+  licence fan-out finished by a Cloud Task ([ADR-026](docs/adr/ADR-026-licence-fanout-marker.md)),
+  `audit_logs` append-only in code and mirrored to Cloud Logging. App: uploads resume only on
+  the declared sha256, a failed batch undone, `WizardInputs` edited whole, viewer hosts, screen
+  work in ViewModels, retriever frames timed as decoded; CI checks file size, ADR-016 rule 1 and
+  swallowed cancellation; [ADR-025](docs/adr/ADR-025-test-type-extension-points.md) proposed.
+  At deploy ([checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md)): TOTP re-registration, C1/C2,
+  `NOTIFY_SECURITY_FROM` (TD-309), `TASKS_QUEUE` (TD-294), the audit bucket lock (TD-237).
+  Left: TD-237, TD-246, TD-294, TD-298, TD-299, TD-309.
+- **Engine: semper-dic-engine#9 open** (0.5.0, the review's engine fixes). The pin stays
+  `23034fe` (0.4.2) until it is released; the bump, with re-captured oracles, is TD-299.
+- **material_testing** merges this `main` (last `17d7bc8`, material_testing#139,
+  [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); its #140 carries the lab fixes and four of #457's
+  commits; the rest come with the next sync. It released `v1.4-beta.2` (`d08aae07`) 2026-10-17.
 - **CI.** Tiers follow the diff, coverage floors rise with every test PR
   ([TESTING.md](docs/app/TESTING.md#coverage-floors)), and `main` requires `CI OK`.
 - **Owed.** A device smoke of `v1.2-beta.4` ([RELEASING.md](docs/ops/RELEASING.md) step 5); the
-  on-device characterization at the 0.4.2 pin (TD-212); Pixel 6 benchmark runs for #435. The public
-  release (website / Play) with each PR's emulator and Pixel checks, ADR-015's queued-work upgrade
-  check and the material_testing ports #298–#302; a licensed-account smoke of share, PDF and
-  Delete; transfer notifications and AVI import on a device ([WORKFLOWS.md](docs/app/WORKFLOWS.md)
+  on-device characterization at the 0.4.2 pin (TD-212); Pixel 6
+  benchmark runs for #435. The public release with each PR's emulator and Pixel checks,
+  ADR-015's queued-work upgrade check; a licensed-account smoke of share, PDF and Delete;
+  transfer notifications and AVI import on a device ([WORKFLOWS.md](docs/app/WORKFLOWS.md)
   §5.1a); Material Testing beside Semper on one phone; the privacy-policy values (TD-36).
 - **Look it up; this list rots.** `gh pr list --state open`, [CHANGELOG.md](docs/ops/CHANGELOG.md), [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
@@ -176,6 +181,6 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - `SubsetRecommender` runs on the paper's `NOISE_VARIANCE`; no import supplies a measured floor — [SubsetRecommender.kt](app/src/main/java/com/sempermechanics/semper/ui/analysis/recommend/SubsetRecommender.kt).
 - Viewer screens read `ViewerArgs.from(intent, …)`, never `intent.get…Extra(IntentKeys…)`; a new viewer field goes in `ViewerArgs`, its default and its `SessionRecord` mapping — [ADR-003](docs/adr/ADR-003-viewerargs-read-side.md).
 - A new wizard input must survive a kill: scalars go in `WizardState`'s Bundle, bytes and lists in `WizardDraft`; and `cacheDir/temp_deformed` is only safe from the janitor while the draft is live — [ADR-005](docs/adr/ADR-005-wizard-process-death.md).
-- After Compute, read the run's `RunSpec` / `RunResult` (`spec`, `settings`), never the wizard's sliders or ROI vars: they stay editable and drift — [ADR-004](docs/adr/ADR-004-runspec.md).
+- After Compute, read the run's `RunSpec` (`BatchAnalysisOutcome.spec`) and the saved row its outcome carries (`.record`, opened through `ViewerArgs.of`), never the wizard's sliders or ROI vars: they stay editable and drift — [ADR-004](docs/adr/ADR-004-runspec.md).
 - Since engine 0.2.3 two runs of one build give bit-identical `.dat` whatever the thread count (TD-65), so a `.dat` hash can prove "engine unchanged" again and any run-to-run difference is a defect — `EnginePipelineSmokeTest.repeatSolveIsBitIdentical`, `engine/tests/integration/test_full_field_determinism.cpp`.
 - `ConvergenceGate` is batch-only; a sweep runs its whole plan, smallest subset first — [ConvergenceGate.kt](app/src/main/java/com/sempermechanics/semper/ui/analysis/run/ConvergenceGate.kt).

@@ -1,18 +1,17 @@
 package com.sempermechanics.semper.data
 
-import android.app.ActivityManager
 import android.content.Context
 import androidx.annotation.VisibleForTesting
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import com.sempermechanics.semper.data.cloud.CloudSync
+import com.sempermechanics.semper.data.cloud.RebuildBudget
 import com.sempermechanics.semper.data.cloud.TransferNotifications
 import com.sempermechanics.semper.data.cloud.TransferPhase
 import com.sempermechanics.semper.data.cloud.TransferProgressUpdates
 import com.sempermechanics.semper.data.cloud.TransferResultNotifications
 import com.sempermechanics.semper.data.cloud.TransferRetryReceiver
-import com.sempermechanics.semper.data.cloud.UploadErrors
 import com.sempermechanics.semper.data.cloud.UploadProgressSampler
 import com.sempermechanics.semper.data.net.ApiException
 import com.sempermechanics.semper.data.net.CloudApi
@@ -25,6 +24,7 @@ import com.sempermechanics.semper.data.net.TokenSource
 import com.sempermechanics.semper.data.net.UploadLinkExpiredException
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.SessionZip
+import com.sempermechanics.semper.data.session.StagingLayout
 import com.sempermechanics.semper.data.session.StorageBudget
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
 import com.sempermechanics.semper.navigation.IntentKeys
@@ -40,19 +40,9 @@ import timber.log.Timber
 import java.io.File
 
 /**
- * Whether one of this app's activities is on screen. Only then may a worker
- * start an activity: Android 10+ blocks background activity starts. Read from
- * the process's own importance — `lifecycle-process` is not on the compile
- * classpath. A foreground service alone (this worker) ranks below FOREGROUND.
- */
-private fun isAppInForeground(): Boolean {
-    val info = ActivityManager.RunningAppProcessInfo()
-    ActivityManager.getMyMemoryState(info)
-    return info.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
-}
-
-/**
- * How [DicUploadWorker] reaches the backend and a token. WorkManager builds the
+ * How [DicUploadWorker] reaches the backend and a token, and whether a screen
+ * of the app is up ([AppForeground]: only then may a worker start an activity,
+ * as Android 10+ blocks background activity starts). WorkManager builds the
  * worker, so these cannot be constructor parameters (ADR-002); tests swap them
  * for `FakeCloudApi` / `FakeTokens` and put them back.
  */
@@ -60,7 +50,7 @@ private fun isAppInForeground(): Boolean {
 internal object DicUploadSeams {
     var api: (Context) -> CloudApi = { SemperApi.get(it) }
     var tokens: TokenSource = TokenProvider
-    var inForeground: () -> Boolean = ::isAppInForeground
+    var inForeground: () -> Boolean = { AppForeground.isForeground }
 }
 
 /**
@@ -130,15 +120,15 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
     }
 
     /** Stage, ensure the cloud session, upload the files, complete; any failure ends as [UploadFailures] says. */
-    private suspend fun backUp(run: UploadRun): Result = coroutineScope {
-        val staging = UploadStaging(applicationContext, run.record).apply { prepare() }
+    private suspend fun backUp(started: UploadRun): Result = coroutineScope {
+        val staging = UploadStaging(applicationContext, started.record).apply { prepare() }
         val reuse = staging.reuse
         // Live progress for the Home row and the notification (UploadProgressSampler):
         // the steps feed these counters and the sampler publishes only changes.
         val progress = UploadProgressSampler(
-            run.localId,
+            started.localId,
             initialPhase = if (reuse) TransferPhase.UPLOAD.wire else TransferPhase.PREPARE.wire,
-            initialTotal = if (reuse) 1L else run.record.defNames.size.toLong().coerceAtLeast(1L),
+            initialTotal = if (reuse) 1L else started.record.defNames.size.toLong().coerceAtLeast(1L),
         )
         val sampler = progress.launchIn(
             this,
@@ -150,36 +140,64 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 )
             },
         ) { setProgress(it) }
-        val stagingDir = staging.layout.dir
-        val failures = UploadFailures(run, stagingDir)
         try {
-            when (val staged = staging.stage(progress)) {
-                is StagingOutcome.Ready -> upload(run, staged.files, progress, stagingDir)
-                is StagingOutcome.Retry -> UploadLog.retry(staged.reason)
-                StagingOutcome.InputsGone -> failures.inputsGone()
+            steps(started, staging, progress)
+        } finally {
+            // Stop the progress sampler so this coroutine can complete (a live
+            // child would otherwise keep the worker from returning).
+            sampler.cancel()
+        }
+    }
+
+    /**
+     * [backUp]'s steps, every failure mapped by [UploadFailures]. A staging
+     * that is not the one [started]'s cloud session declared ([UploadStaging.reuse]
+     * false: unfinished, or its [StagingBinding] names another session or other
+     * bytes) is built again only once that session is out of the way
+     * ([UploadSessionPlanner.releaseForRestage]); the run then goes on with no
+     * session, so the files are declared afresh.
+     */
+    private suspend fun steps(started: UploadRun, staging: UploadStaging, progress: UploadProgressSampler): Result {
+        val stagingDir = staging.layout.dir
+        var run = started
+        fun failures() = UploadFailures(run, stagingDir)
+        return try {
+            val ended = if (staging.reuse) null else started.planner().releaseForRestage(started.currentCloudId())
+            if (ended != null) {
+                finish(run, ended, progress, stagingDir)
+            } else {
+                if (!staging.reuse) run = started.withoutCloudSession()
+                stageAndUpload(run, staging, progress)
             }
         } catch (e: DeviceNotActiveException) {
-            failures.deviceNotActive(e)
+            failures().deviceNotActive(e)
         } catch (e: DeviceConflictException) {
-            failures.deviceConflict(e)
+            failures().deviceConflict(e)
         } catch (e: ApiException) {
-            failures.refused(e)
+            failures().refused(e)
         } catch (e: UploadLinkExpiredException) {
-            failures.linkExpired(e)
+            failures().linkExpired(e)
         } catch (e: OutOfMemoryError) {
-            failures.outOfMemory(e)
+            failures().outOfMemory(e)
         } catch (e: CancellationException) {
             // The worker was stopped (constraints lost, cancelled, quota). Not a
             // failure: rethrow so WorkManager reschedules it, instead of logging
             // every stop as an error (a Crashlytics non-fatal) and asking for a retry.
             throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            failures.unexpected(e)
-        } finally {
-            // Stop the progress sampler so this coroutine can complete (a live
-            // child would otherwise keep the worker from returning).
-            sampler.cancel()
+            failures().unexpected(e)
         }
+    }
+
+    /** Stage the files, then (once they are ready) upload them ([upload]). */
+    private suspend fun stageAndUpload(
+        run: UploadRun,
+        staging: UploadStaging,
+        progress: UploadProgressSampler,
+    ): Result = when (val staged = staging.stage(progress)) {
+        is StagingOutcome.Ready -> upload(run, staged.files, progress, staging.layout.dir)
+        is StagingOutcome.Retry -> UploadLog.retry(staged.reason)
+        StagingOutcome.InputsGone -> UploadFailures(run, staging.layout.dir).inputsGone()
     }
 
     /** Ensure the cloud session for [files], upload into it, and complete. */
@@ -195,23 +213,30 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         progress.begin(TransferPhase.UPLOAD, 1)
         Timber.i("Uploading %s: %d files (%s)", run.localId, files.size, files.groupingBy { it.role }.eachCount())
         UploadLog.phase("start", count = files.size, stage = "upload")
+        val step = run.planner().ensureSession(run.record, files, StagingLayout(stagingDir))
+        return finish(run, step, progress, stagingDir)
+    }
 
-        val planner = UploadSessionPlanner(applicationContext, run.api, run.idToken, run.localId)
-        return when (val step = planner.ensureSession(run.record, files)) {
-            is SessionStep.Upload -> {
-                uploadFiles(run, step.plan, progress)
-                complete(run, step.plan, stagingDir)
-            }
-            SessionStep.Synced -> {
-                Timber.w("Cloud session already complete")
-                SessionStore.markSynced(applicationContext, run.localId)
-                stagingDir.deleteRecursively()
-                UploadErrors.clearRebuildCounts(run.sessionDir)
-                Result.success()
-            }
-            is SessionStep.Retry -> step.result
-            is SessionStep.Fail -> run.failure(step.reason)
+    /** Do what the cloud session [step] says: upload into it and complete, record the sync, or end the run. */
+    private suspend fun finish(
+        run: UploadRun,
+        step: SessionStep,
+        progress: UploadProgressSampler,
+        stagingDir: File,
+    ): Result = when (step) {
+        is SessionStep.Upload -> {
+            uploadFiles(run, step.plan, progress)
+            complete(run, step.plan, stagingDir)
         }
+        SessionStep.Synced -> {
+            Timber.w("Cloud session already complete")
+            SessionStore.markSynced(applicationContext, run.localId)
+            stagingDir.deleteRecursively()
+            RebuildBudget.clear(run.sessionDir)
+            Result.success()
+        }
+        is SessionStep.Retry -> step.result
+        is SessionStep.Fail -> run.failure(step.reason)
     }
 
     /**
@@ -262,7 +287,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         Timber.i("Upload complete for %s (%d files, session %s)", run.localId, plan.work.size, plan.sessionId)
         UploadLog.phase("complete", count = plan.work.size)
         stagingDir.deleteRecursively() // done — staged files no longer needed
-        UploadErrors.clearRebuildCounts(run.sessionDir)
+        RebuildBudget.clear(run.sessionDir)
         // A session only becomes droppable once it is backed up, so this is
         // the moment an over-budget phone can actually get space back.
         StorageBudget.enforce(applicationContext)

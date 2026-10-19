@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app import audit, deps
+from app import deps
 import repo_view as repo
 from app.config import settings
 
@@ -124,7 +124,7 @@ def test_list_license_device_history_filters_non_device_seat_patches(store):
         "target": {"type": "seat", "id": f"{license_id}/u"},
         "detail": {"enabled": True},
     }
-    assert audit.list_license_device_history(license_id) == []
+    assert repo.list_license_device_history(license_id) == []
 
 
 @pytest.mark.asyncio

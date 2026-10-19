@@ -101,7 +101,9 @@ the import, which on a 150-frame batch is minutes.
   `hasCustomRoi`, reference size and name, frame order, sweep ranges,
   line cut, VSG frame, `workingLocalId` and, since 2026-10-09, its run kind
   `workingIsSweep`; a Bundle without the kind restores no `workingLocalId`, so
-  a single run never reuses a sweep's session or the reverse) into one Bundle under
+  a single run never reuses a sweep's session or the reverse; since 2026-10-19 the
+  view model holds the two as one `working: WorkingSession(id, RunKind)?` and the VSG
+  frame as `SweepFrame`, under the same keys) into one Bundle under
   `SavedStateHandle` key `wizard_state`. They are applied in the view
   model's `init`, so they are back before the Activity draws. The frame list
   can hold 500 paths, too big for a saved-state Bundle, so it goes to

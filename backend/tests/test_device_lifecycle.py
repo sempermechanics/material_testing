@@ -6,6 +6,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 import repo_view as repo
 from app.models import DeviceReg
+from refusals import attempt
 
 DEV_A = "dev-a-0001"
 DEV_B = "dev-b-0002"
@@ -62,17 +63,47 @@ def test_unknown_user_is_reported_not_written(store):
     assert "nobody" not in store._data["users"]
 
 
-def test_rebinding_supersedes_the_previous_device(store):
-    """A device switch left the old doc ACTIVE forever, so its id stayed held
-    against other accounts by the device_in_use check."""
-    repo.register_device("u1", DeviceReg(
+def test_registering_a_second_device_while_bound_is_refused(store):
+    """A device switch needs the old binding released first (a lock clear or
+    a staff release). The check and the write are one transaction, so two
+    registrations racing from two phones cannot both leave a device ACTIVE."""
+    code, _ = attempt(repo.register_device, "u1", DeviceReg(
         deviceId=DEV_B, publicKeyPem=_public_pem(),
         model="Pixel", osVersion="15", appVersion="1.0",
     ))
 
-    assert store._data["devices"][DEV_A]["status"] == "SUPERSEDED"
+    assert code == "device_conflict"
+    assert DEV_B not in store._data["devices"]
+    assert store._data["devices"][DEV_A]["status"] == "ACTIVE"
+    assert store._data["users"]["u1"]["activeDeviceId"] == DEV_A
+
+
+def test_registering_a_device_another_account_holds_is_refused(store):
+    store._data["users"]["u1"].pop("activeDeviceId")
+    code, _ = attempt(repo.register_device, "u1", DeviceReg(
+        deviceId="other-001", publicKeyPem=_public_pem(),
+    ))
+
+    assert code == "device_in_use"
+    assert store._data["devices"]["other-001"]["uid"] == "u2"
+    assert "activeDeviceId" not in store._data["users"]["u1"]
+
+
+def test_registering_after_a_release_binds_the_new_device(store):
+    store._data["users"]["u1"].pop("activeDeviceId")
+    repo.register_device("u1", DeviceReg(deviceId=DEV_B, publicKeyPem=_public_pem()))
+
     assert store._data["devices"][DEV_B]["status"] == "ACTIVE"
+    assert store._data["devices"][DEV_B]["stepUpEligible"] is False
     assert store._data["users"]["u1"]["activeDeviceId"] == DEV_B
+
+
+def test_a_registration_records_whether_it_proved_a_second_factor(store):
+    repo.register_device("u1", DeviceReg(deviceId=DEV_A, publicKeyPem=_public_pem()),
+                         step_up_eligible=True)
+
+    assert store._data["devices"][DEV_A]["stepUpEligible"] is True
+    assert store._data["devices"][DEV_A]["app"] == "semper"
 
 
 def test_reregistering_the_same_device_stays_active(store):

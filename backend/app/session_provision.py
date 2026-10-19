@@ -1,11 +1,36 @@
 import logging
 import time
+from datetime import datetime, timedelta, timezone
 
 from . import drive, repo, statuses
 from . import observability as obs
 from .config import settings
+from .licenses import as_utc
 
 log = logging.getLogger("semper")
+
+#: How long after its last write a PROVISIONING session may still have a
+#: provisioning attempt running: the longest a Cloud Tasks HTTP dispatch can
+#: run (30 minutes; the inline path is one request). Past it the session is
+#: stuck, not busy, and a delete goes ahead (`provisioning_in_progress`).
+PROVISIONING_GRACE = timedelta(minutes=30)
+
+
+def provisioning_in_progress(session: dict) -> bool:
+    """Whether a provisioning attempt may be creating `session`'s Drive folder
+    right now: PROVISIONING, last written within `PROVISIONING_GRACE`.
+
+    `DELETE /v1/sessions/{sid}` refuses such a session (409
+    `session_provisioning`): erasing the metadata while the worker runs left
+    the folder it then created with nothing pointing at it. A session stuck
+    in PROVISIONING (a task that never ran) is still erasable once the grace
+    has passed, and a retry that runs after the delete finds no session and
+    creates nothing (`provision_session` answers "gone").
+    """
+    if session.get("status") != statuses.SESSION_PROVISIONING:
+        return False
+    written = as_utc(session.get("updatedAt") or session.get("createdAt"))
+    return written is None or datetime.now(timezone.utc) - written < PROVISIONING_GRACE
 
 
 def purge_session(sid: str) -> None:
@@ -41,12 +66,15 @@ def provision_session(sid: str, *, purge_on_failure: bool = False,
     stop waiting.
 
     The inline caller passes the `session` doc it has just written so it is not
-    read again, and answers the client from the returned `uploads` (the
+    read again (a retry reads it through `repo.start_provisioning`), and answers the client from the returned `uploads` (the
     targets opened here) instead of listing them back. The user doc is still
     read here: the folder pointers must come from the stored doc, not from
     whatever the auth layer handed the route.
     """
-    session = session or repo.get_session(sid)
+    # A retry (no `session` handed in) stamps `updatedAt` as it starts, so the
+    # delete guard sees it running however late it began (TD-296). The inline
+    # caller's session was written by this same request.
+    session = session or repo.start_provisioning(sid)
     if not session:
         return {"sessionId": sid, "provisioned": 0, "status": "gone", "uploads": []}
     if session.get("status") == statuses.SESSION_COMPLETED:

@@ -106,7 +106,7 @@ activation-anomaly alert.
    (`POST /v1/admin/users/{uid}/revoke`), which also revokes refresh tokens once
    TD-214 is done.
 2. **Online devices** drop to Demo on their next request carrying `X-Device-Id`
-   (`backend/app/deps.py:182-189`) and their next `/v1/config` carries a demo
+   (`backend/app/deps.py:181-188`) and their next `/v1/config` carries a demo
    token. **Offline devices** keep their entitlement until their token's
    `graceUntil` (at most `ENTITLEMENT_OFFLINE_GRACE_DAYS`, default 14 days, and
    never past the licence's end plus grace). Say so to the customer; that is the
@@ -146,7 +146,7 @@ drill passed with an import RTO of 111 s
 3. **Stop writers** while copying back: set `KILL_SWITCHES="backup restore upload"`
    and redeploy, so phones queue instead of writing. The backend refuses new
    backups, their completion, restores and downloads with 503 `feature_paused`
-   for every build (`backend/app/deps.py:296-331`); deletes
+   for every build (`backend/app/deps.py:295-330`); deletes
    (`DELETE /v1/sessions/{sid}`), metadata updates and sign-ins still write.
 4. Record the RTO, recovery point and verification in the gate.
 

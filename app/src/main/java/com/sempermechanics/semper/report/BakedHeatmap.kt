@@ -5,7 +5,7 @@ import com.sempermechanics.semper.field.ValueRange
 
 /**
  * A rendered heatmap and the colour range it was rendered with: what
- * `VisualizationEngine.generateHeatmap` and `generateDeformedHeatmap` return,
+ * `VisualizationEngine.render` returns,
  * and what the viewer's scrub cache holds. The property order is the
  * `Triple` the engine used to return, so `val (bitmap, min, max) = ...` reads
  * the same.

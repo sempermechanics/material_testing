@@ -45,7 +45,7 @@ class AnalysisLeaveControllerTest {
 
     @Test
     fun `back on a later page steps back a page`() {
-        bed.viewModel.step = WizardStep.SWEEP
+        bed.viewModel.edit { it.copy(step = WizardStep.SWEEP) }
         leave().onBack()
         assertEquals(listOf(WizardStep.SETTINGS), steps)
         assertFalse(bed.activity.isFinishing)
@@ -53,7 +53,7 @@ class AnalysisLeaveControllerTest {
 
     @Test
     fun `back while busy asks whether to stop`() {
-        bed.viewModel.step = WizardStep.SETTINGS
+        bed.viewModel.edit { it.copy(step = WizardStep.SETTINGS) }
         val chrome = bed.chrome().apply { beginRun {} }
         leave(chrome).onBack()
 
@@ -86,7 +86,7 @@ class AnalysisLeaveControllerTest {
 
     @Test
     fun `the system back reaches it`() {
-        bed.viewModel.step = WizardStep.SETTINGS
+        bed.viewModel.edit { it.copy(step = WizardStep.SETTINGS) }
         leave()
         bed.activity.onBackPressedDispatcher.onBackPressed()
         assertEquals(listOf(WizardStep.IMAGES), steps)

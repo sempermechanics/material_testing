@@ -7,6 +7,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.sempermechanics.semper.data.prefs.WizardDraft
 import com.sempermechanics.semper.field.ImageSize
+import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.fixtures.awaitCondition
 import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
 import kotlinx.coroutines.runBlocking
@@ -66,19 +67,19 @@ class WizardDraftRestoreTest {
         val paths = (1..FRAMES).map { File(frames, "frame_$it.png").apply { writeBytes(byteArrayOf(it.toByte())) }.path }
         val before = AnalysisViewModel(SavedStateHandle()).apply {
             attachDraft(draft)
-            refBytes = REF
-            roiMaskBytes = MASK
-            realRefWidth = 640
-            realRefHeight = 480
-            refName = "speckle.png"
-            hasCustomRoi = true
-            roiX = 16
-            roiY = 16
-            roiW = 600
-            roiH = 440
-            deformedFrames = paths.map { DeformedFrame(it, File(it).name, size = ImageSize(640, 480)) }
-            wizardStep = 2
-            workingLocalId = "draft_device"
+            edit { current ->
+                current.copy(
+                    refBytes = REF,
+                    roiMaskBytes = MASK,
+                    refSize = ImageSize(640, 480),
+                    refName = "speckle.png",
+                    hasCustomRoi = true,
+                    roi = Roi(16, 16, 600, 440),
+                    deformedFrames = paths.map { DeformedFrame(it, File(it).name, size = ImageSize(640, 480)) },
+                    step = WizardStep.of(2),
+                    working = WorkingSession("draft_device", RunKind.BATCH),
+                )
+            }
         }
         awaitDraft("reference") { draft.readReference()?.contentEquals(REF) == true }
         awaitDraft("mask") { draft.readMask()?.contentEquals(MASK) == true }
@@ -88,13 +89,14 @@ class WizardDraftRestoreTest {
         after.attachDraft(WizardDraft(context))
 
         assertEquals(DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
-        assertArrayEquals(REF, after.refBytes)
-        assertArrayEquals(MASK, after.roiMaskBytes)
+        val restored = after.inputs.value
+        assertArrayEquals(REF, restored.refBytes)
+        assertArrayEquals(MASK, restored.roiMaskBytes)
         assertEquals(paths, after.defFilePaths)
         assertEquals(before.defFrameSizes, after.defFrameSizes)
-        assertEquals(listOf(16, 16, 600, 440), listOf(after.roiX, after.roiY, after.roiW, after.roiH))
-        assertEquals(2, after.wizardStep)
-        assertEquals("draft_device", after.workingLocalId)
+        assertEquals(Roi(16, 16, 600, 440), restored.roi)
+        assertEquals(2, restored.step.number)
+        assertEquals("draft_device", restored.working?.id)
         assertTrue(WizardDraft.isLive(context.filesDir))
     }
 
@@ -103,7 +105,7 @@ class WizardDraftRestoreTest {
         val draft = WizardDraft(context)
         val vm = AnalysisViewModel(SavedStateHandle()).apply {
             attachDraft(draft)
-            refBytes = REF
+            edit { it.copy(refBytes = REF) }
         }
         awaitDraft("reference") { draft.readReference() != null }
         vm.discardDraft()

@@ -298,3 +298,64 @@ test("a claim code is shaped as dash-split groups, eight to sixty-four long", ()
     assert.equal(claimCodeShaped(bad), false, String(bad));
   }
 });
+
+/* ------------------------------------------------------------ import graph */
+// auth.js holds the Firebase SDK and a top-level await on the project config.
+// A page that wants a DOM helper or an API call should not need to know that,
+// and a module that only draws or formats must not load Firebase at all, so
+// node --test can run it bare and a page can show a dialog before sign-in.
+
+import { readFileSync, readdirSync } from "node:fs";
+import { dirname, join, resolve as resolvePath } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const CONSOLE_DIR = fileURLToPath(new URL("../public/console/", import.meta.url));
+
+function staticImports(file) {
+  const source = readFileSync(file, "utf8");
+  return [...source.matchAll(/^\s*(?:import|export)\s[^;]*?from\s+"([^"]+)"/gms)].map((m) => m[1]);
+}
+
+function reaches(file, target, seen = new Set()) {
+  if (seen.has(file)) return false;
+  seen.add(file);
+  for (const spec of staticImports(file)) {
+    if (spec.startsWith("https:")) {
+      if (target === "https:") return true;
+      continue;
+    }
+    const next = resolvePath(dirname(file), spec);
+    if (next === target || reaches(next, target, seen)) return true;
+  }
+  return false;
+}
+
+test("the DOM and formatting modules load no Firebase", () => {
+  for (const name of ["util.js", "dialogs.js", "status.js", "messages.js"]) {
+    const file = join(CONSOLE_DIR, name);
+    assert.equal(reaches(file, join(CONSOLE_DIR, "auth.js")), false, `${name} reaches auth.js`);
+    assert.equal(reaches(file, "https:"), false, `${name} imports a remote module`);
+  }
+});
+
+test("auth.js re-exports nothing: each helper is imported from the module that owns it", () => {
+  const source = readFileSync(join(CONSOLE_DIR, "auth.js"), "utf8");
+  assert.doesNotMatch(source, /^\s*export\s*\{[^}]*\}\s*from/m);
+});
+
+test("auth.js is sign-in and the second factor only", () => {
+  const lines = readFileSync(join(CONSOLE_DIR, "auth.js"), "utf8").split("\n").length;
+  assert.ok(lines <= 600, `auth.js is ${lines} lines`);
+  const pages = readdirSync(CONSOLE_DIR, { recursive: true })
+    .filter((f) => f.endsWith(".js") && !f.startsWith("vendor"));
+  for (const page of pages) {
+    const source = readFileSync(join(CONSOLE_DIR, page), "utf8");
+    for (const m of source.matchAll(/import\s*\{([^}]*)\}\s*from\s*"(?:\.\.?\/)+auth\.js"/g)) {
+      for (const name of m[1].split(",").map((s) => s.trim()).filter(Boolean)) {
+        assert.ok(!["esc", "when", "day", "api", "apiBlob", "saveBlob", "setStatus", "whileWaiting",
+          "askInPage", "confirmInPage", "tellInPage", "confirmByTyping", "markFirstData"].includes(name),
+        `${page} imports ${name} from auth.js`);
+      }
+    }
+  }
+});

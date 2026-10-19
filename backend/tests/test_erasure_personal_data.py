@@ -24,7 +24,7 @@ def _mint(domain="university.edu"):
 
 def _account(store, uid, email, **extra):
     store._data.setdefault("users", {})[uid] = {
-        "email": email, "access_status": "APPROVED", "mode": "demo", **extra}
+        "email": email, "access_status": "APPROVED", "emailVerified": True, "mode": "demo", **extra}
 
 
 def _seats(store, license_id):
@@ -155,3 +155,55 @@ async def test_the_erasure_audit_row_carries_the_counts(store, audited, client, 
     assert r.json()["seatsBlanked"] == 1
     assert "dev@university.edu" not in _outside_audit(store)
     assert "@" not in json.dumps(audited, default=str)
+
+
+@pytest.mark.asyncio
+async def test_linked_auth_users_are_deleted(store, audited, client, monkeypatch):
+    """An account adopted by a second Firebase sub (`linkedAuthUids`) is
+    reached by two Auth users, and each holds the address and the name.
+    Erasure deletes every one of them, not only the canonical uid."""
+    from app import google_auth
+
+    store._data["users"] = {}
+    _account(store, "dev-user", "dev@university.edu", driveFolderId="uf",
+             linkedAuthUids=["sub-b"])
+    store._data["auth_links"] = {"dev-user": {"uid": "dev-user"}, "sub-b": {"uid": "dev-user"},
+                                 "sub-c": {"uid": "dev-user"}, "other": {"uid": "u2"}}
+    monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, "driveFolderId": "uf"})
+    monkeypatch.setattr(drive, "access_token", lambda: "tok")
+    monkeypatch.setattr(drive, "delete_file", lambda token, fid: None)
+    deleted = []
+    monkeypatch.setattr(google_auth.fb_auth, "delete_user", lambda uid, app=None: deleted.append(uid))
+
+    r = await client.delete("/v1/me")
+
+    assert r.status_code == 200, r.text
+    assert deleted == ["dev-user", "sub-b", "sub-c"]
+    row = next(a for a in audited if a["action"] == "ACCOUNT_DELETE")
+    assert (row["detail"]["authUsers"], row["detail"]["authUsersDeleted"]) == (3, 3)
+    assert row["detail"]["authUserDeleted"] is True
+
+
+@pytest.mark.asyncio
+async def test_a_linked_auth_user_that_survives_is_reported(store, audited, client, monkeypatch):
+    from app import google_auth
+
+    store._data["users"] = {}
+    _account(store, "dev-user", "dev@university.edu", driveFolderId="uf",
+             linkedAuthUids=["sub-b"])
+    monkeypatch.setattr(drive, "access_token", lambda: "tok")
+    monkeypatch.setattr(drive, "delete_file", lambda token, fid: None)
+    monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, "driveFolderId": "uf"})
+
+    def delete_user(uid, app=None):
+        if uid == "sub-b":
+            raise PermissionError("no firebaseauth.admin")
+
+    monkeypatch.setattr(google_auth.fb_auth, "delete_user", delete_user)
+
+    r = await client.delete("/v1/me")
+
+    assert r.status_code == 200, r.text
+    row = next(a for a in audited if a["action"] == "ACCOUNT_DELETE")
+    assert (row["detail"]["authUsers"], row["detail"]["authUsersDeleted"]) == (2, 1)
+    assert row["detail"]["authUserDeleted"] is False
