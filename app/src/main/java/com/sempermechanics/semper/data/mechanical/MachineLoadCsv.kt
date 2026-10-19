@@ -113,7 +113,11 @@ object MachineLoadCsv {
 
     const val MAX_ROWS = 200_000
 
-    private const val SNIFF_LINES = 10
+    /** The data rows, from the first numeric one, that vote on the delimiter. */
+    private const val SNIFF_ROWS = 20
+
+    /** In tie order: in a `;` or tab file a comma is usually a decimal mark. */
+    private val DELIMITERS = listOf(';', '\t', ',')
 
     private val LOAD_HEADER = Regex("""load|force|\bkn\b|\bn\b|newton|lbf|kgf|\bkp\b|\btf\b""", RegexOption.IGNORE_CASE)
     private val TIME_HEADER = Regex("""time|\bs\b|sec|elapsed""", RegexOption.IGNORE_CASE)
@@ -140,7 +144,7 @@ object MachineLoadCsv {
             .toList()
         if (lines.isEmpty()) return LoadCsvParse.Failed(LoadCsvError.Empty)
 
-        val delimiter = sniffDelimiter(lines.take(SNIFF_LINES).map { it.second })
+        val delimiter = sniffDelimiter(lines.map { it.second })
         // A line of empty cells (a `" "` spacer, or bare delimiters) is blank.
         val table = lines.map { (number, line) -> Line(number, splitCells(line, delimiter)) }
             .filter { line -> line.cells.any { it.isNotEmpty() } }
@@ -190,25 +194,43 @@ object MachineLoadCsv {
     // ── delimiter and cells ──────────────────────────────────────────────────
 
     /**
-     * The candidate that splits the most sniffed lines into the same non-trivial
-     * number of cells. Ties prefer `;` then tab, since a comma in those files
-     * is usually a decimal mark rather than a separator.
+     * The delimiter is read where the decimal mark is: from the header and the
+     * data rows, not the top of the file, so a preamble of `key, value` lines
+     * above `;` data never votes. Split by each candidate, the data block is
+     * that split's first numeric row and the [SNIFF_ROWS] after it, with the
+     * row above it as the header. A candidate with a data block beats one
+     * without; then it scores on the block's rows that split into two or more
+     * cells that are all numbers, then on the header and block lines that hold
+     * it equally often. Ties keep the order of [DELIMITERS]; a file in which
+     * the winner splits nothing is one column, read as `,`.
      */
     private fun sniffDelimiter(lines: List<String>): Char {
-        val candidates = listOf(';', '\t', ',')
-        var best = ','
-        var bestScore = 0
-        for (candidate in candidates) {
-            val counts = lines.map { line -> line.count { it == candidate } }.filter { it > 0 }
-            if (counts.isEmpty()) continue
-            val mode = counts.groupingBy { it }.eachCount().maxBy { it.value }.key
-            val score = counts.count { it == mode }
-            if (score > bestScore) {
-                best = candidate
-                bestScore = score
-            }
+        val eitherMark: (String) -> Float? = { cell -> parseNumber(cell, true) ?: parseNumber(cell, false) }
+        val scored = DELIMITERS.map { delimiter ->
+            val rows = lines.asSequence()
+                .map { line -> line to splitCells(line, delimiter).filter { it.isNotEmpty() } }
+                .filter { (_, cells) -> cells.isNotEmpty() }
+            val start = rows.indexOfFirst { (_, cells) -> isNumericRow(cells, eitherMark) }
+            val block = if (start < 0) emptyList() else rows.drop(start).take(SNIFF_ROWS).toList()
+            val header = if (start > 0) rows.elementAt(start - 1) else null
+            // With no numeric row the file's first lines vote, as the old sniff did.
+            val voters = if (start < 0) rows.take(SNIFF_ROWS).toList() else listOfNotNull(header) + block
+            val counts = voters.map { (line, _) -> line.count { it == delimiter } }.filter { it > 0 }
+            val mode = counts.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
+            delimiter to Vote(
+                hasData = start >= 0,
+                numberRows = block.count { (_, cells) -> cells.size >= 2 && cells.all { eitherMark(it) != null } },
+                evenLines = counts.count { it == mode },
+            )
         }
-        return best
+        val (best, score) = scored.maxBy { it.second }
+        return if (score.evenLines > 0) best else ','
+    }
+
+    /** How well one delimiter reads the data block; compared field by field. */
+    private data class Vote(val hasData: Boolean, val numberRows: Int, val evenLines: Int) : Comparable<Vote> {
+        override fun compareTo(other: Vote): Int =
+            compareValuesBy(this, other, Vote::hasData, Vote::numberRows, Vote::evenLines)
     }
 
     private fun splitCells(line: String, delimiter: Char): List<String> =
@@ -237,7 +259,7 @@ object MachineLoadCsv {
      * its first line as the header, so it reads as empty or as having no load.
      */
     private fun findHeader(table: List<Line>, numberOf: (String) -> Float?): Layout {
-        val dataStart = table.indexOfFirst { isNumericRow(it, numberOf) }
+        val dataStart = table.indexOfFirst { isNumericRow(it.cells, numberOf) }
         if (dataStart == 0) return Layout(null, null, 0)
         if (dataStart < 0) return Layout(table.first().cells, null, 1)
         val before = table[dataStart - 1].cells
@@ -250,10 +272,11 @@ object MachineLoadCsv {
         }
     }
 
-    private fun isNumericRow(line: Line, numberOf: (String) -> Float?): Boolean {
-        val cells = line.cells.filter { it.isNotEmpty() }
-        if (cells.isEmpty()) return false
-        return cells.count { numberOf(it) != null } * 2 >= cells.size
+    /** At least half of a row's non-empty [cells] are numbers. */
+    private fun isNumericRow(cells: List<String>, numberOf: (String) -> Float?): Boolean {
+        val filled = cells.filter { it.isNotEmpty() }
+        if (filled.isEmpty()) return false
+        return filled.count { numberOf(it) != null } * 2 >= filled.size
     }
 
     // ── columns ──────────────────────────────────────────────────────────────

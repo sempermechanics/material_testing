@@ -271,6 +271,61 @@ class MachineLoadCsvTest {
     }
 
     @Test
+    fun `a twelve-line comma preamble over semicolon data reads the loads`() {
+        // A sniff of the first ten lines saw one comma in each and split the
+        // data at the decimal commas: neither the columns nor the loads read.
+        val csv = ok(
+            """
+            Machine, Zwick Z050
+            Software, testXpert III
+            Standard, DIN EN ISO 6892-1
+            Material, S235
+            Specimen, round bar
+            Diameter, 10 mm
+            Gauge length, 50
+            Operator, AB
+            Date, 14.10.2026
+            Test speed, 10 mm/min
+            Preload, 5 N
+            Temperature, 23 °C
+            Time [s];Force [kN];Extension [mm]
+            0,0;0,005;0,000
+            0,5;0,875;0,012
+            1,0;1,25;0,031
+            1,5;12,5;0,240
+            """.trimIndent(),
+        )
+
+        assertEquals(LoadUnit.KN, csv.unit)
+        assertEquals(1, csv.loadColumn)
+        assertEquals(0, csv.timeColumn)
+        assertEquals("Force [kN]", csv.loadHeader)
+        listOf(5f, 875f, 1250f, 12500f).zip(csv.loadsN).forEach { (n, loadN) -> assertEquals(n, loadN, 1e-2f) }
+        assertEquals(listOf(0f, 0.5f, 1f, 1.5f), csv.timesS)
+        assertTrue(csv.warnings.isEmpty())
+    }
+
+    @Test
+    fun `a twelve-line semicolon or tab preamble over comma data reads the loads`() {
+        val preamble = listOf(
+            "Prüfprotokoll", "Norm", "Werkstoff", "Probe", "Prüfer", "Datum",
+            "Messlänge", "Vorkraft", "Geschwindigkeit", "Maschine", "Software", "Temperatur",
+        )
+        listOf(';', '\t').forEach { separator ->
+            val text = preamble.mapIndexed { i, key -> "$key$separator${if (i == 6) "50" else "Wert $i"}" }
+                .joinToString("\n", postfix = "\n") +
+                "Time (s),Load (N)\n0.0,0.5\n0.5,120.5\n1.0,241.0\n"
+
+            val csv = ok(text)
+
+            assertEquals(listOf(0.5f, 120.5f, 241f), csv.loadsN)
+            assertEquals(listOf(0f, 0.5f, 1f), csv.timesS)
+            assertEquals(1, csv.loadColumn)
+            assertTrue(csv.warnings.isEmpty())
+        }
+    }
+
+    @Test
     fun `a time column in milliseconds or minutes is read as seconds`() {
         val ms = ok("Time (ms);Load (N)\n0;0\n500;5\n1000;10\n")
         assertEquals(listOf(0f, 0.5f, 1f), ms.timesS)
