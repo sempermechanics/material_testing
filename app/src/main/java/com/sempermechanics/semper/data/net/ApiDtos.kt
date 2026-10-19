@@ -136,6 +136,21 @@ data class AppConfigDto(
     /** Features switched off fleet-wide: `backup`, `share`, `restore`, `upload`.
      * Null or empty = none. */
     val killSwitches: List<String>? = null,
+    /** Set only on a test account staff made for QC or CI (ADR-027); null on
+     * every real account, and absent from a backend that predates them. Only
+     * `/v1/config` sends it. Display and diagnostics only, never a gate: the
+     * account's licence is what entitles it. */
+    val testAccount: TestAccountDto? = null,
+)
+
+/** `/v1/config`'s `testAccount`: what the account is for and when it ends. */
+@Serializable
+data class TestAccountDto(
+    /** `qc` (staff testing) or `ci` (automated tests). */
+    val purpose: String = "",
+    /** ISO-8601 instant the account is ended, or null: a CI account with no
+     * end. A QC account always has one. */
+    val expiresAt: String? = null,
 )
 
 /**

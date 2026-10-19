@@ -21,5 +21,6 @@
   "recommendedVersionCode": 36,
   "killSwitches": [
     "restore"
-  ]
+  ],
+  "testAccount": null
 }
