@@ -109,24 +109,24 @@ class LegacyRerunTest {
         val loaded = load(record, "again.dng")
         val vm = AnalysisViewModel().apply { applyRerun(loaded) }
 
-        assertArrayEquals(reference, vm.refBytes)
-        assertEquals("again.dng", vm.refName)
-        assertEquals(ImageSize(W, H), ImageSize(vm.realRefWidth, vm.realRefHeight))
+        assertArrayEquals(reference, vm.inputs.value.refBytes)
+        assertEquals("again.dng", vm.inputs.value.refName)
+        assertEquals(ImageSize(W, H), ImageSize(vm.inputs.value.refSize.width, vm.inputs.value.refSize.height))
         assertEquals("run order kept", listOf("c_2.png", "c_0.png", "c_1.png"), vm.defOriginalNames)
-        assertEquals(listOf(0L, 400L, 800L), vm.deformedFrames.map { it.timeMs })
+        assertEquals(listOf(0L, 400L, 800L), vm.inputs.value.deformedFrames.map { it.timeMs })
         assertTrue("copied, not pointed at", vm.defFilePaths.none { File(it).canonicalPath.startsWith(sessionDir) })
         val copied = vm.defFilePaths.map { File(it).readText() }
         assertEquals(listOf("image c_2.png", "image c_0.png", "image c_1.png"), copied)
-        assertTrue(vm.defFromVideo)
-        assertEquals("tensile_03", vm.defVideoName)
-        assertEquals(FrameOrderMode.PICKER, vm.defOrderMode)
-        assertTrue(vm.hasCustomRoi)
-        assertEquals(Roi(6, 8, 40, 30), vm.roi)
-        assertNull("no record kept a mask", vm.roiMaskBytes)
+        assertTrue(vm.inputs.value.defFromVideo)
+        assertEquals("tensile_03", vm.inputs.value.defVideoName)
+        assertEquals(FrameOrderMode.PICKER, vm.inputs.value.defOrderMode)
+        assertTrue(vm.inputs.value.hasCustomRoi)
+        assertEquals(Roi(6, 8, 40, 30), vm.inputs.value.roi)
+        assertNull("no record kept a mask", vm.inputs.value.roiMaskBytes)
         assertTrue("the user is told", loaded.maskDropped)
         assertEquals(RerunInputs.Params(21, 7, SweepStudy.vsgFor(5, 7), true), loaded.inputs.params)
-        assertEquals(WizardStep.SETTINGS, vm.step)
-        assertNull("nothing names the saved analysis", vm.working?.id)
+        assertEquals(WizardStep.SETTINGS, vm.inputs.value.step)
+        assertNull("nothing names the saved analysis", vm.inputs.value.working?.id)
         assertEquals("the saved frames stay", 3, File(record.sessionDir, "raw_deformed").listFiles()?.size)
     }
 
@@ -138,7 +138,7 @@ class LegacyRerunTest {
 
         assertFalse(loaded.inputs.hasCustomRoi)
         assertFalse(loaded.maskDropped)
-        assertEquals(Roi.full(ImageSize(W, H)), AnalysisViewModel().apply { applyRerun(loaded) }.roi)
+        assertEquals(Roi.full(ImageSize(W, H)), AnalysisViewModel().apply { applyRerun(loaded) }.inputs.value.roi)
     }
 
     @Test
@@ -173,14 +173,14 @@ class LegacyRerunTest {
         val loaded = load(record, "r.dng")
         val vm = AnalysisViewModel().apply { applyRerun(loaded) }
 
-        assertTrue(vm.sweepMode)
-        assertEquals(WizardStep.SWEEP, vm.step)
-        assertEquals(ranges, vm.sweepRanges)
-        assertEquals(plan, vm.sweepRanges.plan(subsetCeiling = 99))
-        assertFalse(vm.lineCutHorizontal)
+        assertTrue(vm.inputs.value.sweepMode)
+        assertEquals(WizardStep.SWEEP, vm.inputs.value.step)
+        assertEquals(ranges, vm.inputs.value.sweepRanges)
+        assertEquals(plan, vm.inputs.value.sweepRanges.plan(subsetCeiling = 99))
+        assertFalse(vm.inputs.value.lineCutHorizontal)
         assertEquals(listOf("def.png"), vm.defOriginalNames)
-        assertEquals(SweepFrame.At(0), vm.sweepFrame)
-        assertEquals(SweepStudy.overlapForDenominator(4), vm.subsetOverlap, 1e-9)
+        assertEquals(SweepFrame.At(0), vm.inputs.value.sweepFrame)
+        assertEquals(SweepStudy.overlapForDenominator(4), vm.inputs.value.subsetOverlap, 1e-9)
     }
 
     private fun load(record: SessionRecord, referenceName: String): LoadedRerun =

@@ -48,15 +48,13 @@ class RoiStudioLauncherTest {
     fun `a cancelled studio clears the crop and its mask`() {
         val size = ImageSize(W, H)
         bed.viewModel.applyNewReference(ByteArray(1), "ref.png", size)
-        bed.viewModel.hasCustomRoi = true
-        bed.viewModel.roiMaskBytes = ByteArray(W * H)
-        bed.viewModel.roi = Roi(1, 1, 2, 2)
+        bed.viewModel.edit { it.copy(hasCustomRoi = true, roiMaskBytes = ByteArray(W * H), roi = Roi(1, 1, 2, 2)) }
 
         studio.applyFullImageRoi()
 
-        assertFalse(bed.viewModel.hasCustomRoi)
-        assertNull(bed.viewModel.roiMaskBytes)
-        assertEquals(Roi.full(size), bed.viewModel.roi)
+        assertFalse(bed.viewModel.inputs.value.hasCustomRoi)
+        assertNull(bed.viewModel.inputs.value.roiMaskBytes)
+        assertEquals(Roi.full(size), bed.viewModel.inputs.value.roi)
         assertEquals(1, changes)
     }
 
@@ -72,7 +70,7 @@ class RoiStudioLauncherTest {
         studio.applyRoiResult(Intent())
         bed.idle()
 
-        assertFalse(bed.viewModel.hasCustomRoi)
+        assertFalse(bed.viewModel.inputs.value.hasCustomRoi)
         assertEquals(1, changes)
     }
 

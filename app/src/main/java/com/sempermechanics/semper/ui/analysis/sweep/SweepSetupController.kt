@@ -19,6 +19,7 @@ import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.ui.analysis.recommend.RunEstimate
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
+import com.sempermechanics.semper.ui.analysis.wizard.WizardInputs
 import com.sempermechanics.semper.ui.analysis.wizard.WizardStep
 import com.sempermechanics.semper.ui.common.CollapsibleSection
 import com.sempermechanics.semper.ui.common.Motion
@@ -93,8 +94,11 @@ class SweepSetupController(
     /** The subset, window, step and sample inputs; null until [setup]. */
     private var rangeFields: SweepRangeFields? = null
 
+    /** The wizard's inputs as the view model holds them now. */
+    private val inputs: WizardInputs get() = viewModel.inputs.value
+
     private val framePicker = SweepFramePicker(activity, viewModel) { picked ->
-        viewModel.sweepFrame = SweepFrame.At(picked)
+        viewModel.edit { it.copy(sweepFrame = SweepFrame.At(picked)) }
         refreshSweepPlan()
     }
 
@@ -118,13 +122,13 @@ class SweepSetupController(
         val fields = SweepRangeFields(activity, viewModel, callbacks, onChanged = ::refreshSweepPlan)
         rangeFields = fields
 
-        rgAnalysisMode.check(if (viewModel.sweepMode) R.id.rbModeSweep else R.id.rbModeSingle)
+        rgAnalysisMode.check(if (inputs.sweepMode) R.id.rbModeSweep else R.id.rbModeSingle)
         rgAnalysisMode.onButtonChecked { checkedId ->
             // The last run's "Computed 5 frames" belongs to the mode it ran in.
             callbacks.clearRunStatus()
-            viewModel.sweepMode = checkedId == R.id.rbModeSweep
+            viewModel.edit { it.copy(sweepMode = checkedId == R.id.rbModeSweep) }
             // Leaving sweep mode while on the sweep page returns to settings.
-            if (!viewModel.sweepMode && viewModel.step == WizardStep.SWEEP) {
+            if (!inputs.sweepMode && inputs.step == WizardStep.SWEEP) {
                 callbacks.goToStep(WizardStep.SETTINGS, animate = true)
             } else {
                 applyAnalysisModeUi()
@@ -132,9 +136,9 @@ class SweepSetupController(
             }
         }
 
-        rgLineCutAxis.check(if (viewModel.lineCutHorizontal) R.id.rbAxisX else R.id.rbAxisY)
+        rgLineCutAxis.check(if (inputs.lineCutHorizontal) R.id.rbAxisX else R.id.rbAxisY)
         rgLineCutAxis.onButtonChecked { checkedId ->
-            viewModel.lineCutHorizontal = checkedId == R.id.rbAxisX
+            viewModel.edit { it.copy(lineCutHorizontal = checkedId == R.id.rbAxisX) }
             refreshLineCutPreview()
         }
 
@@ -171,7 +175,7 @@ class SweepSetupController(
      * through Next → page 3 (sweep settings).
      */
     fun applyAnalysisModeUi() {
-        val sweep = viewModel.sweepMode
+        val sweep = inputs.sweepMode
         advancedParamsCard.isVisible = !sweep
         sweepSettingsCard.isVisible = sweep
         if (sweep) refreshSweepPlan()
@@ -197,9 +201,9 @@ class SweepSetupController(
      * already holds them.
      */
     fun showRerun() {
-        rgAnalysisMode.check(if (viewModel.sweepMode) R.id.rbModeSweep else R.id.rbModeSingle)
-        rgLineCutAxis.check(if (viewModel.lineCutHorizontal) R.id.rbAxisX else R.id.rbAxisY)
-        if (viewModel.sweepMode) rangeFields?.adopt()
+        rgAnalysisMode.check(if (inputs.sweepMode) R.id.rbModeSweep else R.id.rbModeSingle)
+        rgLineCutAxis.check(if (inputs.lineCutHorizontal) R.id.rbAxisX else R.id.rbAxisY)
+        if (inputs.sweepMode) rangeFields?.adopt()
         applyAnalysisModeUi()
     }
 
@@ -218,18 +222,7 @@ class SweepSetupController(
      * The sweep grid the current inputs describe, capped to the subsets the ROI
      * can hold: x subset sizes × y strain windows, one step per subset.
      */
-    fun currentPlan(): List<SweepStudy.Point> = sweepRanges().plan(callbacks.maxSubsetForRoi())
-
-    /** The view model's seven sweep inputs as one value. */
-    private fun sweepRanges() = SweepRanges(
-        subsetMin = viewModel.subsetMin,
-        subsetMax = viewModel.subsetMax,
-        strainWinMin = viewModel.strainWinMin,
-        strainWinMax = viewModel.strainWinMax,
-        subsetSamples = viewModel.subsetSamples,
-        strainWinSamples = viewModel.strainWinSamples,
-        stepDenominator = viewModel.stepDenominator,
-    )
+    fun currentPlan(): List<SweepStudy.Point> = inputs.sweepRanges.plan(callbacks.maxSubsetForRoi())
 
     fun refreshSweepPlan() {
         if (!::tvSweepRunCount.isInitialized) return
@@ -254,7 +247,7 @@ class SweepSetupController(
                     plan.maxOf { it.vsg },
                 )
             }
-            viewModel.subsetMin > callbacks.maxSubsetForRoi() -> {
+            inputs.sweepRanges.subsetMin > callbacks.maxSubsetForRoi() -> {
                 sweepPlanWarn.show(
                     activity.getString(
                         R.string.sweep_plan_subset_too_big_fmt,
@@ -276,7 +269,7 @@ class SweepSetupController(
     }
 
     /** The 0-based frame the sweep solves: the picked one while it exists, else the middle ([SweepFrame.resolve]). */
-    fun resolvedSweepFrame(): Int = viewModel.sweepFrame.resolve(viewModel.defCount)
+    fun resolvedSweepFrame(): Int = inputs.sweepFrame.resolve(inputs.deformedFrames.size)
 
     /** "N analyses · subset a–b px · window c–d points": the run overlay's status as a sweep starts. */
     fun planSummary(plan: List<SweepStudy.Point>): String = activity.resources.getQuantityString(
@@ -297,7 +290,7 @@ class SweepSetupController(
      */
     private fun showRunLabel(plan: List<SweepStudy.Point>) {
         val points = plan.sumOf { point ->
-            Roi.forSolve(point.subset, viewModel.hasCustomRoi, viewModel.roi, viewModel.refSize)
+            Roi.forSolve(point.subset, inputs.hasCustomRoi, inputs.roi, inputs.refSize)
                 ?.let { RunEstimate.gridPoints(it.w, it.h, point.step) } ?: 0
         }
         val res = activity.resources
@@ -329,19 +322,19 @@ class SweepSetupController(
     /** The reference with the current ROI: the line-cut preview, and the ROI row's thumbnail. */
     fun refreshLineCutPreview() {
         if (!::lineCutPreview.isInitialized) return
-        val size = ImageSize(viewModel.realRefWidth, viewModel.realRefHeight)
-        val drawn = Roi(viewModel.roiX, viewModel.roiY, viewModel.roiW, viewModel.roiH)
-        val roi = drawn.orFullFrame(viewModel.hasCustomRoi, size)
+        val now = inputs
+        val size = now.refSize
+        val roi = now.roi.orFullFrame(now.hasCustomRoi, size)
         for (view in listOf(lineCutPreview, roiThumb)) {
             if (roi == null) {
-                view.setPreview(null, ImageSize(1, 1), Roi(0, 0, 1, 1), viewModel.lineCutHorizontal)
+                view.setPreview(null, ImageSize(1, 1), Roi(0, 0, 1, 1), now.lineCutHorizontal)
             } else {
                 view.setPreview(
                     bitmap = callbacks.refPreviewBitmap(),
                     image = size,
                     roi = roi,
-                    horizontal = viewModel.lineCutHorizontal,
-                    maskBytes = viewModel.roiMaskBytes,
+                    horizontal = now.lineCutHorizontal,
+                    maskBytes = now.roiMaskBytes,
                 )
             }
         }
@@ -361,8 +354,7 @@ class SweepSetupController(
         var width = ViewGroup.LayoutParams.WRAP_CONTENT
         var height = strip
         if (open) {
-            val w = viewModel.realRefWidth
-            val h = viewModel.realRefHeight
+            val (w, h) = inputs.refSize
             val aspect = if (w > 0 && h > 0) h.toFloat() / w else DEFAULT_ASPECT
             val cap = (res.displayMetrics.heightPixels * EXPANDED_MAX_SCREEN).toInt()
             val floor = res.getDimensionPixelSize(R.dimen.line_cut_preview_open_min).coerceAtMost(cap)

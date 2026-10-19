@@ -151,7 +151,7 @@ internal object WizardState {
             ?.let { WorkingSession(it, if (b.getBoolean(WORKING_IS_SWEEP)) RunKind.SWEEP else RunKind.BATCH) },
     )
 
-    fun frames(viewModel: AnalysisViewModel): Frames = wizardFramesOf(viewModel.deformedFrames)
+    fun frames(viewModel: AnalysisViewModel): Frames = wizardFramesOf(viewModel.inputs.value.deformedFrames)
 
     fun encodeFrames(frames: Frames): String = json.encodeToString(Frames.serializer(), frames)
 

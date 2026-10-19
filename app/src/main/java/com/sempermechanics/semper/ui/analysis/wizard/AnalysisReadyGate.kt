@@ -21,6 +21,9 @@ class AnalysisReadyGate(
     private val frameSizeChip: WarnChip,
 ) {
 
+    /** The wizard's inputs as the view model holds them now. */
+    private val inputs: WizardInputs get() = viewModel.inputs.value
+
     /**
      * Enables Next, Compute and Run sweep for what the wizard holds, unless
      * [isProcessing]. [sweepController] is the sweep page's; before its
@@ -31,23 +34,23 @@ class AnalysisReadyGate(
 
         binding.btnNext.isEnabled = ready && !isProcessing
         binding.tvNextReason.text = when {
-            viewModel.refBytes == null -> binding.root.context.getString(R.string.next_reason_ref)
+            inputs.refBytes == null -> binding.root.context.getString(R.string.next_reason_ref)
             viewModel.defFilePaths.isEmpty() -> binding.root.context.getString(R.string.next_reason_def)
             else -> ""
         }
 
-        val sizeError = viewModel.frameSizeError
+        val sizeError = inputs.frameSizeError
         frameSizeChip.showOrHide(sizeError)
 
         // Compute and Run sweep share every condition but the mode.
         val canRun = ready &&
-            viewModel.settingsReviewed &&
+            inputs.settingsReviewed &&
             !isProcessing &&
             sizeError == null
-        binding.btnCalculateFullField.isEnabled = canRun && !viewModel.sweepMode
-        sweepController.setRunSweepEnabled(canRun && viewModel.sweepMode && sweepController.currentPlan().isNotEmpty())
+        binding.btnCalculateFullField.isEnabled = canRun && !inputs.sweepMode
+        sweepController.setRunSweepEnabled(canRun && inputs.sweepMode && sweepController.currentPlan().isNotEmpty())
 
-        settings.btnDefineRoi.isEnabled = (viewModel.refBytes != null) && !isProcessing
+        settings.btnDefineRoi.isEnabled = (inputs.refBytes != null) && !isProcessing
         binding.btnBack.isEnabled = !isProcessing
         showEstimate()
     }
@@ -61,13 +64,13 @@ class AnalysisReadyGate(
     private fun showEstimate() {
         val subset = settings.sliderSubsetSize.value.toInt()
         val step = settings.sliderStepSize.value.toInt()
-        val roi = Roi.forSolve(subset, viewModel.hasCustomRoi, viewModel.roi, viewModel.refSize)
+        val roi = Roi.forSolve(subset, inputs.hasCustomRoi, inputs.roi, inputs.refSize)
         val points = roi?.let { RunEstimate.gridPoints(it.w, it.h, step) } ?: 0
         val res = binding.root.resources
         showRoi(points)
 
         val rate = AppSettings.runPointsPerSecond(binding.root.context)
-        val seconds = RunEstimate.seconds(points, viewModel.defCount, rate)
+        val seconds = RunEstimate.seconds(points, inputs.deformedFrames.size, rate)
         binding.btnCalculateFullField.text = if (seconds != null) {
             res.getString(R.string.run_compute_eta_fmt, RunEstimate.duration(res, seconds))
         } else {
@@ -84,12 +87,12 @@ class AnalysisReadyGate(
      */
     private fun showRoi(points: Int) {
         val res = binding.root.resources
-        val region = if (viewModel.hasCustomRoi) {
-            res.getString(R.string.roi_custom_fmt, viewModel.roiW, viewModel.roiH)
+        val region = if (inputs.hasCustomRoi) {
+            res.getString(R.string.roi_custom_fmt, inputs.roi.w, inputs.roi.h)
         } else {
             res.getString(R.string.roi_full_image)
         }
-        val counted = points > 0 && !viewModel.sweepMode
+        val counted = points > 0 && !inputs.sweepMode
         settings.tvInstruction.text = if (counted) RunEstimate.regionLabel(res, region, points) else region
     }
 }

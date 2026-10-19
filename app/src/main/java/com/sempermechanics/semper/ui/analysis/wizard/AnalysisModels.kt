@@ -32,7 +32,7 @@ enum class RunKind { BATCH, SWEEP }
 
 /**
  * The session a run wrote, as the wizard's working session names it
- * (`AnalysisViewModel.working`): while no Home row names it, the next run of
+ * ([WizardInputs.working]): while no Home row names it, the next run of
  * the same [kind] writes it again (`openRunSession`).
  */
 data class WorkingSession(val id: String, val kind: RunKind)

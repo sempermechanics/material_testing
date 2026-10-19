@@ -5,6 +5,7 @@ import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.ui.analysis.rerun.RerunSetup
 import com.sempermechanics.semper.ui.analysis.rerun.snapshotRerunSetup
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
+import com.sempermechanics.semper.ui.analysis.wizard.WizardInputs
 import com.sempermechanics.semper.ui.analysis.wizard.WorkingSession
 import java.io.File
 import kotlin.coroutines.CoroutineContext
@@ -35,7 +36,7 @@ internal class RunInputs(
     val frames: Frames,
     /** What a saved run keeps for Home's Re-run beyond its spec and images; null keeps nothing. */
     val setup: RerunSetup? = null,
-    /** The wizard's working session at launch ([AnalysisViewModel.working]); null for none. */
+    /** The wizard's working session at launch ([WizardInputs.working]); null for none. */
     val working: WorkingSession? = null,
 ) {
 
@@ -63,14 +64,16 @@ internal class RunInputs(
 
 /** The wizard's reference and frames as they stand now, copied so later edits do not reach a run. */
 @MainThread
-internal fun AnalysisViewModel.snapshotRunInputs(): RunInputs = RunInputs(
-    reference = RunInputs.Reference(refBytes, refSize, refName),
-    frames = RunInputs.Frames(
-        paths = defFilePaths.toList(),
-        originalNames = defOriginalNames.toList(),
-        timesMs = defFrameTimesMs?.toList(),
-        videoName = defVideoName,
-    ),
-    setup = snapshotRerunSetup(),
-    working = working,
-)
+internal fun AnalysisViewModel.snapshotRunInputs(): RunInputs = inputs.value.let { now ->
+    RunInputs(
+        reference = RunInputs.Reference(now.refBytes, now.refSize, now.refName),
+        frames = RunInputs.Frames(
+            paths = defFilePaths.toList(),
+            originalNames = defOriginalNames.toList(),
+            timesMs = defFrameTimesMs?.toList(),
+            videoName = now.defVideoName,
+        ),
+        setup = snapshotRerunSetup(),
+        working = now.working,
+    )
+}

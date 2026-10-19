@@ -19,6 +19,7 @@ import com.sempermechanics.semper.data.session.SessionQuota
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.field.DicParams
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
@@ -385,11 +386,9 @@ class EnginePipelineSmokeTest {
         val ids = mutableListOf<String>()
 
         val vm = AnalysisViewModel().apply {
-            refBytes = ref.toPngBytes()
-            realRefWidth = W
-            realRefHeight = H
-            refName = "ref.png"
-            deformedFrames = frames
+            edit {
+                it.copy(refBytes = ref.toPngBytes(), refSize = ImageSize(W, H), refName = "ref.png", deformedFrames = frames)
+            }
         }
         val spec = RunSpec.of(DicParams(subset = SUBSET, step = STEP, strainWindow = 15), Roi(0, 0, W, H), null, false, null)
 
@@ -399,9 +398,7 @@ class EnginePipelineSmokeTest {
             vm.cancelRequested = false
             val run = BatchRun(spec, ctx.cacheDir, System.currentTimeMillis(), Job(), vm.snapshotRunInputs())
             // TD-173: what the wizard does once the run has its inputs never reaches it.
-            vm.refBytes = null
-            vm.refName = "other.png"
-            vm.deformedFrames = emptyList()
+            vm.edit { it.copy(refBytes = null, refName = "other.png", deformedFrames = emptyList()) }
             val outcome = vm.runBatchAnalysisBody(ctx, run) { ticks += it }
             val sessionId = checkNotNull(outcome.sessionId)
             ids += sessionId
@@ -473,11 +470,9 @@ class EnginePipelineSmokeTest {
             DeformedFrame(file.absolutePath, file.name)
         }
         val vm = AnalysisViewModel().apply {
-            refBytes = ref.toPngBytes()
-            realRefWidth = W
-            realRefHeight = H
-            refName = "ref.png"
-            deformedFrames = frames
+            edit {
+                it.copy(refBytes = ref.toPngBytes(), refSize = ImageSize(W, H), refName = "ref.png", deformedFrames = frames)
+            }
         }
         val roi = Roi(0, 0, W, H)
         val saved = RunSpec.of(DicParams(subset = SUBSET, step = STEP, strainWindow = 15), roi, null, false, null)

@@ -63,7 +63,8 @@ class BatchAnalysisLimitTest {
         ctx = ApplicationProvider.getApplicationContext()
         AccountCache.clear(ctx)
         AppRemoteConfig.apply(ctx, AppConfigDto(maxSessions = 1, maxFilesPerSession = 600, maxFrames = 150))
-        vm.deformedFrames = listOf("/frames/a.png", "/frames/b.png", "/frames/c.png").map { DeformedFrame(it, "") }
+        val picked = listOf("/frames/a.png", "/frames/b.png", "/frames/c.png").map { DeformedFrame(it, "") }
+        vm.edit { it.copy(deformedFrames = picked) }
     }
 
     @After
@@ -87,7 +88,7 @@ class BatchAnalysisLimitTest {
         assertEquals(RunStop.SessionLimit, outcome.stop)
         assertEquals(3, outcome.totalFrames)
         assertEquals("", outcome.batchDirPath)
-        assertNull("no session id is minted for a blocked run", vm.working?.id)
+        assertNull("no session id is minted for a blocked run", vm.inputs.value.working?.id)
         assertNull("nor one for the wizard to take", outcome.session)
         assertTrue(SessionStore.list(ctx).isEmpty())
     }
@@ -97,7 +98,7 @@ class BatchAnalysisLimitTest {
         AccountCache.setQuota(ctx, used = 1)
         val run = BatchRun(spec, ctx.cacheDir, 0L, Job(), vm.snapshotRunInputs())
         // The wizard picks five frames on Main while the run waits for the native thread.
-        vm.deformedFrames = (0 until 5).map { DeformedFrame("/frames/late_$it.png", "") }
+        vm.edit { cur -> cur.copy(deformedFrames = (0 until 5).map { DeformedFrame("/frames/late_$it.png", "") }) }
 
         val outcome = vm.runBatchAnalysisBody(ctx, run) { }
 
@@ -109,9 +110,9 @@ class BatchAnalysisLimitTest {
     fun `every run is a new analysis, so every run is checked`() {
         AccountCache.setQuota(ctx, used = 1)
         assertTrue(vm.admitRun(ctx, 3) is RunAdmission.Blocked)
-        vm.working = WorkingSession("earlier_run", RunKind.BATCH)
+        vm.edit { it.copy(working = WorkingSession("earlier_run", RunKind.BATCH)) }
         assertTrue("no run is a free re-run of a saved one", vm.admitRun(ctx, 3) is RunAdmission.Blocked)
-        assertEquals("a blocked run keeps the working folder", "earlier_run", vm.working?.id)
+        assertEquals("a blocked run keeps the working folder", "earlier_run", vm.inputs.value.working?.id)
     }
 
     @Test

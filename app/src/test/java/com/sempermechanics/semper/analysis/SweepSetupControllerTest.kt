@@ -48,12 +48,12 @@ class SweepSetupControllerTest {
     private val helper = SweepSetupController(AppCompatActivity(), vm, callbacks)
 
     private fun frames(n: Int) {
-        vm.deformedFrames = (1..n).map { DeformedFrame("/frames/f$it.png", "") }
+        vm.edit { cur -> cur.copy(deformedFrames = (1..n).map { DeformedFrame("/frames/f$it.png", "") }) }
     }
 
     @Test
     fun `no frames resolves to frame zero`() {
-        vm.sweepFrame = SweepFrame.At(3)
+        vm.edit { it.copy(sweepFrame = SweepFrame.At(3)) }
         assertEquals(0, helper.resolvedSweepFrame())
     }
 
@@ -70,19 +70,25 @@ class SweepSetupControllerTest {
     @Test
     fun `a stored frame is kept while it exists and replaced once it does not`() {
         frames(5)
-        vm.sweepFrame = SweepFrame.At(4)
+        vm.edit { it.copy(sweepFrame = SweepFrame.At(4)) }
         assertEquals(4, helper.resolvedSweepFrame())
         frames(3) // the user removed frames after picking
         assertEquals(1, helper.resolvedSweepFrame())
     }
 
     private fun sweep(min: Int, max: Int) {
-        vm.subsetMin = min
-        vm.subsetMax = max
-        vm.subsetSamples = 3
-        vm.strainWinMin = 11
-        vm.strainWinMax = 21
-        vm.strainWinSamples = 2
+        vm.edit {
+            it.copy(
+                sweepRanges = it.sweepRanges.copy(
+                    subsetMin = min,
+                    subsetMax = max,
+                    subsetSamples = 3,
+                    strainWinMin = 11,
+                    strainWinMax = 21,
+                    strainWinSamples = 2,
+                ),
+            )
+        }
     }
 
     @Test
@@ -99,7 +105,7 @@ class SweepSetupControllerTest {
             strainWinMin = 11,
             strainWinMax = 21,
             strainWinSamples = 2,
-            stepDenominator = vm.stepDenominator,
+            stepDenominator = vm.inputs.value.sweepRanges.stepDenominator,
         )
         assertEquals(expected, plan)
     }

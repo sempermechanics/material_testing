@@ -32,7 +32,7 @@ class WizardParamFields(
         settings,
         object : AnalysisSettingsSheetController.Listener {
             override fun onSubsetUserModified() {
-                viewModel.subsetUserModified = true
+                viewModel.edit { it.copy(subsetUserModified = true) }
                 subsets.showSpeckleFeedback()
             }
 
@@ -97,7 +97,7 @@ class WizardParamFields(
     /** Back to the recommended subset and the default step, window and interpolator. */
     internal fun reset() {
         host.commitParamFields()
-        viewModel.subsetUserModified = false
+        viewModel.edit { it.copy(subsetUserModified = false) }
         settings.sliderSubsetSize.value = subsets.defaultSubsetSize().toFloat()
         settings.sliderStepSize.value = DicParams.DEFAULT_STEP.toFloat()
         settings.sliderStrainWindow.value = SweepStudy.DEFAULT_WINDOW_POINTS.toFloat()
@@ -117,7 +117,7 @@ class WizardParamFields(
         val params = ParamClipboard.peek(activity) ?: return
         host.commitParamFields()
         val shown = settings.etOverlapValue.text.toString() to settings.ddInterpolator.text.toString()
-        viewModel.subsetUserModified = true
+        viewModel.edit { it.copy(subsetUserModified = true) }
         setSliders(params.subset, params.step, params.vsg)
         if (shown != settings.etOverlapValue.text.toString() to settings.ddInterpolator.text.toString()) {
             advanced.expand()
@@ -137,7 +137,7 @@ class WizardParamFields(
      */
     internal fun applyRerun(subset: Int, step: Int, vsg: Int, use6x6: Boolean) {
         host.commitParamFields()
-        viewModel.subsetUserModified = true
+        viewModel.edit { it.copy(subsetUserModified = true) }
         settings.ddInterpolator.setText(if (use6x6) keys else bicubic, false)
         setSliders(subset, step, vsg)
     }

@@ -48,10 +48,10 @@ class WizardStepTest {
     @Test
     fun `the view model's saved number follows its page`() {
         val vm = AnalysisViewModel()
-        assertEquals(1, vm.wizardStep)
-        vm.wizardStep = 3
-        assertEquals(WizardStep.SWEEP, vm.step)
-        vm.step = WizardStep.SETTINGS
-        assertEquals(2, vm.wizardStep)
+        assertEquals(1, vm.inputs.value.step.number)
+        vm.edit { it.copy(step = WizardStep.of(3)) }
+        assertEquals(WizardStep.SWEEP, vm.inputs.value.step)
+        vm.edit { it.copy(step = WizardStep.SETTINGS) }
+        assertEquals(2, vm.inputs.value.step.number)
     }
 }

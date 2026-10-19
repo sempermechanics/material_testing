@@ -43,11 +43,16 @@ class ParametersPageTest {
 
     /** A 1200 × 900 reference with a 1100 × 800 region, 40 frames, a 10 px step: 8,800 points. */
     private fun loadRun() {
-        bed.viewModel.refSize = ImageSize(1200, 900)
-        bed.viewModel.hasCustomRoi = true
-        bed.viewModel.roi = Roi(50, 50, 1100, 800)
-        bed.viewModel.deformedFrames = List(40) { DeformedFrame("/tmp/def$it.png", "def$it.png") }
-        bed.viewModel.step = WizardStep.SETTINGS
+        bed.viewModel.edit {
+            it.copy(
+                refSize = ImageSize(1200, 900),
+                hasCustomRoi = true,
+                roi = Roi(50, 50, 1100, 800),
+            )
+        }
+        val picked = List(40) { DeformedFrame("/tmp/def$it.png", "def$it.png") }
+        bed.viewModel.edit { it.copy(deformedFrames = picked) }
+        bed.viewModel.edit { it.copy(step = WizardStep.SETTINGS) }
         bed.settings.sliderSubsetSize.value = 31f
         bed.settings.sliderStepSize.value = 10f
     }
@@ -74,7 +79,7 @@ class ParametersPageTest {
         assertEquals("1100 × 800 px · 35,200 points", bed.settings.tvInstruction.text.toString())
 
         // The full 1200 × 900 frame, inset 25 px a side for the 31 px subset: 1150 × 850.
-        bed.viewModel.hasCustomRoi = false
+        bed.viewModel.edit { it.copy(hasCustomRoi = false) }
         gate.apply(isProcessing = false, sweepController = sweep)
         assertEquals("Full image · 39,100 points", bed.settings.tvInstruction.text.toString())
     }
@@ -83,16 +88,15 @@ class ParametersPageTest {
     fun `in sweep mode the ROI row names the region without a count, and single brings it back`() {
         loadRun()
 
-        bed.viewModel.sweepMode = true
+        bed.viewModel.edit { it.copy(sweepMode = true) }
         gate.apply(isProcessing = false, sweepController = sweep)
         assertEquals("1100 × 800 px", bed.settings.tvInstruction.text.toString())
 
-        bed.viewModel.sweepMode = false
+        bed.viewModel.edit { it.copy(sweepMode = false) }
         gate.apply(isProcessing = false, sweepController = sweep)
         assertEquals("1100 × 800 px · 8,800 points", bed.settings.tvInstruction.text.toString())
 
-        bed.viewModel.hasCustomRoi = false
-        bed.viewModel.sweepMode = true
+        bed.viewModel.edit { it.copy(hasCustomRoi = false, sweepMode = true) }
         gate.apply(isProcessing = false, sweepController = sweep)
         assertEquals("Full image", bed.settings.tvInstruction.text.toString())
     }

@@ -86,11 +86,14 @@ class SweepSessionSaveTest {
      * [afterLaunch] is what the wizard does once the sweep has its inputs.
      */
     private fun finish(id: String, admitted: Boolean = false, afterLaunch: () -> Unit = {}): BatchAnalysisOutcome {
-        vm.realRefWidth = REF_SIDE
-        vm.realRefHeight = REF_SIDE
-        vm.refName = "ref.png"
+        vm.edit {
+            it.copy(
+                refSize = it.refSize.copy(width = REF_SIDE, height = REF_SIDE),
+                refName = "ref.png",
+            )
+        }
         val frame = File(ctx.cacheDir, "0000_def.png").apply { writeBytes(byteArrayOf(1, 2, 3)) }
-        vm.deformedFrames = listOf(DeformedFrame(frame.absolutePath, "def.png"))
+        vm.edit { it.copy(deformedFrames = listOf(DeformedFrame(frame.absolutePath, "def.png"))) }
         val batchDir = SessionStore.dirFor(ctx, id)
         val plan = listOf(SweepStudy.Point(21, 5, 3), SweepStudy.Point(31, 5, 3))
         val spec = RunSpec.sweep(
@@ -105,7 +108,7 @@ class SweepSessionSaveTest {
             firstMetrics = null,
             engineErrorCode = 0,
         )
-        vm.refBytes = ByteArray(REF_SIDE * REF_SIDE * 4)
+        vm.edit { it.copy(refBytes = ByteArray(REF_SIDE * REF_SIDE * 4)) }
         val session = SweepSession(id, batchDir, vm.snapshotRunInputs(), result, spec, 3_000)
         afterLaunch()
         return vm.finishSolvedSweep(ctx, session, cloudEnabled = true, admitted = admitted)
@@ -131,10 +134,14 @@ class SweepSessionSaveTest {
     @Test
     fun `the saved sweep describes the images it was launched with, not the wizard's later ones`() {
         val outcome = finish("s1") {
-            vm.refBytes = null
-            vm.refSize = ImageSize(10, 10)
-            vm.refName = "other.png"
-            vm.deformedFrames = listOf(DeformedFrame("/frames/late.png", "late.png"))
+            vm.edit {
+                it.copy(
+                    refBytes = null,
+                    refSize = ImageSize(10, 10),
+                    refName = "other.png",
+                    deformedFrames = listOf(DeformedFrame("/frames/late.png", "late.png")),
+                )
+            }
         }
 
         assertTrue(outcome.saved)

@@ -13,6 +13,7 @@ import com.sempermechanics.semper.field.DicParams
 import com.sempermechanics.semper.field.toRect
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisWizardHost
+import com.sempermechanics.semper.ui.analysis.wizard.WizardInputs
 import com.sempermechanics.semper.ui.analysis.wizard.glideTo
 import com.sempermechanics.semper.ui.analysis.wizard.snapToSlider
 import com.sempermechanics.semper.ui.common.InlineBusy
@@ -45,6 +46,9 @@ class SubsetRecommendationController(
     /** Where the measurement runs: the engine's thread. A function, so the engine loads only when one is asked. */
     private val measureOn: () -> CoroutineDispatcher = { engineThread() },
 ) {
+    /** The wizard's inputs as the view model holds them now. */
+    private val inputs: WizardInputs get() = viewModel.inputs.value
+
     private val lowTextureChip = WarnChip(binding.lowTextureWarnRow.root, host::confirmOpenFaq)
         .apply { setFaq(activity.getString(R.string.url_faq_speckle)) }
     private val speckleChip = WarnChip(binding.speckleWarnRow.root, host::confirmOpenFaq)
@@ -60,16 +64,16 @@ class SubsetRecommendationController(
      * held, then seeds the slider with it. Nothing to measure without a reference.
      */
     fun request() {
-        val bytes = viewModel.refBytes
+        val asked = inputs
+        val bytes = asked.refBytes
         val roi = currentSamplingRoi()
         if (bytes == null || roi == null) return
-        val key = "${viewModel.refName}|${bytes.size}|${roi.toShortString()}"
-        if (key == viewModel.subsetRecommendationKey) {
+        val key = "${asked.refName}|${bytes.size}|${roi.toShortString()}"
+        if (key == asked.subsetRecommendationKey) {
             apply()
             return
         }
-        viewModel.subsetRecommendationKey = key
-        viewModel.subsetRecommendation = null
+        viewModel.edit { it.copy(subsetRecommendationKey = key, subsetRecommendation = null) }
 
         // Read off the slider here: the measurement runs on the native thread,
         // which must not touch views.
@@ -82,18 +86,18 @@ class SubsetRecommendationController(
             val result = runCatching {
                 SubsetRecommender.recommend(
                     refBytes = bytes,
-                    imgW = viewModel.realRefWidth,
-                    imgH = viewModel.realRefHeight,
+                    imgW = asked.refSize.width,
+                    imgH = asked.refSize.height,
                     roi = roi,
                     tuning = tuning,
                 )
             }.onFailure { Timber.w(it, "Subset recommendation failed") }.getOrNull()
 
-            // A newer reference/ROI landed while we were measuring.
+            // A newer reference/ROI landed while we were measuring: read the inputs as they are now.
             withContext(Dispatchers.Main) {
                 measuring.stop(started)
-                if (viewModel.subsetRecommendationKey != key) return@withContext
-                viewModel.subsetRecommendation = result
+                if (inputs.subsetRecommendationKey != key) return@withContext
+                viewModel.edit { it.copy(subsetRecommendation = result) }
                 apply()
             }
         }
@@ -104,7 +108,7 @@ class SubsetRecommendationController(
      * the loaded reference image, or the historical 41 px before one exists.
      */
     fun defaultSubsetSize(): Int {
-        val rec = viewModel.subsetRecommendation ?: return DicParams.DEFAULT_SUBSET
+        val rec = inputs.subsetRecommendation ?: return DicParams.DEFAULT_SUBSET
         return snapToSlider(settings.sliderSubsetSize, rec.subsetSize)
     }
 
@@ -116,7 +120,7 @@ class SubsetRecommendationController(
     /** Seeds the slider with the recommendation, until the user overrides it. */
     fun apply() {
         settle()
-        val rec = viewModel.subsetRecommendation ?: run {
+        val rec = inputs.subsetRecommendation ?: run {
             lowTextureChip.hide()
             speckleChip.hide()
             speckleSpanChip.hide()
@@ -126,13 +130,13 @@ class SubsetRecommendationController(
         // The one thing the measurement knows that the slider cannot show: even
         // the largest allowed subset misses the accuracy target on this pattern.
         lowTextureChip.showOrHide(activity.getString(R.string.subset_low_texture).takeIf { rec.lowTexture })
-        if (!viewModel.subsetUserModified) {
+        if (!inputs.subsetUserModified) {
             val snapped = snapToSlider(settings.sliderSubsetSize, rec.subsetSize)
             if (settings.sliderSubsetSize.value.toInt() != snapped) {
                 host.commitParamFields()
                 // The band and chip show now; the rest waits for the slider to get there.
                 showReadout()
-                seeding = settings.sliderSubsetSize.glideTo(snapped, { viewModel.subsetUserModified }) {
+                seeding = settings.sliderSubsetSize.glideTo(snapped, { inputs.subsetUserModified }) {
                     seeding = null
                     afterSeeding()
                 }
@@ -199,7 +203,7 @@ class SubsetRecommendationController(
      * without one.
      */
     private fun showReadout(): Double? {
-        val rec = viewModel.subsetRecommendation
+        val rec = inputs.subsetRecommendation
         val slider = settings.sliderSubsetSize
         band.range = rec?.let { SubsetBand.rangeFor(it, slider.valueFrom.toInt()..slider.valueTo.toInt()) }
         val diameter = rec?.speckleDiameterPx
@@ -223,7 +227,7 @@ class SubsetRecommendationController(
 
     private fun spanMessage(): String? {
         val inUse = settings.sliderSubsetSize.value.toInt()
-        val wanted = viewModel.subsetRecommendation?.subsetSpanningSpeckles
+        val wanted = inputs.subsetRecommendation?.subsetSpanningSpeckles
         return if (wanted != null && wanted > inUse) {
             activity.getString(R.string.speckle_subset_span_fmt, inUse, wanted)
         } else {
@@ -233,7 +237,7 @@ class SubsetRecommendationController(
 
     /** Region the recommendation samples: the ROI when set, else the frame. */
     private fun currentSamplingRoi(): Rect? =
-        viewModel.roi.orFullFrame(viewModel.hasCustomRoi, viewModel.refSize)?.toRect()
+        inputs.let { it.roi.orFullFrame(it.hasCustomRoi, it.refSize)?.toRect() }
 
     internal companion object {
         /**

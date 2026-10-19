@@ -39,7 +39,8 @@ object RoiResolveHelper {
         realRefHeight: Int,
     ): Int = maxSubsetForRoi(hasCustomRoi, Roi(roiX, roiY, roiW, roiH), ImageSize(realRefWidth, realRefHeight))
 
-    private fun maxSubsetForRoi(hasCustomRoi: Boolean, roi: Roi, size: ImageSize): Int {
+    /** [maxSubsetForRoi] of the wizard's [roi] (in [size]'s pixels) as one value. */
+    fun maxSubsetForRoi(hasCustomRoi: Boolean, roi: Roi, size: ImageSize): Int {
         if (!size.isKnown) return SubsetRecommender.MAX_SUBSET
         val fits = if (hasCustomRoi) {
             val clipped = roi.clampTo(size)

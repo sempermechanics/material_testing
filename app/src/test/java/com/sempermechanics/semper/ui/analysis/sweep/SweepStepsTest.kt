@@ -47,12 +47,17 @@ class SweepStepsTest {
 
     private fun open(frames: Int) {
         bed.binding.stubStepSweep.inflate()
-        bed.viewModel.deformedFrames = List(frames) { DeformedFrame("/tmp/def$it.png", "steel_$it.tif") }
-        bed.viewModel.refSize = ImageSize(1200, 900)
-        bed.viewModel.hasCustomRoi = true
-        bed.viewModel.roi = Roi(50, 50, 1100, 800)
-        bed.viewModel.sweepMode = true
-        bed.viewModel.step = WizardStep.SETTINGS
+        val picked = List(frames) { DeformedFrame("/tmp/def$it.png", "steel_$it.tif") }
+        bed.viewModel.edit { it.copy(deformedFrames = picked) }
+        bed.viewModel.edit {
+            it.copy(
+                refSize = ImageSize(1200, 900),
+                hasCustomRoi = true,
+                roi = Roi(50, 50, 1100, 800),
+                sweepMode = true,
+                step = WizardStep.SETTINGS,
+            )
+        }
         controller = SweepSetupController(bed.activity, bed.viewModel, bed.host).also { it.setup() }
         bed.idle()
     }
@@ -104,7 +109,7 @@ class SweepStepsTest {
         dialog.getButton(DialogInterface.BUTTON_POSITIVE).performClick()
         bed.idle()
 
-        assertEquals(SweepFrame.At(22), bed.viewModel.sweepFrame)
+        assertEquals(SweepFrame.At(22), bed.viewModel.inputs.value.sweepFrame)
         assertEquals("steel_22.tif", view<EditText>(R.id.ddSweepFrame).text.toString())
         assertEquals("23 / 40", view<TextInputLayout>(R.id.tilSweepFrame).suffixText.toString())
     }
@@ -141,8 +146,7 @@ class SweepStepsTest {
     @Test
     fun `a plan with nothing to run hides the count`() {
         open(frames = 40)
-        bed.viewModel.subsetMin = 121
-        bed.viewModel.subsetMax = 121
+        bed.viewModel.edit { it.copy(sweepRanges = it.sweepRanges.copy(subsetMin = 121, subsetMax = 121)) }
         controller.refreshSweepPlan()
 
         assertTrue(controller.currentPlan().isEmpty())

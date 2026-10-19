@@ -94,10 +94,13 @@ class CancelDiscardsRunTest {
         // One analysis on this account: a run that consumed it would block the next.
         AppRemoteConfig.apply(ctx, AppConfigDto(maxSessions = 1, maxFilesPerSession = 600, maxFrames = 150))
         AccountCache.setQuota(ctx, used = 0)
-        vm.realRefWidth = REF_SIDE
-        vm.realRefHeight = REF_SIDE
-        vm.refName = "ref.png"
-        vm.refBytes = ByteArray(REF_SIDE * REF_SIDE * 4)
+        vm.edit {
+            it.copy(
+                refSize = it.refSize.copy(width = REF_SIDE, height = REF_SIDE),
+                refName = "ref.png",
+                refBytes = ByteArray(REF_SIDE * REF_SIDE * 4),
+            )
+        }
     }
 
     @After
@@ -114,7 +117,8 @@ class CancelDiscardsRunTest {
         val files = (0 until count).map { i ->
             File(importDir, "000${i}_def_$i.png").apply { writeBytes(byteArrayOf(i.toByte(), 1, 2, 3)) }
         }
-        vm.deformedFrames = files.map { DeformedFrame(it.absolutePath, it.name.substringAfter('_')) }
+        val picked = files.map { DeformedFrame(it.absolutePath, it.name.substringAfter('_')) }
+        vm.edit { it.copy(deformedFrames = picked) }
         return files
     }
 
@@ -150,7 +154,7 @@ class CancelDiscardsRunTest {
 
     /** A saved single run that solved [solved] of the wizard's frames, as the loop and its save leave it. */
     private fun savedRun(solved: Int): RunSession {
-        val session = openRunSession(ctx, vm.working, RunKind.BATCH)
+        val session = openRunSession(ctx, vm.inputs.value.working, RunKind.BATCH)
         val resolved = solveUpTo(session, vm.defFilePaths, solved, "saved")
         session.commit()
         vm.repointDeformedPaths(resolved)
@@ -185,7 +189,7 @@ class CancelDiscardsRunTest {
         val frames = importFrames(3)
         val bytes = frames.map { it.readBytes() }
         val launched = vm.defFilePaths
-        val session = openRunSession(ctx, vm.working, RunKind.BATCH)
+        val session = openRunSession(ctx, vm.inputs.value.working, RunKind.BATCH)
         assertTrue(session.fresh)
         val resolved = solveUpTo(session, launched, reached = 2, tag = "cancelled")
         assertFalse("the loop moved the frames it reached", frames[0].exists())
@@ -199,7 +203,7 @@ class CancelDiscardsRunTest {
         assertEquals("no upload", 0, uploadsQueuedFor(session.id))
         frames.forEachIndexed { i, file -> assertArrayEquals("frame $i is back", bytes[i], file.readBytes()) }
         assertEquals(launched, vm.defFilePaths)
-        assertNull("the next run is a new session", vm.working?.id)
+        assertNull("the next run is a new session", vm.inputs.value.working?.id)
         assertEquals("the one analysis allowed is still free", RunAdmission.Admitted, vm.admitRun(ctx, 3))
     }
 
@@ -208,7 +212,7 @@ class CancelDiscardsRunTest {
         val frames = importFrames(3)
         val bytes = frames.map { it.readBytes() }
         val launched = vm.defFilePaths
-        val session = openRunSession(ctx, vm.working, RunKind.BATCH)
+        val session = openRunSession(ctx, vm.inputs.value.working, RunKind.BATCH)
         // Frame 0 solved and was moved in; writing frame 1's .dat then fails (a full disk).
         val resolved = solveUpTo(session, launched, reached = 1, tag = "failed")
         assertFalse("the loop moved the frame it reached", frames[0].exists())
@@ -231,7 +235,7 @@ class CancelDiscardsRunTest {
         val frames = importFrames(3)
         val bytes = frames.map { it.readBytes() }
         val launched = vm.defFilePaths
-        val session = openRunSession(ctx, vm.working, RunKind.BATCH)
+        val session = openRunSession(ctx, vm.inputs.value.working, RunKind.BATCH)
         // Frames 0 and 1 solved and were moved in, and the run committed them.
         val resolved = solveUpTo(session, launched, reached = 2, tag = "committed").toMutableList()
         session.commit()
@@ -260,10 +264,10 @@ class CancelDiscardsRunTest {
     @Test
     fun `a committed run undone in a folder that saved nothing takes its results out and keeps the folder`() {
         importFrames(2)
-        val first = openRunSession(ctx, vm.working, RunKind.BATCH)
+        val first = openRunSession(ctx, vm.inputs.value.working, RunKind.BATCH)
         vm.applyRunOutcome(ended(first, saved = false))
         val launched = vm.defFilePaths
-        val next = openRunSession(ctx, vm.working, RunKind.BATCH)
+        val next = openRunSession(ctx, vm.inputs.value.working, RunKind.BATCH)
         assertEquals("the unsaved folder is written again", first.id, next.id)
         val resolved = solveUpTo(next, launched, reached = 2, tag = "committed")
         next.commit()
@@ -291,7 +295,7 @@ class CancelDiscardsRunTest {
         val launched = vm.defFilePaths
         val thumbTime = SessionPaths.resultThumb(saved.dir).lastModified()
 
-        val next = openRunSession(ctx, vm.working, RunKind.BATCH)
+        val next = openRunSession(ctx, vm.inputs.value.working, RunKind.BATCH)
         assertNotEquals("a new analysis, never the saved one", saved.id, next.id)
         assertTrue(next.fresh)
         val resolved = solveUpTo(next, launched, reached = 3, tag = "next")
@@ -309,7 +313,7 @@ class CancelDiscardsRunTest {
         assertEquals("its thumbnail is not made stale", thumbTime, SessionPaths.resultThumb(saved.dir).lastModified())
         assertTrue("the frame the run moved in is back in the import", frames[2].isFile)
         assertEquals(launched, vm.defFilePaths)
-        assertNull(vm.working?.id)
+        assertNull(vm.inputs.value.working?.id)
     }
 
     @Test
@@ -319,7 +323,7 @@ class CancelDiscardsRunTest {
         val files = hashes(saved.dir)
         val row = SessionStore.get(ctx, saved.id)
 
-        val next = openRunSession(ctx, vm.working, RunKind.BATCH)
+        val next = openRunSession(ctx, vm.inputs.value.working, RunKind.BATCH)
         val resolved = solveUpTo(next, vm.defFilePaths, reached = 3, tag = "next")
         next.commit()
         val record = sessionRecord(
@@ -339,19 +343,19 @@ class CancelDiscardsRunTest {
         assertEquals("its row", row, SessionStore.get(ctx, saved.id))
         assertEquals("next frame 2", SessionPaths.frameDat(next.dir, 2).readText())
         assertFalse(next.staging.exists())
-        assertNull("the next run is a new one again", vm.working?.id)
+        assertNull("the next run is a new one again", vm.inputs.value.working?.id)
     }
 
     @Test
     fun `a run in a folder that saved nothing leaves its results alone until it commits`() {
         importFrames(3)
-        val first = openRunSession(ctx, vm.working, RunKind.BATCH)
+        val first = openRunSession(ctx, vm.inputs.value.working, RunKind.BATCH)
         SessionPaths.frameDat(first.staging, 0).writeText("unsaved frame 0")
         first.commit()
         SessionLayout(first.dir).fieldRanges.writeText("unsaved ranges")
         vm.applyRunOutcome(ended(first, saved = false))
 
-        val next = openRunSession(ctx, vm.working, RunKind.BATCH)
+        val next = openRunSession(ctx, vm.inputs.value.working, RunKind.BATCH)
 
         assertEquals("no row names it", first.id, next.id)
         assertEquals("unsaved frame 0", SessionPaths.frameDat(first.dir, 0).readText())
@@ -381,7 +385,7 @@ class CancelDiscardsRunTest {
     @Test
     fun `a cancelled sweep saves nothing, however many combinations it solved`() {
         val frames = importFrames(1)
-        val session = openRunSession(ctx, vm.working, RunKind.SWEEP)
+        val session = openRunSession(ctx, vm.inputs.value.working, RunKind.SWEEP)
 
         val outcome = vm.endSweep(ctx, session, sweepRun(session, RunStop.Cancelled.wireCode, "cancelled"), true)
         vm.applyRunOutcome(outcome)
@@ -395,24 +399,24 @@ class CancelDiscardsRunTest {
         assertEquals("no upload", 0, uploadsQueuedFor(session.id))
         assertTrue("the sweep's frame stays in the import", frames[0].isFile)
         assertNull("no session for the wizard to take", outcome.session)
-        assertNull(vm.working?.id)
+        assertNull(vm.inputs.value.working?.id)
     }
 
     @Test
     fun `a cancelled sweep after a saved one leaves the saved sweep as it was`() {
         importFrames(1)
-        val first = openRunSession(ctx, vm.working, RunKind.SWEEP)
+        val first = openRunSession(ctx, vm.inputs.value.working, RunKind.SWEEP)
         val saved = vm.endSweep(ctx, first, sweepRun(first, code = 0, tag = "saved"), true)
         vm.applyRunOutcome(saved)
         idle()
         assertTrue(saved.saved)
-        assertNull("a saved sweep closes its session", vm.working?.id)
+        assertNull("a saved sweep closes its session", vm.inputs.value.working?.id)
         assertTrue("committed into the session", SessionPaths.frameDat(first.dir, 1).isFile)
         val files = hashes(first.dir)
         val row = SessionStore.get(ctx, first.id)
         val uploads = uploadsQueuedFor(first.id)
 
-        val next = openRunSession(ctx, vm.working, RunKind.SWEEP)
+        val next = openRunSession(ctx, vm.inputs.value.working, RunKind.SWEEP)
         assertNotEquals(first.id, next.id)
         val outcome = vm.endSweep(ctx, next, sweepRun(next, RunStop.Cancelled.wireCode, "next"), true)
         vm.applyRunOutcome(outcome)
@@ -424,7 +428,7 @@ class CancelDiscardsRunTest {
         assertEquals(uploads, uploadsQueuedFor(first.id))
         assertNull(outcome.session)
         assertFalse(next.dir.exists())
-        assertNull(vm.working?.id)
+        assertNull(vm.inputs.value.working?.id)
     }
 
     @Test
@@ -461,8 +465,8 @@ class CancelDiscardsRunTest {
     fun `a new run whose frame cannot go back keeps its folder and points the wizard there`() {
         val blocker = File(importDir, "blocker").apply { writeText("a file, not a folder") }
         val launched = listOf(File(blocker, "0000_a.png").absolutePath)
-        vm.deformedFrames = listOf(DeformedFrame(launched[0], "a.png"))
-        val session = openRunSession(ctx, vm.working, RunKind.BATCH)
+        vm.edit { it.copy(deformedFrames = listOf(DeformedFrame(launched[0], "a.png"))) }
+        val session = openRunSession(ctx, vm.inputs.value.working, RunKind.BATCH)
         val moved = File(SessionLayout(session.dir).rawDeformedDir.apply { mkdirs() }, "a.png").apply { writeText("a") }
 
         vm.discardCancelledBatch(ctx, session, launched, listOf(moved.absolutePath))

@@ -108,7 +108,8 @@ class RerunWizardTest {
         val frames = (0 until 3).map { File(raw, "def_$it.png").apply { writeText("image $it") } }
         val wizard = AnalysisViewModel().apply {
             applyNewReference(ByteArray(W * H * 4) { (it % 251).toByte() }, "ref.dng", size)
-            deformedFrames = frames.map { DeformedFrame(it.absolutePath, it.name, size = size) }
+            val picked = frames.map { DeformedFrame(it.absolutePath, it.name, size = size) }
+            edit { it.copy(deformedFrames = picked) }
         }
         val spec = RunSpec.of(params, Roi.insetFullFrame(size, params.subset), null, use6x6 = true, debugDir = null)
         keepBatchRerun(dir, wizard.snapshotRunInputs(), spec, frames.map { it.absolutePath }.toMutableList())
@@ -125,15 +126,15 @@ class RerunWizardTest {
         val wizard = Robolectric.buildActivity(StaticAnalysisActivity::class.java, intent).also { built = it }
             .setup().get()
         val vm = ViewModelProvider(wizard)[AnalysisViewModel::class.java]
-        await("the copied frames") { vm.defCount == 3 && vm.step == WizardStep.SETTINGS }
+        await("the copied frames") { vm.inputs.value.run { deformedFrames.size == 3 && step == WizardStep.SETTINGS } }
 
-        assertEquals("ref.dng", vm.refName)
+        assertEquals("ref.dng", vm.inputs.value.refName)
         assertEquals(listOf("def_0.png", "def_1.png", "def_2.png"), vm.defOriginalNames)
         assertTrue(vm.defFilePaths.none { File(it).canonicalPath.startsWith(dir.canonicalPath) })
         assertEquals(params.subset, wizard.findViewById<Slider>(R.id.sliderSubsetSize).value.toInt())
         assertEquals(params.step, wizard.findViewById<Slider>(R.id.sliderStepSize).value.toInt())
         assertEquals(7, wizard.findViewById<Slider>(R.id.sliderStrainWindow).value.toInt())
-        assertNull("nothing names the saved analysis", vm.working?.id)
+        assertNull("nothing names the saved analysis", vm.inputs.value.working?.id)
         assertTrue("ready to Compute", vm.isReadyToCompute())
         assertTrue("the parameters page is shown", wizard.findViewById<View>(R.id.sliderSubsetSize).isShown)
         assertEquals("the speckle measurement was asked for", 1, measurements.size)
@@ -150,10 +151,14 @@ class RerunWizardTest {
         val ranges = SweepRanges(15, 19, 3, 5, subsetSamples = 3, strainWinSamples = 2, stepDenominator = 3)
         val source = AnalysisViewModel().apply {
             applyNewReference(ByteArray(W * H * 4), "ref.dng", size)
-            deformedFrames = listOf(DeformedFrame(frame.absolutePath, frame.name, size = size))
-            sweepMode = true
-            sweepRanges = ranges
-            lineCutHorizontal = false
+            edit {
+                it.copy(
+                    deformedFrames = listOf(DeformedFrame(frame.absolutePath, frame.name, size = size)),
+                    sweepMode = true,
+                    sweepRanges = ranges,
+                    lineCutHorizontal = false,
+                )
+            }
         }
         val plan = ranges.plan(subsetCeiling = 19)
         val spec = RunSpec.sweep(
@@ -171,11 +176,11 @@ class RerunWizardTest {
         val wizard = Robolectric.buildActivity(StaticAnalysisActivity::class.java, intent).also { built = it }
             .setup().get()
         val vm = ViewModelProvider(wizard)[AnalysisViewModel::class.java]
-        await("the sweep page") { vm.defCount == 1 && vm.step == WizardStep.SWEEP }
+        await("the sweep page") { vm.inputs.value.deformedFrames.size == 1 && vm.inputs.value.step == WizardStep.SWEEP }
 
-        assertTrue(vm.sweepMode)
-        assertEquals(ranges, vm.sweepRanges)
-        assertFalse(vm.lineCutHorizontal)
+        assertTrue(vm.inputs.value.sweepMode)
+        assertEquals(ranges, vm.inputs.value.sweepRanges)
+        assertFalse(vm.inputs.value.lineCutHorizontal)
         fun checked(group: Int) = wizard.findViewById<MaterialButtonToggleGroup>(group).checkedButtonId
         assertEquals(R.id.rbModeSweep, checked(R.id.rgAnalysisMode))
         assertEquals(R.id.rbAxisY, checked(R.id.rgLineCutAxis))
@@ -214,12 +219,12 @@ class RerunWizardTest {
         val wizard = Robolectric.buildActivity(StaticAnalysisActivity::class.java, intent).also { built = it }
             .setup().get()
         val vm = ViewModelProvider(wizard)[AnalysisViewModel::class.java]
-        await("the copied frames") { vm.defCount == 2 && vm.step == WizardStep.SETTINGS }
+        await("the copied frames") { vm.inputs.value.run { deformedFrames.size == 2 && step == WizardStep.SETTINGS } }
 
-        assertEquals("again.dng", vm.refName)
+        assertEquals("again.dng", vm.inputs.value.refName)
         assertEquals(names, vm.defOriginalNames)
         assertTrue(vm.defFilePaths.none { File(it).canonicalPath.startsWith(dir.canonicalPath) })
-        assertEquals(Roi(4, 4, 40, 30), vm.roi)
+        assertEquals(Roi(4, 4, 40, 30), vm.inputs.value.roi)
         assertEquals(params.step, wizard.findViewById<Slider>(R.id.sliderStepSize).value.toInt())
         assertEquals(app.getString(R.string.rerun_mask_not_saved), ShadowToast.getTextOfLatestToast())
         assertFalse("the hand-off is read once", picked.exists())

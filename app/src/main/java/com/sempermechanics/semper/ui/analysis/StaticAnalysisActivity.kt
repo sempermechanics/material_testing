@@ -126,12 +126,13 @@ class StaticAnalysisActivity :
         buildImports()
 
         binding.btnNext.setOnClickListener {
-            viewModel.step.next(viewModel.sweepMode)?.let { goToStep(it, animate = true) }
+            val inputs = viewModel.inputs.value
+            inputs.step.next(inputs.sweepMode)?.let { goToStep(it, animate = true) }
         }
         binding.btnBack.setOnClickListener {
-            viewModel.step.previous?.let { goToStep(it, animate = true) }
+            viewModel.inputs.value.step.previous?.let { goToStep(it, animate = true) }
         }
-        goToStep(viewModel.step, animate = false)
+        goToStep(viewModel.inputs.value.step, animate = false)
 
         // Hand-off from Home's media picker: the selection type already
         // decided the branch — image becomes the reference, video enters
@@ -207,7 +208,9 @@ class StaticAnalysisActivity :
         binding.btnCalculateFullField.setOnClickListener {
             // A field still holding focus has not committed its typed value yet.
             commitParamFields()
-            if (!viewModel.sweepMode) runs.startBatch(params.dicParams(), params.isKeysInterpolatorSelected())
+            if (!viewModel.inputs.value.sweepMode) {
+                runs.startBatch(params.dicParams(), params.isKeysInterpolatorSelected())
+            }
         }
     }
 
@@ -327,7 +330,8 @@ class StaticAnalysisActivity :
     // ------------------------------------------------------------------
     // Wizard navigation: page 1 (images) → page 2 (settings) → page 3 (sweep)
     // ------------------------------------------------------------------
-    override fun updateWizardChrome() = wizardChrome.updateBottomNav(viewModel.step, viewModel.sweepMode)
+    override fun updateWizardChrome() =
+        viewModel.inputs.value.let { wizardChrome.updateBottomNav(it.step, it.sweepMode) }
 
     override fun refPreviewBitmap(): Bitmap? = refPreviewBmp
 
@@ -335,17 +339,17 @@ class StaticAnalysisActivity :
 
     /** Shows page [step]: also the sweep setup's way back to settings, and how the smoke test moves the wizard. */
     override fun goToStep(step: WizardStep, animate: Boolean) {
+        val inputs = viewModel.inputs.value
         val target = wizardChrome.applyStep(
-            previous = viewModel.step,
+            previous = inputs.step,
             requested = step,
-            sweepMode = viewModel.sweepMode,
+            sweepMode = inputs.sweepMode,
             animate = animate,
         )
-        viewModel.step = target
-
         // Reaching the settings page counts as reviewing the parameters —
         // they are all visible here — which satisfies the Compute gate.
-        if (target >= WizardStep.SETTINGS) viewModel.settingsReviewed = true
+        val reviewed = target >= WizardStep.SETTINGS
+        viewModel.edit { it.copy(step = target, settingsReviewed = it.settingsReviewed || reviewed) }
 
         if (target == WizardStep.SETTINGS) {
             wizardSlots.updateRoiThumbnail()
@@ -396,12 +400,12 @@ class StaticAnalysisActivity :
      * ranges, then the parameters page (or the sweep's), ready to Compute.
      */
     private suspend fun showRerun(inputs: RerunInputs) {
-        refPreviewBmp = viewModel.refBytes?.let { decodeRefPreview(it) }
+        refPreviewBmp = viewModel.inputs.value.refBytes?.let { decodeRefPreview(it) }
         val run = inputs.params
         params.applyRerun(run.subset, run.step, run.strainWindow, run.use6x6)
         sweepController.showRerun()
         onImagesChanged(newReference = true, newFrames = true)
-        goToStep(viewModel.step, animate = false)
+        goToStep(viewModel.inputs.value.step, animate = false)
     }
 
     /**
@@ -412,8 +416,8 @@ class StaticAnalysisActivity :
     private suspend fun decodeRefPreview(bytes: ByteArray): Bitmap? = ReferencePreviewLoader.load(
         ReferencePreviewLoader.Request(
             bytes = bytes,
-            intentWidth = viewModel.realRefWidth,
-            intentHeight = viewModel.realRefHeight,
+            intentWidth = viewModel.inputs.value.refSize.width,
+            intentHeight = viewModel.inputs.value.refSize.height,
             previewMaxEdge = BitmapDecoder.PREVIEW_MAX_EDGE,
         ),
     ).bitmap
@@ -426,12 +430,12 @@ class StaticAnalysisActivity :
     private fun restoreUiFromViewModel() {
         lifecycleScope.launch {
             val restore = viewModel.restoreDraft()
-            viewModel.refBytes?.let { refPreviewBmp = decodeRefPreview(it) }
+            viewModel.inputs.value.refBytes?.let { refPreviewBmp = decodeRefPreview(it) }
             wizardSlots.refreshRefSlot(refPreviewBmp)
             wizardSlots.refreshDefSlot()
             when (restore) {
                 // Re-enter the page so it re-measures what it shows.
-                DraftRestore.RESTORED -> goToStep(viewModel.step, animate = false)
+                DraftRestore.RESTORED -> goToStep(viewModel.inputs.value.step, animate = false)
                 DraftRestore.LOST -> {
                     goToStep(WizardStep.IMAGES, animate = false)
                     val lost = getString(R.string.wizard_draft_lost)

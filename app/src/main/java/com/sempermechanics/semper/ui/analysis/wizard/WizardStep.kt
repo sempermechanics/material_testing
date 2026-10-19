@@ -9,7 +9,7 @@ enum class WizardStep {
 
     /**
      * The page's 1-based number: what the saved state holds
-     * ([AnalysisViewModel.wizardStep]) and what the toolbar shows.
+     * (of [WizardInputs.step]) and what the toolbar shows.
      */
     val number: Int get() = ordinal + 1
 

@@ -13,18 +13,22 @@ import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 /**
  * The wizard's inputs as one value: what the user picked, drew and set on its
  * pages, and the session its next run writes. [AnalysisViewModel.inputs] holds
- * it in a `StateFlow`; Main writes it, one `update` per change
- * ([AnalysisViewModel.edit], or the view model's property of the same name),
+ * it in a `StateFlow`; Main writes it, one [AnalysisViewModel.edit] per change,
  * a run reads it once as it is launched (`snapshotRunInputs`), and
  * [WizardState.save] writes the scalars into the saved-state Bundle, key for
  * key as before (`WizardStateBundleFormatTest`).
  *
  * The two byte arrays compare by identity, as a new pick is a new array; they
- * are mirrored into the draft by the view model's setters (ADR-005).
+ * are mirrored into the draft by [AnalysisViewModel.edit] as they change (ADR-005).
  *
  * @property refBytes the reference image's bytes; null before one is picked
  * @property roiMaskBytes the ROI mask, one byte per reference pixel; null for none
- * @property deformedFrames the deformed frames, in the order the run solves them
+ * @property deformedFrames the deformed frames, in the order the run solves
+ *   them: each one's staged path, the name the user picked it as, its capture
+ *   date and its pixel size. The size is measured once at import, so the match
+ *   against the reference costs nothing to re-check: the engine places its grid
+ *   in reference coordinates, and a frame of another size is solved anyway, to
+ *   a wrong field with no error. [frameSizeError] keeps such a batch from the engine.
  * @property defOrderMode how the user wants the frames ordered (image batches only)
  * @property defOrderDirection ascending or descending, for name and date order
  * @property frameSizeError set when the frames do not all match the reference; blocks Compute
@@ -44,7 +48,15 @@ import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
  * @property subsetOverlap the subset overlap every combination of a sweep shares
  * @property lineCutHorizontal true when the sweep's line cut runs along x
  * @property sweepFrame the frame the sweep is solved against
- * @property working the session the next run of its kind writes, while no Home row names it
+ * @property working the session folder the next run of its kind writes, while
+ *   no Home row names it: the last run of that kind in this wizard saved
+ *   nothing, and the next one writes there again (`openRunSession`). Null for
+ *   none, so the next run mints a new one. A run reads it once, on Main, as it
+ *   is launched (`snapshotRunInputs`), and its outcome sets it there
+ *   (`applyRunOutcome`): the run itself never touches it. A run that saves
+ *   clears it: a saved analysis is never written over (owner decision,
+ *   2026-10-15). New inputs clear it too
+ *   ([AnalysisViewModel.clearPreviousResults]).
  */
 data class WizardInputs(
     val refBytes: ByteArray? = null,

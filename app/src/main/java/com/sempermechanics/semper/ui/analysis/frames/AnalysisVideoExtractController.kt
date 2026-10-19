@@ -111,10 +111,14 @@ class AnalysisVideoExtractController(
 
     private fun apply(result: VideoFrameExtractor.ExtractionResult) {
         viewModel.applyNewReference(result.reference.png, result.refName, result.reference.size)
-        viewModel.deformedFrames = result.batch.frames
-        viewModel.defOrderMode = FrameOrderMode.PICKER
-        viewModel.defOrderDirection = FrameOrderDirection.ASCENDING
-        viewModel.defFromVideo = result.batch.fromVideo
-        viewModel.defVideoName = result.batch.videoName
+        viewModel.edit {
+            it.copy(
+                deformedFrames = result.batch.frames,
+                defOrderMode = FrameOrderMode.PICKER,
+                defOrderDirection = FrameOrderDirection.ASCENDING,
+                defFromVideo = result.batch.fromVideo,
+                defVideoName = result.batch.videoName,
+            )
+        }
     }
 }

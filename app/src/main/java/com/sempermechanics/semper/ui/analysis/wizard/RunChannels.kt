@@ -296,7 +296,7 @@ internal fun openRunSession(appContext: Context, working: WorkingSession?, kind:
 internal fun AnalysisViewModel.applyRunOutcome(outcome: BatchAnalysisOutcome) {
     if (BuildConfig.DEBUG) check(Looper.getMainLooper().isCurrentThread) { "a run's outcome is applied on Main" }
     val session = outcome.session ?: return
-    working = if (outcome.saved) null else session
+    edit { it.copy(working = if (outcome.saved) null else session) }
 }
 
 /**
@@ -380,8 +380,12 @@ private const val SESSION_ID_LENGTH = 12
  */
 @MainThread
 internal fun AnalysisViewModel.repointDeformedPaths(resolved: List<String>) {
-    deformedFrames = deformedFrames.mapIndexed { i, frame ->
-        frame.copy(path = resolved.getOrElse(i) { frame.path })
+    edit { current ->
+        current.copy(
+            deformedFrames = current.deformedFrames.mapIndexed { i, frame ->
+                frame.copy(path = resolved.getOrElse(i) { frame.path })
+            },
+        )
     }
 }
 

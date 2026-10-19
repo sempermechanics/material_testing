@@ -135,10 +135,14 @@ class RunSpecTest {
         val sweep = RunSpec.Sweep(plan, listOf("a"), lineCutHorizontal = false, frameIndex = 0)
         val sweepSpec = RunSpec.sweep(sweep, Roi.fromXywh(resolved)!!, null, use6x6 = false, debugDir = null)
         val vm = AnalysisViewModel().apply {
-            refBytes = ByteArray(8)
-            refSize = ImageSize(2000, 435)
-            refName = "steel_24.png"
-            deformedFrames = listOf(DeformedFrame("/frames/a.png", "a.png"))
+            edit {
+                it.copy(
+                    refBytes = ByteArray(8),
+                    refSize = ImageSize(2000, 435),
+                    refName = "steel_24.png",
+                    deformedFrames = listOf(DeformedFrame("/frames/a.png", "a.png")),
+                )
+            }
         }
         val result = SweepStudyRunner.SweepResult(runs = emptyList(), firstMetrics = null, engineErrorCode = -3)
         val run = SweepSession("x", File("/sessions/x"), vm.snapshotRunInputs(), result, sweepSpec, 0)
