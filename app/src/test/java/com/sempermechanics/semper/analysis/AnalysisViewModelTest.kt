@@ -13,8 +13,10 @@ import com.sempermechanics.semper.fixtures.CleanAppState
 import com.sempermechanics.semper.fixtures.sessionRecord
 import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
+import com.sempermechanics.semper.ui.analysis.wizard.BatchAnalysisOutcome
+import com.sempermechanics.semper.ui.analysis.wizard.RunSession
 import com.sempermechanics.semper.ui.analysis.wizard.WizardStep
-import com.sempermechanics.semper.ui.analysis.wizard.closeSavedSession
+import com.sempermechanics.semper.ui.analysis.wizard.applyRunOutcome
 import com.sempermechanics.semper.ui.analysis.wizard.openRunSession
 import com.sempermechanics.semper.ui.analysis.wizard.repointDeformedPathsOnMain
 import org.junit.Assert.assertEquals
@@ -92,19 +94,33 @@ class AnalysisViewModelTest {
 
     // ------------------------------------------------- working session identity
 
+    /** What a run in [session] that saved its row, or not, hands the view model in its outcome. */
+    private fun ended(session: RunSession, saved: Boolean = false) = BatchAnalysisOutcome(
+        engineErrorCode = 0,
+        firstFrameValidPoints = 0,
+        totalFrames = 0,
+        executionTimeMs = 0,
+        batchDirPath = session.dir.path,
+        saved = saved,
+        session = session.working,
+    )
+
     @Test
-    fun `a fresh view model's run opens a new session`() {
-        val session = vm.openRunSession(ctx, sweep = false)
+    fun `a fresh view model's run opens a new session, which the view model takes from its outcome`() {
+        val session = openRunSession(ctx, vm.working, sweep = false)
 
         assertTrue(session.fresh)
+        assertNull("the run itself writes none of the wizard's fields", vm.workingLocalId)
+        vm.applyRunOutcome(ended(session))
         assertEquals(session.id, vm.workingLocalId)
     }
 
     @Test
     fun `a run after one that saved nothing writes that folder again`() {
-        val first = vm.openRunSession(ctx, sweep = false)
+        val first = openRunSession(ctx, vm.working, sweep = false)
+        vm.applyRunOutcome(ended(first))
 
-        val next = vm.openRunSession(ctx, sweep = false)
+        val next = openRunSession(ctx, vm.working, sweep = false)
 
         assertEquals("no Home row names it: it holds no one's analysis", first.id, next.id)
         assertFalse(next.fresh)
@@ -112,10 +128,11 @@ class AnalysisViewModelTest {
 
     @Test
     fun `a saved analysis is never written over by the next run`() {
-        val first = vm.openRunSession(ctx, sweep = false)
+        val first = openRunSession(ctx, vm.working, sweep = false)
+        vm.applyRunOutcome(ended(first))
         assertTrue(SessionStore.upsert(ctx, sessionRecord(id = first.id, sessionDir = first.dir.path), true))
 
-        val next = vm.openRunSession(ctx, sweep = false)
+        val next = openRunSession(ctx, vm.working, sweep = false)
 
         assertNotEquals(first.id, next.id)
         assertTrue(next.fresh)
@@ -123,19 +140,32 @@ class AnalysisViewModelTest {
 
     @Test
     fun `a saved run closes its session, so the next run is a new one`() {
-        vm.openRunSession(ctx, sweep = false)
+        val first = openRunSession(ctx, vm.working, sweep = false)
+        vm.applyRunOutcome(ended(first))
 
-        vm.closeSavedSession()
+        vm.applyRunOutcome(ended(first, saved = true))
 
         assertNull(vm.workingLocalId)
         assertFalse(vm.workingIsSweep)
     }
 
     @Test
-    fun `a run of the other kind opens its own session`() {
-        val single = vm.openRunSession(ctx, sweep = false)
+    fun `a run that kept nothing or never started leaves the working session as it was`() {
+        val first = openRunSession(ctx, vm.working, sweep = false)
+        vm.applyRunOutcome(ended(first))
 
-        val sweep = vm.openRunSession(ctx, sweep = true)
+        vm.applyRunOutcome(ended(first).copy(engineErrorCode = RunStop.Cancelled.wireCode, session = null))
+
+        assertEquals(first.id, vm.workingLocalId)
+    }
+
+    @Test
+    fun `a run of the other kind opens its own session`() {
+        val single = openRunSession(ctx, vm.working, sweep = false)
+        vm.applyRunOutcome(ended(single))
+
+        val sweep = openRunSession(ctx, vm.working, sweep = true)
+        vm.applyRunOutcome(ended(sweep))
 
         assertNotEquals("a sweep must not write a single run's folder", single.id, sweep.id)
         assertTrue(vm.workingIsSweep)

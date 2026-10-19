@@ -86,6 +86,7 @@ class BatchAnalysisLimitTest {
         assertEquals(3, outcome.totalFrames)
         assertEquals("", outcome.batchDirPath)
         assertNull("no session id is minted for a blocked run", vm.workingLocalId)
+        assertNull("nor one for the wizard to take", outcome.session)
         assertTrue(SessionStore.list(ctx).isEmpty())
     }
 

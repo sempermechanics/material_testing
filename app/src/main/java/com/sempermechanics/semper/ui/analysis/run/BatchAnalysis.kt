@@ -29,8 +29,8 @@ import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.BatchAnalysisOutcome
 import com.sempermechanics.semper.ui.analysis.wizard.BatchProgressUpdate
 import com.sempermechanics.semper.ui.analysis.wizard.RunAdmission
+import com.sempermechanics.semper.ui.analysis.wizard.RunResult
 import com.sempermechanics.semper.ui.analysis.wizard.admitRun
-import com.sempermechanics.semper.ui.analysis.wizard.closeSavedSession
 import com.sempermechanics.semper.ui.analysis.wizard.openRunSession
 import com.sempermechanics.semper.ui.analysis.wizard.repointDeformedPathsOnMain
 import kotlinx.coroutines.ensureActive
@@ -80,16 +80,10 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     // the OS may evict): one directory per Home-list session, never a sweep's.
     // The loop writes them to the session's staging folder; only a run that
     // is not cancelled moves them into the session (RunSession.commit).
-    val session = openRunSession(appContext, sweep = false)
+    val session = openRunSession(appContext, run.inputs.working, sweep = false)
     val localSessionId = session.id
     val batchDir = session.dir
     val resultsDir = session.staging
-
-    // Start every run from a clean result snapshot carrying its spec. Fields
-    // below (engineStats, refPath, settings, stopCode, plannedFrames) are only
-    // written on the success path, so a run that fails early or yields 0 valid points
-    // would otherwise keep the PREVIOUS run's numbers — the stale-results bug.
-    resetRunResult(batchDir.absolutePath, spec, localSessionId)
 
     EngineDebug.attach(spec.debugDir)
 
@@ -102,6 +96,9 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     var firstFrameValidPoints = 0
     var firstFrameCorrelatedPoints = -1
     var firstFrameAvgIters = 0f
+    // The first frame's engine stats. A local, not the view model's field: the
+    // run hands them back in its outcome, and the wizard takes them on Main.
+    var engineStatsArray: FloatArray? = null
     var stop: RunStop = RunStop.Finished
 
     onProgress(BatchProgressUpdate(0f, "Caching reference in engine…", plannedFrames = plannedFrames))
@@ -381,6 +378,14 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     }
     var recordSaved = false
     var indexUnavailable = false
+    // What the viewer reads of this run (ADR-004); the wizard takes it on Main.
+    // Its record's fields are set only when the run saves one.
+    var result = RunResult(
+        batchDirPath = batchDir.absolutePath,
+        engineStats = engineStatsArray,
+        spec = spec,
+        sessionId = localSessionId,
+    )
     // The names actually on disk in raw_deformed/ — reopening a session,
     // exporting and cloud upload resolve images by these.
     val defNames = persistedRawNames.mapIndexed { i, persisted ->
@@ -393,14 +398,15 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         // Persist a viewable copy of the reference next to the frames —
         // the Home list and reopened sessions depend on it surviving.
         val refPngPath = sessions.writeReferenceCopy(batchDir, refBytes, reference.size.width, reference.size.height)
-        lastRefPath = refPngPath
+        val settings = spec.recordSettings()
+        result = result.copy(refPath = refPngPath, settings = settings, stop = stop, plannedFrames = plannedFrames)
 
         val cloudEnabled = CloudSync.uploadsEnabled(appContext)
         val input = RunInput(
             localSessionId = localSessionId,
             dir = batchDir,
             reference = RunReference(refPngPath, reference.name, reference.size),
-            settings = spec.recordSettings().also { recordRunSettings(it) },
+            settings = settings,
             videoName = videoName,
             frameTimesMs = frameTimesMs,
         )
@@ -413,16 +419,14 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
                 executionTimeMs = executionTimeMs,
                 engineStats = engineStatsArray?.toList().orEmpty(),
             ),
-            stopCode = stop.wireCode.also { lastStop = stop },
-            plannedFrameCount = plannedFrames.also { lastPlannedFrames = it },
+            stopCode = stop.wireCode,
+            plannedFrameCount = plannedFrames,
         )
         val record = sessions.buildSessionRecord(appContext, input, outcome, cloudEnabled)
         val saved = afterSave(stop, saveRunRecord(appContext, record, cloudEnabled, admission.admitted))
         stop = saved.stop
         recordSaved = saved.recordSaved
         indexUnavailable = saved.indexUnavailable
-        // That analysis is finished: the next run in this wizard is a new one.
-        if (recordSaved) closeSavedSession()
     }
 
     val outcome = BatchAnalysisOutcome(
@@ -438,6 +442,10 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         firstFrameCorrelatedPoints = firstFrameCorrelatedPoints,
         saved = recordSaved,
         indexUnavailable = indexUnavailable,
+        // Once saved, that analysis is finished: the next run in this wizard
+        // is a new one (applyRunOutcome).
+        session = session.working,
+        result = result,
     )
     batchEndEvent(appContext, outcome, stop)
     return outcome

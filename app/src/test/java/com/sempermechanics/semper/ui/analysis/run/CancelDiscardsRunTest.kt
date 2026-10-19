@@ -14,7 +14,6 @@ import com.sempermechanics.semper.data.session.SessionLayout
 import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
-import com.sempermechanics.semper.field.DicParams
 import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.fixtures.CleanAppState
@@ -25,11 +24,12 @@ import com.sempermechanics.semper.ui.analysis.frames.FrameImportHelper
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
+import com.sempermechanics.semper.ui.analysis.wizard.BatchAnalysisOutcome
 import com.sempermechanics.semper.ui.analysis.wizard.RunAdmission
 import com.sempermechanics.semper.ui.analysis.wizard.RunSession
 import com.sempermechanics.semper.ui.analysis.wizard.SweepSession
 import com.sempermechanics.semper.ui.analysis.wizard.admitRun
-import com.sempermechanics.semper.ui.analysis.wizard.closeSavedSession
+import com.sempermechanics.semper.ui.analysis.wizard.applyRunOutcome
 import com.sempermechanics.semper.ui.analysis.wizard.endSweep
 import com.sempermechanics.semper.ui.analysis.wizard.openRunSession
 import com.sempermechanics.semper.ui.analysis.wizard.repointDeformedPaths
@@ -63,7 +63,9 @@ import java.io.IOException
  * and a staged `.dat` per frame it reaches, then [discardCancelledBatch] or
  * [RunSession.commit] at its end, or [undoFailedBatch] when it throws before
  * that (the instrumented `EnginePipelineSmokeTest` runs the real loop). A
- * sweep is handed its runner's result ([endSweep]).
+ * sweep is handed its runner's result ([endSweep]). The wizard takes what a
+ * run learned from its outcome on Main ([applyRunOutcome]); the run itself
+ * changes none of its fields.
  */
 @RunWith(RobolectricTestRunner::class)
 class CancelDiscardsRunTest {
@@ -82,13 +84,6 @@ class CancelDiscardsRunTest {
             mkdirs()
         }
     }
-    private val spec = RunSpec.of(
-        params = DicParams(subset = 21, step = 5, strainWindow = 15),
-        roi = Roi(0, 0, REF_SIDE, REF_SIDE),
-        mask = null,
-        use6x6 = false,
-        debugDir = null,
-    )
 
     @Before
     fun setUp() {
@@ -139,9 +134,20 @@ class CancelDiscardsRunTest {
         return resolved
     }
 
+    /** What a run in [session] that saved its row, or not, hands the wizard in its outcome. */
+    private fun ended(session: RunSession, saved: Boolean) = BatchAnalysisOutcome(
+        engineErrorCode = 0,
+        firstFrameValidPoints = 1,
+        totalFrames = 1,
+        executionTimeMs = 0,
+        batchDirPath = session.dir.absolutePath,
+        saved = saved,
+        session = session.working,
+    )
+
     /** A saved single run that solved [solved] of the wizard's frames, as the loop and its save leave it. */
     private fun savedRun(solved: Int): RunSession {
-        val session = vm.openRunSession(ctx, sweep = false)
+        val session = openRunSession(ctx, vm.working, sweep = false)
         val resolved = solveUpTo(session, vm.defFilePaths, solved, "saved")
         session.commit()
         vm.repointDeformedPaths(resolved)
@@ -160,8 +166,8 @@ class CancelDiscardsRunTest {
         )
         assertTrue(SessionStore.upsert(ctx, row, allowOverLimit = true))
         vm.lastRefPath = layout.referencePng.absolutePath
-        // As the run body does once its row is saved.
-        vm.closeSavedSession()
+        // As the wizard takes the run's outcome once its row is saved.
+        vm.applyRunOutcome(ended(session, saved = true))
         return session
     }
 
@@ -177,13 +183,13 @@ class CancelDiscardsRunTest {
         val frames = importFrames(3)
         val bytes = frames.map { it.readBytes() }
         val launched = vm.defFilePaths
-        val session = vm.openRunSession(ctx, sweep = false)
+        val session = openRunSession(ctx, vm.working, sweep = false)
         assertTrue(session.fresh)
-        vm.resetRunResult(session.dir.absolutePath, spec)
         val resolved = solveUpTo(session, launched, reached = 2, tag = "cancelled")
         assertFalse("the loop moved the frames it reached", frames[0].exists())
 
         vm.discardCancelledBatch(ctx, session, launched, resolved)
+        vm.applyRunOutcome(cancelledOutcome(executionTimeMs = 0))
         idle()
 
         assertTrue("no Home row", SessionStore.list(ctx).isEmpty())
@@ -201,7 +207,7 @@ class CancelDiscardsRunTest {
         val frames = importFrames(3)
         val bytes = frames.map { it.readBytes() }
         val launched = vm.defFilePaths
-        val session = vm.openRunSession(ctx, sweep = false)
+        val session = openRunSession(ctx, vm.working, sweep = false)
         // Frame 0 solved and was moved in; writing frame 1's .dat then fails (a full disk).
         val resolved = solveUpTo(session, launched, reached = 1, tag = "failed")
         assertFalse("the loop moved the frame it reached", frames[0].exists())
@@ -230,14 +236,14 @@ class CancelDiscardsRunTest {
         val launched = vm.defFilePaths
         val thumbTime = SessionPaths.resultThumb(saved.dir).lastModified()
 
-        val next = vm.openRunSession(ctx, sweep = false)
+        val next = openRunSession(ctx, vm.working, sweep = false)
         assertNotEquals("a new analysis, never the saved one", saved.id, next.id)
         assertTrue(next.fresh)
-        vm.resetRunResult(next.dir.absolutePath, spec, next.id)
         val resolved = solveUpTo(next, launched, reached = 3, tag = "next")
         assertEquals("the saved frames are copied, not moved", files, hashes(saved.dir))
 
         vm.discardCancelledBatch(ctx, next, launched, resolved)
+        vm.applyRunOutcome(cancelledOutcome(executionTimeMs = 0))
         idle()
 
         assertEquals("every file of the saved analysis", files, hashes(saved.dir))
@@ -259,7 +265,7 @@ class CancelDiscardsRunTest {
         val files = hashes(saved.dir)
         val row = SessionStore.get(ctx, saved.id)
 
-        val next = vm.openRunSession(ctx, sweep = false)
+        val next = openRunSession(ctx, vm.working, sweep = false)
         val resolved = solveUpTo(next, vm.defFilePaths, reached = 3, tag = "next")
         next.commit()
         val record = sessionRecord(
@@ -270,7 +276,7 @@ class CancelDiscardsRunTest {
             defNames = resolved.map { File(it).name },
         )
         val after = afterSave(RunStop.Finished, saveRunRecord(ctx, record, cloudEnabled = false, admitted = true))
-        vm.closeSavedSession()
+        vm.applyRunOutcome(ended(next, saved = after.recordSaved))
 
         assertTrue(after.recordSaved)
         assertNotEquals(saved.id, next.id)
@@ -285,12 +291,13 @@ class CancelDiscardsRunTest {
     @Test
     fun `a run in a folder that saved nothing leaves its results alone until it commits`() {
         importFrames(3)
-        val first = vm.openRunSession(ctx, sweep = false)
+        val first = openRunSession(ctx, vm.working, sweep = false)
         SessionPaths.frameDat(first.staging, 0).writeText("unsaved frame 0")
         first.commit()
         SessionLayout(first.dir).fieldRanges.writeText("unsaved ranges")
+        vm.applyRunOutcome(ended(first, saved = false))
 
-        val next = vm.openRunSession(ctx, sweep = false)
+        val next = openRunSession(ctx, vm.working, sweep = false)
 
         assertEquals("no row names it", first.id, next.id)
         assertEquals("unsaved frame 0", SessionPaths.frameDat(first.dir, 0).readText())
@@ -314,16 +321,16 @@ class CancelDiscardsRunTest {
             firstMetrics = null,
             engineErrorCode = code,
         )
-        vm.resetRunResult(session.dir.absolutePath, sweepSpec)
         return SweepSession(session.id, session.dir, vm.snapshotRunInputs(), result, sweepSpec, 3_000)
     }
 
     @Test
     fun `a cancelled sweep saves nothing, however many combinations it solved`() {
         val frames = importFrames(1)
-        val session = vm.openRunSession(ctx, sweep = true)
+        val session = openRunSession(ctx, vm.working, sweep = true)
 
         val outcome = vm.endSweep(ctx, session, sweepRun(session, RunStop.Cancelled.wireCode, "cancelled"), true)
+        vm.applyRunOutcome(outcome)
         idle()
 
         assertEquals(RunStop.Cancelled, outcome.stop)
@@ -340,8 +347,9 @@ class CancelDiscardsRunTest {
     @Test
     fun `a cancelled sweep after a saved one leaves the saved sweep as it was`() {
         importFrames(1)
-        val first = vm.openRunSession(ctx, sweep = true)
+        val first = openRunSession(ctx, vm.working, sweep = true)
         val saved = vm.endSweep(ctx, first, sweepRun(first, code = 0, tag = "saved"), true)
+        vm.applyRunOutcome(saved)
         idle()
         assertTrue(saved.saved)
         assertNull("a saved sweep closes its session", vm.workingLocalId)
@@ -351,9 +359,10 @@ class CancelDiscardsRunTest {
         val plan = vm.sweepPlan
         val uploads = uploadsQueuedFor(first.id)
 
-        val next = vm.openRunSession(ctx, sweep = true)
+        val next = openRunSession(ctx, vm.working, sweep = true)
         assertNotEquals(first.id, next.id)
         val outcome = vm.endSweep(ctx, next, sweepRun(next, RunStop.Cancelled.wireCode, "next"), true)
+        vm.applyRunOutcome(outcome)
         idle()
 
         assertEquals(RunStop.Cancelled, outcome.stop)
@@ -400,7 +409,7 @@ class CancelDiscardsRunTest {
         val blocker = File(importDir, "blocker").apply { writeText("a file, not a folder") }
         val launched = listOf(File(blocker, "0000_a.png").absolutePath)
         vm.deformedFrames = listOf(DeformedFrame(launched[0], "a.png"))
-        val session = vm.openRunSession(ctx, sweep = false)
+        val session = openRunSession(ctx, vm.working, sweep = false)
         val moved = File(SessionLayout(session.dir).rawDeformedDir.apply { mkdirs() }, "a.png").apply { writeText("a") }
 
         vm.discardCancelledBatch(ctx, session, launched, listOf(moved.absolutePath))

@@ -189,7 +189,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
         _runResult.value = RunResult(batchDirPath = batchDirPath, spec = spec, sessionId = sessionId)
     }
 
-    /** [runResult]'s value, which a cancelled run puts back as it found it ([discardRun]). */
+    /** [runResult]'s value, which a run's outcome sets on Main (`applyRunOutcome`). */
     internal var lastRunResult: RunResult
         get() = _runResult.value
         set(value) {
@@ -339,10 +339,14 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
     var sweepFrameIndex: Int = -1
 
     /** Parameter combination behind each frame of the last sweep, in order. */
-    var sweepPlan: List<SweepStudy.Point> = emptyList()
+    var sweepPlan: List<SweepStudy.Point>
+        get() = _runResult.value.sweepPlan
+        set(v) = _runResult.update { it.copy(sweepPlan = v) }
 
     /** Combinations the engine could not solve in the last sweep. */
-    var sweepSkippedNodes: List<SkippedNode> = emptyList()
+    var sweepSkippedNodes: List<SkippedNode>
+        get() = _runResult.value.sweepSkippedNodes
+        set(v) = _runResult.update { it.copy(sweepSkippedNodes = v) }
 
     val sweepProgress: SharedFlow<SweepStudyRunner.Progress?> = runs.sweepProgress.asSharedFlow()
 
@@ -388,7 +392,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
      * The session folder the next run writes, while no Home row names it: the
      * last run of [workingIsSweep]'s kind in this wizard saved nothing, and the
      * next one of that kind writes there again (`openRunSession`). A run that
-     * saves clears it (`closeSavedSession`): a saved analysis is never written
+     * saves clears it (`applyRunOutcome`): a saved analysis is never written
      * over (owner decision, 2026-10-15). New inputs clear it too
      * ([clearPreviousResults]).
      */
@@ -396,6 +400,18 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
 
     /** Whether [workingLocalId] names a sweep's folder; meaningless while that is null. */
     var workingIsSweep: Boolean = false
+
+    /**
+     * [workingLocalId] and its kind as one value. A run reads it once, on
+     * Main, as it is launched (`snapshotRunInputs`), and its outcome sets it
+     * there (`applyRunOutcome`): the run itself never touches it.
+     */
+    internal var working: WorkingSession?
+        get() = workingLocalId?.let { WorkingSession(it, workingIsSweep) }
+        set(value) {
+            workingLocalId = value?.id
+            workingIsSweep = value?.sweep ?: false
+        }
 
     /**
      * Cooperative cancel: checked between frames here, and forwarded to the

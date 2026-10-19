@@ -29,10 +29,11 @@ import java.util.Locale
  * combinations it solved ([discardRun]): no row, no upload, and any saved
  * sweep stays exactly as it was. A sweep moves no image before it
  * saves, so there is none to put back. Like a cancelled batch run, it sends
- * no analytics end event. [executionTimeMs] is how long it ran.
+ * no analytics end event, and its outcome names no session, so the wizard
+ * stays as it was. [executionTimeMs] is how long it ran.
  */
 @WorkerThread
-internal fun AnalysisViewModel.discardCancelledSweep(
+internal fun discardCancelledSweep(
     appContext: Context,
     session: RunSession,
     executionTimeMs: Int,
@@ -41,7 +42,10 @@ internal fun AnalysisViewModel.discardCancelledSweep(
     return cancelledOutcome(executionTimeMs)
 }
 
-/** How a cancelled run ends: nothing solved is kept, and there is no session to open. */
+/**
+ * How a cancelled run ends: nothing solved is kept, and there is no session
+ * to open or for the wizard to take ([BatchAnalysisOutcome.session]).
+ */
 internal fun cancelledOutcome(executionTimeMs: Int) = BatchAnalysisOutcome(
     engineErrorCode = RunStop.Cancelled.wireCode,
     firstFrameValidPoints = 0,

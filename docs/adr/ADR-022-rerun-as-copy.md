@@ -30,7 +30,7 @@ display-size (≤ 1080 px) `reference.png`, and the mask was never written.
    (`WizardRunOutcomes.openResults`), its draft is discarded, and Back from
    the results lands on Home.
 2. **No in-place re-run.** Once a run's row is saved the wizard lets go of the
-   session (`RunChannels.closeSavedSession`); `openRunSession` reuses a working
+   session (`RunChannels.applyRunOutcome`, once its outcome says saved); `openRunSession` reuses a working
    id only while no Home row names it (an unsaved or cancelled run's folder).
    Every run is admitted (`admitRun`, `ensureCanStart`), and the session id
    reaches the results through `RunResult.sessionId`. The #439 staging, commit

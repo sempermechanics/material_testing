@@ -31,9 +31,8 @@ import com.sempermechanics.semper.ui.analysis.wizard.BatchProgressUpdate
 import kotlinx.coroutines.Job
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -404,7 +403,7 @@ class EnginePipelineSmokeTest {
             vm.refName = "other.png"
             vm.deformedFrames = emptyList()
             val outcome = vm.runBatchAnalysisBody(ctx, run) { ticks += it }
-            val sessionId = checkNotNull(vm.runResult.value.sessionId)
+            val sessionId = checkNotNull(outcome.sessionId)
             ids += sessionId
 
             assertEquals(RunStop.Finished, outcome.stop)
@@ -492,7 +491,7 @@ class EnginePipelineSmokeTest {
         try {
             vm.cancelRequested = false
             val first = vm.runBatchAnalysisBody(ctx, BatchRun(saved, ctx.cacheDir, 0L, Job(), vm.snapshotRunInputs())) {}
-            val savedId = checkNotNull(vm.runResult.value.sessionId)
+            val savedId = checkNotNull(first.sessionId)
             ids += savedId
             assertTrue("the first run saved", first.saved)
             // The run moved its frames into the session; the wizard follows them on Main.
@@ -501,25 +500,23 @@ class EnginePipelineSmokeTest {
             val files = hashes(dir)
             val row = SessionStore.get(ctx, savedId)
 
+            // The sessions' folders: the saved one's and its siblings, not
+            // SessionStore.dirFor, which creates one.
+            val sessionsRoot = checkNotNull(dir.parentFile)
+            val foldersBefore = sessionsRoot.list().orEmpty().toSet()
             val run = BatchRun(next, ctx.cacheDir, 0L, Job(), vm.snapshotRunInputs())
-            // The run's own id, read while it runs: Cancel puts runResult back
-            // as the run found it (discardRun), so afterwards it names the saved one.
-            var runningId: String? = null
             val outcome = vm.runBatchAnalysisBody(ctx, run) { tick ->
-                if (runningId == null) runningId = vm.runResult.value.sessionId
                 if (tick.frameIndex == 1) vm.cancelRequested = true
             }
-            val nextId = checkNotNull(runningId)
-            ids += nextId
+            val foldersAfter = sessionsRoot.list().orEmpty().toSet()
+            ids += foldersAfter - foldersBefore
 
-            assertNotEquals("a new analysis, never the saved one", savedId, nextId)
-            assertEquals("Cancel put the saved run's result back", savedId, vm.runResult.value.sessionId)
             assertEquals(RunStop.Cancelled, outcome.stop)
             assertEquals(0, outcome.totalFrames)
+            assertNull("a cancel names no session for the wizard to take", outcome.session)
             assertEquals("the saved analysis's files", files, hashes(dir))
             assertEquals("its Home row", row, SessionStore.get(ctx, savedId))
-            // A sibling of the saved one's folder, not SessionStore.dirFor, which creates it.
-            assertFalse("no folder for the cancelled one", File(dir.parentFile, nextId).exists())
+            assertEquals("no folder for the cancelled one", foldersBefore, foldersAfter)
         } finally {
             vm.cancelRequested = false
             forget(ctx, ids)

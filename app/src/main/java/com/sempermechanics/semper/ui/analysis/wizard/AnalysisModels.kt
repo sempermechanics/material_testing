@@ -1,23 +1,25 @@
 package com.sempermechanics.semper.ui.analysis.wizard
 
 import com.sempermechanics.semper.data.session.SessionRecordSettings
+import com.sempermechanics.semper.data.session.SkippedNode
 import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.ui.analysis.run.RunSpec
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 
 /**
- * The result of the last (or in-progress) run, as ONE immutable snapshot.
+ * The result of the last run, as ONE immutable snapshot.
  *
- * These fields are written from the native solve dispatcher and read on Main
- * (e.g. `restoreUiFromViewModel()` on Activity recreation, and
- * [AnalysisNavHelper] when building the result intent). Holding them in a
- * single `MutableStateFlow` gives that cross-thread hand-off a consistent
- * snapshot and one owning source, instead of a bag of separate `@Volatile`
- * fields. The `lastX` / `currentX` properties of [AnalysisViewModel] are thin
- * accessors over it; each setter does an atomic `update { copy(...) }`.
+ * A run builds it on the native thread and hands it back in its outcome
+ * ([BatchAnalysisOutcome.result]); the view model takes it on Main
+ * (`applyRunOutcome`), and [AnalysisNavHelper] reads it there when building
+ * the result intent. The `lastX` properties of [AnalysisViewModel] are thin
+ * accessors over it.
  *
  * @property spec what the run was computed from (ADR-004); null before the first run
  * @property settings what the saved session records, once it is saved. For a
  *   sweep that is its first solved combination, not the plan's first.
+ * @property sweepPlan the parameter combination behind each frame of a sweep, in order
+ * @property sweepSkippedNodes the combinations the engine could not solve in a sweep
  */
 @Suppress("ArrayInDataClass") // engineStats identity-compared; never used as a map key
 data class RunResult(
@@ -31,6 +33,8 @@ data class RunResult(
     val settings: SessionRecordSettings? = null,
     /** The Home-list id of the session the run wrote, which the viewer opens on. */
     val sessionId: String? = null,
+    val sweepPlan: List<SweepStudy.Point> = emptyList(),
+    val sweepSkippedNodes: List<SkippedNode> = emptyList(),
 ) {
     /** The settings the viewer shows: the saved session's, else the spec's (a sweep that solved nothing). */
     fun viewerSettings(): SessionRecordSettings? = settings ?: spec?.recordSettings()
@@ -57,6 +61,13 @@ data class BatchProgressUpdate(
     val framePercent: Float = 0f,
     val perFrameConvergence: FloatArray? = null,
 )
+
+/**
+ * The session a run wrote, as the wizard's working session names it
+ * (`AnalysisViewModel.working`): while no Home row names it, the next run of
+ * the same kind ([sweep]) writes it again (`openRunSession`).
+ */
+data class WorkingSession(val id: String, val sweep: Boolean)
 
 /** How a batch run or a sweep ended. */
 data class BatchAnalysisOutcome(
@@ -99,7 +110,18 @@ data class BatchAnalysisOutcome(
      * run as [RunStop.SessionLimit].
      */
     val indexUnavailable: Boolean = false,
+    /**
+     * The session the run wrote: null when it never got one (the quota
+     * blocked it) or kept nothing (it was cancelled). The view model makes it
+     * its working session unless it was [saved] (`applyRunOutcome`).
+     */
+    val session: WorkingSession? = null,
+    /** What the viewer reads of the run, for the view model to take on Main; null with no [session]. */
+    val result: RunResult? = null,
 ) {
+    /** The Home-list id of the session the run wrote; null with none. */
+    val sessionId: String? get() = session?.id
+
     /**
      * [engineErrorCode] as the batch's stop code: [RunStop.Finished] when
      * the loop ran through every frame, whatever they kept.

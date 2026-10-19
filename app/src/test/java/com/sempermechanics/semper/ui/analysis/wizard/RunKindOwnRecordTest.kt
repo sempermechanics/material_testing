@@ -21,6 +21,7 @@ import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -38,7 +39,9 @@ import java.io.File
  * there, which the wizard still pointed at. Everything a run does on disk is
  * driven here except the engine's solve, which the JVM has no library for:
  * [openRunSession] as both runs start, [finishSolvedSweep] as a sweep saves,
- * and [keepDeformedFrame] as the batch loop keeps each frame.
+ * and [keepDeformedFrame] as the batch loop keeps each frame. A run changes
+ * none of the wizard's fields itself: the wizard takes its outcome on Main
+ * ([applyRunOutcome]).
  */
 @RunWith(RobolectricTestRunner::class)
 class RunKindOwnRecordTest {
@@ -63,7 +66,7 @@ class RunKindOwnRecordTest {
 
     /** A single run of [FRAMES] frames as the batch loop leaves it: saved, its images in its own folder. */
     private fun savedSingleRun(): RunSession {
-        val session = vm.openRunSession(ctx, sweep = false)
+        val session = openRunSession(ctx, vm.working, sweep = false)
         val raw = SessionLayout(session.dir).rawDeformedDir.apply { mkdirs() }
         val frames = names().map { name -> File(raw, name).apply { writeText("image $name") } }
         repeat(FRAMES) { SessionPaths.frameDat(session.dir, it).writeText("dat $it") }
@@ -95,9 +98,26 @@ class RunKindOwnRecordTest {
             sweepSubsets = sweepSubsets,
         )
 
-    /** A sweep of two combinations against frame [SWEEP_FRAME], saved as [finishSolvedSweep] saves it. */
+    /** What a run in [session] that saved nothing hands the wizard in its outcome. */
+    private fun unsaved(session: RunSession) = BatchAnalysisOutcome(
+        engineErrorCode = 0,
+        firstFrameValidPoints = 0,
+        totalFrames = 0,
+        executionTimeMs = 0,
+        batchDirPath = session.dir.absolutePath,
+        session = session.working,
+    )
+
+    /** A sweep against frame [SWEEP_FRAME], saved as [finishSolvedSweep] saves it, and taken on Main. */
     private fun runSweep(): RunSession {
-        val session = vm.openRunSession(ctx, sweep = true)
+        val session = openRunSession(ctx, vm.working, sweep = true)
+        vm.applyRunOutcome(solveSweep(session))
+        shadowOf(Looper.getMainLooper()).idle()
+        return session
+    }
+
+    /** The outcome of a sweep of two combinations in [session], saved as [finishSolvedSweep] saves it. */
+    private fun solveSweep(session: RunSession): BatchAnalysisOutcome {
         val plan = listOf(SweepStudy.Point(21, 5, 3), SweepStudy.Point(31, 5, 3))
         val spec = RunSpec.sweep(
             RunSpec.Sweep(plan, labels = listOf("a", "b"), lineCutHorizontal = true, frameIndex = SWEEP_FRAME),
@@ -114,9 +134,7 @@ class RunKindOwnRecordTest {
         )
         vm.refBytes = ByteArray(REF_SIDE * REF_SIDE * 4)
         val inputs = vm.snapshotRunInputs()
-        vm.finishSolvedSweep(ctx, SweepSession(session.id, session.dir, inputs, result, spec, 3_000), false)
-        shadowOf(Looper.getMainLooper()).idle()
-        return session
+        return vm.finishSolvedSweep(ctx, SweepSession(session.id, session.dir, inputs, result, spec, 3_000), false)
     }
 
     @Test
@@ -154,7 +172,7 @@ class RunKindOwnRecordTest {
         val sweepFrame = SessionLayout(sweep.dir).rawDeformed(names()[SWEEP_FRAME])
         assertEquals("the sweep followed its moved frame", sweepFrame.absolutePath, vm.defFilePaths[SWEEP_FRAME])
 
-        val single = vm.openRunSession(ctx, sweep = false)
+        val single = openRunSession(ctx, vm.working, sweep = false)
         val raw = SessionLayout(single.dir).rawDeformedDir.apply { mkdirs() }
         val kept = vm.defFilePaths.mapIndexed { i, path ->
             val source = File(path)
@@ -172,13 +190,41 @@ class RunKindOwnRecordTest {
 
     @Test
     fun `a run after one of the same kind that saved nothing keeps its folder`() {
-        val single = vm.openRunSession(ctx, sweep = false)
-        assertEquals(single.id, vm.openRunSession(ctx, sweep = false).id)
+        val single = openRunSession(ctx, vm.working, sweep = false)
+        assertNull("the run itself changes nothing in the wizard", vm.workingLocalId)
+        vm.applyRunOutcome(unsaved(single))
+        assertEquals(single.id, openRunSession(ctx, vm.working, sweep = false).id)
 
-        val sweep = vm.openRunSession(ctx, sweep = true)
+        val sweep = openRunSession(ctx, vm.working, sweep = true)
         assertNotEquals(single.id, sweep.id)
-        assertEquals(sweep.id, vm.openRunSession(ctx, sweep = true).id)
+        vm.applyRunOutcome(unsaved(sweep))
+        assertEquals(sweep.id, openRunSession(ctx, vm.working, sweep = true).id)
         assertEquals("the view model names the last run's session", sweep.id, vm.workingLocalId)
+    }
+
+    @Test
+    fun `a sweep changes none of the wizard's fields until its outcome is taken on Main`() {
+        val staged = names().map { name -> File(importDir, name).apply { writeText("image $name") } }
+        vm.deformedFrames = staged.map { DeformedFrame(it.absolutePath, it.name) }
+        val single = openRunSession(ctx, vm.working, sweep = false)
+        vm.applyRunOutcome(unsaved(single))
+        val before = vm.runResult.value
+        val sweep = openRunSession(ctx, vm.working, sweep = true)
+
+        val outcome = solveSweep(sweep)
+
+        assertEquals("the working session", single.id, vm.workingLocalId)
+        assertEquals("the last result", before, vm.runResult.value)
+        assertTrue("the plan", vm.sweepPlan.isEmpty())
+        assertEquals(sweep.id, outcome.sessionId)
+        assertTrue(outcome.saved)
+
+        vm.applyRunOutcome(outcome)
+
+        assertNull("a saved sweep is finished: the next run is a new one", vm.workingLocalId)
+        assertEquals(listOf(21, 31), vm.sweepPlan.map { it.subset })
+        assertEquals(sweep.id, vm.runResult.value.sessionId)
+        assertEquals(21, vm.runResult.value.settings?.subset)
     }
 
     @Test
@@ -202,11 +248,12 @@ class RunKindOwnRecordTest {
 
     @Test
     fun `a run clears the field-range sidecar its previous run left`() {
-        val sweep = vm.openRunSession(ctx, sweep = true)
+        val sweep = openRunSession(ctx, vm.working, sweep = true)
         val sidecar = SessionLayout(sweep.dir).fieldRanges.apply { writeText("stale ranges") }
         val dat = SessionPaths.frameDat(sweep.dir, 1).apply { writeText("old") }
+        vm.applyRunOutcome(unsaved(sweep))
 
-        val rerun = vm.openRunSession(ctx, sweep = true)
+        val rerun = openRunSession(ctx, vm.working, sweep = true)
         SessionPaths.frameDat(rerun.staging, 0).writeText("new")
         rerun.commit()
 

@@ -5,6 +5,7 @@ import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.ui.analysis.rerun.RerunSetup
 import com.sempermechanics.semper.ui.analysis.rerun.snapshotRerunSetup
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
+import com.sempermechanics.semper.ui.analysis.wizard.WorkingSession
 import java.io.File
 import kotlin.coroutines.CoroutineContext
 
@@ -26,13 +27,16 @@ internal class BatchRun(
  * ([snapshotRunInputs]), so the run on the native thread reads nothing the
  * wizard may write meanwhile (TD-173). The rest of what it solves is its
  * [RunSpec] (ADR-004); the session it writes is resolved inside the run,
- * after the quota check.
+ * after the quota check, from the wizard's [working] session as it stood at
+ * launch (`openRunSession`).
  */
 internal class RunInputs(
     val reference: Reference,
     val frames: Frames,
     /** What a saved run keeps for Home's Re-run beyond its spec and images; null keeps nothing. */
     val setup: RerunSetup? = null,
+    /** The wizard's working session at launch ([AnalysisViewModel.working]); null for none. */
+    val working: WorkingSession? = null,
 ) {
 
     /**
@@ -68,4 +72,5 @@ internal fun AnalysisViewModel.snapshotRunInputs(): RunInputs = RunInputs(
         videoName = defVideoName,
     ),
     setup = snapshotRerunSetup(),
+    working = working,
 )
