@@ -14,7 +14,7 @@ from fastapi.responses import StreamingResponse
 from .. import audit, drive, errors, repo, statuses
 from .. import observability as obs
 from .. import rate_limit
-from .. import tasks
+from .. import session_provision, tasks
 from ..config import settings
 from ..deps import (
     attested_or_mfa_user,
@@ -32,6 +32,12 @@ from ._shared import clamp_page_size, drive_failure, json_dumps, named_app, page
 
 log = logging.getLogger("semper")
 router = APIRouter()
+
+
+#: Retry-After on a delete refused while provisioning runs: a provisioning
+#: attempt usually ends within seconds, and the app retries a failed delete on
+#: its own schedule anyway.
+DELETE_PROVISIONING_RETRY_AFTER_SECONDS = 30
 
 
 def _owned_session(sid: str, user: dict) -> dict:
@@ -150,6 +156,12 @@ def delete_session(sid: SessionId, ctx=Depends(verified_device)):
     """
     user = ctx.user
     session = _owned_session(sid, user)
+    # The worker may be creating the session's Drive folder right now: erased
+    # first, that folder would be left with nothing pointing at it. The app
+    # keeps its pointer and deletes again later.
+    if session_provision.provisioning_in_progress(session):
+        raise HTTPException(409, errors.SESSION_PROVISIONING,
+                            headers={"Retry-After": str(DELETE_PROVISIONING_RETRY_AFTER_SECONDS)})
 
     folder = session.get("driveFolderId")
     if folder:

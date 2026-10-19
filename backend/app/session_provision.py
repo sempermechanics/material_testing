@@ -1,11 +1,36 @@
 import logging
 import time
+from datetime import datetime, timedelta, timezone
 
 from . import drive, repo, statuses
 from . import observability as obs
 from .config import settings
+from .licenses import as_utc
 
 log = logging.getLogger("semper")
+
+#: How long after its last write a PROVISIONING session may still have a
+#: provisioning attempt running: the longest a Cloud Tasks HTTP dispatch can
+#: run (30 minutes; the inline path is one request). Past it the session is
+#: stuck, not busy, and a delete goes ahead (`provisioning_in_progress`).
+PROVISIONING_GRACE = timedelta(minutes=30)
+
+
+def provisioning_in_progress(session: dict) -> bool:
+    """Whether a provisioning attempt may be creating `session`'s Drive folder
+    right now: PROVISIONING, last written within `PROVISIONING_GRACE`.
+
+    `DELETE /v1/sessions/{sid}` refuses such a session (409
+    `session_provisioning`): erasing the metadata while the worker runs left
+    the folder it then created with nothing pointing at it. A session stuck
+    in PROVISIONING (a task that never ran) is still erasable once the grace
+    has passed, and a retry that runs after the delete finds no session and
+    creates nothing (`provision_session` answers "gone").
+    """
+    if session.get("status") != statuses.SESSION_PROVISIONING:
+        return False
+    written = as_utc(session.get("updatedAt") or session.get("createdAt"))
+    return written is None or datetime.now(timezone.utc) - written < PROVISIONING_GRACE
 
 
 def purge_session(sid: str) -> None:

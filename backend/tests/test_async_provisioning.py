@@ -602,3 +602,49 @@ def test_task_callbacks_share_one_certificate_transport(oidc, monkeypatch):
     tasks.tasks_caller(authorization="Bearer a")
     tasks.tasks_caller(authorization="Bearer b")
     assert len(seen) == 2 and seen[0] is seen[1]
+
+
+# --- delete while provisioning (B6) ------------------------------------------
+
+async def test_delete_during_provision_leaves_no_folder(store, queued, client, monkeypatch):
+    """A delete that lands while the worker is creating the Drive folder used
+    to erase the session doc first; the worker then made the folder with
+    nothing left pointing at it. The delete is refused (409, retry later)
+    while provisioning runs, so the folder is recorded and the next delete
+    removes it with the session."""
+    deleted = []
+    monkeypatch.setattr(drive, "delete_file", lambda token, fid: deleted.append(fid))
+    sid = (await client.post(
+        "/v1/sessions", json={"specimen": "s", "files": [_file("a")]},
+    )).json()["sessionId"]
+
+    r = await client.delete(f"/v1/sessions/{sid}")
+
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"] == "session_provisioning"
+    assert r.headers["Retry-After"]
+    assert sid in store._data["sessions"]
+
+    session_provision.provision_session(sid)
+    r = await client.delete(f"/v1/sessions/{sid}")
+
+    assert r.status_code == 200, r.text
+    assert deleted == ["sf"]
+    assert sid not in store._data["sessions"]
+
+
+async def test_a_session_stuck_provisioning_can_still_be_deleted(store, queued, client):
+    """A task that never ran must not make an analysis unerasable: past the
+    longest a provisioning attempt can run, the delete goes ahead."""
+    from datetime import datetime, timedelta, timezone
+
+    sid = (await client.post(
+        "/v1/sessions", json={"specimen": "s", "files": [_file("a")]},
+    )).json()["sessionId"]
+    store._data["sessions"][sid]["updatedAt"] = (
+        datetime.now(timezone.utc) - session_provision.PROVISIONING_GRACE - timedelta(minutes=1))
+
+    r = await client.delete(f"/v1/sessions/{sid}")
+
+    assert r.status_code == 200, r.text
+    assert sid not in store._data["sessions"]

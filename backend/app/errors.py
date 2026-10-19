@@ -64,6 +64,10 @@ RANGE_NOT_SATISFIABLE = "range_not_satisfiable"
 # metadata file in the session (404), or a body that is not this session's
 # metadata (422) or is too big for one (413).
 SESSION_NOT_COMPLETE = "session_not_complete"
+# DELETE /v1/sessions/{sid} while the session is still PROVISIONING (409, with
+# Retry-After): the worker is creating its Drive folder, and erasing the
+# metadata now would leave that folder with nothing pointing at it.
+SESSION_PROVISIONING = "session_provisioning"
 METADATA_NOT_FOUND = "metadata_not_found"
 METADATA_INVALID = "metadata_invalid"
 METADATA_TOO_LARGE = "metadata_too_large"
