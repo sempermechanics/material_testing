@@ -95,7 +95,8 @@ class SettingsYourDataSection(
     /**
      * Each consent change's answer once, on whichever Settings is started.
      * A change the server did not take is said; either way the switch shows
-     * the answer this phone holds, which the repository stores before sending.
+     * the answer this phone holds, which the repository stores only once the
+     * server took it, so a refused change puts the switch back (TD-306).
      */
     private fun observeConsent() {
         activity.lifecycleScope.launch {

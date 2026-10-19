@@ -12,11 +12,16 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.work.impl.WorkManagerImpl
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.sempermechanics.semper.R
+import com.sempermechanics.semper.cloud.FakeCloudApi
+import com.sempermechanics.semper.cloud.FakeTokens
+import com.sempermechanics.semper.data.account.AuthRepository
 import com.sempermechanics.semper.data.cloud.restore.RestoreStart
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.fixtures.CleanAppState
 import com.sempermechanics.semper.ui.common.auth.SignOutRun
 import com.sempermechanics.semper.ui.common.transfer.RestoreRequest
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -164,6 +169,30 @@ class SettingsRotationTest {
         assertEquals("sent once, not again by the rebuilt switch", listOf(true), sent)
         assertTrue(newSwitch.isEnabled)
         assertEquals(rebuilt.getString(R.string.terms_error_generic), ShadowToast.getTextOfLatestToast())
+    }
+
+    @Test
+    fun `a consent change the server refuses leaves the switch and the stored answer as they were`() {
+        AccountCache.setImprovementConsent(context, false)
+        val controller = settings()
+        val vm = viewModelOf(controller.get())
+        val api = FakeCloudApi().apply { onSetImprovementConsent = { _, _ -> throw IOException("refused") } }
+        val repo = AuthRepository(context, api, FakeTokens(), signedIn = { true })
+        // The real repository (TD-306), held on the main thread until it answers,
+        // so one idle() delivers the outcome.
+        vm.sendConsent = { granted -> runBlocking { repo.setImprovementConsent(granted) } }
+        val switch = controller.get().findViewById<CompoundButton>(R.id.switchImprovementConsent)
+        assertFalse(switch.isChecked)
+        ShadowToast.reset()
+
+        switch.performClick()
+        idle()
+
+        assertTrue("the change was sent", "setImprovementConsent" in api.calls)
+        assertEquals(false, AccountCache.improvementConsent(context))
+        assertFalse("the switch is back at the server's answer", switch.isChecked)
+        assertTrue(switch.isEnabled)
+        assertEquals(controller.get().getString(R.string.terms_error_generic), ShadowToast.getTextOfLatestToast())
     }
 
     @Test

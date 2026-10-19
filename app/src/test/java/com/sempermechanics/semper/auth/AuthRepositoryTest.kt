@@ -386,11 +386,34 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun `a consent change the server did not take is reported`() = runBlocking {
+    fun `a consent change the server did not take is reported and not stored`() = runBlocking {
+        AccountCache.setImprovementConsent(context, true)
         api.onSetImprovementConsent = { _, _ -> throw IOException("no route") }
 
-        assertTrue(repo.setImprovementConsent(true).isFailure)
-        // The switch still shows what the user chose.
+        assertTrue(repo.setImprovementConsent(false).isFailure)
+        // TD-306: the phone keeps the server's last accepted answer, not the refused one.
+        assertEquals(true, AccountCache.improvementConsent(context))
+    }
+
+    @Test
+    fun `a consent change the server took is stored`() = runBlocking {
+        AccountCache.setImprovementConsent(context, true)
+        val sent = mutableListOf<Boolean>()
+        api.onSetImprovementConsent = { _, granted -> sent += granted }
+
+        assertTrue(repo.setImprovementConsent(false).isSuccess)
+
+        assertEquals(listOf(false), sent)
+        assertEquals(false, AccountCache.improvementConsent(context))
+    }
+
+    @Test
+    fun `a consent change with no token stays on this phone`() = runBlocking {
+        tokens.token = null
+
+        assertTrue(repo.setImprovementConsent(true).isSuccess)
+
+        assertFalse("setImprovementConsent" in api.calls)
         assertEquals(true, AccountCache.improvementConsent(context))
     }
 }
