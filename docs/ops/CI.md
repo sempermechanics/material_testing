@@ -89,10 +89,10 @@ gitleaks detect --config .gitleaks.toml --log-opts="<base-sha>..HEAD"
 
 | Filter | Paths | Sets |
 |--------|-------|------|
-| `app` | `app/**` except `app/src/main/cpp/**`; `benchmark/**`, `gradle/**`, `*.gradle.kts`, `gradle.properties`, `gradlew`, `gradlew.bat`, `settings.gradle.kts`, `contracts/**` | `app` (tier 1) |
+| `app` | `app/**`, `benchmark/**`, `gradle/**`, `*.gradle.kts`, `gradle.properties`, `gradlew`, `gradlew.bat`, `settings.gradle.kts`, `contracts/**` | `app` (tier 1) |
 | `android_test` | `app/src/androidTest/**` | `app` (tier 1 compiles it) |
 | `packaging` | `app/build.gradle.kts`, `app/proguard-rules.pro`, `gradle/libs.versions.toml` | `app` + `release_build` (tier 5 runs R8) |
-| `native_jni` | `engine`, `.gitmodules`, `app/src/main/cpp/**`, `SemperNativeLib.kt` | `emulator` + `release_build` (tiers 3 + 5) |
+| `native_jni` | `engine`, `.gitmodules`, `SemperNativeLib.kt` | `emulator` + `release_build` (tiers 3 + 5) |
 | `native_ci` | `.github/actions/{setup-native-ci,enable-kvm,check-arm64-so}/**` | `emulator` + `release_build` |
 | `backend` | `backend/**`, `firestore.rules`, `firebase-hosting/firebase.json`, `scripts/deploy-firestore.sh`, `.github/workflows/deploy-backend.yml`, `docs/legal/**`, `scripts/*.py`, `scripts/tests/**` (the scripts' test fixtures), `scripts/check_gcp_posture.sh`, `scripts/apply-monitoring.sh`, `ops/monitoring/**`, `contracts/**`, and the client's three wire-contract files | `backend` (tier 4) |
 | `rules` | `firestore.rules`, `firestore-rules-tests/**`, `backend/app/**` | `rules` (Firestore rules tests) |
@@ -105,13 +105,16 @@ scripts, whose only lint is Tier 4's ruff. The console pages under
 
 Because the engine is a submodule, `native_jni` matches the **gitlink**
 `engine` rather than a source tree — bumping the pinned engine commit is what
-triggers it.
+triggers it. The JNI adapter is part of the engine
+(`engine/adapters/android/`; Gradle builds `engine/CMakeLists.txt`), so a JNI
+change arrives as a pin bump too.
 
 The filter step runs with `predicate-quantifier: 'some-with-excludes'`: a file
 matches a filter if any of its patterns includes it and no `!` pattern excludes
-it. That is what makes `app`'s "except `app/src/main/cpp/**`" hold. Under the
-default (`some`), the negated pattern matched every file outside `cpp/`, so
-`app` was true on every PR and a docs-only PR ran Tier 1 (TD-96).
+it. No filter has a `!` pattern since `app/src/main/cpp/` (a dead redirect)
+was deleted; the setting stays so the next one holds. Under the default
+(`some`), `app`'s old `!app/src/main/cpp/**` matched every file outside
+`cpp/`, so `app` was true on every PR and a docs-only PR ran Tier 1 (TD-96).
 
 ### What runs for each diff
 
@@ -120,7 +123,7 @@ default (`some`), the negated pattern matched every file outside `cpp/`, so
 | app Kotlin / resources | run | —† | — | — | —† |
 | androidTest only | run (compiles it) | —† | — | — | —† |
 | keep rules / app build script / version catalog | run | —† | — | — | run |
-| engine pin / JNI / `app/src/main/cpp/**` | — (‡) | run | — | — | run |
+| engine pin (JNI adapter included) / `SemperNativeLib.kt` | — (‡) | run | — | — | run |
 | `backend/app/**`, `firestore.rules` | — | — | run | run | — |
 | `firestore-rules-tests/**` | — | — | — | run | — |
 | other backend, Terms, ops scripts | — | — | run | — | — |

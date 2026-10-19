@@ -182,14 +182,14 @@ jobs:
           token: ''
           base: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
           # A file matches a filter on any of its patterns unless a '!' pattern
-          # excludes it. The default ('some') made app's '!app/src/main/cpp/**'
-          # match every file outside cpp/, so a docs-only PR ran Tier 1
-          # (material_testing TD-96).
+          # excludes it. The default ('some') made a '!' pattern match every file
+          # outside what it names, so a docs-only PR ran Tier 1 (material_testing
+          # TD-96). No filter has one since app/src/main/cpp/ was deleted; this
+          # keeps the next one meaning what it says.
           predicate-quantifier: 'some-with-excludes'
           filters: |
             app:
               - 'app/**'
-              - '!app/src/main/cpp/**'
               # The wire bodies ApiDtosContractTest decodes (the backend's
               # test_wire_contracts.py reads the same files).
               - 'contracts/**'
@@ -202,15 +202,15 @@ jobs:
               - 'gradlew'
               - 'gradlew.bat'
               - 'settings.gradle.kts'
-            # Engine sources live in sempermechanics/semper-dic-engine. App CI only
-            # sees pin bumps (gitlink) / .gitmodules — host/sanitizer suites run
-            # in the engine repo's own workflow. Here a bump or a JNI change has
-            # to build for both ABIs and run EnginePipelineSmokeTest on the
-            # emulator before it merges, not after.
+            # Engine sources live in sempermechanics/semper-dic-engine, the JNI
+            # adapter too (engine/adapters/android/). App CI only sees pin bumps
+            # (gitlink) / .gitmodules — host/sanitizer suites run in the engine
+            # repo's own workflow. Here a bump or a JNI change has to build for
+            # both ABIs and run EnginePipelineSmokeTest on the emulator before it
+            # merges, not after.
             native_jni:
               - 'engine'
               - '.gitmodules'
-              - 'app/src/main/cpp/**'
               - 'app/src/main/java/com/sempermechanics/semper/SemperNativeLib.kt'
             # Composite actions only the emulator and release tiers use.
             native_ci:
