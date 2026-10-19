@@ -349,8 +349,12 @@ matches one load to each deformed frame:
   log (reference ↔ first row, last frame ↔ last row). This is right when
   photos were taken at a steady rate through the whole test; otherwise export
   the log at the photo rate, or shoot video.
-- **No unit** — the header did not say N, kN or lbf, so the column is taken as
-  newtons. Add the unit to the header if that is wrong.
+- **No unit** — the header did not say N, kN, kgf (kp), tf or lbf, so the
+  column is taken as newtons. Add the unit to the header if that is wrong.
+- **kg read as kgf** — the load column says kg, a mass; it is read as
+  kilograms-force, N = kg × 9.80665.
+- **Time unit** — a time column in ms, min or h is converted to seconds; one
+  that names no unit is taken as seconds, and the chip says so.
 - **No load column** — no header named a load or force column; the last
   numeric column is used. Name the column `Load (N)` in the export.
 - **Sign** — loads are kept exactly as logged. A tensile test whose loads are

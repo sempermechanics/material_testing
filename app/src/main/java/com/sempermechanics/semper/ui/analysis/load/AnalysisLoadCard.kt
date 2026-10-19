@@ -247,8 +247,10 @@ class AnalysisLoadCard(
     private fun csvWarningText(warning: LoadCsvWarning): String = activity.getString(
         when (warning) {
             LoadCsvWarning.UNITS_ASSUMED_N -> R.string.load_warn_units_assumed
+            LoadCsvWarning.KG_READ_AS_KGF -> R.string.load_warn_kg_as_kgf
             LoadCsvWarning.COLUMN_GUESSED -> R.string.load_warn_column_guessed
             LoadCsvWarning.TIME_IGNORED -> R.string.load_warn_time_ignored
+            LoadCsvWarning.TIME_UNIT_ASSUMED_S -> R.string.load_warn_time_unit_assumed
         },
     )
 

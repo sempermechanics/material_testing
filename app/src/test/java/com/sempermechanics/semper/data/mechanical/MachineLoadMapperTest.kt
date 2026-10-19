@@ -139,6 +139,16 @@ class MachineLoadMapperTest {
     }
 
     @Test
+    fun `a log timed in milliseconds matches frames in seconds`() {
+        // Read as seconds, rows 500 and 1000 sat 499.5 s and 999 s from the frames.
+        val parsed = (MachineLoadCsv.parse("Time (ms),Load (N)\n0,0\n500,5\n1000,10\n") as LoadCsvParse.Ok).csv
+        val table = MachineLoadMapper.map(parsed, 2, listOf(500L, 1000L), TestType.TENSILE)!!
+
+        assertEquals(listOf(5f, 10f), table.loadsN)
+        assertEquals(LoadMapping.TIME_NEAREST, table.mapping)
+    }
+
+    @Test
     fun `a timed log with photos, which have no times, pairs in order`() {
         val table = map(listOf(10f, 20f), frames = 2, times = listOf(0f, 1f))!!
 

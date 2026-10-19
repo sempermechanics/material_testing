@@ -25,7 +25,7 @@ So the copy is plain, the formulas are spelled out, and every number shown is on
 | | Tensile | Bending |
 |---|---|---|
 | Photos / video | Reference before loading, then one photo per load step | Reference with no weights, then a photo per weight, or a video that holds each weight a few seconds; filmed from the **side face** |
-| Loads | CSV in N or kN: one row per photo, or the machine's log | Typed on the phone: the hanger mass of each photo in kg, W = m × 9.80665 N. Or, optionally, a CSV in N or kN |
+| Loads | CSV in N, kN, kgf (kp), tf or lbf: one row per photo, or the machine's log (time in s, ms, min or h) | Typed on the phone: the hanger mass of each photo in kg, W = m × 9.80665 N. Or, optionally, a CSV in N, kN or kgf |
 | Dimensions | Area (mm²); for a round bar πd²/4 | Span L, width b, thickness t (mm) |
 | Scale | None: strain is a ratio | Top and bottom edges tapped on the reference (**Beam height → Set**) |
 

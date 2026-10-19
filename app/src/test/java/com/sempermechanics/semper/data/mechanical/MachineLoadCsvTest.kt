@@ -214,6 +214,82 @@ class MachineLoadCsvTest {
     }
 
     @Test
+    fun `a load column in kgf is scaled by standard gravity`() {
+        // 102 kgf × 9.80665 N/kgf = 1000.278 N; before kgf was known this read as 102 N.
+        val csv = ok("Time (s),Load (kgf)\n0,0\n1,102\n")
+
+        assertEquals(1000.278f, csv.loadsN[1], 1e-2f)
+        assertEquals(LoadUnit.KGF, csv.unit)
+        assertTrue(csv.warnings.isEmpty())
+    }
+
+    @Test
+    fun `kilopond and tonne-force are read as kgf and tf`() {
+        assertEquals(LoadUnit.KGF, ok("Kraft [kp]\n1\n").unit)
+        val tonnes = ok("Load (tf)\n0.5\n")
+        assertEquals(LoadUnit.TF, tonnes.unit)
+        // 0.5 tf × 9806.65 N/tf = 4903.325 N.
+        assertEquals(4903.325f, tonnes.loadsN.single(), 1e-1f)
+    }
+
+    @Test
+    fun `a bare kg load column is read as kgf and says so`() {
+        // 4.28 kg on a hanger × 9.80665 = 41.973 N.
+        val csv = ok("Load (kg)\n0\n4.28\n")
+
+        assertEquals(LoadUnit.KGF, csv.unit)
+        assertEquals(41.9725f, csv.loadsN[1], 1e-3f)
+        assertEquals(listOf(LoadCsvWarning.KG_READ_AS_KGF), csv.warnings)
+    }
+
+    @Test
+    fun `a German log with a ten-line header reads its decimal commas from the data rows`() {
+        // The first ten lines hold no data row, so a sniff of the file's first
+        // lines saw no decimal comma and read 0,875 kN as 875 kN (× 1000).
+        val csv = ok(
+            """
+            Prüfprotokoll;Zugversuch
+            Norm;DIN EN ISO 6892-1
+            Werkstoff;S235
+            Probe;Rundstab
+            Prüfer;AB
+            Datum;14.10.2026
+            Prüfgeschwindigkeit;10 mm/min
+            Vorkraft;5 N
+            Standard force;Strain
+            kN;%
+            0,005;0,000
+            0,875;0,012
+            1,25;0,031
+            12,5;0,240
+            """.trimIndent(),
+        )
+
+        assertEquals(LoadUnit.KN, csv.unit)
+        assertEquals(4, csv.loadsN.size)
+        listOf(5f, 875f, 1250f, 12500f).zip(csv.loadsN).forEach { (n, loadN) -> assertEquals(n, loadN, 1e-2f) }
+    }
+
+    @Test
+    fun `a time column in milliseconds or minutes is read as seconds`() {
+        val ms = ok("Time (ms);Load (N)\n0;0\n500;5\n1000;10\n")
+        assertEquals(listOf(0f, 0.5f, 1f), ms.timesS)
+        assertTrue(ms.warnings.isEmpty())
+
+        val min = ok("Time (min),Load (N)\n0,0\n0.5,5\n")
+        assertEquals(listOf(0f, 30f), min.timesS)
+        assertTrue(min.warnings.isEmpty())
+    }
+
+    @Test
+    fun `a time column with no unit is taken as seconds and says so`() {
+        val csv = ok("Time,Load (N)\n0,0\n2,5\n")
+
+        assertEquals(listOf(0f, 2f), csv.timesS)
+        assertEquals(listOf(LoadCsvWarning.TIME_UNIT_ASSUMED_S), csv.warnings)
+    }
+
+    @Test
     fun `windows line endings and quoted cells parse the same`() {
         val csv = ok("\"Time (s)\",\"Load (N)\"\r\n\"0\",\"0\"\r\n\"1\",\"9.5\"\r\n")
 
