@@ -85,7 +85,9 @@ ways, out of the count.
    Twelve backend files already differ (205 lines of fixes missing), along with
    `scripts/check_secret_access.sh`. Three rows closed here on 2026-10-19 are still
    open there: TD-269, TD-270 and TD-276 (`mt:docs/ops/TECH_DEBT.md:257`, `:258`,
-   `:263`). Nothing reads those copies except the fork's own CI.
+   `:263`). Nothing reads those copies except the fork's own CI. (Later the same day
+   material_testing#139 synced `17d7bc8`, with #454, and closed those three there too;
+   the copies still drift with every backend change here until they are deleted.)
 4. **One lab state takes many shapes.** A lab input has to be added in
    `MechanicalTestInputs`, `RunSpec.mechanical`, `ViewerArgs` (both sides),
    `WizardState` and the draft. If one is missed, a viewer or a restored wizard
@@ -308,5 +310,4 @@ Phased, smallest first. Every phase can ship on its own and leaves both apps wor
 5. [ ] **Delete the fork's copies** (`backend/`, `firebase-hosting/`,
    `firestore.rules`, `contracts/`, `ops/`), retire the fork's sync docs, and mark
    material_testing's ADR-009 and ADR-022 superseded in part.
-6. [ ] Open a TECH_DEBT row to track carrying out this record. This draft does not
-   open one.
+6. [x] Open a TECH_DEBT row to track carrying out this record: TD-298 (2026-10-19).

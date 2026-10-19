@@ -38,14 +38,14 @@ Pick the home by how long the work must live and who must see its outcome.
 | A configuration change, while the user stays on the screen | The screen's ViewModel (`viewModelScope`) | Viewer exports: `ResultViewerViewModel.exports` (`ui/viewer/ResultViewerViewModel.kt:93`) runs `ShareExportJobs` (`ui/viewer/share/ShareExportJobs.kt:49`); the viewer's `StateFlow<ViewerState>` (`:42`: the frame set, listed once by `listFrames` (`:72`), the frame and the field), the custom colour scales (`:90`) and the field-metrics cache (`:128`) live there too. Home's list and restores: `HomeViewModel` (`ui/home/HomeViewModel.kt`); sign-in: `AuthViewModel` (`ui/auth/AuthViewModel.kt`). Save to Files: `SaveExportViewModel` (`ui/viewer/SaveExportViewModel.kt:28`) |
 | The screen closing, but not the process | An application-lifetime scope in a singleton `object` that exposes a `StateFlow` | Account deletion: `AccountDeletionRun` (`ui/settings/AccountDeletionRun.kt:48`, scope `:73`), with its stage on disk (`data/prefs/AccountDeletionMarker.kt`) so a new process finishes it (`resumeInterrupted`, `:141`, from `SemperApp.onCreate`). Sign-out: `SignOutRun` (`ui/common/auth/SignOutRun.kt:42`, scope `:56`) |
 | Cancellation of the caller, for a short sequence that must not stop half-way | `withContext(NonCancellable)` around that sequence only | The erase → wipe → sign-out sequence, `CloudErase.deleteAccount` (`data/cloud/CloudErase.kt:46-66`) |
-| Process death, or the app leaving the screen | WorkManager unique work | `oneTimeWork` + `enqueueUnique` (`data/cloud/WorkTags.kt:96`, `:119`): upload (`data/cloud/CloudSync.kt:392-398`), restore and bundle download (`data/cloud/restore/CloudRestore.kt:73-81`, `:102-112`), backup deletes (`data/cloud/SessionDeletes.kt:91-96`), metadata sends (`data/cloud/SessionMetadataSync.kt:135-139`); the licence refresh is periodic (`data/LicenseConfigWorker.kt:97`) |
+| Process death, or the app leaving the screen | WorkManager unique work | `oneTimeWork` + `enqueueUnique` (`data/cloud/WorkTags.kt:96`, `:119`): upload (`data/cloud/CloudSync.kt:392-398`), restore and bundle download (`data/cloud/restore/CloudRestore.kt:73-81`, `:102-112`), backup deletes (`data/cloud/SessionDeletes.kt:91-96`), metadata sends (`data/cloud/SessionMetadataSync.kt:135-139`); the licence refresh is periodic (`data/LicenseConfigWorker.kt:95`) |
 
 **What each home promises.**
 
 - **ViewModel.** The job and its state survive a rotation; leaving the
   screen for good (Back, or the screen finishing) clears the ViewModel and
   cancels the job, as the user expects. A job holds plain data, never the Activity, so a rotation
-  frees the old screen at once (`ShareExportJobs.kt:41-46`). The recreated
+  frees the old screen at once (`ShareExportJobs.kt:43-47`). The recreated
   screen re-attaches to the job's state and takes each finished outcome once.
 - **Application-lifetime object.** The run has an explicit state
   (`Idle` → `Running` → `Done`), and an outcome is consumed once
@@ -69,14 +69,14 @@ Pick the home by how long the work must live and who must see its outcome.
 **The wizard is the exception, on purpose.** `StaticAnalysisActivity`
 absorbs every configuration change (`app/src/main/AndroidManifest.xml:154-158`),
 so rotation never recreates it. Its batch and sweep runs sit on
-`viewModelScope` (`ui/analysis/wizard/RunChannels.kt:112`, `:171`), but
+`viewModelScope` (`ui/analysis/wizard/RunChannels.kt:131`, `:197`), but
 `onDestroy` raises the run's cancel flag on every destroy
-(`ui/analysis/StaticAnalysisActivity.kt:246`), and a destroy that is not a
+(`ui/analysis/StaticAnalysisActivity.kt:238`), and a destroy that is not a
 configuration change also clears the view model and its scope: a solve
 belongs to the screen that shows it. Process death is covered by the
 draft ([ADR-005](ADR-005-wizard-process-death.md)), not by keeping the run.
 A run's outcome is held in the view model until a started screen takes it,
-once (`PendingOutcome`, `ui/analysis/wizard/RunChannels.kt:73`), so a run
+once (`PendingOutcome`, `ui/analysis/wizard/RunChannels.kt:83`), so a run
 that ends while the wizard is in the background is handled when it returns.
 
 **Rule for new code.**
@@ -94,11 +94,11 @@ that ends while the wizard is in the background is handled when it returns.
    `CancellationException` everywhere else (ADR-018).
 
 Other application-lifetime scopes exist for housekeeping, not for user
-requests: startup cleanup and the seat heartbeat (`SemperApp.kt:29`, `:47-54`),
+requests: startup cleanup and the seat heartbeat (`SemperApp.kt:33`, `:60-67`),
 the status re-check after splash (`ui/auth/StatusRecheck.kt:27`), the wizard
 draft's write lane (`data/prefs/WizardDraft.kt:101`) and the shared config
 fetch (`data/net/SingleFlight.kt:18`). The summary GIF's build records and
-locks are process-wide by output path (`ui/viewer/summary/SummaryAnimation.kt:273-275`)
+locks are process-wide by output path (`ui/viewer/summary/SummaryAnimation.kt:295-298`)
 so a rotated viewer reuses a GIF the old one finished.
 
 ## Options considered
@@ -200,6 +200,7 @@ declared types and packages; it would live in a `lint-rules` module wired in wit
 configured list of names; it would live in a rules module added with
 `detektPlugins`. Neither module exists yet (`app/build.gradle.kts:423-428` uses the
 default detekt rules). Findings are never baselined (CLAUDE.md). A refresh that the
-next `onResume` repeats anyway, such as Home's list refresh (`HomeActivity.kt:83`,
-run from `onResume` at `:356-358`), is not a request the user can lose, so it is
-suppressed with that reason given.
+next `onResume` repeats anyway, such as Home's list refresh, is not a request the
+user can lose, so it is suppressed with that reason given. The cites above are at
+`763ed7a`, before the fix: #457 moved Home's restore to `HomeViewModel` and sign-in
+to `AuthViewModel` (U7, U8). The check itself is TD-291.

@@ -180,4 +180,4 @@ notice needs a recipient, template and key of its own. The `DEVICE_REGISTER` /
 - [ ] Staff and IT phones re-register once with a second factor after the
       backend carrying the amendment deploys.
 - [ ] Mail the holder when a new device registers (needs `notify.py` to send
-      more than one kind of mail).
+      more than one kind of mail); TD-295.

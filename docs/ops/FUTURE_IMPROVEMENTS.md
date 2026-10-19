@@ -84,7 +84,8 @@ which is TD-61. **Decided:** [ADR-004](../adr/ADR-004-runspec.md).
 
 **Done** (run-spec PR): `RunSpec` is built once at Compute; the batch params,
 the sweep, both session records and the viewer the run opens read it or the
-`RunResult` that carries it. The wizard keeps its mutable editing state. What
+`RunResult` that carried it (since 2026-10-19 the run's outcome and the saved row it
+opens through `ViewerArgs.of`). The wizard keeps its mutable editing state. What
 went in and what stayed out: [ADR-004 As built](../adr/ADR-004-runspec.md#as-built-2026-09-23).
 
 ## FI-7 Retire the unattested `/uploads` reader

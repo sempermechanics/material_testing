@@ -86,6 +86,16 @@ File counts are main sources only; the first move's table is in this file's hist
 `data/policy/` (`FeatureLocks`; 7). `ui/home/` is over the guide by two; the
 counts in the table above are left as they were on 2026-10-03.
 
+**Since then (2026-10-19, #457).** `data/` holds 12 files: `AppForeground`, the one
+count of started screens (the upload worker reads it; `ManagedConfigReader` and
+`LicenseConfigWorker` listen to it), joined the worker steps. Also added: `field/FieldKind`
+(13), `report/HeatmapRequest` with `report/RoiDataConversions` deleted (22),
+`ui/analysis/run/RunEnd` with `WizardRunOutcomes` deleted (19), `ui/auth/AuthViewModel`
+and `AuthScreen` (13), `ui/common/transfer/RestoreRequest` (5), `ui/home/HomeViewModel`
+and `HomeNewAnalysis` (19), and `util/SafCopy` (12). One main file is now over the
+size guide, `data/cloud/SessionMetadataDoc.kt` at 506 lines, and nothing checks the
+guide in CI (TD-292).
+
 Eight packages are still over the ~15-file guide: `data/net/` (23),
 `report/` (22), `ui/analysis/wizard/` (22), `ui/viewer/` (19),
 `data/cloud/` (23), `data/session/` (17), `ui/analysis/sweep/` (17) and
@@ -106,14 +116,14 @@ split. Fused hot loops are exempt: the function that holds one keeps its body
 whole however long it is, and only the code around it moves out. They are
 (CONTEXT.md § Invariants):
 
-| Hot loop | Function | Lines (2026-10-03) |
+| Hot loop | Function (cites re-checked 2026-10-19) | Lines (2026-10-03) |
 |---|---|---|
-| The batch JNI loop | `BatchAnalysis.runBatchAnalysisBody` (`ui/analysis/run/BatchAnalysis.kt:51`) | 354 |
-| The ReportBuilder fusion pass | `ReportBuilder.buildReport` (`report/ReportBuilder.kt:133`) | 180 |
+| The batch JNI loop | `BatchAnalysis.runBatchAnalysisBody` (`ui/analysis/run/BatchAnalysis.kt:60`) | 354 |
+| The ReportBuilder fusion pass | `ReportBuilder.buildReport` (`report/ReportBuilder.kt:139`) | 180 |
 | The heatmap pixel loops | `HeatmapRenderer.generateHeatmapIndices` (`report/HeatmapRenderer.kt:59`), `DeformedHeatmap.generateDeformedHeatmapIndices` (`report/DeformedHeatmap.kt:40`) | 119, 78 |
 | GIF LZW | `GifEncoder`'s `compress` (`report/GifEncoder.kt:184`) | |
 | `.dat` decode | `DatDecoder.decodeInto` (`field/DatDecoder.kt:32`), behind `DicResult.decodeDatFile` | |
-| Viewer look-ahead | `ViewerFrameLoader.prefetchAround` (`ui/viewer/ViewerFrameLoader.kt:148`) | |
+| Viewer look-ahead | `ViewerFrameLoader.prefetchAround` (`ui/viewer/ViewerFrameLoader.kt:121`) | |
 | Inspect index | `PointSpatialIndex.build` (`ui/viewer/inspect/PointSpatialIndex.kt:50`) | |
 
 After #331 no main-source file is over 500 lines; the largest is
