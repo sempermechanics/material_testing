@@ -65,7 +65,7 @@ object ViewerReportFactory {
         fun mechanicalCoverAt(position: Int): MechanicalCover? {
             val sessionModel = args.labSession.stressModel() ?: return null
             return MechanicalCover(
-                testType = args.testType,
+                testType = args.labSession.testType,
                 model = stressModel ?: sessionModel,
                 loadN = args.loadsN.loadOfFrame(plannedAt(position)),
             )

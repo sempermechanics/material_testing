@@ -141,11 +141,8 @@ object AnalysisNavHelper {
             },
             defPath = run.defPath,
             defFilePaths = viewModel.defFilePaths,
-            testType = mechanical.testType,
-            crossSectionMm2 = mechanical.crossSectionMm2,
-            loadAxisX = mechanical.loadAxisX,
+            labSession = mechanical.labSession,
             loadsN = mechanical.loadsN.take(frameNames.size),
-            geometry = mechanical.geometry,
             frameTimesMs = viewModel.defFrameTimesMs.takeUnless { sweep },
         )
     }

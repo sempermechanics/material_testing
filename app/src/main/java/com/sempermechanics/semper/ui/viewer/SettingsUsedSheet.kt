@@ -79,7 +79,7 @@ object SettingsUsedSheet {
         return buildList {
             // A session recorded before test types existed has none, and says
             // nothing rather than claiming a default.
-            TestType.fromWire(args.testType)?.let { type ->
+            TestType.fromWire(args.labSession.testType)?.let { type ->
                 add(host.getString(R.string.settings_used_test_type) to host.getString(TestTypeSheet.labelRes(type)))
             }
             add(host.getString(R.string.settings_used_subset) to host.getString(R.string.settings_used_px_fmt, subset))

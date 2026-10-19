@@ -71,24 +71,22 @@ data class ViewerArgs(
     // anyway, and an absent extra and an empty one read the same there.
     val defPath: String? = null,
     val defFilePaths: List<String> = emptyList(),
-    // Mechanical test. Written unconditionally (blank / 0 / empty when the
-    // session has none) so the two builders' key sets stay identical.
-    val testType: String = "",
-    val crossSectionMm2: Float = 0f,
-    val loadAxisX: Boolean = true,
+    /**
+     * The lab test as one value; its stress model is null on a plain DIC
+     * session. On the Intent it is still its five extras, one key each
+     * ([putLabSession], [Reader.readLabSession]), written unconditionally
+     * (blank / 0 / empty when the session has none) so the two builders' key
+     * sets stay identical and an Intent from an older build still reads.
+     */
+    val labSession: LabSession = LabSession.NONE,
+    /** Each frame's load in N, index-aligned with [frameNames]; empty without machine loads. */
     val loadsN: List<Float> = emptyList(),
-    val geometry: SpecimenGeometry = SpecimenGeometry.NONE,
-    val curveCorrection: CurveCorrection = CurveCorrection.NONE,
     /** The frame to open on; null opens a run on its summary. A lattice node sets it. */
     val startFrame: Int? = null,
     val strainMethod: String = STRAIN_METHOD_VSG,
     /** A video's frame times in its clip (ms), index-aligned with [frameNames]; null for anything else. */
     val frameTimesMs: List<Long>? = null,
 ) {
-
-    /** The lab test as one value; its stress model is null on a plain DIC session. */
-    val labSession: LabSession
-        get() = LabSession(testType, crossSectionMm2, loadAxisX, geometry, curveCorrection)
 
     /**
      * A sweep opens on its lattice unless a node has already been picked
@@ -132,14 +130,19 @@ data class ViewerArgs(
             putExtra(IntentKeys.ROI_Y, roiY)
             putExtra(IntentKeys.ROI_W, roiW)
             putExtra(IntentKeys.ROI_H, roiH)
-            putExtra(IntentKeys.TEST_TYPE, testType)
-            putExtra(IntentKeys.CROSS_SECTION_MM2, crossSectionMm2)
-            putExtra(IntentKeys.LOAD_AXIS_X, loadAxisX)
+            putLabSession(labSession)
             putExtra(IntentKeys.LOADS_N, loadsN.toFloatArray())
-            putExtra(IntentKeys.SPECIMEN_GEOMETRY, geometry.toArray())
-            putExtra(IntentKeys.CURVE_CORRECTION, curveCorrection.toArray())
             startFrame?.let { putExtra(IntentKeys.START_FRAME, it) }
         }
+    }
+
+    /** [lab] as its five extras, the keys an older build wrote and reads. */
+    private fun Intent.putLabSession(lab: LabSession) {
+        putExtra(IntentKeys.TEST_TYPE, lab.testType)
+        putExtra(IntentKeys.CROSS_SECTION_MM2, lab.crossSectionMm2)
+        putExtra(IntentKeys.LOAD_AXIS_X, lab.loadAxisX)
+        putExtra(IntentKeys.SPECIMEN_GEOMETRY, lab.geometry.toArray())
+        putExtra(IntentKeys.CURVE_CORRECTION, lab.curveCorrection.toArray())
     }
 
     /** [engineStats] in the array form `EngineStats.fromArray` reads, or null. */
@@ -288,24 +291,12 @@ data class ViewerArgs(
                 startFrame = intent.takeIf { it.hasExtra(IntentKeys.START_FRAME) }
                     ?.getIntExtra(IntentKeys.START_FRAME, 0),
                 strainMethod = intent.getStringExtra(IntentKeys.STRAIN_METHOD) ?: STRAIN_METHOD_VSG,
-                testType = string(IntentKeys.TEST_TYPE, { it.testType }, "").orEmpty(),
-                crossSectionMm2 = fill(IntentKeys.CROSS_SECTION_MM2, { it.crossSectionMm2 }, 0f) {
-                    it.getFloatExtra(IntentKeys.CROSS_SECTION_MM2, 0f)
-                },
-                loadAxisX = fill(IntentKeys.LOAD_AXIS_X, { it.loadAxisX }, true) {
-                    it.getBooleanExtra(IntentKeys.LOAD_AXIS_X, true)
-                },
+                labSession = readLabSession(),
                 loadsN = fill(
                     IntentKeys.LOADS_N,
                     { if (it.hasMachineLoads) it.loadsN else emptyList() },
                     emptyList(),
                 ) { it.getFloatArrayExtra(IntentKeys.LOADS_N)?.toList() },
-                geometry = fill(IntentKeys.SPECIMEN_GEOMETRY, { it.geometry }, SpecimenGeometry.NONE) {
-                    SpecimenGeometry.fromArray(it.getFloatArrayExtra(IntentKeys.SPECIMEN_GEOMETRY))
-                },
-                curveCorrection = fill(IntentKeys.CURVE_CORRECTION, { it.curveCorrection }, CurveCorrection.NONE) {
-                    CurveCorrection.fromArray(it.getFloatArrayExtra(IntentKeys.CURVE_CORRECTION))
-                },
                 // Absent for anything but a video, so never filled from the record:
                 // an older Intent's video frames keep their names.
                 frameTimesMs = intent.getLongArrayExtra(IntentKeys.FRAME_TIMES_MS)?.toList(),
@@ -313,6 +304,27 @@ data class ViewerArgs(
             logMissingKeys()
             return args
         }
+
+        /**
+         * The lab test from its five extras, the inverse of [putLabSession]:
+         * each missing one is filled from the record's own, so an Intent
+         * that has only some of them still reads.
+         */
+        private fun readLabSession(): LabSession = LabSession(
+            testType = string(IntentKeys.TEST_TYPE, { it.testType }, "").orEmpty(),
+            crossSectionMm2 = fill(IntentKeys.CROSS_SECTION_MM2, { it.crossSectionMm2 }, 0f) {
+                it.getFloatExtra(IntentKeys.CROSS_SECTION_MM2, 0f)
+            },
+            loadAxisX = fill(IntentKeys.LOAD_AXIS_X, { it.loadAxisX }, true) {
+                it.getBooleanExtra(IntentKeys.LOAD_AXIS_X, true)
+            },
+            geometry = fill(IntentKeys.SPECIMEN_GEOMETRY, { it.geometry }, SpecimenGeometry.NONE) {
+                SpecimenGeometry.fromArray(it.getFloatArrayExtra(IntentKeys.SPECIMEN_GEOMETRY))
+            },
+            curveCorrection = fill(IntentKeys.CURVE_CORRECTION, { it.curveCorrection }, CurveCorrection.NONE) {
+                CurveCorrection.fromArray(it.getFloatArrayExtra(IntentKeys.CURVE_CORRECTION))
+            },
+        )
 
         /** Names the extras that came from the session's record or a default, once per read. */
         private fun logMissingKeys() {

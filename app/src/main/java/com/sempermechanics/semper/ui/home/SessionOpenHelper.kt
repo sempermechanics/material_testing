@@ -69,11 +69,7 @@ object SessionOpenHelper {
             } else {
                 null
             },
-            testType = session.testType,
-            crossSectionMm2 = session.crossSectionMm2,
-            loadAxisX = session.loadAxisX,
+            labSession = session.labSession,
             loadsN = if (session.hasMachineLoads) session.loadsN else emptyList(),
-            geometry = session.geometry,
-            curveCorrection = session.curveCorrection,
         )
 }

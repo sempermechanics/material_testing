@@ -17,11 +17,11 @@ import kotlinx.coroutines.launch
 
 /** The session's geometry, with the deflection correction set in Results when there is one. */
 internal val ResultViewerActivity.geometry: SpecimenGeometry
-    get() = viewModel.deflectionCorrection?.let(args.geometry::withCorrection) ?: args.geometry
+    get() = viewModel.deflectionCorrection?.let(args.labSession.geometry::withCorrection) ?: args.labSession.geometry
 
 /** The tensile scale and bias: one typed on this screen, else the session's. */
 internal val ResultViewerActivity.curveCorrection: CurveCorrection
-    get() = viewModel.curveCorrection ?: args.curveCorrection
+    get() = viewModel.curveCorrection ?: args.labSession.curveCorrection
 
 /** The session's lab test with Results' corrections: what the curve, share sheet, report and CSV read. */
 internal val ResultViewerActivity.labSession: LabSession
