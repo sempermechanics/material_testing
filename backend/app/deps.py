@@ -356,8 +356,9 @@ async def verified_device(
 ) -> Caller:
     """Device-attested caller: active device + single-use nonce + ECDSA signature.
 
-    Keeps `async` only for `await request.body()`. Firestore device/nonce lookups
-    run in the threadpool so they do not stall the event loop.
+    Keeps `async` only for `await request.body()`. Firestore device/nonce lookups,
+    the body hash and the signature check run in the threadpool so they do not
+    stall the event loop.
     """
     if settings.DEV_INSECURE_AUTH:
         return Caller(user, _DEV_DEVICE)
@@ -412,12 +413,10 @@ async def verified_device(
     target = request.url.path
     if request.url.query:
         target = target + "?" + request.url.query
-    msg = (x_nonce + request.method + target).encode() + hashlib.sha256(body).digest()
-    try:
-        pub = load_pem_public_key(dev["publicKeyPem"].encode())
-        signature = base64.b64decode(x_signature, validate=True)
-        pub.verify(signature, msg, ec.ECDSA(hashes.SHA256()))
-    except (binascii.Error, InvalidSignature, ValueError):
+    # In the threadpool, as the Firestore lookups are (TD-198): the hash of a
+    # 4 MiB body is a few ms, and the event loop serves every other request.
+    signed = (x_nonce + request.method + target).encode()
+    if not await run_in_threadpool(_signature_ok, dev["publicKeyPem"], x_signature, signed, body):
         audit.record(user["uid"], x_device_id, action="AUTH_DENIED", outcome="DENIED",
                      detail={"stage": "signature"})
         raise HTTPException(401, errors.BAD_SIGNATURE)
@@ -433,6 +432,20 @@ async def verified_device(
     request.state.device_id = x_device_id
     obs.bind_device(x_device_id)
     return Caller(user, dev)
+
+
+def _signature_ok(public_key_pem: str, signature_b64: str, signed: bytes, body: bytes) -> bool:
+    """Whether `signature_b64` is the device key's ECDSA P-256 signature over
+    `signed` followed by the SHA-256 of `body`. CPU work, called off the
+    event loop."""
+    msg = signed + hashlib.sha256(body).digest()
+    try:
+        pub = load_pem_public_key(public_key_pem.encode())
+        signature = base64.b64decode(signature_b64, validate=True)
+        pub.verify(signature, msg, ec.ECDSA(hashes.SHA256()))
+    except (binascii.Error, InvalidSignature, ValueError):
+        return False
+    return True
 
 
 def _device_is_bound(dev: dict | None, user: dict, device_id: str, app: str) -> bool:
