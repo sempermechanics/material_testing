@@ -29,6 +29,7 @@ from ._base import (
 )
 from .devices import (
     _release_devices,
+    forget_device_sessions,
 )
 from .license_admin import (
     _drop_user_to_demo_if_licensed,
@@ -163,6 +164,11 @@ def clear_device_lock(license_id: str, uid: str = "", *,
     and its cooldown is that app's: moving Semper to a new phone does not make
     Material Testing wait a month to follow.
 
+    A staff or IT clear also stops the released phone's demo count holding
+    the holder's analyses (`forget_device_sessions`, TD-276); the holder's
+    own clear does not, or a second account on the same phone could shed
+    the first one's count.
+
     The cooldown applies to `ACTOR_SELF` alone. A second factor proves *who*
     is asking, not *how often*, so one person could otherwise re-bind daily
     and pass a single licence round a lab. It is counted against
@@ -215,8 +221,12 @@ def clear_device_lock(license_id: str, uid: str = "", *,
             "schemaVersion": SCHEMA_VERSION,
         })
         released = _settle_holder(license_id, lic, ref, scope, uid, previous)
+        # The phone may go to someone else: its demo count stops holding the
+        # holder's analyses (TD-276). Staff and IT only; see the docstring.
+        holder = uid if scope == "seat" else lic.get("redeemedByUid") or ""
+        forgotten = forget_device_sessions(holder, released.values()) if holder else 0
         return {**detail, **apps.spread("previousDeviceId", previous),
-                **apps.spread("releasedDeviceId", released)}
+                **apps.spread("releasedDeviceId", released), "sessionsForgotten": forgotten}
 
     now = _now()
     cooldown = timedelta(days=max(0, settings.SELF_DEVICE_CHANGE_COOLDOWN_DAYS))

@@ -261,3 +261,44 @@ async def test_the_app_moves_its_own_device_by_header(client, monkeypatch):
     assert resp.status_code == 200, resp.text
     assert store._data["licenses"][license_id]["deviceIdLockMaterialTesting"] == ""
     assert store._data["licenses"][license_id]["deviceIdLock"] == "and-semper"
+
+
+# ------------------------------------------- the released phone's demo count
+
+
+def _sessions_from(store, uid, device, n=2):
+    store._data.setdefault("sessions", {})
+    for i in range(n):
+        store._data["sessions"][f"{uid}-{device}-{i}"] = {
+            "uid": uid, "deviceId": device, "status": "COMPLETED"}
+
+
+def test_a_staff_clear_stops_the_old_phone_counting_the_holders_analyses(store):
+    """TD-276: the phone may go to someone else, whose demo it would hold."""
+    store._data["users"] = {}
+    license_id = _licensed(store)
+    repo.revalidate_device_lock(store._data["users"]["solo-1"], "and-mt", MT)
+    _registered(store, "solo-1")
+    _sessions_from(store, "solo-1", "and-semper")
+    _sessions_from(store, "someone-else", "and-semper", n=1)
+
+    err, cleared = attempt(repo.clear_device_lock, license_id, actor=repo.ACTOR_STAFF)
+
+    assert err == ""
+    assert cleared["sessionsForgotten"] == 2
+    assert repo.count_device_sessions("and-semper") == 1, "another account's stay counted"
+    assert repo.count_user_sessions("solo-1") == 2, "still the account's"
+
+
+def test_the_holders_own_clear_keeps_the_phone_counting(store):
+    """Else a second account on the same phone could shed the first one's count."""
+    store._data["users"] = {}
+    license_id = _licensed(store)
+    _registered(store, "solo-1")
+    _sessions_from(store, "solo-1", "and-semper")
+
+    err, cleared = attempt(repo.clear_device_lock, license_id, "solo-1", actor=repo.ACTOR_SELF)
+
+    assert err == ""
+    assert "sessionsForgotten" not in cleared
+    assert repo.count_device_sessions("and-semper") == 2

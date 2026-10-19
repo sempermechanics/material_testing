@@ -33,10 +33,15 @@ def _admin_email_detail(admin_emails) -> dict:
 
 def _audited_patch(patch: dict) -> dict:
     """A licence edit as ADMIN_LICENSE_EXTEND records it: each term as text,
-    except `adminEmails`, which is hashed (`_admin_email_detail`)."""
-    out = {k: str(v) for k, v in patch.items() if k != "adminEmails"}
+    except `adminEmails`, which is hashed (`_admin_email_detail`), and `note`,
+    free text staff may type a name or an address into: only that it changed
+    and its length (TD-270). The row outlives erasure and reaches the
+    licence's audit export."""
+    out = {k: str(v) for k, v in patch.items() if k not in ("adminEmails", "note")}
     if "adminEmails" in patch:
         out.update(_admin_email_detail(patch["adminEmails"]))
+    if "note" in patch:
+        out.update({"noteChanged": "true", "noteLength": str(len(patch["note"] or ""))})
     return out
 
 
@@ -111,10 +116,13 @@ def admin_release_account_device(body: AdminDeviceRelease,
     if user is None:
         raise HTTPException(404, errors.USER_NOT_FOUND)
     released = repo.release_account_device(user["uid"])
+    # The phone may go to someone else: its demo count stops holding this
+    # account's analyses, which still count toward the account's (TD-276).
+    forgotten = repo.forget_device_sessions(user["uid"], released.values())
     audit.record(
         admin["uid"], action="ADMIN_DEVICE_RELEASE",
         target={"type": "user", "id": user["uid"]},
-        detail=apps.spread("releasedDeviceId", released),
+        detail={**apps.spread("releasedDeviceId", released), "sessionsForgotten": forgotten},
     )
     return {"uid": user["uid"], "email": user.get("email") or "",
             **apps.spread("releasedDeviceId", released)}

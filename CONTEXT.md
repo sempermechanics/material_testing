@@ -114,7 +114,7 @@ emulator (`scripts/micro_ab.py`, [TESTING.md](docs/app/TESTING.md)); the phone-r
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-18)
+## Current state (2026-10-19)
 
 - **Deployed.** Cloud Run `semper-api` behind API Gateway `semper-gw`, and staging
   `semper-api-staging` behind `semper-gw-staging`, from `c295639d` (2026-10-14; gateways
@@ -131,18 +131,18 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **App release `v1.2-beta.4`** (beta, versionCode 1036, from `33dce87d`, 2026-10-17;
   engine `23034fe`, 0.4.2). It is the first release under the new app id, so it installs
   beside the old app, not over it. Contents and install steps: the GitHub Release and
-  [CHANGELOG](docs/ops/CHANGELOG.md). Nothing is on `main` beyond it.
-- **Branch `claude/new-session-jhfhj9`** (#448; CI green on `ae4c24a`) and
-  **`claude/readiness-followups-jhfhj9`** on it (`2371bec`, no CI run yet); neither merged nor
-  deployed. The readiness cross-check ([gate](docs/ops/PRODUCTION_READINESS_GATE.md#framework-cross-check-2026-10-18),
-  TD-214–TD-278, FI-17–FI-24): signed offline entitlement ([ADR-023](docs/adr/ADR-023-signed-offline-entitlement.md)),
+  [CHANGELOG](docs/ops/CHANGELOG.md). `main` has moved past it (the readiness change below).
+- **Readiness change merged, not deployed** (#448 and #449, 2026-10-19; `main` @ `5b59cf3`):
+  the cross-check ([gate](docs/ops/PRODUCTION_READINESS_GATE.md#framework-cross-check-2026-10-18),
+  TD-214–TD-278, FI-17–FI-24), signed offline entitlement ([ADR-023](docs/adr/ADR-023-signed-offline-entitlement.md)),
   **minSdk 30**, version gate, EMM config, IT roster tools and audit export, rules tests, APK
-  inspection, AAB, monitoring as code; the follow-up adds the Auth Admin budget, hashed audit
-  addresses, wider erasure and account-anchored entitlements ([ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md):
+  inspection, AAB, monitoring as code, the Auth Admin budget, hashed audit addresses, wider
+  erasure and account-anchored entitlements ([ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md):
   nothing entered or sold in the app, Refresh licence, locked-not-hidden features, claim codes on
-  the web account page, kill switches refused server-side, a per-device demo cap). Owed at
-  deploy, in order: indexes (TD-216, TD-271), backend, gateway, Hosting, monitoring (TD-217); also
-  TD-214, TD-215, TD-219, TD-226, TD-229–TD-232, and counsel on the aligned Terms (TD-277).
+  the web account page, kill switches refused server-side, a per-device demo cap). No release
+  is built from it yet. Owed at deploy, in order: indexes (TD-216, TD-271), backend, gateway,
+  Hosting (with the aligned Terms), monitoring (TD-217); also TD-214, TD-215, a device smoke
+  (TD-219), TD-226, TD-229–TD-232, and counsel on the Terms (TD-277).
 - **material_testing** merges this `main` (last `8ba7081`, material_testing#133,
   [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); it released `v1.4-beta.2` (`d08aae07`) 2026-10-17.
 - **CI.** Tiers follow the diff, coverage floors rise with every test PR

@@ -813,8 +813,10 @@ own code since TD-279, so the app does not lift it on the account's count). A
 session with no `deviceId` counts toward no device. `GET /v1/sessions`
 `quota.used` stays the account's count (`sessions.py:131`). A demo create costs
 11 reads, not 9 ([request-volume.md](../perf/request-volume.md) Pass 4). After
-a staff device release the phone still counts its previous holder's analyses
-(TD-276). Tests `backend/tests/test_demo_device_cap.py`.
+a staff device release, or a staff or IT licence lock clear, the phone no longer
+counts its previous holder's analyses: `forget_device_sessions` drops their
+`deviceId` (`backend/app/repo/devices.py:82-107`; TD-276, closed). The holder's own
+device change keeps them counted. Tests `backend/tests/test_demo_device_cap.py`.
 
 **`MAX_SESSIONS_PER_USER` is deleted, not merely unread.** It used to be the
 one cap for everyone (default 4). `mode` now selects between

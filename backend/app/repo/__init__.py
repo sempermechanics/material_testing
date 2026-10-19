@@ -92,6 +92,7 @@ from .institution_admin import (  # noqa: F401
 from .devices import (  # noqa: F401
     get_device,
     register_device,
+    forget_device_sessions,
     issue_nonce,
     consume_nonce,
     claim_client_nonce,
