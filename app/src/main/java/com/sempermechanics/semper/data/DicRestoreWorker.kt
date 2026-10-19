@@ -97,7 +97,7 @@ class DicRestoreWorker internal constructor(
             SemperAnalytics.event(applicationContext, SemperAnalytics.CLOUD_RESTORE_SUCCEEDED)
             Result.success()
         } catch (e: CancellationException) {
-            clearPartialArtifacts(targetLocalId)
+            clearStoppedRestore(applicationContext, cloudSessionId, targetLocalId, stopReasonNow())
             throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             onFailure(DownloadFailure.of(e), cloudSessionId, targetLocalId)
@@ -108,8 +108,9 @@ class DicRestoreWorker internal constructor(
      * Give up on a backup no retry can fix, clearing what this attempt wrote, or
      * retry from scratch. A retry starts the files over: CloudRestore deletes its
      * cache temps and their `*.part` sidecars on the way out, and the session dir
-     * is cleared at the top of [doWork]. Only after process death (no way out)
-     * does the next attempt resume the bundle from its leftover `.part` — see
+     * is cleared at the top of [doWork]. Only after a stop WorkManager reruns
+     * ([clearStoppedRestore]) or process death (no way out) does the next
+     * attempt resume the bundle from its leftover `.part` — see
      * [RestoreDownloadOutcomes]; the bundle's sha256 catches a bad resume.
      */
     private fun onFailure(failure: DownloadFailure, cloudSessionId: String, targetLocalId: String): Result =
@@ -166,4 +167,18 @@ class DicRestoreWorker internal constructor(
         runCatching { CloudRestore.clearPartialArtifacts(applicationContext, localId) }
             .onFailure { Timber.w(it, "Could not clean partial restore %s", localId) }
     }
+}
+
+/**
+ * What a restore of [cloudSessionId] into [localId] stopped for [stopReason]
+ * leaves behind. The session dir is reset either way (the rerun unpacks into
+ * it afresh). The bundle download's `.part` stays for a stop WorkManager runs
+ * again — lost connectivity, quota, the system — so the rerun resumes it
+ * rather than starting from byte 0; the app's own cancel drops it, as nothing
+ * will resume it ([keepsDestinationOnStop], TD-283).
+ */
+internal fun clearStoppedRestore(context: Context, cloudSessionId: String, localId: String, stopReason: Int) {
+    runCatching { CloudRestore.clearPartialArtifacts(context, localId) }
+        .onFailure { Timber.w(it, "Could not clean partial restore %s", localId) }
+    if (!keepsDestinationOnStop(stopReason)) CloudRestore.discardDownloads(context, cloudSessionId)
 }

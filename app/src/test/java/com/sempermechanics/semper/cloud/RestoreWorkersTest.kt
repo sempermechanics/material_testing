@@ -13,6 +13,7 @@ import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.DicBundleDownloadWorker
 import com.sempermechanics.semper.data.DicRestoreWorker
 import com.sempermechanics.semper.data.account.LicenseErrors
+import com.sempermechanics.semper.data.clearStoppedRestore
 import com.sempermechanics.semper.data.cloud.CorruptTransferException
 import com.sempermechanics.semper.data.cloud.restore.CloudRestore
 import com.sempermechanics.semper.data.keepsDestinationOnStop
@@ -23,10 +24,13 @@ import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.navigation.IntentKeys
+import com.sempermechanics.semper.util.AtomicFiles
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -314,6 +318,86 @@ class RestoreWorkersTest {
         assertFalse(keepsDestinationOnStop(WorkInfo.STOP_REASON_CANCELLED_BY_APP))
         // Cancelled without a stop: nothing runs it again either.
         assertFalse(keepsDestinationOnStop(WorkInfo.STOP_REASON_NOT_STOPPED))
+    }
+
+    // ------------------------------------------- a restore stopped part-way
+
+    private fun restoreDirect(): String = runBlocking {
+        CloudRestore.restore(context, "cloud-1", "local-1", api = api, tokens = tokens)
+    }
+
+    /** Where a restore of `cloud-1` downloads its bundle; the `.part` beside it is what a rerun resumes. */
+    private val bundlePart get() = AtomicFiles.partOf(File(context.cacheDir, "restore_cloud-1_bundle.zip"))
+
+    @Test
+    fun `a restore stopped for its network keeps the bundle part and the rerun resumes from it`() {
+        val zip = FakeRestoreApi.zipOf(
+            listOf(
+                "raw/Reference.png" to byteArrayOf(1, 2, 3),
+                "raw/def.png" to byteArrayOf(4, 5),
+                "dat/frame_0001.dat" to FakeRestoreApi.onePointDat(),
+            ),
+        )
+        api.files = listOf(
+            api.file("meta-1", "metadata", FakeRestoreApi.metadataJson()),
+            api.file("bundle-1", "bundle", zip),
+        )
+        val half = zip.size / 2
+        var stopNext = true
+        var resumedFrom = -1L
+        api.beforeDownload = { fileId, dest ->
+            if (fileId == "bundle-1") {
+                if (stopNext) {
+                    stopNext = false
+                    AtomicFiles.partOf(dest).writeBytes(zip.copyOf(half))
+                    throw CancellationException("stopped: connectivity lost")
+                }
+                resumedFrom = AtomicFiles.partOf(dest).length()
+            }
+        }
+
+        assertThrows(CancellationException::class.java) { restoreDirect() }
+        clearStoppedRestore(context, "cloud-1", "local-1", WorkInfo.STOP_REASON_CONSTRAINT_CONNECTIVITY)
+
+        assertEquals(half.toLong(), bundlePart.length())
+        assertEquals("local-1", restoreDirect())
+        assertEquals("the rerun starts from the bytes the stop kept", half.toLong(), resumedFrom)
+        assertFalse("a finished restore leaves no part behind", bundlePart.exists())
+    }
+
+    @Test
+    fun `a restore the app cancels drops the bundle part`() {
+        bundlePart.writeBytes(byteArrayOf(1, 2, 3))
+        val leftover = File(SessionStore.dirFor(context, "local-1"), "frame_0001.dat")
+        leftover.writeBytes(byteArrayOf(1))
+
+        clearStoppedRestore(context, "cloud-1", "local-1", WorkInfo.STOP_REASON_CANCELLED_BY_APP)
+
+        assertFalse(bundlePart.exists())
+        assertFalse("the session dir is reset", leftover.exists())
+    }
+
+    @Test
+    fun `a restore stopped by the system resets the session dir but keeps the part`() {
+        bundlePart.writeBytes(byteArrayOf(1, 2, 3))
+        val leftover = File(SessionStore.dirFor(context, "local-1"), "frame_0001.dat")
+        leftover.writeBytes(byteArrayOf(1))
+
+        clearStoppedRestore(context, "cloud-1", "local-1", WorkInfo.STOP_REASON_UNKNOWN)
+
+        assertTrue(bundlePart.isFile)
+        assertFalse(leftover.exists())
+    }
+
+    @Test
+    fun `a restore worker cancelled without a stop drops the part, as nothing reruns it`() {
+        bundlePart.writeBytes(byteArrayOf(1, 2, 3))
+
+        assertThrows(CancellationException::class.java) {
+            runRestore { _, _, _, _ -> throw CancellationException("cancelled") }
+        }
+
+        assertFalse(bundlePart.exists())
     }
 
     // -------------------------------------------------------------- helpers
