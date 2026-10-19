@@ -96,7 +96,14 @@ class StaticAnalysisActivity :
     private lateinit var wizardChrome: AnalysisWizardChrome
     private lateinit var wizardSlots: AnalysisWizardSlots
     private lateinit var wizardCoach: AnalysisWizardCoach
-    private lateinit var sweepController: SweepSetupController
+
+    // Built on first use rather than in buildPages: the sliders and the subset
+    // suggestion call back into it as they bind, before it is set up. Until
+    // setup() finds its views, each of its calls is a no-op. Not at
+    // construction: it takes the view model, which exists from onCreate on.
+    private val sweepController by lazy(LazyThreadSafetyMode.NONE) {
+        SweepSetupController(activity = this, viewModel = viewModel, callbacks = this)
+    }
     private lateinit var frameOrder: FrameOrderController
     private lateinit var subsets: SubsetRecommendationController
     private lateinit var params: WizardParamFields
@@ -150,10 +157,6 @@ class StaticAnalysisActivity :
 
     /** The warnings, the sliders, the page chrome and the sweep page. */
     private fun buildPages() {
-        // Built first, with the other parts rather than after them: the
-        // sliders and the subset suggestion call back into it as they bind.
-        // Until setup() below finds its views, each of its calls is a no-op.
-        sweepController = SweepSetupController(activity = this, viewModel = viewModel, callbacks = this)
         val frameSizeChip = WarnChip(settings.frameSizeWarnRow.root, ::confirmOpenFaq)
             .apply { setFaq(getString(R.string.url_faq_frame_size)) }
         readyGate = AnalysisReadyGate(viewModel, binding, settings, frameSizeChip)
