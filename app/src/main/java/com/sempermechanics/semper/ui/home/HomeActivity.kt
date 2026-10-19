@@ -29,6 +29,7 @@ import com.sempermechanics.semper.data.session.isRestorable
 import com.sempermechanics.semper.databinding.ActivityHomeBinding
 import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.StaticAnalysisActivity
+import com.sempermechanics.semper.ui.analysis.rerun.LabRerun
 import com.sempermechanics.semper.ui.analysis.rerun.PickedReference
 import com.sempermechanics.semper.ui.analysis.rerun.RerunSource
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisNavHelper
@@ -246,6 +247,8 @@ class HomeActivity : AppCompatActivity() {
     private fun openRerun(record: SessionRecord, picked: PickedReference?) {
         val intent = Intent(this, StaticAnalysisActivity::class.java)
             .putExtra(IntentKeys.RERUN_SESSION_ID, record.id)
+        // A tensile or bending analysis re-runs as one, not as plain DIC (TD-280).
+        LabRerun.of(record)?.putOn(intent)
         if (picked != null) {
             intent.putExtra(IntentKeys.RERUN_REFERENCE_PATH, picked.file.absolutePath)
                 .putExtra(IntentKeys.RERUN_REFERENCE_NAME, picked.name)

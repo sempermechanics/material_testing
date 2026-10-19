@@ -733,10 +733,13 @@ towards your analyses like any other and is named after the reference, with
 one frame it was solved against, so its Re-run has that frame alone. Re-run
 needs the original photos on this phone: an **Only in cloud** row asks you to
 restore it first, and a freed-up one says this phone doesn't have them.
-In Material Testing, Re-run copies the photos and the DIC settings, not the test:
-a **Tensile** or **Bending** analysis comes back as a **2D DIC** one, with no load
-log, specimen sizes, Results or lab report. To redo a lab test with other
-settings, start it again with **+** and import the load log (TD-280).
+In Material Testing, Re-run copies the test too: a **Tensile** or **Bending**
+analysis comes back as one, with its cross-section or beam dimensions, its
+strain axis, its beam-edge taps (and the deflection scale and bias set in
+Results), and bending's typed hanger masses. A machine's load log is not kept
+with the analysis, so a test that read one opens on step 1 and asks for the
+log again; import the same file and continue. A tensile analysis's own scale
+and bias (**Adjust curve**) are set again in Results after the run.
 
 An analysis made before Re-run kept its reference, or restored from the cloud
 (the backup does not carry Re-run's copy), asks you to **Pick its reference
