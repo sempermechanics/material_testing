@@ -40,11 +40,11 @@ import com.sempermechanics.semper.ui.common.dialog.DeleteChoiceDialog
 import com.sempermechanics.semper.ui.common.dialog.Dialogs
 import com.sempermechanics.semper.ui.common.dialog.Feedback
 import com.sempermechanics.semper.ui.common.transfer.DeleteFeedback
+import com.sempermechanics.semper.ui.common.transfer.RestoreRequest
 import com.sempermechanics.semper.ui.common.transfer.TransferBannerController
+import com.sempermechanics.semper.ui.common.transfer.request
 import com.sempermechanics.semper.ui.home.SessionOpenHelper
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 /**
@@ -211,10 +211,7 @@ class SettingsActivity : AppCompatActivity() {
      * after SAF CreateDocument returns a destination.
      */
     private fun startBundleDownloadToUri(pending: PendingBundleDownload, destUri: Uri) {
-        if (!LicenseEntitlements.restoreEnabled(this)) {
-            Feedback.toast(this, R.string.restore_paused, long = true)
-            return
-        }
+        if (!RestoreRequest.allowedOrSay(this)) return
         if (pending.cloudSessionId.isBlank()) {
             Feedback.toast(this, R.string.download_analysis_failed, long = true)
             return
@@ -287,10 +284,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun restoreBackup(entry: AnalysisEntry) {
         val cloud = entry.cloud ?: return
-        if (!LicenseEntitlements.restoreEnabled(this)) {
-            Feedback.toast(this, R.string.restore_paused, long = true)
-            return
-        }
+        if (!RestoreRequest.allowedOrSay(this)) return
         val key = entry.downloadKey()
         if (analyses.isBusy(key)) {
             analyses.markBusy(key)
@@ -303,16 +297,20 @@ class SettingsActivity : AppCompatActivity() {
         // Marked before the IO hop: the restore can run and finish inside it.
         analyses.markBusy(key)
         lifecycleScope.launch {
-            val started = withContext(Dispatchers.IO) {
-                RestoreStart.start(this@SettingsActivity, cloud.sessionId, targetLocalId, entry.name)
-            }
-            if (started == RestoreStart.Outcome.ALREADY_RUNNING) {
+            val target = RestoreStart.Target(cloud.sessionId, targetLocalId, entry.name)
+            val asked = RestoreStart.request(this@SettingsActivity, listOf(target))
+            val counts = (asked as? RestoreRequest.Queued)?.counts
+            if (counts != null && counts.alreadyRunning > 0) {
                 Feedback.toast(this@SettingsActivity, R.string.download_analysis_already)
                 return@launch
             }
-            if (started != RestoreStart.Outcome.STARTED) {
+            if (counts == null || counts.started == 0) {
                 analyses.unmarkBusy(key)
-                Feedback.toast(this@SettingsActivity, R.string.restore_failed_generic, long = true)
+                if (asked == RestoreRequest.Paused) {
+                    RestoreRequest.sayPaused(this@SettingsActivity)
+                } else {
+                    Feedback.toast(this@SettingsActivity, R.string.restore_failed_generic, long = true)
+                }
                 return@launch
             }
             transferBanner.upsert(
