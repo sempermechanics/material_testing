@@ -149,6 +149,10 @@ class StaticAnalysisActivity :
 
     /** The warnings, the sliders, the page chrome and the sweep page. */
     private fun buildPages() {
+        // Built first, with the other parts rather than after them: the
+        // sliders and the subset suggestion call back into it as they bind.
+        // Until setup() below finds its views, each of its calls is a no-op.
+        sweepController = SweepSetupController(activity = this, viewModel = viewModel, callbacks = this)
         val frameSizeChip = WarnChip(settings.frameSizeWarnRow.root, ::confirmOpenFaq)
             .apply { setFaq(getString(R.string.url_faq_frame_size)) }
         readyGate = AnalysisReadyGate(viewModel, binding, settings, frameSizeChip)
@@ -163,7 +167,6 @@ class StaticAnalysisActivity :
 
         wizardChrome = AnalysisWizardChrome(this, binding, settingsPage, sweepPage)
         wizardCoach = AnalysisWizardCoach(this, CoachMarkController(this), binding, settings, sweepPage)
-        sweepController = SweepSetupController(activity = this, viewModel = viewModel, callbacks = this)
         // After the wizard views exist: the sweep controls call checkReady().
         sweepController.setup()
         wizardSlots = AnalysisWizardSlots(
@@ -302,15 +305,14 @@ class StaticAnalysisActivity :
     /** Flushes any in-progress typing into the sliders (focus loss commits). */
     override fun commitParamFields() {
         params.commit()
-        if (::sweepController.isInitialized) sweepController.clearSweepFieldFocus()
+        sweepController.clearSweepFieldFocus()
     }
 
     override fun onSweepInputsChanged() {
-        if (::sweepController.isInitialized) sweepController.onRecommendationChanged()
+        sweepController.onRecommendationChanged()
     }
 
     override fun resetSweepInputs() {
-        if (!::sweepController.isInitialized) return
         viewModel.resetSweepDepth()
         sweepController.resetUserModified()
         sweepController.seedSweepSuggestions()
@@ -360,7 +362,7 @@ class StaticAnalysisActivity :
     }
 
     override fun checkReady() {
-        readyGate.apply(chrome.isBusy, sweepController = if (::sweepController.isInitialized) sweepController else null)
+        readyGate.apply(chrome.isBusy, sweepController)
     }
 
     private fun consumePickerHandOff() {

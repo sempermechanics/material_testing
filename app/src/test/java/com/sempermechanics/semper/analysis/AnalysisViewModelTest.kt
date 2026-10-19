@@ -19,6 +19,8 @@ import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.BatchAnalysisOutcome
 import com.sempermechanics.semper.ui.analysis.wizard.RunKind
 import com.sempermechanics.semper.ui.analysis.wizard.RunSession
+import com.sempermechanics.semper.ui.analysis.wizard.WizardInputs
+import com.sempermechanics.semper.ui.analysis.wizard.WizardState
 import com.sempermechanics.semper.ui.analysis.wizard.WizardStep
 import com.sempermechanics.semper.ui.analysis.wizard.WorkingSession
 import com.sempermechanics.semper.ui.analysis.wizard.applyRunOutcome
@@ -287,5 +289,55 @@ class AnalysisViewModelTest {
 
         val second = Robolectric.buildActivity(ComponentActivity::class.java).setup(state)
         assertEquals(WizardStep.SETTINGS, ViewModelProvider(second.get())[AnalysisViewModel::class.java].step)
+    }
+
+    @Test
+    fun `the inputs are one value that every property reads and writes`() {
+        val before = vm.inputs.value
+
+        vm.refName = "ref.png"
+        vm.roi = Roi(1, 2, 30, 40)
+        vm.sweepMode = true
+        vm.deformedFrames = frames("/a/0.png", "/a/1.png")
+
+        val after = vm.inputs.value
+        assertEquals(AnalysisViewModel.NO_REFERENCE_NAME, before.refName)
+        assertEquals("ref.png", after.refName)
+        assertEquals(Roi(1, 2, 30, 40), after.roi)
+        assertTrue(after.sweepMode)
+        assertEquals(frames("/a/0.png", "/a/1.png"), after.deformedFrames)
+        assertEquals(WizardInputs(), before.copy(refBytes = null, roiMaskBytes = null))
+    }
+
+    @Test
+    fun `an edit is seen through the properties, the frame lists included`() {
+        vm.deformedFrames = frames("/a/0.png")
+        assertEquals(listOf("/a/0.png"), vm.defFilePaths)
+
+        vm.edit { it.copy(deformedFrames = frames("/b/0.png", "/b/1.png"), step = WizardStep.SETTINGS, refName = "r") }
+
+        assertEquals(listOf("/b/0.png", "/b/1.png"), vm.defFilePaths)
+        assertEquals(listOf("0.png", "1.png"), vm.defOriginalNames)
+        assertEquals(WizardStep.SETTINGS, vm.step)
+        assertEquals(2, vm.wizardStep)
+        assertEquals("r", vm.refName)
+    }
+
+    @Test
+    fun `the saved state is the inputs' value, the same Bundle either way`() {
+        vm.refName = "ref.png"
+        vm.hasCustomRoi = true
+        vm.roi = Roi(1, 2, 30, 40)
+        vm.working = WorkingSession("abc", RunKind.SWEEP)
+
+        val fromViewModel = WizardState.save(vm, "")
+        val fromInputs = WizardState.save(vm.inputs.value, "")
+        val restored = WizardState.restoreScalars(WizardInputs(), fromInputs)
+
+        assertEquals(fromViewModel.keySet(), fromInputs.keySet())
+        assertEquals("ref.png", restored.refName)
+        assertEquals(Roi(1, 2, 30, 40), restored.roi)
+        assertTrue(restored.hasCustomRoi)
+        assertEquals(WorkingSession("abc", RunKind.SWEEP), restored.working)
     }
 }

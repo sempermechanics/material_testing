@@ -18,8 +18,12 @@ import com.sempermechanics.semper.ui.analysis.sweep.SweepFrame
 import com.sempermechanics.semper.ui.analysis.sweep.SweepRanges
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 /**
  * Holds analysis inputs/state across configuration changes and runs the
@@ -56,17 +60,35 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
     /** The view model's tie to the process's one [WizardDraft]. */
     internal val drafts = WizardDraftBinding()
 
+    private val state = MutableStateFlow(WizardInputs())
+
+    /**
+     * The wizard's inputs as one value (TD-286). Each property below reads
+     * one field of it and writes it with one [edit]; [WizardState] saves and
+     * restores it.
+     */
+    val inputs: StateFlow<WizardInputs> = state.asStateFlow()
+
+    /**
+     * Replaces [inputs] with [transform] of them, in one `update`. Main only,
+     * like every wizard input: a run reads them as it is launched and writes
+     * none. The draft mirror is the setters' ([refBytes], [roiMaskBytes]).
+     */
+    internal fun edit(transform: (WizardInputs) -> WizardInputs) = state.update(transform)
+
     /** Mirrored into the [WizardDraft] as it changes (ADR-005). */
-    var refBytes: ByteArray? = null
+    var refBytes: ByteArray?
+        get() = inputs.value.refBytes
         set(value) {
-            field = value
+            edit { it.copy(refBytes = value) }
             drafts.stage { it.writeReference(value) }
         }
 
     /** Mirrored into the [WizardDraft] as it changes (ADR-005). */
-    var roiMaskBytes: ByteArray? = null
+    var roiMaskBytes: ByteArray?
+        get() = inputs.value.roiMaskBytes
         set(value) {
-            field = value
+            edit { it.copy(roiMaskBytes = value) }
             drafts.stage { it.writeMask(value) }
         }
 
@@ -82,14 +104,22 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
      * error. [frameSizeError] is what stops such a batch from ever reaching the
      * engine.
      */
-    var deformedFrames: List<DeformedFrame> = emptyList()
-        set(value) {
-            field = value
-            frameLists = DeformedFrame.unzip(value)
-        }
+    var deformedFrames: List<DeformedFrame>
+        get() = inputs.value.deformedFrames
+        set(value) = edit { it.copy(deformedFrames = value) }
 
-    /** [deformedFrames] as parallel lists, kept in step with it for the readers below. */
-    private var frameLists = DeformedFrame.unzip(emptyList())
+    /** The last [deformedFrames] unzipped, and its lists; one list is unzipped once. */
+    private var unzipped: Pair<List<DeformedFrame>, DeformedFrame.Lists> =
+        emptyList<DeformedFrame>().let { it to DeformedFrame.unzip(it) }
+
+    /** [deformedFrames] as parallel lists, for the readers below. */
+    private val frameLists: DeformedFrame.Lists
+        get() {
+            val frames = deformedFrames
+            val last = unzipped
+            if (last.first === frames) return last.second
+            return DeformedFrame.unzip(frames).also { unzipped = frames to it }
+        }
 
     /** The staged path of each of [deformedFrames]. */
     val defFilePaths: List<String> get() = frameLists.paths
@@ -107,13 +137,19 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
     val defFrameDates: List<Long> get() = frameLists.dates
 
     /** How the user wants deformed frames ordered (image batches only). */
-    var defOrderMode: FrameOrderMode = FrameOrderMode.NAME
+    var defOrderMode: FrameOrderMode
+        get() = inputs.value.defOrderMode
+        set(value) = edit { it.copy(defOrderMode = value) }
 
     /** Ascending/descending for Name and Date modes. */
-    var defOrderDirection: FrameOrderDirection = FrameOrderDirection.ASCENDING
+    var defOrderDirection: FrameOrderDirection
+        get() = inputs.value.defOrderDirection
+        set(value) = edit { it.copy(defOrderDirection = value) }
 
     /** Set when loaded frames do not all match the reference; blocks Compute. */
-    var frameSizeError: String? = null
+    var frameSizeError: String?
+        get() = inputs.value.frameSizeError
+        set(value) = edit { it.copy(frameSizeError = value) }
 
     /**
      * Whether [defFilePaths] came from sampling a video rather than picked
@@ -121,10 +157,14 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
      * indistinguishable by the time the UI shows them — this is what lets the
      * deformed-frames card show an icon that matches what the user chose.
      */
-    var defFromVideo: Boolean = false
+    var defFromVideo: Boolean
+        get() = inputs.value.defFromVideo
+        set(value) = edit { it.copy(defFromVideo = value) }
 
     /** The clip [defFilePaths] were sampled from ("tensile_03", or "Video"); null for picked images. */
-    var defVideoName: String? = null
+    var defVideoName: String?
+        get() = inputs.value.defVideoName
+        set(value) = edit { it.copy(defVideoName = value) }
 
     /**
      * Each deformed frame's time in its clip, index-aligned with [defFilePaths];
@@ -133,7 +173,9 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
     val defFrameTimesMs: List<Long>? get() = DeformedFrame.timesOf(deformedFrames)
 
     /** The reference's true pixel size, as the engine measures it; [ImageSize.UNKNOWN] before one is picked. */
-    var refSize: ImageSize = ImageSize.UNKNOWN
+    var refSize: ImageSize
+        get() = inputs.value.refSize
+        set(value) = edit { it.copy(refSize = value) }
 
     var realRefWidth: Int
         get() = refSize.width
@@ -145,15 +187,21 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
         set(value) {
             refSize = refSize.copy(height = value)
         }
-    var refName: String = NO_REFERENCE_NAME
+    var refName: String
+        get() = inputs.value.refName
+        set(value) = edit { it.copy(refName = value) }
 
     val defCount: Int get() = deformedFrames.size
 
     /** True when [roi] is one the user drew, rather than the whole frame. */
-    var hasCustomRoi: Boolean = false
+    var hasCustomRoi: Boolean
+        get() = inputs.value.hasCustomRoi
+        set(value) = edit { it.copy(hasCustomRoi = value) }
 
     /** The ROI as drawn, in reference pixels; the run solves [Roi.forSolve] of it. */
-    var roi: Roi = NO_ROI
+    var roi: Roi
+        get() = inputs.value.roi
+        set(value) = edit { it.copy(roi = value) }
 
     var roiX: Int
         get() = roi.x
@@ -184,7 +232,9 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
     internal val batchOutcome: PendingOutcome<RunEnd> get() = runs.batchOutcome
 
     /** The page the wizard shows. */
-    var step: WizardStep = WizardStep.IMAGES
+    var step: WizardStep
+        get() = inputs.value.step
+        set(value) = edit { it.copy(step = value) }
 
     /** [step]'s number, as the saved state holds it. */
     var wizardStep: Int
@@ -193,34 +243,46 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
             step = WizardStep.of(value)
         }
 
-    var settingsReviewed: Boolean = false
+    var settingsReviewed: Boolean
+        get() = inputs.value.settingsReviewed
+        set(value) = edit { it.copy(settingsReviewed = value) }
 
     /**
      * Subset size suggested by [SubsetRecommender] for the current reference
      * image + ROI, or null while it has not been computed. It seeds the subset
      * slider until [subsetUserModified] says the user has taken it over.
      */
-    var subsetRecommendation: SubsetRecommender.Recommendation? = null
+    var subsetRecommendation: SubsetRecommender.Recommendation?
+        get() = inputs.value.subsetRecommendation
+        set(value) = edit { it.copy(subsetRecommendation = value) }
 
     /** Identifies the inputs [subsetRecommendation] was computed for. */
-    var subsetRecommendationKey: String? = null
+    var subsetRecommendationKey: String?
+        get() = inputs.value.subsetRecommendationKey
+        set(value) = edit { it.copy(subsetRecommendationKey = value) }
 
     /** Set once the user drags or types a subset size; suppresses re-seeding. */
-    var subsetUserModified: Boolean = false
+    var subsetUserModified: Boolean
+        get() = inputs.value.subsetUserModified
+        set(value) = edit { it.copy(subsetUserModified = value) }
 
     // ------------------------------------------------------------------
     // Virtual strain gauge study (see [SweepStudy])
     // ------------------------------------------------------------------
 
     /** True when Run should sweep the parameter space instead of solving once. */
-    var sweepMode: Boolean = false
+    var sweepMode: Boolean
+        get() = inputs.value.sweepMode
+        set(value) = edit { it.copy(sweepMode = value) }
 
     /**
      * The sweep's axes as the user set them; [SweepRanges.UNSEEDED] until a
      * recommendation or default seeds the ranges. The seven properties below
      * read and write one axis each.
      */
-    var sweepRanges: SweepRanges = SweepRanges.UNSEEDED
+    var sweepRanges: SweepRanges
+        get() = inputs.value.sweepRanges
+        set(value) = edit { it.copy(sweepRanges = value) }
 
     /** Smallest subset size of the sweep; 0 until a recommendation seeds it. */
     var subsetMin: Int
@@ -278,13 +340,19 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
      * Subset overlap shared by every combination in a sweep (`1 − step/subset`).
      * Kept in sync with [stepDenominator] (`1 − 1/N`).
      */
-    var subsetOverlap: Double = SweepStudy.overlapForDenominator(SweepStudy.DEFAULT_STEP_DENOM)
+    var subsetOverlap: Double
+        get() = inputs.value.subsetOverlap
+        set(value) = edit { it.copy(subsetOverlap = value) }
 
     /** True when the line cut runs along x; false for a cut along y. Editing state; a run reads its `RunSpec`. */
-    var lineCutHorizontal: Boolean = true
+    var lineCutHorizontal: Boolean
+        get() = inputs.value.lineCutHorizontal
+        set(value) = edit { it.copy(lineCutHorizontal = value) }
 
     /** The frame the sweep is solved against: the middle of the sequence until one is picked. */
-    var sweepFrame: SweepFrame = SweepFrame.Middle
+    var sweepFrame: SweepFrame
+        get() = inputs.value.sweepFrame
+        set(value) = edit { it.copy(sweepFrame = value) }
 
     val sweepProgress: SharedFlow<SweepStudyRunner.Progress?> = runs.sweepProgress.asSharedFlow()
 
@@ -351,7 +419,9 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
      * clears it: a saved analysis is never written over (owner decision,
      * 2026-10-15). New inputs clear it too ([clearPreviousResults]).
      */
-    internal var working: WorkingSession? = null
+    internal var working: WorkingSession?
+        get() = inputs.value.working
+        set(value) = edit { it.copy(working = value) }
 
     /**
      * Cooperative cancel: checked between frames here, and forwarded to the

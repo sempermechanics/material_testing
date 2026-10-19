@@ -9,6 +9,7 @@ import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.ui.analysis.WizardTestBed
 import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
 import com.sempermechanics.semper.ui.analysis.recommend.SubsetRecommendationController
+import com.sempermechanics.semper.ui.analysis.sweep.SweepSetupController
 import com.sempermechanics.semper.ui.common.dialog.WarnChip
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -34,6 +35,9 @@ class ParametersPageTest {
         WarnChip(bed.settings.frameSizeWarnRow.root) {},
     )
 
+    /** The sweep page's controller, its views never found: its Run button is not there to enable. */
+    private val sweep = SweepSetupController(bed.activity, bed.viewModel, bed.host)
+
     @After
     fun tearDown() = bed.close()
 
@@ -52,7 +56,7 @@ class ParametersPageTest {
     fun `the ROI row counts the region's points, and Compute stays plain before any run`() {
         loadRun()
 
-        gate.apply(isProcessing = false, sweepController = null)
+        gate.apply(isProcessing = false, sweepController = sweep)
 
         assertEquals("1100 × 800 px · 8,800 points", bed.settings.tvInstruction.text.toString())
         assertEquals("Compute", bed.binding.btnCalculateFullField.text.toString())
@@ -63,7 +67,7 @@ class ParametersPageTest {
         loadRun()
         val subsets = SubsetRecommendationController(bed.activity, bed.viewModel, bed.binding, bed.settings, bed.host)
         WizardParamFields(bed.activity, bed.viewModel, bed.settings, subsets, bed.host) {
-            gate.apply(isProcessing = false, sweepController = null)
+            gate.apply(isProcessing = false, sweepController = sweep)
         }.bind()
 
         bed.settings.sliderStepSize.value = 5f
@@ -71,7 +75,7 @@ class ParametersPageTest {
 
         // The full 1200 × 900 frame, inset 25 px a side for the 31 px subset: 1150 × 850.
         bed.viewModel.hasCustomRoi = false
-        gate.apply(isProcessing = false, sweepController = null)
+        gate.apply(isProcessing = false, sweepController = sweep)
         assertEquals("Full image · 39,100 points", bed.settings.tvInstruction.text.toString())
     }
 
@@ -80,16 +84,16 @@ class ParametersPageTest {
         loadRun()
 
         bed.viewModel.sweepMode = true
-        gate.apply(isProcessing = false, sweepController = null)
+        gate.apply(isProcessing = false, sweepController = sweep)
         assertEquals("1100 × 800 px", bed.settings.tvInstruction.text.toString())
 
         bed.viewModel.sweepMode = false
-        gate.apply(isProcessing = false, sweepController = null)
+        gate.apply(isProcessing = false, sweepController = sweep)
         assertEquals("1100 × 800 px · 8,800 points", bed.settings.tvInstruction.text.toString())
 
         bed.viewModel.hasCustomRoi = false
         bed.viewModel.sweepMode = true
-        gate.apply(isProcessing = false, sweepController = null)
+        gate.apply(isProcessing = false, sweepController = sweep)
         assertEquals("Full image", bed.settings.tvInstruction.text.toString())
     }
 
@@ -98,7 +102,7 @@ class ParametersPageTest {
         loadRun()
         AppSettings.setRunPointsPerSecond(bed.activity, 5000)
 
-        gate.apply(isProcessing = false, sweepController = null)
+        gate.apply(isProcessing = false, sweepController = sweep)
 
         assertEquals("Compute · about 71 s", bed.binding.btnCalculateFullField.text.toString())
     }
@@ -107,7 +111,7 @@ class ParametersPageTest {
     fun `without a region there is no point count and no time`() {
         AppSettings.setRunPointsPerSecond(bed.activity, 5000)
 
-        gate.apply(isProcessing = false, sweepController = null)
+        gate.apply(isProcessing = false, sweepController = sweep)
 
         assertEquals("Full image", bed.settings.tvInstruction.text.toString())
         assertEquals("Compute", bed.binding.btnCalculateFullField.text.toString())

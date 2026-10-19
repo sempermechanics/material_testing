@@ -21,7 +21,12 @@ class AnalysisReadyGate(
     private val frameSizeChip: WarnChip,
 ) {
 
-    fun apply(isProcessing: Boolean, sweepController: SweepSetupController?) {
+    /**
+     * Enables Next, Compute and Run sweep for what the wizard holds, unless
+     * [isProcessing]. [sweepController] is the sweep page's; before its
+     * views are found its Run button is not there to enable.
+     */
+    fun apply(isProcessing: Boolean, sweepController: SweepSetupController) {
         val ready = viewModel.isReadyToCompute()
 
         binding.btnNext.isEnabled = ready && !isProcessing
@@ -40,7 +45,7 @@ class AnalysisReadyGate(
             !isProcessing &&
             sizeError == null
         binding.btnCalculateFullField.isEnabled = canRun && !viewModel.sweepMode
-        sweepController?.setRunSweepEnabled(canRun && viewModel.sweepMode && sweepController.currentPlan().isNotEmpty())
+        sweepController.setRunSweepEnabled(canRun && viewModel.sweepMode && sweepController.currentPlan().isNotEmpty())
 
         settings.btnDefineRoi.isEnabled = (viewModel.refBytes != null) && !isProcessing
         binding.btnBack.isEnabled = !isProcessing
