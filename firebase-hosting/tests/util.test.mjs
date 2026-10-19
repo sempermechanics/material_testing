@@ -8,6 +8,7 @@ import {
   errorDetail, licenceListPath, licenceSearchBody, searchableLicenceText, upsertLicence, alreadyLicensedId,
   isoDay, emailList, licenceEditPatch, daysLeft, reauthMethods, unfinishedStepUpText,
   normaliseClaimCode, claimCodeShaped, MAX_CLAIM_CODE,
+  reauthFailureText, testAccountBody, testAccountEnds, extendDays, TEST_ACCOUNT,
 } from "../public/console/util.js";
 
 const NOW = Date.parse("2026-09-23T12:00:00Z");
@@ -264,6 +265,65 @@ test("a failed re-authentication says the action was not sent", () => {
   assert.match(
     unfinishedStepUpText({ action: "delete", id: "x", reauthFailed: "auth/network-request-failed" }, "K"),
     /re-authentication failed \(auth\/network-request-failed\)/);
+});
+
+test("a failed re-authentication is said in words, an unknown reason as it came", () => {
+  assert.equal(reauthFailureText("cancelled"), "the authenticator code was not entered");
+  assert.equal(reauthFailureText("auth/x"), "re-authentication failed (auth/x)");
+});
+
+/* ------------------------------------------------------- test accounts */
+
+const taForm = (over = {}) => ({ email: "qc@test.example", purpose: "qc", days: "30", maxDevices: "3", note: "", ...over });
+
+test("a test account's body is the form's values, numbers as numbers, an empty note left out", () => {
+  assert.deepEqual(testAccountBody(taForm({ email: " qc@test.example ", note: " rack " })), {
+    body: { email: "qc@test.example", purpose: "qc", days: 30, maxDevices: 3, note: "rack" },
+  });
+  assert.deepEqual(testAccountBody(taForm({ maxDevices: "" })).body,
+    { email: "qc@test.example", purpose: "qc", days: 30 }, "blank phones: the backend's default");
+  assert.deepEqual(testAccountBody(taForm({ days: "90", maxDevices: "10" })).body.days, 90);
+  assert.deepEqual(testAccountBody(taForm({ days: "1", maxDevices: "1" })).body.maxDevices, 1);
+  assert.equal(testAccountBody(taForm({ note: "x".repeat(TEST_ACCOUNT.maxNote) })).body.note.length, 200);
+});
+
+test("a CI account without days never ends; a QC one must end", () => {
+  assert.deepEqual(testAccountBody(taForm({ purpose: "ci", days: " " })).body.days, null);
+  assert.deepEqual(testAccountBody(taForm({ purpose: "ci", days: "7" })).body.days, 7);
+  assert.match(testAccountBody(taForm({ days: "" })).error, /a QC account always ends/);
+});
+
+test("each field the backend would refuse is named before anything is sent", () => {
+  for (const [over, why] of [
+    [{ email: "" }, /email address/],
+    [{ email: "a@b" }, /email address/],
+    [{ email: "a b@c.d" }, /email address/],
+    [{ purpose: "demo" }, /QC or CI/],
+    [{ days: "0" }, /1 to 90/],
+    [{ days: "91" }, /1 to 90/],
+    [{ days: "2.5" }, /1 to 90/],
+    [{ days: "-3" }, /1 to 90/],
+    [{ purpose: "ci", days: "100" }, /or blank for a CI account/],
+    [{ maxDevices: "0" }, /Phones at once is 1 to 10/],
+    [{ maxDevices: "11" }, /Phones at once is 1 to 10/],
+    [{ note: "x".repeat(201) }, /at most 200/],
+  ]) {
+    const out = testAccountBody(taForm(over));
+    assert.equal(out.body, undefined, JSON.stringify(over));
+    assert.match(out.error, why, JSON.stringify(over));
+  }
+});
+
+test("Extend takes a whole number of days, 1 to 90", () => {
+  assert.equal(extendDays(" 45 "), 45);
+  assert.equal(extendDays("90"), 90);
+  for (const text of ["", "0", "91", "1.5", "ten", null]) assert.equal(extendDays(text), null, String(text));
+});
+
+test("a test account ends on its UTC day, or never", () => {
+  assert.equal(testAccountEnds({ expiresAt: "2026-11-18T23:59:59Z" }), day("2026-11-18T23:59:59Z"));
+  assert.equal(testAccountEnds({ expiresAt: null }), "Never");
+  assert.equal(testAccountEnds(null), "Never");
 });
 
 test("a past end is refused before the typed key is asked for", () => {

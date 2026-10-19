@@ -138,6 +138,12 @@ object PrefFiles {
         /** `killSwitches`, by wire name. */
         val KILL_SWITCHES = PrefKey.stringSet("kill_switches")
 
+        /** `testAccount.purpose` (`qc` / `ci`); "" = not a test account. */
+        val TEST_ACCOUNT_PURPOSE = PrefKey.string("test_account_purpose", "")
+
+        /** `testAccount.expiresAt`, epoch millis; 0 = no end on file. */
+        val TEST_ACCOUNT_EXPIRES_AT = PrefKey.long("test_account_expires_at", 0L)
+
         /** Written by builds before the plan → mode rename; read once on upgrade. */
         val LEGACY_PLAN = PrefKey.string("plan")
     }

@@ -68,7 +68,8 @@ change on the desk, and the import is repeated by hand after the return.
 The operator desk is split by card: `operator.js` (sign-in and the row-button
 routing), `state.js` (the loaded licences, shared as one object), `licences.js`
 (the table), `mint.js`, `edit.js` (Edit and To institution), `verify.js`,
-`lifecycle.js` (revoke, delete, restore), `people.js` and `roster-card.js`.
+`lifecycle.js` (revoke, delete, restore), `people.js`, `roster-card.js` and
+`test-accounts.js` (the Test accounts card).
 `licences.js` imports none of the cards; the seat check hears about a re-read
 licence through `onLicenceRead`.
 
@@ -87,7 +88,7 @@ not declare.
 | `/login` (`/console/`) | Anyone with an account | Signs in and forwards to whichever dashboard below is theirs. |
 | `/account` (`/console/account`) | Anyone with an account | See the licence field by field (mode, kind and key, seats, end, grace end, a shared seat's lease, all from `/v1/me`), what a phone does offline, and the saved analyses; give a floating seat back, move the licence to a new device, download an analysis, and, while no licence is attached, redeem a one-time claim code (`account/claim.js`, `POST /v1/me/claim`). The last three need **2FA**. Deleting the account is the app's (device-signed `DELETE /v1/me`); the page says where, and that it removes the sign-in for both apps. |
 | `/console/institution` | IT staff named in a licence's `adminEmails` | Add and remove roster members (one at a time or up to 500 from a CSV), withdraw an unclaimed invitation, see who holds a seat, put a member on hold, clear a device lock; seat counts, roster CSV export, and the licence's audit log with CSV / JSON export. |
-| `/console/operator` | Semper staff (`ADMIN_EMAILS` / `role=admin`) **with 2FA** | Issue individual and institution licences, edit or upgrade one, revoke or delete a key (30-day restore), drive any institution roster with IT's tools (seat counts, CSV import and export, the audit log with CSV / JSON export), approve accounts. |
+| `/console/operator` | Semper staff (`ADMIN_EMAILS` / `role=admin`) **with 2FA** | Issue individual and institution licences, edit or upgrade one, revoke or delete a key (30-day restore), drive any institution roster with IT's tools (seat counts, CSV import and export, the audit log with CSV / JSON export), approve accounts, and create, list, extend, re-password and end the test accounts for QC and CI. |
 
 ## The front door
 
@@ -314,6 +315,28 @@ and operator rosters say the same for `member_already_licensed`. Every mint
 says whether the licence reached the person: attached, waiting for their
 first sign-in, or not delivered and why.
 
+### Test accounts
+
+The Test accounts card (`operator/test-accounts.js`, ADR-027)
+makes the sign-ins QC staff and CI use: `POST /v1/admin/test-accounts` with
+`{email, purpose, days, maxDevices, note}` (QC: days 1–90, default 30; CI: days
+blank is sent as `days: null`, no expiry; phones at once 1–10, default 3). The
+address must be on one of the server's `TEST_ACCOUNT_DOMAINS`; with none set,
+every create is refused (`403 test_accounts_disabled`), and an address with an
+account or a sign-in already is refused too (`409 email_in_use`). The list
+(`GET …`) is read on demand, like Recently deleted. Each row offers Extend
+(`POST …/{uid}/extend {days}`), New password (`POST …/{uid}/password`) and End
+now (`DELETE …/{uid}`, after the address is typed).
+
+Every one of those changes is held to the revoke window, so each first steps
+up with `stepUpFresh` (`stepUpForRevoke` is the same step-up in a licence's
+words), and a Google re-authentication carries the change through
+sessionStorage and finishes it after one plain confirmation, as a revoke does.
+The password, from a create or a New password, is shown once in its dialog with
+Copy and a "shown once" warning. It is never written to the status line,
+storage or a log, the stash carries none, and its text is removed from the page
+when the dialog closes (Close or Escape).
+
 ### Go-live checklist (Identity Platform + consoles)
 
 Same Firebase project as the app (`indicvision-dic-app-auth`). Do **not** open a
@@ -503,13 +526,14 @@ The other files cover `auth.js`, `api.js`, `dialogs.js`, `status.js`,
 
 | File | Pins |
 |---|---|
-| `auth.test.mjs` | `api()` sends `Bearer <ID token>` to `API_BASE_URL + path` and throws the backend's code; `reauth_required` leaves for Google once and never retries with the stale token; a step-up that completes retries once with a force-refreshed token; `allowStepUp: false` and `mfa_required` are handed back untouched; a cancelled code is `ERR_CANCELLED`; the 120 s redirect-loop guard and `operatorAsked`; `apiBlob()`; a resolved challenge adopts the re-authenticated user; `sessionHasSecondFactor` reads the token claim; TOTP enrolment in the page; `stepUpForRevoke`'s 90 s window and password-versus-Google choice; `confirmByTyping`; a refusal carries its `code`, the `rest` after it, and the `status` |
+| `auth.test.mjs` | `api()` sends `Bearer <ID token>` to `API_BASE_URL + path` and throws the backend's code; `reauth_required` leaves for Google once and never retries with the stale token; a step-up that completes retries once with a force-refreshed token; `allowStepUp: false` and `mfa_required` are handed back untouched; a cancelled code is `ERR_CANCELLED`; the 120 s redirect-loop guard and `operatorAsked`; `apiBlob()`; a resolved challenge adopts the re-authenticated user; `sessionHasSecondFactor` reads the token claim; TOTP enrolment in the page; `stepUpForRevoke`'s 90 s window and password-versus-Google choice, and `stepUpFresh` in its caller's words; `confirmByTyping`; a refusal carries its `code`, the `rest` after it, and the `status` |
 | `signin.test.mjs` | `requireSignIn`: nothing reaches `onReady` signed out or without this session's second factor; one start per account; the return leg hands `resume` over once, or marks it `reauthFailed`; declining to enrol signs out; a redirect that keeps failing stops with a message |
 | `router.test.mjs` | `/login` forwards staff, IT contacts (deep-linked to one licence) and everyone else, and offers a switcher when it cannot or should not choose |
 | `operator.test.mjs` | The desk only for `role=admin`; licence rows (seats, term, cap, state, which actions apply — no Delete on a system Demo key, only Delete on a revoked row); Show revoked / Show Demo refetch; Load more without duplicates; the filter, and the backend search after a 300 ms pause (a POST with the text in its body, never in a URL); revoke and delete: who-is-affected confirmation, typed key, `stepUpForRevoke` (a stale session goes to Google carrying the licence, nothing sent), the sent request and its message, each refusal's wording; the return leg finishes a revoke or delete after one plain confirmation, once, reads a licence past the first page first, refuses a gone or already-revoked one, and says a failed leg sent nothing; Edit prefill, a later end without a typed key, an earlier one only with it, clearing the cap, a Demo key's cap locked, a Demo key's hand-off to Issue (address filled, Individual ticked, nothing sent), each `editError` code in the dialog; New device; the roster card on the staff routes, with the same actions as IT, and a refusal said in the card |
 | `account.test.mjs` | Licence pills and explanation (licensed, Demo, perpetual, expired past grace, ended in grace, shared seat held or not, a backend without `held`); Move licence hidden without a held licence; "N of M", "N analyses stored", and the inactive-licence wording, also when the analyses answer first; each analysis row's state, file count and stored size ("—" for failed or nothing, "… when done" while uploading), Download disabled until something finished, a specimen name never markup; Show more; give a seat back and move the licence (confirmation, request, the cooldown instant from `device_change_too_soon: <ISO>`, each refusal); Download saves `semper-analysis-<id>.zip`, and its refusals; the licence's facts (mode, licence, seats, end, grace end, lease; none without a licence; an unknown value as it came), the offline line only with a licence, and the delete card naming both apps |
 | `institution.test.mjs` | Nothing of the roster for an address no licence names (or an unverified one); a failed check leaves the page usable; the deep link; "N of M seats taken" / "in use right now" with invites counted apart; member rows (New device, Hold / Resume, Remove; nothing for a removed member; invites with Withdraw); not-found wording; Hold / Resume / New device bodies and reload; Remove and Withdraw confirm first; `ACT_ERRORS`; adding a member (on now vs invited, each refusal, `claim_contended`); the licence picker; a roster longer than one page read to the end |
 | `institution-tools.test.mjs` | The seat-count tiles (attention marked, a failure said in place, a late answer for another licence dropped); Export roster CSV saves `roster-<keyPrefix>.csv`; the import's row-count preview and 500-row stop, a chosen file, the sent body, every row's result, a roster reload only when someone was added, each whole-file refusal; another licence clears the results, one not yours hides the tools; the audit log read on demand with its dates, members named by address, Older events, an empty range, `invalid_audit_range`, a late page dropped, CSV and JSON exports and the 5,000-event note |
+| `operator-test-accounts.test.mjs` | The Test accounts card: the create body (QC days, CI `days: null`, phones), each form error before anything is sent, the password in its dialog only and gone from the page, the status line and storage once closed (Close or Escape), Copy; `test_accounts_disabled`, `email_in_use` and the step-up refusals; a stale sign-in sent to Google with the change stashed (no password in it) and nothing sent, and the return leg finishing a create, Extend or End now after one confirmation, or saying a failed leg sent nothing; the list on demand (purpose, end or Never, phones, status, note never markup, Retry, a late answer dropped); Extend's days, New password, End now behind the typed address |
 | `operator-roster-tools.test.mjs` | The desk's roster card on the staff routes: the tiles (a failure in place, another licence's late answer dropped); Export roster CSV; the import's preview, 500-row stop, chosen file, sent body, every row's result, and the roster and licence row re-read; a refused import; a stale sign-in sent to Google with nothing else sent; another licence clears the results and the log; the audit log by date and page, `invalid_audit_range`, CSV and JSON exports and the 5,000-event note; and both pages drawing the same HTML and sending the same requests for the same answers |
 
 How the fake gets in: `tests/harness.mjs` calls `module.register` with

@@ -381,8 +381,15 @@ One flag, two consumers:
 
 ```
 AppSettings.diagnosticsEnabled ─┬─ Diagnostics.apply/setEnabled → Crashlytics + CrashReportingTree
-                                └─ diagnostics/SemperAnalytics.event (dropped, not queued, when off)
+                                ├─ diagnostics/SemperAnalytics.event (dropped, not queued, when off)
+                                └─ Diagnostics.applyAccountType → account_type (cleared when off)
 ```
+
+`account_type` is `test` or `ci` on a QC or CI test account (`/v1/config`'s
+`testAccount`, kept by `AppRemoteConfig.testAccount`), as a Firebase Analytics
+user property and a Crashlytics custom key. It is re-applied whenever the
+consent or the cached config changes, and cleared without consent, on a real
+account and at sign-out.
 
 Asked once on first run (after the beta notice, defaulting to **off**), mirrored
 by the Settings toggle (**Send crash reports and usage data**). Events carry
@@ -390,7 +397,7 @@ buckets and enums only — never images, results, session ids, specimen names or
 paths. The label, its subtitle, the first-run prompt and
 [legal/PRIVACY_POLICY.md](legal/PRIVACY_POLICY.md) §2.4 all name both halves;
 keep them in step if the event set changes.
-Tests: `diagnostics/SemperAnalyticsTest`.
+Tests: `diagnostics/SemperAnalyticsTest`, `diagnostics/AccountTypeTest`.
 
 ### B11 Device identity and attestation 🔒
 

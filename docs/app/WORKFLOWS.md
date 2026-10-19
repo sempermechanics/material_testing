@@ -276,6 +276,7 @@ data**.
 | [ ] 4.1 | Open Settings | All seven sections are collapsed; chevrons rotate on tap |
 | [ ] 4.2 | Expand **Account** | Your email and "Device ID · …" are shown; the device ID can be selected and copied |
 | [ ] 4.2a | Expand **Account** on a licensed account | "Licensed as SEMP-…" is shown below the device ID — the key prefix support asks for, never the key. Absent whenever the account runs as Demo, a held key that is not active included |
+| [ ] 4.2b | Expand **Account** on a test account staff made for QC or CI (ADR-027) | "Test account · ends 18 Nov 2026" (the day, in the phone's language) below the licence line, or "Test account (CI)" for a CI account with no end. No such line on a real account (`SettingsAccountSection.testAccountLine`, from `/v1/config`'s `testAccount`) |
 | [ ] 4.3 | Expand **Account** as a non-admin | No "Pending access requests" button |
 | [ ] 4.4 | Expand **Account** as an admin | The button appears and opens the admin list |
 | [ ] 4.4a | Tap **Refresh licence** under **Account** | A spinner on the button, then one line: "Licensed (institution seat)", "Licensed (Semper licence)", "Still on the demo", or, offline, "Couldn't reach Semper — will retry". If the licence changed, Settings rebuilds with the sections it now opens or locks. No field to type a key in, and no price or purchase anywhere ([ADR-024](../adr/ADR-024-account-anchored-entitlements.md)) |
@@ -1080,7 +1081,11 @@ verified, both are live; §1.13a covers the in-app reset form it opens.
   session ids or specimen names — and every one of them is dropped unless
   `AppSettings.diagnosticsEnabled` is on. The consent copy names both halves —
   **Send crash reports and usage data** — matching
-  [the privacy policy](../legal/PRIVACY_POLICY.md) §2.4.
+  [the privacy policy](../legal/PRIVACY_POLICY.md) §2.4. On a QC or CI test
+  account the same consent also sets the Analytics user property and the
+  Crashlytics key `account_type` (`test` or `ci`), so test traffic can be told
+  from real use; without consent, on a real account and after sign-out it is
+  cleared (`Diagnostics.applyAccountType`).
 - **An interrupted solve cannot be resumed** — it is a foreground coroutine, so
   process death loses the run.
 - **`AnalysisWizardSmokeTest`** opens the analysis wizard and asserts chrome
