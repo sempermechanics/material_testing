@@ -48,7 +48,9 @@ async def test_another_accounts_analyses_on_this_device_fill_the_demo_cap(demo, 
 
     assert r.status_code == 409, r.text
     detail = r.json()["detail"]
-    assert detail.startswith("session_quota_exceeded: ")
+    # Its own code (TD-279): the account's count has room, so the app must
+    # not read this as the account cap that a re-check can clear.
+    assert detail.startswith("device_quota_exceeded: ")
     # Nothing about the other account: no uid, no address, not even its count.
     assert "other-account" not in detail
     assert f"{CAP}/{CAP}" not in detail and "0/" not in detail

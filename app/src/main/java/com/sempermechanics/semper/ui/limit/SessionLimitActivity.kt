@@ -40,7 +40,6 @@ class SessionLimitActivity : AppCompatActivity() {
         setContentView(binding.root)
         Insets.padVertical(binding.limitRoot)
 
-        binding.tvLimitBody.setText(R.string.limit_body)
         renderQuota()
 
         binding.btnEmailSupport.setOnClickListener { emailSupport() }
@@ -49,14 +48,21 @@ class SessionLimitActivity : AppCompatActivity() {
         binding.tvLimitBack.setOnClickListener { finish() }
     }
 
+    /**
+     * The body and the counter, by which half of the cap holds the stop. The
+     * account's counter is beside the point when the device is full (TD-279):
+     * "3 / 25" under "limit reached" reads as a fault, so it is hidden.
+     */
     private fun renderQuota() {
+        val deviceStop = SessionQuota.deviceStop(this)
+        binding.tvLimitBody.setText(if (deviceStop) R.string.limit_body_device else R.string.limit_body)
         val used = AccountCache.quotaUsed(this)
         // The cap the gate enforces, not the server's maxSessions: with the
         // entitlement token lapsed that is demo's (TD-263).
         val max = LicenseEntitlements.shownAnalysisCap(this)
         // Only show the counter when the backend actually reported numbers.
-        binding.tvLimitQuota.isVisible = max > 0
-        if (max > 0) {
+        binding.tvLimitQuota.isVisible = max > 0 && !deviceStop
+        if (binding.tvLimitQuota.isVisible) {
             binding.tvLimitQuota.text = resources.getQuantityString(R.plurals.limit_quota_fmt, used, used, max)
         }
     }
@@ -68,7 +74,8 @@ class SessionLimitActivity : AppCompatActivity() {
      */
     private fun emailSupport() {
         val email = AccountCache.cachedEmail(this) ?: getString(R.string.pending_unknown_account)
-        val quota = "Quota: ${AccountCache.quotaUsed(this)}/${LicenseEntitlements.shownAnalysisCap(this)}"
+        val quota = "Quota: ${AccountCache.quotaUsed(this)}/${LicenseEntitlements.shownAnalysisCap(this)}" +
+            if (SessionQuota.deviceStop(this)) " (device limit)" else ""
         val context = SupportMail.contextLines(email, DeviceKeys.deviceId(this), extra = listOf(quota))
         SupportMail.open(
             this,
@@ -93,7 +100,11 @@ class SessionLimitActivity : AppCompatActivity() {
         }
     }
 
-    /** Re-query the backend; if the account is under the limit again, dismiss. */
+    /**
+     * Re-query the backend; if the account is under the limit again, dismiss.
+     * The device's stop outlives it: the reconcile reports the account's count
+     * only, and lifting the stop on it let the next upload be refused again.
+     */
     private fun recheck() {
         setLoading(true)
         lifecycleScope.launch {
@@ -121,7 +132,12 @@ class SessionLimitActivity : AppCompatActivity() {
                 finish()
             } else {
                 renderQuota()
-                Feedback.toast(this@SessionLimitActivity, R.string.limit_still_full, long = true)
+                val still = if (SessionQuota.deviceStop(this@SessionLimitActivity)) {
+                    R.string.limit_still_full_device
+                } else {
+                    R.string.limit_still_full
+                }
+                Feedback.toast(this@SessionLimitActivity, still, long = true)
             }
         }
     }

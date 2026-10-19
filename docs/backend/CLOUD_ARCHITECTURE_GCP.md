@@ -808,7 +808,8 @@ analyses stored at once, less `PROVISION_FAILED`, so a delete frees a place
 also refuses when the device's stored analyses, every account's, reach the cap
 (`count_device_sessions`, `:415-439`; `_device_cap_reached`,
 `backend/app/routers/sessions.py:473-486`, applied at `:546-547`), with a
-`409 session_quota_exceeded` that names neither the count nor the owners. A
+`409 device_quota_exceeded` that names neither the count nor the owners (its
+own code since TD-279, so the app does not lift it on the account's count). A
 session with no `deviceId` counts toward no device. `GET /v1/sessions`
 `quota.used` stays the account's count (`sessions.py:131`). A demo create costs
 11 reads, not 9 ([request-volume.md](../perf/request-volume.md) Pass 4). After

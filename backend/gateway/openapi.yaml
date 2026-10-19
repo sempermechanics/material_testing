@@ -294,7 +294,7 @@ paths:
           session-create-requests: 1
       responses:
         '200': { description: OK }
-        '409': { description: "session_quota_exceeded (the account's stored analyses; for a demo account also the device's)" }
+        '409': { description: "session_quota_exceeded (the account's stored analyses) or, for a demo account, device_quota_exceeded (the device's)" }
         '413': { description: too_many_files }
         '429': { description: Rate limited }
         '401': { description: Missing or invalid device attestation }

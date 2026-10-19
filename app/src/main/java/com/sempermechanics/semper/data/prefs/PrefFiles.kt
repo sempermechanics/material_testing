@@ -77,6 +77,9 @@ object PrefFiles {
         val QUOTA_USED = PrefKey.int("quota_used")
         val LOCAL_COUNT = PrefKey.int("quota_local_count")
         val LIMIT_FORCED = PrefKey.boolean("session_limit_forced")
+
+        /** The device half of the demo cap refused an upload (`device_quota_exceeded`). */
+        val DEVICE_LIMIT_FORCED = PrefKey.boolean("device_limit_forced")
         val TERMS_REQUIRED = PrefKey.string("terms_required_version")
         val TERMS_ACCEPTED = PrefKey.string("terms_accepted_version")
         val TERMS_SYNCED = PrefKey.boolean("terms_accepted_synced")

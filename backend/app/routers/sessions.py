@@ -491,10 +491,12 @@ def _device_quota_detail(cap: int) -> str:
 
     Says neither how many analyses the device holds nor whose they are: the
     other analyses may belong to another account, and the caller must not
-    learn that one exists, let alone its count. The code before the colon is
-    the one the app already branches on.
+    learn that one exists, let alone its count. Its own code, not the
+    account's (TD-279): the app's Re-check counts the account, finds room,
+    and would lift a stop the next upload refuses again. A build that
+    predates the code fails that one backup as refused (`Kind.REJECTED`).
     """
-    return (f"{errors.SESSION_QUOTA_EXCEEDED}: the demo allows {cap} analyses stored "
+    return (f"{errors.DEVICE_QUOTA_EXCEEDED}: the demo allows {cap} analyses stored "
             "from one device. Delete an older analysis from this device, or use a "
             "licence, to sync a new one.")
 

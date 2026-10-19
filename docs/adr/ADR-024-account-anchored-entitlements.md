@@ -131,7 +131,7 @@ licence or seat device lock and drops to Demo on a mismatch or revocation
 
 | Route | Caller | Gates, in order |
 |---|---|---|
-| `POST /v1/sessions` (record an analysis) | signed device | rate limit; kill switch `upload` or `backup` → 503 `feature_paused`; files per session → 413; account cap: stored analyses (less `PROVISION_FAILED`) ≥ `maxSessions` → 409 `session_quota_exceeded`; **demo only**, device cap: every account's stored analyses from this device ≥ `maxSessions` → 409 `session_quota_exceeded` (`backend/app/routers/sessions.py:502-547`) |
+| `POST /v1/sessions` (record an analysis) | signed device | rate limit; kill switch `upload` or `backup` → 503 `feature_paused`; files per session → 413; account cap: stored analyses (less `PROVISION_FAILED`) ≥ `maxSessions` → 409 `session_quota_exceeded`; **demo only**, device cap: every account's stored analyses from this device ≥ `maxSessions` → 409 `device_quota_exceeded` (TD-279; `backend/app/routers/sessions.py:504-549`) |
 | `POST /v1/files/{id}/complete` | signed device | rate limit; kill switch `upload` or `backup` → 503 (`backend/app/routers/files.py:106-110`) |
 | `GET /v1/files/{id}/content` (restore) | signed device | rate limit; kill switch `restore` → 503; demo → 403 `feature_not_licensed` (`files.py:38-58`) |
 | `GET /v1/sessions/{sid}/bundle` (download) | signed device, or browser with a second factor | rate limit; kill switch `restore` → 503; demo → 403 `feature_not_licensed` (`sessions.py:355-387`) |
@@ -200,9 +200,10 @@ count closes the cheaper bypass, a fresh account on the same phone.
   (`data/account/DeviceKeys.kt:54-62`): a factory reset gives a new id, and a
   phone handed on after a device release still counts the previous holder's
   analyses (TD-276).
-- The hosted Terms still describe a "valid licence key" and fees "as stated in
-  your order" (`docs/legal/TERMS_OF_SERVICE.md:149-172`) and are linked from the
-  app (TD-277).
+- The hosted Terms keep fees "as stated in your order" for access arranged
+  outside the app (`docs/legal/TERMS_OF_SERVICE.md:149-180`). Their wording was
+  aligned on 2026-10-19 (account-anchored sources in 6.2, "no purchases in the
+  App" in 6.6); counsel's review is owed (TD-277).
 
 ## Consequences
 
@@ -231,6 +232,7 @@ count closes the cheaper bypass, a fresh account on the same phone.
       (`6c6d059..2371bec`). Their tests first run in that branch's CI (TD-219).
 - [ ] Deploy backend, gateway (the claim route is a new path) and Hosting, in
       the order in TD-216.
+- [x] Terms wording aligned with consumption-only (6.2, 6.6; 2026-10-19).
 - [ ] Counsel reviews the Terms' fees section against consumption-only (TD-277).
 - [ ] Retire `POST /v1/licenses/activate` and its contract fixture once no
       installed build can call it (TD-278).

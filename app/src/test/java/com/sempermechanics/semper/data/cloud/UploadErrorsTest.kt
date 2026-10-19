@@ -28,6 +28,7 @@ class UploadErrorsTest {
     @Test
     fun `only the quota code makes a 409 a quota failure`() {
         assertEquals(Kind.QUOTA, UploadErrors.classify(409, body("session_quota_exceeded: 25/25 analyses stored.")))
+        assertEquals(Kind.QUOTA, UploadErrors.classify(409, body("device_quota_exceeded: the demo allows 25")))
         assertEquals(Kind.TOO_LARGE, UploadErrors.classify(413, body("too_many_files")))
         // `:complete` 409s when the file record no longer matches: the session
         // can't be finished, but nothing about the analysis is too large.

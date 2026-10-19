@@ -951,6 +951,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="limit_recheck">Re-check limit</string>
     <string name="limit_back">Back to my analyses</string>
     <string name="limit_subject">Semper support</string>
+    <!-- The device half of the demo cap (TD-279): this phone's stored analyses,
+         every account's, are at the demo's. Says nothing of the other accounts. -->
+    <string name="limit_body_device">This phone holds the most saved analyses the demo allows, counting every account used on it, so new analyses can\'t be saved.\n\nDelete an analysis you no longer need from this phone, including its cloud copy, then try again. If your institution has given you a seat or your licence was just added, tap Refresh licence.</string>
+    <string name="limit_still_full_device">This phone is still at the demo limit. Delete an analysis, including its cloud copy, then try again.</string>
     <string name="limit_still_full">Still at the limit. Delete an analysis, then re-check.</string>
     <string name="limit_cleared">You\'re under the limit again.</string>
 
