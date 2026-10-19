@@ -123,7 +123,8 @@ class CloudBackupsCardTest {
         val target = CloudBackupsCard.target(activity, beam)
 
         assertEquals(RestoreStart.Target("c1", "s1", "Beam test"), target)
-        assertEquals("Beam test · 22 MB", CloudBackupsCard.label(activity, beam))
+        // Settings' unit and rounding: 21 MiB reads "21 MB" on both screens.
+        assertEquals("Beam test · 21 MB", CloudBackupsCard.label(activity, beam))
     }
 
     @Test

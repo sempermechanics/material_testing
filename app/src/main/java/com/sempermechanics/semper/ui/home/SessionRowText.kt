@@ -10,6 +10,7 @@ import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.imaging.video.VideoFrameExtractor
 import com.sempermechanics.semper.report.EngineStats
 import com.sempermechanics.semper.ui.analysis.run.EngineFailure
+import com.sempermechanics.semper.ui.common.ByteUnit
 import com.sempermechanics.semper.ui.common.transfer.TransferWorkObserver
 import java.util.Locale
 
@@ -23,9 +24,6 @@ internal object SessionRowText {
     const val CONVERGENCE_WARN_BELOW = 85f
 
     private const val SEP = " · "
-    private const val KB = 1024L
-    private const val MB = KB * 1024L
-    private const val GB = MB * 1024L
 
     /** Below this a byte figure keeps one decimal ("4.2"); from it on, none ("12"). */
     private const val WHOLE_FROM = 10.0
@@ -66,7 +64,12 @@ internal object SessionRowText {
         val total = progress.bytesTotal
         return when {
             done != null && total != null && total > 0 ->
-                context.getString(R.string.transfer_row_bytes_fmt, label, figure(done, unitOf(total)), withUnit(total))
+                context.getString(
+                    R.string.transfer_row_bytes_fmt,
+                    label,
+                    figure(done, ByteUnit.of(total)),
+                    withUnit(total),
+                )
             progress.percent > 0 ->
                 context.getString(R.string.transfer_row_percent_fmt, label, oneDecimal(progress.percent.toFloat()))
             else -> label
@@ -139,26 +142,19 @@ internal object SessionRowText {
 
     private fun oneDecimal(value: Float): String = String.format(Locale.getDefault(), "%.1f", value)
 
-    /** "12 MB": [bytes] in its own [unitOf]. */
+    /** "12 MB": [bytes] in its own [ByteUnit]. */
     internal fun withUnit(bytes: Long): String {
-        val unit = unitOf(bytes)
-        return "${figure(bytes, unit)} ${unit.second}"
+        val unit = ByteUnit.of(bytes)
+        return "${figure(bytes, unit)} ${unit.label}"
     }
 
     /** [bytes] counted in [unit]: one decimal under ten, whole from ten. */
-    internal fun figure(bytes: Long, unit: Pair<Long, String>): String {
-        val value = bytes.toDouble() / unit.first
+    internal fun figure(bytes: Long, unit: ByteUnit): String {
+        val value = unit.amount(bytes)
         return if (value < WHOLE_FROM) {
             String.format(Locale.getDefault(), "%.1f", value)
         } else {
             String.format(Locale.getDefault(), "%.0f", value)
         }
-    }
-
-    /** The binary unit Settings' sizes use for [bytes] (1 KB = 1024 bytes, as `ByteSize`). */
-    private fun unitOf(bytes: Long): Pair<Long, String> = when {
-        bytes >= GB -> GB to "GB"
-        bytes >= MB -> MB to "MB"
-        else -> KB to "KB"
     }
 }

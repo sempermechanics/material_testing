@@ -30,6 +30,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
@@ -399,11 +400,15 @@ object SessionUploadBundler {
             var ok = true
             try {
                 scratch.outputStream().use { stream ->
-                    PdfReportGenerator.generate(reportData, stream, resources).collect { progress ->
-                        if (progress is PdfReportGenerator.Progress.Error) {
-                            Timber.e(progress.ex, "PDF generation failed for %s", frameName)
-                            ok = false
-                        }
+                    // The generator throws a failed render; the frame's report is
+                    // then skipped (its heatmaps still staged), cancellation is not.
+                    try {
+                        PdfReportGenerator.generate(reportData, stream, resources).collect()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                        Timber.e(e, "PDF generation failed for %s", frameName)
+                        ok = false
                     }
                 }
                 onFieldHeatmaps(reportData.fieldResults)

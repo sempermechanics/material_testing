@@ -1,7 +1,6 @@
 package com.sempermechanics.semper.ui.home
 
 import android.content.Context
-import android.text.format.Formatter
 import android.view.View
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
@@ -12,6 +11,7 @@ import com.sempermechanics.semper.data.cloud.CloudBackupListing
 import com.sempermechanics.semper.data.cloud.restore.CloudRestore
 import com.sempermechanics.semper.data.cloud.restore.RestoreStart
 import com.sempermechanics.semper.data.net.CloudSessionDto
+import com.sempermechanics.semper.ui.common.ByteSize
 import com.sempermechanics.semper.ui.common.SerialJob
 import kotlinx.coroutines.CoroutineScope
 
@@ -95,7 +95,7 @@ internal class CloudBackupsCard(
         fun label(context: Context, backup: CloudBackupListing.Backup): String = context.getString(
             R.string.cloud_backups_item_fmt,
             nameOf(context, backup),
-            Formatter.formatShortFileSize(context, backup.bytes),
+            ByteSize.format(backup.bytes),
         )
 
         /** Restore into the backup's own local id, as Settings does, so a later restore fills the same row. */

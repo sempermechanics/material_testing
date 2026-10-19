@@ -8,6 +8,7 @@ import com.sempermechanics.semper.report.PdfReportGenerator.Progress
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -19,7 +20,7 @@ import java.io.OutputStream
  * The PDF report drawn by the platform's real PdfDocument, which Robolectric
  * cannot run: the stages, a document that starts `%PDF`, one cover per
  * readable frame, A4 pages, every frame's bitmaps released once it is drawn, and a
- * failed write reported as Error rather than Complete.
+ * failed write thrown to the collector rather than completing.
  */
 @RunWith(AndroidJUnit4::class)
 class PdfReportDeviceTest {
@@ -60,7 +61,6 @@ class PdfReportDeviceTest {
     fun singleReportWritesAPdf() {
         val out = ByteArrayOutputStream()
         val events = runBlocking { PdfReportGenerator.generate(data(), out, resources).toList() }
-        assertEquals(Progress.Complete, events.last())
         assertEquals(listOf(10, 30, 90, 98), percents(events))
         assertEquals("%PDF", String(out.toByteArray().copyOf(4), Charsets.US_ASCII))
         // Cover, three field pages (U+V, Exx+Eyy, Exy+ZNSSD), telemetry.
@@ -75,7 +75,6 @@ class PdfReportDeviceTest {
         val events = runBlocking {
             PdfReportGenerator.generateBatch(frames.size, { frames[it] }, out, resources = resources).toList()
         }
-        assertEquals(Progress.Complete, events.last())
         assertEquals(listOf(2, 32, 63, 96, 98), percents(events))
         // Two readable frames of cover + three field pages, then one telemetry page.
         assertEquals(2 * (SINGLE_PAGES - 1) + 1, pageCount(out.toByteArray()))
@@ -92,11 +91,12 @@ class PdfReportDeviceTest {
             override fun write(b: Int) = throw IOException("disk full")
             override fun write(b: ByteArray, off: Int, len: Int) = throw IOException("disk full")
         }
-        val events = runBlocking { PdfReportGenerator.generate(data(), broken).toList() }
+        val events = mutableListOf<Progress>()
         // PdfDocument itself swallows the IOException; the generator must not.
-        val last = events.last()
-        assertTrue("$events", last is Progress.Error)
-        assertEquals("disk full", (last as Progress.Error).ex.message)
+        val thrown = assertThrows(IOException::class.java) {
+            runBlocking { PdfReportGenerator.generate(data(), broken).collect { events += it } }
+        }
+        assertEquals("disk full", thrown.message)
         assertEquals(listOf(10, 30, 90, 98), percents(events))
     }
 
