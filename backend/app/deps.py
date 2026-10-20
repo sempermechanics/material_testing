@@ -454,13 +454,15 @@ def _device_is_bound(dev: dict | None, user: dict, device_id: str, app: str) -> 
     ACTIVE and the caller's is not enough: the account's binding for the
     asking app must name this device too, so a stale ACTIVE record (a
     registration that lost a race, a release that left one behind) cannot
-    sign (ADR-010, device trust).
+    sign (ADR-010, device trust). A test account holds several phones, so
+    any of its ACTIVE ones for the app signs (ADR-027).
     """
     return bool(
         dev
         and dev.get("uid") == user.get("uid")
         and dev.get("status") == statuses.DEVICE_ACTIVE
-        and user.get(apps.field("activeDeviceId", app)) == device_id
+        and (user.get(apps.field("activeDeviceId", app)) == device_id
+             or repo.test_account_of(user) is not None)
     )
 
 

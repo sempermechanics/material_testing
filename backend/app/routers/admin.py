@@ -153,10 +153,12 @@ def admin_list_licenses(
     include_demo: bool = False,
     include_revoked: bool = True,
     q: LicenceSearch = "",
+    include_test: bool = False,
     admin=Depends(admin_user),
 ):
     """Licences, newest first. System Demo keys are left out unless
-    `include_demo`; revoked licences are left out when `include_revoked` is
+    `include_demo`, and test-account licences unless `include_test`
+    (ADR-027); revoked licences are left out when `include_revoked` is
     false. `q` searches by exact address, domain or key prefix instead of
     paging (see `repo.list_licenses`).
 
@@ -168,7 +170,8 @@ def admin_list_licenses(
         obs.log_event(log, logging.WARNING, "deprecated_query_search",
                       uid=admin["uid"], path="/v1/admin/licenses")
     return _licence_listing(admin, limit=limit, page_token=page_token,
-                            include_demo=include_demo, include_revoked=include_revoked, q=q)
+                            include_demo=include_demo, include_revoked=include_revoked, q=q,
+                            include_test=include_test)
 
 
 @router.post("/v1/admin/licenses/search")
@@ -179,17 +182,19 @@ def admin_search_licenses(body: AdminLicenseSearch, admin=Depends(admin_user)):
     the body repeats."""
     return _licence_listing(admin, limit=body.limit, page_token=body.page_token,
                             include_demo=body.include_demo,
-                            include_revoked=body.include_revoked, q=body.q)
+                            include_revoked=body.include_revoked, q=body.q,
+                            include_test=body.include_test)
 
 
 def _licence_listing(admin: dict, *, limit: int, page_token: str, include_demo: bool,
-                     include_revoked: bool, q: str) -> dict:
+                     include_revoked: bool, q: str, include_test: bool = False) -> dict:
     """The licence table or a search over it, for the GET and the POST."""
     rate_limit.enforce(rate_limit.admin_bucket, admin["uid"])
     limit = clamp_page_size(limit, 200)
     licenses, next_token = repo.list_licenses(
         limit=limit, page_token=page_token or None,
         include_demo=include_demo, include_revoked=include_revoked, q=q.strip(),
+        include_test=include_test,
     )
     return {
         "licenses": licenses,

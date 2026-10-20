@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 
 from .. import repo, tasks
 from ..models import LicenseFanoutTask, ProvisionTask
+from ..services import testaccounts as test_accounts
 from ..session_provision import provision_session
 
 router = APIRouter()
@@ -27,3 +28,13 @@ def license_fanout_task(body: LicenseFanoutTask, caller=Depends(tasks.tasks_call
     and a licence that is gone both answer 200 with nothing finished, so the
     queue does not retry them; a failed fan-out raises, and is retried."""
     return {"licenseId": body.licenseId, "finished": repo.finish_license_fanout(body.licenseId)}
+
+
+@router.post(tasks.TEST_ACCOUNT_EXPIRY_PATH)
+def expire_test_accounts_task(caller=Depends(tasks.tasks_caller)):
+    """Cloud Scheduler, daily: end every test account past its `expiresAt`
+    (ADR-027), each audited `test_account_expired`. OIDC as the invoker, like
+    the Cloud Tasks callbacks, and off the gateway. Answers
+    `{expiredTestAccounts, ended, failed}`: how many were due, and the uids
+    ended and not; a failed one is due again tomorrow."""
+    return test_accounts.expire_due()

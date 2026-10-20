@@ -98,9 +98,11 @@ def provision_session(sid: str, *, purge_on_failure: bool = False,
             user = repo.get_user(uid) or {}
             cached = {"userFolderId": user.get("driveFolderId"),
                       "sessionsFolderId": user.get("driveSessionsFolderId")}
+            # A test account's uploads go to their own tree (ADR-027).
+            test = {"test": True} if repo.test_account_of(user) else {}
             folders = drive.ensure_session_folders(
                 token, uid, sid, roles=roles, cached=cached,
-                session_folder_id=session.get("driveFolderId"))
+                session_folder_id=session.get("driveFolderId"), **test)
             # Write only when the pointers changed — the common upload reuses them.
             if (folders["userFolderId"] != cached["userFolderId"]
                     or folders.get("sessionsFolderId") != cached["sessionsFolderId"]):

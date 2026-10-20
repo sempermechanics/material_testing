@@ -1,4 +1,6 @@
-"""Cloud Tasks: enqueue session provisioning, and authenticate the callback.
+"""Cloud Tasks: enqueue session provisioning, and authenticate the callback
+(and the Cloud Scheduler job that ends expired test accounts, which signs
+its OIDC token as the same invoker).
 
 Why this exists: POST /v1/sessions used to open one Drive resumable session per
 file inline. At the 600-file ceiling that is ~1200 sequential round-trips inside
@@ -27,6 +29,9 @@ log = logging.getLogger("semper.tasks")
 PROVISION_PATH = "/v1/tasks/provision-session"
 #: The callback that finishes a licence's pending fan-out (ADR-026).
 LICENSE_FANOUT_PATH = "/v1/tasks/license-fanout"
+#: The daily Cloud Scheduler call that ends test accounts past their
+#: `expiresAt` (ADR-027). OIDC like the two above, and off the gateway.
+TEST_ACCOUNT_EXPIRY_PATH = "/v1/tasks/test-account-expiry"
 #: How long after a licence action its fan-out task is due: past the Cloud Run
 #: request timeout (300 s), so the action's own call has finished, or died,
 #: before the task looks.

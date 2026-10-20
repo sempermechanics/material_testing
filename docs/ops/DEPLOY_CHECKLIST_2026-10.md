@@ -30,6 +30,17 @@ material_testing: any Hosting deploy replaces the whole site.
       passed today, TD-309), then set the repo variable. Unset, that mail is off and the
       access-request mail is unaffected ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md)).
 
+- [ ] **Test accounts ([ADR-027](../adr/ADR-027-test-accounts.md))**, optional, and
+      only once the branch carrying them is merged. Creating, resetting and ending
+      one calls Firebase Auth admin, so it needs the same
+      `roles/firebaseauth.admin` grant on `indicvision-dic-app-auth` as the
+      revocation item above (without it each call answers 503 `internal_error`).
+      Then set the repo variable `TEST_ACCOUNT_DOMAINS` to the domain(s) staff may
+      use, space-separated, for example `qa.sempermechanics.com`: a domain the
+      company controls and no customer uses. `deploy-backend.yml` already passes
+      it in `env_vars` (`TEST_ACCOUNT_DOMAINS=${{ vars.TEST_ACCOUNT_DOMAINS }}`);
+      unset, it is empty and every create answers 403 `test_accounts_disabled`.
+
 ## 1. Firestore indexes (TD-216, TD-271)
 
 - [ ] `PROJECT=indicvision-dic-app scripts/deploy-firestore.sh indexes`. Never
@@ -64,6 +75,20 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       diff must not add it. On staging, a revoke of a test licence leaves a
       `license-fanout-<id>` task that runs about 6 minutes later and finds nothing
       pending.
+- [ ] **Test-account expiry job (ADR-027)**, with the test-accounts item in §0. A
+      Cloud Scheduler job per environment calls the backend daily; like the Cloud
+      Tasks callbacks it goes straight to Cloud Run with the invoker SA's OIDC token,
+      and `POST /v1/tasks/test-account-expiry` is kept off the gateway
+      (`backend/tests/test_gateway_parity.py`): the gateway diff must not add it.
+      With the environment's `TASKS_TARGET_BASE_URL` (the Cloud Run URL) and
+      `TASKS_INVOKER_SA`, and `cloudscheduler.googleapis.com` enabled:
+      `gcloud scheduler jobs create http semper-test-account-expiry --project indicvision-dic-app --location asia-south1 --schedule "17 3 * * *" --time-zone Etc/UTC --http-method POST --uri "$TASKS_TARGET_BASE_URL/v1/tasks/test-account-expiry" --oidc-service-account-email "$TASKS_INVOKER_SA" --oidc-token-audience "$TASKS_TARGET_BASE_URL"`
+      (staging: its own job name and URL). Whoever creates it needs
+      `iam.serviceAccounts.actAs` on the invoker SA. Check with
+      `gcloud scheduler jobs run semper-test-account-expiry --location asia-south1`:
+      the request log shows 200 and the answer `{"expiredTestAccounts": 0, ...}`.
+      Without the job, accounts past their date are not erased; their licence has
+      still lapsed, and the staff list shows them `expired`.
 - [ ] For the first deploy, leave unset (or 0): `MIN_SUPPORTED_VERSION_CODE`,
       `RECOMMENDED_VERSION_CODE`, their `_MATERIAL_TESTING` pair, and
       `KILL_SWITCHES`.
@@ -75,6 +100,9 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       `/v1/institutions/licenses/{id}/seats/import`, `…/export`, `…/summary`,
       and `…/audit`.
 - [ ] `GET …/audit` answers 200 for a licence administrator.
+- [ ] With test accounts: an anonymous `GET /v1/admin/test-accounts` and
+      `POST /v1/admin/test-accounts` answer 401, and
+      `POST /v1/tasks/test-account-expiry` through the gateway answers 404.
 
 ## 4. Hosting: consoles, account page, aligned Terms
 
@@ -114,6 +142,11 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       part-way and the task finished (TD-294).
 - [ ] One erasure of a test account: its `ACCOUNT_DELETE` row says
       `seatScanComplete: true` (TD-271).
+- [ ] With test accounts, on staging: create a QC account (`days: 1`), sign it in
+      on two phones or emulators (both licensed, no new-device mail), check its
+      upload lands under `Research Storage/_test/{uid}`, then end it from the
+      console; the audit trail has `test_account_created` and `test_account_ended`,
+      and its Firebase user is gone.
 - [ ] **Audit trail lock (TD-237)**, once #457 is deployed (it writes the `audit_row`
       lines) and the legal/privacy owners have set the retention period: create the
       `audit-trail` log bucket at that retention, the sink on

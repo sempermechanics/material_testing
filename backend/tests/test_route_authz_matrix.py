@@ -180,6 +180,15 @@ EXPECTED = {
     ("GET", "/v1/institutions/licenses/{license_id}/audit"): INSTITUTION_STEPUP,
     ("POST", "/v1/tasks/provision-session"): TASK,
     ("POST", "/v1/tasks/license-fanout"): TASK,
+    # Staff test accounts (ADR-027). The list is a read; every change hands
+    # over, prolongs or ends a working login, so the revoke tier's fresh
+    # step-up, and the expiry job is the Scheduler's OIDC invoker.
+    ("GET", "/v1/admin/test-accounts"): ADMIN,
+    ("POST", "/v1/admin/test-accounts"): ADMIN_STEPUP_FRESH,
+    ("POST", "/v1/admin/test-accounts/{uid}/extend"): ADMIN_STEPUP_FRESH,
+    ("POST", "/v1/admin/test-accounts/{uid}/password"): ADMIN_STEPUP_FRESH,
+    ("DELETE", "/v1/admin/test-accounts/{uid}"): ADMIN_STEPUP_FRESH,
+    ("POST", "/v1/tasks/test-account-expiry"): TASK,
 }
 
 

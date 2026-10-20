@@ -498,14 +498,25 @@ export function requireSignIn(onReady, { showApp = true } = {}) {
 const REVOKE_FRESH_SECONDS = 90;
 
 export async function stepUpForRevoke(resume) {
-  if ((await authAge()) < REVOKE_FRESH_SECONDS) return;
   const verb = resume && resume.action === "delete" ? "delete" : "revoke";
+  await stepUpFresh(resume, `${verb} this licence`);
+}
+
+/**
+ * The same fresh step-up for any change the backend holds to the revoke
+ * window (`attested_or_mfa_admin_fresh`): today also every change to a test
+ * account. `what` finishes the sentence "Re-enter your account password to
+ * …" ("end this test account"); `resume` is what the page finishes on the
+ * return leg of a Google re-authentication, as for a revoke.
+ */
+export async function stepUpFresh(resume, what) {
+  if ((await authAge()) < REVOKE_FRESH_SECONDS) return;
   const can = reauthMethods(auth.currentUser && auth.currentUser.providerData);
   let password;
   if (can.password) {
     password = await askInPage({
       title: "Re-enter your password",
-      message: `Re-enter your account password to ${verb} this licence.\n\n` +
+      message: `Re-enter your account password to ${what}.\n\n` +
         (can.google
           ? "Leave blank to re-authenticate with Google, then enter your " +
             "authenticator code when asked."
@@ -517,7 +528,7 @@ export async function stepUpForRevoke(resume) {
       throw new Error(ERR_CANCELLED);
     }
   } else {
-    setStatus(`Re-authenticating with Google to ${verb} this licence…`);
+    setStatus(`Re-authenticating with Google to ${what}…`);
   }
   await stepUp({
     password: password || undefined,

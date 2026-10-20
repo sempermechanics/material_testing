@@ -16,6 +16,7 @@ from .config import settings
 from .routers import (
     account,
     admin,
+    admin_test_accounts,
     devices,
     files,
     health,
@@ -269,6 +270,7 @@ for _router in (
     files.router,
     provision_tasks.router,
     admin.router,
+    admin_test_accounts.router,
     institutions.router,
 ):
     app.include_router(_router)

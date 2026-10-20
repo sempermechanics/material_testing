@@ -9,6 +9,7 @@ import com.sempermechanics.semper.data.prefs.PrefFiles.RemoteConfig
 import com.sempermechanics.semper.data.prefs.get
 import com.sempermechanics.semper.data.prefs.privatePrefs
 import com.sempermechanics.semper.data.prefs.put
+import com.sempermechanics.semper.diagnostics.Diagnostics
 import timber.log.Timber
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -115,8 +116,13 @@ object AppRemoteConfig {
             if (authoritative || config.killSwitches != null) {
                 put(RemoteConfig.KILL_SWITCHES, KillSwitch.wireNames(KillSwitch.parse(config.killSwitches)))
             }
+            if (authoritative || config.testAccount != null) {
+                put(RemoteConfig.TEST_ACCOUNT_PURPOSE, config.testAccount?.purpose?.trim().orEmpty())
+                put(RemoteConfig.TEST_ACCOUNT_EXPIRES_AT, parseInstant(config.testAccount?.expiresAt))
+            }
         }
         EntitlementStore.accept(context, config.entitlement, authoritative, ClientNonce.serverNowMs())
+        Diagnostics.applyAccountType(context)
     }
 
     /**
@@ -317,9 +323,34 @@ object AppRemoteConfig {
     /** The features the backend has switched off fleet-wide. */
     fun killSwitches(context: Context): Set<KillSwitch> = KillSwitch.parse(prefs(context)[RemoteConfig.KILL_SWITCHES])
 
+    /**
+     * The test account staff made this one for (`testAccount` on the last
+     * `/v1/config`), or null for a real account and before any answer.
+     * Display and diagnostics only: nothing is gated on it.
+     */
+    fun testAccount(context: Context): TestAccount? {
+        val prefs = prefs(context)
+        val purpose = prefs[RemoteConfig.TEST_ACCOUNT_PURPOSE]
+        return if (purpose.isBlank()) null else TestAccount(purpose, prefs[RemoteConfig.TEST_ACCOUNT_EXPIRES_AT])
+    }
+
     /** Drop cached limits and the entitlement token (sign-out). */
     fun clear(context: Context) {
         prefs(context).edit { clear() }
         EntitlementStore.clear(context)
+        Diagnostics.applyAccountType(context)
+    }
+
+    /**
+     * A QC or CI test account (ADR-027): its [purpose] and the instant it is
+     * ended, [expiresAtMs], or [NO_INSTANT] for a CI account with no end.
+     */
+    data class TestAccount(val purpose: String, val expiresAtMs: Long) {
+        val isCi: Boolean get() = purpose == PURPOSE_CI
+
+        companion object {
+            const val PURPOSE_QC = "qc"
+            const val PURPOSE_CI = "ci"
+        }
     }
 }

@@ -1414,3 +1414,97 @@ single seat is revoked, or a seat is disabled, the affected account(s) simply
 stop being able to start *new* cloud analyses — everything already saved
 stays listable and restorable. Re-activating (or re-enabling) restores full
 licensed access with zero data loss.
+
+## Appendix E — Test accounts (QC and CI)
+
+A **test account** is a login Semper staff make for internal QC or for the CI
+pipeline ([ADR-027](adr/ADR-027-test-accounts.md)). It is pre-approved and
+licensed, may be signed in on several phones at once, and ends on a date. It is
+never for a customer or an outside verifier, and it can never be an admin.
+
+**Before the first one.** The backend must hold `TEST_ACCOUNT_DOMAINS`
+([ENVIRONMENTS.md](ops/ENVIRONMENTS.md)): the address domains test accounts
+may use, a domain the company controls and no customer uses. Until it is set,
+every create is refused (`test_accounts_disabled`). The daily job that ends
+expired accounts is a Cloud Scheduler job
+([DEPLOY_CHECKLIST_2026-10.md](ops/DEPLOY_CHECKLIST_2026-10.md)).
+
+**Creating one** (Semper staff, the fresh step-up a licence revoke asks for):
+the operator console's test-account section, or `POST /v1/admin/test-accounts`
+with `{"email", "purpose": "qc" or "ci", "days", "maxDevices", "note"}`
+([ADMIN_API.md](backend/ADMIN_API.md)).
+
+- The address must be on a `TEST_ACCOUNT_DOMAINS` domain and new: one that
+  already has an account, a Firebase sign-in or a licence, or is a staff
+  address, is refused (`email_in_use`). Use a fresh address per account, such
+  as `qc-pixel6-1@<domain>`.
+- `days` is 1 to 90 (30 when left out for QC). A CI account may leave it out
+  and then never ends; give it a date anyway if it will not be needed for long.
+- `maxDevices` is how many phones per app may be signed in at once, 1 to 10
+  (default 3). Semper and Material Testing each count their own.
+- `note` says what it is for (who has it, which bench). Never put the password
+  in it.
+
+The answer shows the **password once**: 20 letters, digits, `-` and `_`. It is
+not stored anywhere Semper can read back, logged or audited. Copy it straight
+into the hand-over.
+
+**Handing it over.** Send the address and the password separately (for example
+the address in the ticket, the password in a direct message or a password
+manager share), never together in one chat line or email. The person signs in
+on the phone with **email and password**, accepts the Terms like anyone else,
+and is licensed. App builds that read `testAccount` from `/v1/config` show it in
+Settings as a test account, with its end date.
+Each phone they sign in on takes one of the `maxDevices` places for that app;
+there is no 24-hour hold after a phone is released and no "new device" mail.
+
+**What is different about its data.** Its uploads go to the Shared Drive under
+`Research Storage/_test/{uid}`, apart from customers' `Research Storage/user/`.
+Its analyses do not count toward any phone's demo limit, so a QC phone handed
+back to someone on demo is not already full. Its licence is hidden from the
+licence desk unless the desk asks for test licences (`include_test`). Its audit
+rows are kept like everyone's, and staff actions on it, its device registrations
+and its uploads are tagged `testAccount`. App builds that read the tag also mark
+analytics and crash reports with `account_type`, only with the user's consent,
+as for everything those report.
+
+**Extending it.** `POST /v1/admin/test-accounts/{uid}/extend` with `{"days"}`:
+the account and its licence now end that many days from today (at most 90).
+It sets the date, so a smaller number ends it sooner.
+
+**A new password.** `POST /v1/admin/test-accounts/{uid}/password` answers a new
+password, once, and signs the account out everywhere (its refresh tokens are
+revoked; a session already open lasts until its ID token expires, an hour at
+most). Use it when a phone or a person should no longer have it, or the
+password was shared too widely.
+
+**All its phones are taken.** A phone signing in beyond `maxDevices` is refused
+as "already linked". There is no per-phone release for a test account: end it
+and create a new one, or ask for a larger `maxDevices` when it is created.
+
+**Ending it.** `DELETE /v1/admin/test-accounts/{uid}` ends it now: the account
+is suspended, signed out, its licence revoked, and then everything it stored is
+erased as the account's own **Delete account** would (its Drive folder, its
+analyses and devices, its sign-in), audited `test_account_ended`. It cannot be
+undone; the address may then be used for a new test account. Accounts past
+their end are ended the same way by the daily job (`test_account_expired`);
+between the end date and the job's next run the account shows `expired` in the
+list and its licence has already lapsed.
+
+**The CI account.** CI's instrumented tests sign in with the secrets
+`FIREBASE_TEST_EMAIL` / `FIREBASE_TEST_PASSWORD` (`FirebaseAuthIntegrationTest`).
+Make that login a test account with `purpose: "ci"`, so it also has an account
+and a licence the backend knows:
+
+1. If the CI address already has a Firebase sign-in made by
+   `scripts/create_ci_firebase_account.sh`, delete that user in the Firebase
+   console (Authentication → Users) first, or create on a new address.
+2. Create the account with `purpose: "ci"`, `maxDevices` for the emulators that
+   run at once, and usually no `days`.
+3. Store the pair without pasting the password on a command line:
+   `bash scripts/create_ci_firebase_account.sh --store <email>`, then paste the
+   password at its hidden prompt. It sets both secrets with `gh`.
+4. To rotate: **New password**, then `--store` again.
+
+CI does not call the backend with this account yet (TD-313); today it only
+signs in to Firebase.
