@@ -448,3 +448,10 @@ in `scripts/tests/fixtures/cancellation/`.
   The account and both secrets come from `scripts/create_ci_firebase_account.sh`
   (gcloud as an owner of `indicvision-dic-app-auth`, gh as a repo admin); `--rotate`
   gives the account a new password and updates the secret.
+  For local runs use a separate account, not CI's: an owner of the auth project
+  runs `bash scripts/create_local_firebase_test_account.sh` (Git Bash on Windows;
+  the `bash.exe` on PATH is WSL's). It makes `test-local-instrumented@sempermechanics.com`,
+  a Firebase sign-in only (no users doc or licence, so the backend refuses it),
+  and writes both arguments to `~/.gradle/gradle.properties`, outside the repo,
+  so every later `connectedDebugAndroidTest` signs in without flags. The password
+  is never printed; running it again gives the account a new password.
