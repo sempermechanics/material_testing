@@ -9,6 +9,7 @@ regardless — the mint reporting afterwards that the licence had not attached,
 the other two moving the account onto the new licence and leaving the old one
 `redeemed` in its name.
 """
+from .. import statuses
 from ..licenses import (
     MODE_DEMO,
     normalize_email,
@@ -27,6 +28,33 @@ from .invites import (
     find_user_by_email,
     _invite_ref,
 )
+
+
+def verified_address(user: dict | None) -> str:
+    """The account's address, normalised, when it is proven; else "".
+
+    The one reading of "this person's address" for anything an address
+    grants: an invite, an institution roster or IT membership, a claim code.
+    The stored `email` follows the sign-in token (`repo.users._touch_existing`)
+    and so does `emailVerified`; an address nobody has proved they own grants
+    nothing, so it is no address at all.
+    """
+    if not (user or {}).get("emailVerified"):
+        return ""
+    return normalize_email((user or {}).get("email"))
+
+
+def _eligible_holder(user: dict | None) -> bool:
+    """Whether an existing account may be handed a licence or a seat now:
+    approved, with a proven address. Shared by staff minting for an address
+    (`repo.mint`), IT adding a roster member (`repo.institution_admin`) and
+    the invite claim at sign-in (`repo.entitlement`), so the three cannot
+    disagree about who may hold one. An account that is not eligible yet is
+    given the invite an address with no account gets, kept for it until it
+    qualifies."""
+    return (bool(user)
+            and user.get("access_status") == statuses.ACCESS_APPROVED
+            and bool(verified_address(user)))
 
 
 def licence_is_live(lic: dict | None) -> bool:

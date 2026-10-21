@@ -1,13 +1,13 @@
 package com.sempermechanics.semper.results
 
 import android.graphics.Bitmap
+import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.report.EngineStats
 import com.sempermechanics.semper.report.FieldResult
 import com.sempermechanics.semper.report.PdfReportGenerator
 import com.sempermechanics.semper.report.PdfReportGenerator.Progress
 import com.sempermechanics.semper.report.PdfReportGenerator.Stage
 import com.sempermechanics.semper.report.ReportData
-import com.sempermechanics.semper.report.RoiData
 import com.sempermechanics.semper.report.TelemetrySummary
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.runBlocking
@@ -110,7 +110,7 @@ class PdfReportGeneratorTest {
         stepSize = 5,
         strainWindow = 15,
         strainMethod = "VSG",
-        roiData = RoiData(0, 0, 10, 10),
+        roi = Roi(0, 0, 10, 10),
         referenceImage = bitmap(),
         deformedImage = bitmap(),
         referenceImageName = "ref.png",

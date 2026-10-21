@@ -94,6 +94,8 @@
     <string name="failed_load_reference">Failed to load reference image. Please try another file.</string>
     <string name="roi_too_small">ROI is too small. It must be larger than the subset size.</string>
     <string name="analysis_failed_title">Analysis failed</string>
+    <!-- The run-status line under Compute after a run that kept nothing; %1$s is why. -->
+    <string name="run_failed_status_fmt">❌ Error: %1$s</string>
     <string name="analysis_unexpected_title">Analysis stopped unexpectedly</string>
     <string name="analysis_not_saved_title">Couldn\'t save results</string>
     <string name="analysis_index_unavailable_body">The list of analyses couldn\'t be updated. Free up space and run again.</string>
@@ -373,6 +375,13 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- The key prefix, never the key. It is what support asks for on the
          phone, so it has to be readable somewhere in the app. -->
     <string name="account_license_prefix_fmt">Licensed as %1$s</string>
+    <!-- A test account staff made for QC or CI (ADR-027). %1$s is the day it
+         is ended, its data erased: a QC account always has one. -->
+    <string name="account_test_account_ends_fmt">Test account · ends %1$s</string>
+    <!-- A CI test account with no end. -->
+    <string name="account_test_account_ci">Test account (CI)</string>
+    <!-- A test account with no end on file that is not a CI one. -->
+    <string name="account_test_account">Test account</string>
     <string name="cloud_section">Cloud backup</string>
     <string name="analyses_data_management">Analyses data management</string>
     <string name="analyses_data_empty">No analyses on this phone or in the cloud yet.</string>
@@ -551,7 +560,6 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- W is the strain window in data points; with St it fixes the VSG,
          (W − 1) × St + 1 px, so the label needs no VSG of its own. -->
     <string name="sweep_frame_label_fmt">S%1$d · St%2$d · W%3$d</string>
-    <string name="sweep_failed">The parameter sweep could not run.</string>
     
     <string name="sweep_fail_features">The engine couldn\'t match the two images: it found no starting point (phase correlation could not lock and no anchor solved). \n\nThe image pair: during the test the specimen might have moved, or too much deformation could have decorrelated it from the reference.</string>
     <string name="sweep_fail_roi">The region of interest contains no valid points. Redraw it over the speckled area or use a different image.</string>
@@ -938,7 +946,19 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="param_section_correlation">Correlation</string>
     <string name="param_step">Step</string>
     <string name="param_interpolation">Interpolation</string>
-    <!-- The collapsible section holding the overlap and the interpolation. -->
+    <!-- Which image each frame is correlated against: the first one, or a recent one (incremental DIC). -->
+    <string name="param_reference">Reference</string>
+    <string name="reference_update_description">Reference image for each frame</string>
+    <string name="reference_fixed">First image</string>
+    <string name="reference_every_frame">Every frame</string>
+    <plurals name="reference_every_n_frames">
+        <item quantity="one">Every %1$d frame</item>
+        <item quantity="other">Every %1$d frames</item>
+    </plurals>
+    <!-- A video's choices: every this many seconds of the clip, whatever frame rate it was sampled at. -->
+    <string name="reference_every_n_seconds">Every %1$d s</string>
+    <string name="reference_hint">Moving the reference follows large stretch or rotation that the first image stops matching. Results stay relative to the first image. Each move adds a little error, the more so the less the specimen moved since the last, so keep the first image while it still matches. On a video the reference moves every so many seconds of the clip, whatever frame rate you sampled, and earlier when points start to drop.</string>
+    <!-- The collapsible section holding the overlap, the interpolation and the reference. -->
     <string name="param_advanced">Advanced</string>
     <string name="run_compute_eta_fmt">Compute · %1$s</string>
     <string name="run_estimate_seconds_fmt">about %1$d s</string>

@@ -13,7 +13,8 @@
  * the answer it already read, or the read it already started, and the switch
  * asks only for the other (roles.js decides what each answer opens).
  */
-import { api, esc } from "./auth.js";
+import { api } from "./api.js";
+import { esc } from "./util.js";
 import { licencesAdministered, dashboardsFor } from "./roles.js";
 
 const $ = (id) => document.getElementById(id);

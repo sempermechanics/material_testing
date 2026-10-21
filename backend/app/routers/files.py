@@ -35,6 +35,28 @@ def _is_first_byte_request(byte_range: str | None) -> bool:
     return bool(match) and match.group(1) == "0"
 
 
+def _download_headers(f: dict, file_id: str, dl) -> dict:
+    """The headers a proxied download answers with: Drive's range and length
+    passed through, and a filename that cannot break out of its quotes."""
+    # The stored name is client-supplied (validated for length only), so strip
+    # anything that could break out of the quoted filename or inject a header.
+    raw_name = f.get("name") or file_id
+    safe_name = re.sub(r'[\r\n"\\]', "_", str(raw_name))[:256] or file_id
+    out_headers = {
+        "Content-Disposition": f'attachment; filename="{safe_name}"',
+        "Accept-Ranges": "bytes",
+    }
+    content_range = dl.headers.get("Content-Range")
+    if content_range:
+        out_headers["Content-Range"] = content_range
+    content_length = dl.headers.get("Content-Length")
+    if content_length:
+        out_headers["Content-Length"] = content_length
+    elif dl.status_code == 200 and f.get("sizeBytes"):
+        out_headers["Content-Length"] = str(f.get("sizeBytes", 0))
+    return out_headers
+
+
 @router.get("/v1/files/{file_id}/content", dependencies=[
     rate_limited(rate_limit.download_bucket), unless_paused("restore"),
 ])
@@ -78,29 +100,40 @@ def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_de
         raise drive_failure(e, "download", drive_file_id,
                             gone=404, failed=errors.DRIVE_DOWNLOAD_FAILED) from e
 
-    # The stored name is client-supplied (validated for length only), so strip
-    # anything that could break out of the quoted filename or inject a header.
-    raw_name = f.get("name") or file_id
-    safe_name = re.sub(r'[\r\n"\\]', "_", str(raw_name))[:256] or file_id
-    out_headers = {
-        "Content-Disposition": f'attachment; filename="{safe_name}"',
-        "Accept-Ranges": "bytes",
-    }
-    content_range = dl.headers.get("Content-Range")
-    if content_range:
-        out_headers["Content-Range"] = content_range
-    content_length = dl.headers.get("Content-Length")
-    if content_length:
-        out_headers["Content-Length"] = content_length
-    elif dl.status_code == 200 and f.get("sizeBytes"):
-        out_headers["Content-Length"] = str(f.get("sizeBytes", 0))
-
     return StreamingResponse(
         dl.iter_chunks(),
         status_code=dl.status_code,
         media_type="application/octet-stream",
-        headers=out_headers,
+        headers=_download_headers(f, file_id, dl),
     )
+
+
+def _require_landed(rec: dict, body: FileComplete) -> None:
+    """Refuse a completion unless Drive holds the object intact, in this
+    session's folder: right size, matching md5, the right parent."""
+    try:
+        meta = drive.get_file_meta(drive.access_token(), body.driveFileId)
+    except requests.HTTPError as e:
+        # 400, not 404: the app discards the session and rebuilds it.
+        raise drive_failure(e, "meta", body.driveFileId,
+                            gone=400, failed=errors.DRIVE_META_FAILED) from e
+    if meta["size"] != rec.get("sizeBytes"):
+        raise HTTPException(422, errors.SIZE_MISMATCH)
+    # Whenever Drive reports an md5 (always, for our binary blobs), the client
+    # MUST supply a matching one. Previously a client that simply omitted md5
+    # skipped the checksum entirely — a corrupt-but-right-sized upload could be
+    # accepted. md5 is only skipped when Drive itself has none (Docs-native
+    # types we never store).
+    if meta["md5"] and body.md5 != meta["md5"]:
+        raise HTTPException(422, errors.CHECKSUM_MISMATCH)
+    # Bind the object to this session's Drive folder — never trust a client
+    # pointer into an arbitrary shared-drive file the download proxy would
+    # then stream under the SA.
+    session = repo.get_session(rec["sessionId"])
+    folder = (session or {}).get("driveFolderId")
+    parents = meta.get("parents") or []
+    if not folder or folder not in parents:
+        raise HTTPException(403, errors.FILE_NOT_IN_SESSION)
 
 
 @router.post(
@@ -115,29 +148,7 @@ def complete_file(file_id: DocumentId, body: FileComplete, ctx=Depends(verified_
     # and reject a truncated or corrupted object. Skipped on an idempotent retry
     # (already COMPLETED), which carries no new bytes.
     if rec.get("status") != statuses.FILE_COMPLETED:
-        try:
-            meta = drive.get_file_meta(drive.access_token(), body.driveFileId)
-        except requests.HTTPError as e:
-            # 400, not 404: the app discards the session and rebuilds it.
-            raise drive_failure(e, "meta", body.driveFileId,
-                                gone=400, failed=errors.DRIVE_META_FAILED) from e
-        if meta["size"] != rec.get("sizeBytes"):
-            raise HTTPException(422, errors.SIZE_MISMATCH)
-        # Whenever Drive reports an md5 (always, for our binary blobs), the client
-        # MUST supply a matching one. Previously a client that simply omitted md5
-        # skipped the checksum entirely — a corrupt-but-right-sized upload could be
-        # accepted. md5 is only skipped when Drive itself has none (Docs-native
-        # types we never store).
-        if meta["md5"] and body.md5 != meta["md5"]:
-            raise HTTPException(422, errors.CHECKSUM_MISMATCH)
-        # Bind the object to this session's Drive folder — never trust a client
-        # pointer into an arbitrary shared-drive file the download proxy would
-        # then stream under the SA.
-        session = repo.get_session(rec["sessionId"])
-        folder = (session or {}).get("driveFolderId")
-        parents = meta.get("parents") or []
-        if not folder or folder not in parents:
-            raise HTTPException(403, errors.FILE_NOT_IN_SESSION)
+        _require_landed(rec, body)
     outcome = repo.complete_file(file_id, user["uid"], body)
     if outcome is repo.Completion.REJECTED:
         raise HTTPException(409, errors.SIZE_OR_STATE_MISMATCH)

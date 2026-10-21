@@ -8,12 +8,12 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.field.RunStop
-import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
+import com.sempermechanics.semper.fixtures.sessionRecord
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
-import com.sempermechanics.semper.ui.analysis.wizard.BatchAnalysisOutcome
 import com.sempermechanics.semper.ui.analysis.wizard.BatchProgressUpdate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -22,6 +22,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowDialog
 import java.util.concurrent.TimeUnit
 
 /**
@@ -38,8 +39,14 @@ class RunDoneMomentTest {
     private lateinit var header: TextView
     private lateinit var eta: TextView
     private val viewModel = AnalysisViewModel()
-    private var viewersOpened = 0
-    private var partials = 0
+    private var openedCount = 0
+
+    /** Viewers the screen has opened so far. */
+    private val viewersOpened: Int
+        get() {
+            while (shadowOf(activity).nextStartedActivity != null) openedCount++
+            return openedCount
+        }
 
     @Before
     fun setUp() {
@@ -62,37 +69,18 @@ class RunDoneMomentTest {
             doneIcon = View(activity),
         )
         val chrome = RunChrome(activity, overlay, cancelButton = View(activity)).apply { beginRun {} }
-        val host = object : BatchRunController.Host {
-            override fun checkReady() = Unit
-            override fun onPartialRun(outcome: BatchAnalysisOutcome) {
-                partials++
-            }
-
-            override fun openResultViewer() {
-                viewersOpened++
-            }
-
-            override fun engineFailureMessage(code: Int, frameIndex: Int, frameName: String?) = ""
-            override fun showEngineFailureDialog(message: String, titleRes: Int, faqUrlRes: Int, why: String?) = Unit
-            override fun clearEngineFailFaq() = Unit
-            override fun onSweepProgress(progress: SweepStudyRunner.Progress) = Unit
-            override fun onSweepFinished(outcome: BatchAnalysisOutcome?) = Unit
-        }
-        val line = TextView(activity)
+        val status = RunStatusLine(activity, chrome, TextView(activity), View(activity))
         return if (holdMs == null) {
-            BatchRunController(activity, viewModel, chrome, line, host)
+            BatchRunController(activity, viewModel, chrome, status, recheck = {})
         } else {
-            BatchRunController(activity, viewModel, chrome, line, host, doneHoldMs = holdMs)
+            BatchRunController(activity, viewModel, chrome, status, recheck = {}, doneHoldMs = holdMs)
         }
     }
 
-    private fun outcome(code: Int = 0, frames: Int = 3) = BatchAnalysisOutcome(
-        engineErrorCode = code,
-        firstFrameValidPoints = 500,
-        totalFrames = frames,
-        executionTimeMs = 6_600,
-        batchDirPath = "",
-        saved = true,
+    /** A run that solved [frames] frames in [executionTimeMs] and saved them. */
+    private fun solved(frames: Int = 3, executionTimeMs: Int = 6_600) = RunEnd.Solved(
+        sessionRecord(id = "run", frameCount = frames, sessionDir = "/sessions/run").copy(plannedFrameCount = frames),
+        executionTimeMs,
     )
 
     private fun advance(ms: Long) = shadowOf(Looper.getMainLooper()).idleFor(ms, TimeUnit.MILLISECONDS)
@@ -111,7 +99,7 @@ class RunDoneMomentTest {
             ),
         )
         advance(200)
-        controller.handleBatchOutcome(Result.success(outcome()))
+        controller.render(solved())
 
         assertEquals(View.VISIBLE, sheet.visibility)
         assertEquals("3 frames solved", header.text.toString())
@@ -160,7 +148,7 @@ class RunDoneMomentTest {
         )
         advance(200)
 
-        viewModel.runs.batchOutcome.post(Result.success(outcome(frames = 5).copy(executionTimeMs = 6_000)))
+        viewModel.runs.batchOutcome.post(solved(frames = 5, executionTimeMs = 6_000))
         progress.tryEmit(null)
         advance(1)
 
@@ -181,17 +169,16 @@ class RunDoneMomentTest {
 
     @Test
     fun `a partial run, a low-convergence stop and a cancel go on at once`() {
-        controller().handleBatchOutcome(
-            Result.success(outcome(code = RunStop.LowConvergence.wireCode, frames = 2)),
-        )
+        val kept = sessionRecord(id = "run", frameCount = 2).copy(plannedFrameCount = 3)
+        controller().render(RunEnd.Partial(kept, RunStop.LowConvergence.wireCode, 2, 1, null))
         assertEquals(View.GONE, sheet.visibility)
-        assertEquals(1, partials)
+        assertTrue("its frames-kept dialog", ShadowDialog.getLatestDialog().isShowing)
 
-        controller().handleBatchOutcome(Result.success(outcome(code = RunStop.Cancelled.wireCode)))
+        controller().render(RunEnd.Cancelled)
         assertEquals(View.GONE, sheet.visibility)
         assertNotEquals("3 frames solved", header.text.toString())
 
-        controller().handleBatchOutcome(Result.failure(IllegalStateException("boom")))
+        controller().render(RunEnd.Unexpected("boom"))
         assertEquals(View.GONE, sheet.visibility)
         advance(HOLD_MS)
         assertEquals(0, viewersOpened)
@@ -199,7 +186,7 @@ class RunDoneMomentTest {
 
     @Test
     fun `no hold opens the viewer straight away`() {
-        controller(holdMs = 0L).handleBatchOutcome(Result.success(outcome()))
+        controller(holdMs = 0L).render(solved())
 
         assertEquals(1, viewersOpened)
         assertEquals(View.GONE, sheet.visibility)
@@ -209,7 +196,7 @@ class RunDoneMomentTest {
     fun `with animations off there is no hold`() {
         Settings.Global.putFloat(activity.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 0f)
 
-        controller(holdMs = null).handleBatchOutcome(Result.success(outcome()))
+        controller(holdMs = null).render(solved())
 
         assertEquals(1, viewersOpened)
     }
@@ -219,7 +206,7 @@ class RunDoneMomentTest {
         val controller = controller()
         activity.finish()
 
-        controller.handleBatchOutcome(Result.success(outcome()))
+        controller.render(solved())
 
         assertEquals(View.GONE, sheet.visibility)
         assertEquals(1, viewersOpened)
@@ -227,7 +214,7 @@ class RunDoneMomentTest {
 
     @Test
     fun `a screen left during the hold does not open the viewer`() {
-        controller().handleBatchOutcome(Result.success(outcome()))
+        controller().render(solved())
         activity.finish()
         screen.pause().stop().destroy()
         advance(HOLD_MS)
@@ -238,7 +225,7 @@ class RunDoneMomentTest {
 
     @Test
     fun `a screen sent to the background during the hold opens the viewer when it is back`() {
-        controller().handleBatchOutcome(Result.success(outcome()))
+        controller().render(solved())
         screen.pause().stop()
         advance(HOLD_MS)
         assertEquals("a stopped screen starts nothing", 0, viewersOpened)

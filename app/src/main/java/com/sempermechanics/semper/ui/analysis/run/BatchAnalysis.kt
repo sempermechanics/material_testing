@@ -11,12 +11,14 @@ import com.sempermechanics.semper.data.session.RunMetrics
 import com.sempermechanics.semper.data.session.RunOutcome
 import com.sempermechanics.semper.data.session.RunReference
 import com.sempermechanics.semper.data.session.SessionPaths
+import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.originalNameOr
 import com.sempermechanics.semper.diagnostics.EngineDebug
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.field.RunStop
+import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.EngineStats
 import com.sempermechanics.semper.report.FieldRangesStore
 import com.sempermechanics.semper.report.VisualizationEngine
@@ -29,19 +31,19 @@ import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.BatchAnalysisOutcome
 import com.sempermechanics.semper.ui.analysis.wizard.BatchProgressUpdate
 import com.sempermechanics.semper.ui.analysis.wizard.RunAdmission
+import com.sempermechanics.semper.ui.analysis.wizard.RunKind
 import com.sempermechanics.semper.ui.analysis.wizard.admitRun
-import com.sempermechanics.semper.ui.analysis.wizard.closeSavedSession
 import com.sempermechanics.semper.ui.analysis.wizard.openRunSession
 import com.sempermechanics.semper.ui.analysis.wizard.repointDeformedPathsOnMain
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import timber.log.Timber
 import java.io.File
-import java.util.Locale
 
 /**
  * The batch DIC run loop, moved as one unit from [AnalysisViewModel].
- * JNI [SemperNativeLib.computeFullFieldDirect] stays in this loop — do not
+ * JNI [SemperNativeLib.computeFullFieldDirect] (or, for an incremental run,
+ * [SemperNativeLib.computeIncrementalFrame]) stays in this loop — do not
  * fragment it. Buffer allocate / overrun / `.dat` write are [DicFieldIo].
  */
 // One JNI loop over the deformed frames, writing `.dat` results: its size,
@@ -81,16 +83,10 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     // the OS may evict): one directory per Home-list session, never a sweep's.
     // The loop writes them to the session's staging folder; only a run that
     // is not cancelled moves them into the session (RunSession.commit).
-    val session = openRunSession(appContext, sweep = false)
+    val session = openRunSession(appContext, run.inputs.working, RunKind.BATCH)
     val localSessionId = session.id
     val batchDir = session.dir
     val resultsDir = session.staging
-
-    // Start every run from a clean result snapshot carrying its spec. Fields
-    // below (engineStats, refPath, settings, stopCode, plannedFrames) are only
-    // written on the success path, so a run that fails early or yields 0 valid points
-    // would otherwise keep the PREVIOUS run's numbers — the stale-results bug.
-    resetRunResult(batchDir.absolutePath, spec, localSessionId)
 
     EngineDebug.attach(spec.debugDir)
 
@@ -103,15 +99,20 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     var firstFrameValidPoints = 0
     var firstFrameCorrelatedPoints = -1
     var firstFrameAvgIters = 0f
+    // The first frame's engine stats, which its saved record keeps.
+    var engineStatsArray: FloatArray? = null
     var stop: RunStop = RunStop.Finished
 
     onProgress(BatchProgressUpdate(0f, "Caching reference in engine…", plannedFrames = plannedFrames))
-    SemperNativeLib.initializeReference(
-        refBytes,
-        spec.mask,
-        reference.size.width,
-        reference.size.height,
-    )
+    // An incremental run opens its session just before the loop, below.
+    if (!spec.incremental) {
+        SemperNativeLib.initializeReference(
+            refBytes,
+            spec.mask,
+            reference.size.width,
+            reference.size.height,
+        )
+    }
 
     val roi = spec.roi
     val dic = spec.params
@@ -159,199 +160,254 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         DicResult.IDX_EYY,
         DicResult.IDX_EXY,
     )
-    val perFrameSummaryRanges = mutableListOf<Map<Int, Pair<Float, Float>?>>()
+    val perFrameSummaryRanges = mutableListOf<Map<Int, ValueRange?>>()
 
-    for ((frameIndex, defPath) in frames.paths.withIndex()) {
-        // A job cancelled with its view model is a cancel too: it keeps nothing
-        // either, and the cancel below rethrows it once the run is undone.
-        if (cancelRequested || !run.job.isActive) {
-            stop = RunStop.Cancelled
-            break
-        }
-        onProgress(
-            BatchProgressUpdate(
-                percent = (frameIndex.toFloat() / plannedFrames) * 100,
-                status = if (plannedFrames > 1) {
-                    "Processing frame ${frameIndex + 1} of $plannedFrames"
-                } else {
-                    "Correlating & solving…"
-                },
-                frameIndex = frameIndex,
-                plannedFrames = plannedFrames,
-                perFrameConvergence = frameConvergence.copyOf(),
-            ),
-        )
-
-        val source = File(defPath)
-        // One read feeds both the JNI buffer and the copy fallback below
-        // (avoids Files.copy + a second heap read).
-        val defBytes = try {
-            source.readBytes()
-        } catch (e: Exception) {
-            Timber.e(e, "Could not read deformed frame %d", frameIndex)
-            continue
-        }
-        if (source.parentFile?.absolutePath == rawDeformedDir.absolutePath) {
-            // Moved here by a run in this wizard that saved nothing: the image
-            // already lives where it belongs, so there is nothing to move, and
-            // the prune below must not treat it as stale.
-            persistedRawNames[frameIndex] = source.name
-        } else {
-            try {
-                // Persist the untouched original under the user's own filename
-                // so exports keep default names.
-                val rawName = frames.originalNames.originalNameOr(frameIndex, source.name).baseName()
-                val target = keepDeformedFrame(source, defBytes, rawDeformedDir, rawName, frameIndex)
-                // Record the name we ACTUALLY wrote: the session index (and the
-                // cloud upload) must be able to find these files again.
-                persistedRawNames[frameIndex] = target.name
-                resolvedDefPaths[frameIndex] = target.absolutePath
-            } catch (e: Exception) {
-                Timber.w(e, "Could not persist raw deformed frame %d", frameIndex)
-            }
-        }
-        val callback = object : ProgressCallback {
-            override fun onProgressUpdate(percentage: Int) {
-                val frameProgress = (frameIndex.toFloat() / plannedFrames) * 100
-                val overallProgress = frameProgress + (percentage.toFloat() / plannedFrames)
-                onProgress(
-                    BatchProgressUpdate(
-                        percent = overallProgress,
-                        status = if (plannedFrames > 1) {
-                            "Processing frame ${frameIndex + 1} of $plannedFrames"
-                        } else {
-                            "Correlating & solving…"
-                        },
-                        frameIndex = frameIndex,
-                        plannedFrames = plannedFrames,
-                        framePercent = percentage.toFloat(),
-                    ),
-                )
-            }
-        }
-
-        outputBuffer.clear()
-        val metricsCatcher = EngineStats.newMetrics(EngineStats.ENGINE_SLOT_COUNT)
-
-        val validPointsCount = SemperNativeLib.computeFullFieldDirect(
-            refBytes, defBytes, spec.mask,
+    // An incremental run opens a session that moves the reference forward as it
+    // goes, and holds two images until the finally below releases it, however
+    // the run ends. Its init failure is reported at the first frame, where a
+    // fixed run's engine would report the same code.
+    val incrementalInfo = IntArray(SemperNativeLib.INC_INFO_LEN)
+    val incrementalInit = if (spec.incremental) {
+        SemperNativeLib.initializeIncremental(
+            refBytes, spec.mask,
+            reference.size.width, reference.size.height,
             roi.x, roi.y, roi.w, roi.h,
             dic.step, dic.subset, dic.strainWindow, spec.use6x6,
-            outputBuffer, callback, metricsCatcher,
+            spec.refUpdateInterval,
         )
-
-        if (validPointsCount < 0) {
-            stop = RunStop.fromWireCode(validPointsCount)
-            failedFrameIndex = frameIndex
-            break
-        }
-
-        // Defensive bound: the engine must never report more points than the ROI
-        // grid the direct buffer was sized for (maxPoints). Today it cannot: its
-        // grid is exactly (rect_w / step) x (rect_h / step), the size allocated
-        // above (engine/src/pipeline/full_field_solver.cpp, gridW / gridH), and
-        // it stops packing at the buffer's capacity rather than overrun it
-        // (full_field_solver_stats.cpp). Should either change, the get() below
-        // would read past the buffer and crash the run with
-        // BufferUnderflowException, so it is an init-class engine failure.
-        if (DicFieldIo.wouldOverrun(validPointsCount, outputBuffer)) {
-            Timber.e(
-                "Engine returned %d points but the buffer holds %d (frame %d) — failing frame",
-                validPointsCount,
-                DicFieldIo.capacityPoints(outputBuffer),
-                frameIndex,
-            )
-            stop = RunStop.InitFailed
-            failedFrameIndex = frameIndex
-            break
-        }
-
-        if (frameIndex == 0) {
-            firstFrameValidPoints = validPointsCount
-            firstFrameCorrelatedPoints = EngineStats.correlatedPoints(metricsCatcher)
-            // Stored stats stay SLOT_COUNT long; the slots past it are read here only.
-            engineStatsArray = metricsCatcher.copyOf(EngineStats.SLOT_COUNT)
-            firstFrameAvgIters = metricsCatcher[EngineStats.SLOT_AVG_ITERS]
-        }
-
-        if (validPointsCount == 0) continue
-
-        DicFieldIo.write(outputBuffer, validPointsCount, SessionPaths.frameDat(resultsDir, frameIndex))
-        run {
-            // Same bytes just written, reinterpreted as the point-record floats
-            // VisualizationEngine.valueRanges expects — no extra decode, this data
-            // is already in hand.
-            val floatData = FloatArray(validPointsCount * DicResult.STRIDE)
-            outputBuffer.position(0)
-            outputBuffer.asFloatBuffer().get(floatData, 0, floatData.size)
-            perFrameSummaryRanges.add(VisualizationEngine.valueRanges(floatData, summaryFieldIndices))
-        }
-
-        solvedFrames++
-        lastConvergence = metricsCatcher[EngineStats.SLOT_CONVERGENCE]
-        frameConvergence[frameIndex] = lastConvergence
-        if (convergenceGate.record(lastConvergence)) {
-            stop = RunStop.LowConvergence
-            failedFrameIndex = frameIndex
-            break
-        }
-        onProgress(
-            BatchProgressUpdate(
-                percent = ((frameIndex + 1).toFloat() / plannedFrames) * 100,
-                status = "Processing frame ${frameIndex + 1} of $plannedFrames",
-                frameIndex = frameIndex,
-                plannedFrames = plannedFrames,
-                framePercent = 100f,
-                perFrameConvergence = frameConvergence.copyOf(),
-            ),
-        )
+    } else {
+        0
     }
 
-    // A cancel keeps nothing: no frames, no row, no upload; its results never
-    // left the staging. One confirmed while the last frame solved counts too.
-    if (cancelRequested) stop = RunStop.Cancelled
+    // A run that throws before its results are committed (a full disk under
+    // DicFieldIo.write, say) keeps nothing either: it is undone as a cancel is
+    // (undoFailedBatch), so the frames it moved are back where the wizard
+    // reads them, rather than skipped by the next Compute and pruned. One that
+    // throws after its commit is undone the same way below (undoCommittedBatch).
+    try {
+        for ((frameIndex, defPath) in frames.paths.withIndex()) {
+            // A job cancelled with its view model is a cancel too: it keeps nothing
+            // either, and the cancel below rethrows it once the run is undone.
+            if (cancelRequested || !run.job.isActive) {
+                stop = RunStop.Cancelled
+                break
+            }
+            onProgress(
+                BatchProgressUpdate(
+                    percent = (frameIndex.toFloat() / plannedFrames) * 100,
+                    status = if (plannedFrames > 1) {
+                        "Processing frame ${frameIndex + 1} of $plannedFrames"
+                    } else {
+                        "Correlating & solving…"
+                    },
+                    frameIndex = frameIndex,
+                    plannedFrames = plannedFrames,
+                    perFrameConvergence = frameConvergence.copyOf(),
+                ),
+            )
+
+            val source = File(defPath)
+            // One read feeds both the JNI buffer and the copy fallback below
+            // (avoids Files.copy + a second heap read).
+            val defBytes = try {
+                source.readBytes()
+            } catch (e: Exception) {
+                Timber.e(e, "Could not read deformed frame %d", frameIndex)
+                continue
+            }
+            if (source.parentFile?.absolutePath == rawDeformedDir.absolutePath) {
+                // Moved here by a run in this wizard that saved nothing: the image
+                // already lives where it belongs, so there is nothing to move, and
+                // the prune below must not treat it as stale.
+                persistedRawNames[frameIndex] = source.name
+            } else {
+                try {
+                    // Persist the untouched original under the user's own filename
+                    // so exports keep default names.
+                    val rawName = frames.originalNames.originalNameOr(frameIndex, source.name).baseName()
+                    val target = keepDeformedFrame(source, defBytes, rawDeformedDir, rawName, frameIndex)
+                    // Record the name we ACTUALLY wrote: the session index (and the
+                    // cloud upload) must be able to find these files again.
+                    persistedRawNames[frameIndex] = target.name
+                    resolvedDefPaths[frameIndex] = target.absolutePath
+                } catch (e: Exception) {
+                    Timber.w(e, "Could not persist raw deformed frame %d", frameIndex)
+                }
+            }
+            val callback = object : ProgressCallback {
+                override fun onProgressUpdate(percentage: Int) {
+                    val frameProgress = (frameIndex.toFloat() / plannedFrames) * 100
+                    val overallProgress = frameProgress + (percentage.toFloat() / plannedFrames)
+                    onProgress(
+                        BatchProgressUpdate(
+                            percent = overallProgress,
+                            status = if (plannedFrames > 1) {
+                                "Processing frame ${frameIndex + 1} of $plannedFrames"
+                            } else {
+                                "Correlating & solving…"
+                            },
+                            frameIndex = frameIndex,
+                            plannedFrames = plannedFrames,
+                            framePercent = percentage.toFloat(),
+                        ),
+                    )
+                }
+            }
+
+            outputBuffer.clear()
+            val metricsCatcher = EngineStats.newMetrics(EngineStats.ENGINE_SLOT_COUNT)
+
+            // Incremental: the total from the first image, on its grid, in the same layout.
+            val validPointsCount = when {
+                incrementalInit < 0 -> incrementalInit
+                spec.incremental -> SemperNativeLib.computeIncrementalFrame(
+                    defBytes,
+                    outputBuffer,
+                    callback,
+                    metricsCatcher,
+                    incrementalInfo,
+                )
+                else -> SemperNativeLib.computeFullFieldDirect(
+                    refBytes, defBytes, spec.mask,
+                    roi.x, roi.y, roi.w, roi.h,
+                    dic.step, dic.subset, dic.strainWindow, spec.use6x6,
+                    outputBuffer, callback, metricsCatcher,
+                )
+            }
+
+            if (validPointsCount < 0) {
+                stop = RunStop.fromWireCode(validPointsCount)
+                failedFrameIndex = frameIndex
+                break
+            }
+
+            // Defensive bound: the engine must never report more points than the ROI
+            // grid the direct buffer was sized for (maxPoints). Today it cannot: its
+            // grid is exactly (rect_w / step) x (rect_h / step), the size allocated
+            // above (engine/src/pipeline/full_field_solver.cpp, gridW / gridH), and
+            // it stops packing at the buffer's capacity rather than overrun it
+            // (full_field_solver_stats.cpp). Should either change, the get() below
+            // would read past the buffer and crash the run with
+            // BufferUnderflowException, so it is an init-class engine failure.
+            if (DicFieldIo.wouldOverrun(validPointsCount, outputBuffer)) {
+                Timber.e(
+                    "Engine returned %d points but the buffer holds %d (frame %d) — failing frame",
+                    validPointsCount,
+                    DicFieldIo.capacityPoints(outputBuffer),
+                    frameIndex,
+                )
+                stop = RunStop.InitFailed
+                failedFrameIndex = frameIndex
+                break
+            }
+
+            if (frameIndex == 0) {
+                firstFrameValidPoints = validPointsCount
+                firstFrameCorrelatedPoints = EngineStats.correlatedPoints(metricsCatcher)
+                // Stored stats stay SLOT_COUNT long; the slots past it are read here only.
+                engineStatsArray = metricsCatcher.copyOf(EngineStats.SLOT_COUNT)
+                firstFrameAvgIters = metricsCatcher[EngineStats.SLOT_AVG_ITERS]
+            }
+
+            if (validPointsCount == 0) continue
+
+            DicFieldIo.write(outputBuffer, validPointsCount, SessionPaths.frameDat(resultsDir, frameIndex))
+            run {
+                // Same bytes just written, reinterpreted as the point-record floats
+                // VisualizationEngine.valueRanges expects — no extra decode, this data
+                // is already in hand.
+                val floatData = FloatArray(validPointsCount * DicResult.STRIDE)
+                outputBuffer.position(0)
+                outputBuffer.asFloatBuffer().get(floatData, 0, floatData.size)
+                perFrameSummaryRanges.add(VisualizationEngine.valueRanges(floatData, summaryFieldIndices))
+            }
+
+            solvedFrames++
+            lastConvergence = metricsCatcher[EngineStats.SLOT_CONVERGENCE]
+            if (spec.incremental) {
+                lastConvergence = ConvergenceGate.incremental(
+                    lastConvergence,
+                    incrementalInfo[SemperNativeLib.INC_INFO_TRACKED_POINTS],
+                    incrementalInfo[SemperNativeLib.INC_INFO_FRAME0_POINTS],
+                )
+            }
+            frameConvergence[frameIndex] = lastConvergence
+            if (convergenceGate.record(lastConvergence)) {
+                stop = RunStop.LowConvergence
+                failedFrameIndex = frameIndex
+                break
+            }
+            onProgress(
+                BatchProgressUpdate(
+                    percent = ((frameIndex + 1).toFloat() / plannedFrames) * 100,
+                    status = "Processing frame ${frameIndex + 1} of $plannedFrames",
+                    frameIndex = frameIndex,
+                    plannedFrames = plannedFrames,
+                    framePercent = 100f,
+                    perFrameConvergence = frameConvergence.copyOf(),
+                ),
+            )
+        }
+
+        // A cancel keeps nothing: no frames, no row, no upload; its results never
+        // left the staging. One confirmed while the last frame solved counts too.
+        if (cancelRequested) stop = RunStop.Cancelled
+        // Any other end moves this run's results into its session, whether or not
+        // it then saves a record (a partial stop keeps its frames). The session is
+        // never a saved analysis (openRunSession): at most the folder of a run in
+        // this wizard that saved nothing.
+        if (stop != RunStop.Cancelled) session.commit()
+    } catch (e: Exception) {
+        undoFailedBatch(appContext, session, frames.paths, resolvedDefPaths, e)
+    } finally {
+        if (spec.incremental) SemperNativeLib.releaseIncremental()
+    }
     if (stop == RunStop.Cancelled) {
         discardCancelledBatch(appContext, session, frames.paths, resolvedDefPaths)
         run.job.ensureActive()
         return cancelledOutcome((System.currentTimeMillis() - run.startedAtMs).toInt())
     }
-    // Any other end moves this run's results into its session, whether or not
-    // it then saves a record (a partial stop keeps its frames). The session is
-    // never a saved analysis (openRunSession): at most the folder of a run in
-    // this wizard that saved nothing.
-    session.commit()
 
-    // Every frame solved: the overlay says so while the run saves.
-    if (stop == RunStop.Finished) {
-        onProgress(
-            BatchProgressUpdate(
-                percent = 100f,
-                status = "Saving…",
-                frameIndex = plannedFrames,
-                plannedFrames = plannedFrames,
-                framePercent = 100f,
-                perFrameConvergence = frameConvergence.copyOf(),
-            ),
-        )
+    // The frames are in the session now, and the wizard still names where they
+    // came from until it follows them below. A throw before then (the
+    // "Saving…" post, the prune, or Re-run's keep past its own IOException
+    // catch) is undone like one before the commit, its committed results
+    // included (undoCommittedBatch), so the wizard never names a moved frame.
+    try {
+        // Every frame solved: the overlay says so while the run saves.
+        if (stop == RunStop.Finished) {
+            onProgress(
+                BatchProgressUpdate(
+                    percent = 100f,
+                    status = "Saving…",
+                    frameIndex = plannedFrames,
+                    plannedFrames = plannedFrames,
+                    framePercent = 100f,
+                    perFrameConvergence = frameConvergence.copyOf(),
+                ),
+            )
+        }
+
+        // One entry per frame actually written above — matches what batchFiles will
+        // list on a later read, so SummaryAnimation.globalRanges's frame-count check
+        // accepts this cache. A partial or failed run's shorter list still writes
+        // correctly: it just describes fewer frames, consistent with fewer .dat files
+        // existing. Best-effort — a write failure here only costs the cache its
+        // speedup, never correctness (globalRanges falls back to decoding).
+        FieldRangesStore.writeBestEffort(batchDir, summaryFieldIndices, perFrameSummaryRanges)
+
+        // Images an earlier run left behind that this one no longer has. This is
+        // the wipe that used to run before the loop; done here it can never delete
+        // the run's own inputs.
+        val keptRawNames = persistedRawNames.filterTo(HashSet()) { it.isNotBlank() }
+        rawDeformedDir.listFiles()?.forEach { if (it.name !in keptRawNames) it.delete() }
+
+        // A run that will save keeps what Home's Re-run starts from, the frames it
+        // stopped before included, which the wizard then follows.
+        if (firstFrameValidPoints > 0) keepBatchRerun(batchDir, run.inputs, spec, resolvedDefPaths)
+    } catch (e: Exception) {
+        undoCommittedBatch(appContext, session, frames.paths, resolvedDefPaths, e)
     }
-
-    // One entry per frame actually written above — matches what batchFiles will
-    // list on a later read, so SummaryAnimation.globalRanges's frame-count check
-    // accepts this cache. A partial or failed run's shorter list still writes
-    // correctly: it just describes fewer frames, consistent with fewer .dat files
-    // existing. Best-effort — a write failure here only costs the cache its
-    // speedup, never correctness (globalRanges falls back to decoding).
-    writeSummaryRanges(batchDir, summaryFieldIndices, perFrameSummaryRanges)
-
-    // Images an earlier run left behind that this one no longer has. This is
-    // the wipe that used to run before the loop; done here it can never delete
-    // the run's own inputs.
-    val keptRawNames = persistedRawNames.filterTo(HashSet()) { it.isNotBlank() }
-    rawDeformedDir.listFiles()?.forEach { if (it.name !in keptRawNames) it.delete() }
-
-    // A run that will save keeps what Home's Re-run starts from, the frames it
-    // stopped before included, which the wizard then follows.
-    if (firstFrameValidPoints > 0) keepBatchRerun(batchDir, run.inputs, spec, resolvedDefPaths)
 
     // On Main: the wizard's fields are not this thread's to write.
     repointDeformedPathsOnMain(resolvedDefPaths)
@@ -372,7 +428,8 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         val rate = RunEstimate.nextRate(previous, points, solvedFrames, executionTimeMs.toLong())
         AppSettings.setRunPointsPerSecond(appContext, rate)
     }
-    var recordSaved = false
+    // The row the run saved, as the index holds it: what its viewer opens on.
+    var savedRecord: SessionRecord? = null
     var indexUnavailable = false
     // The names actually on disk in raw_deformed/ — reopening a session,
     // exporting and cloud upload resolve images by these.
@@ -386,14 +443,13 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         // Persist a viewable copy of the reference next to the frames —
         // the Home list and reopened sessions depend on it surviving.
         val refPngPath = sessions.writeReferenceCopy(batchDir, refBytes, reference.size.width, reference.size.height)
-        lastRefPath = refPngPath
 
         val cloudEnabled = CloudSync.uploadsEnabled(appContext)
         val input = RunInput(
             localSessionId = localSessionId,
             dir = batchDir,
             reference = RunReference(refPngPath, reference.name, reference.size),
-            settings = spec.recordSettings().also { recordRunSettings(it) },
+            settings = spec.recordSettings(),
             videoName = videoName,
             frameTimesMs = frameTimesMs,
         )
@@ -406,16 +462,14 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
                 executionTimeMs = executionTimeMs,
                 engineStats = engineStatsArray?.toList().orEmpty(),
             ),
-            stopCode = stop.wireCode.also { lastStop = stop },
-            plannedFrameCount = plannedFrames.also { lastPlannedFrames = it },
+            stopCode = stop.wireCode,
+            plannedFrameCount = plannedFrames,
         )
         val record = sessions.buildSessionRecord(appContext, input, outcome, cloudEnabled, spec.mechanical)
         val saved = afterSave(stop, saveRunRecord(appContext, record, cloudEnabled, admission.admitted))
         stop = saved.stop
-        recordSaved = saved.recordSaved
+        if (saved.recordSaved) savedRecord = SessionStore.get(appContext, localSessionId) ?: record
         indexUnavailable = saved.indexUnavailable
-        // That analysis is finished: the next run in this wizard is a new one.
-        if (recordSaved) closeSavedSession()
     }
 
     val outcome = BatchAnalysisOutcome(
@@ -429,8 +483,12 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
             .takeIf { it >= 0 }
             ?.let { resolvedDefPaths.getOrNull(it)?.substringAfterLast('/') },
         firstFrameCorrelatedPoints = firstFrameCorrelatedPoints,
-        saved = recordSaved,
+        record = savedRecord,
         indexUnavailable = indexUnavailable,
+        // Once saved, that analysis is finished: the next run in this wizard
+        // is a new one (applyRunOutcome).
+        session = session.working,
+        spec = spec,
     )
     batchEndEvent(appContext, outcome, stop)
     return outcome
@@ -490,38 +548,4 @@ internal fun batchEndEvent(appContext: Context, outcome: BatchAnalysisOutcome, s
             ),
         )
     }
-}
-
-/**
- * Keeps frame [frameIndex]'s deformed image [source], whose [bytes] the run
- * has already read, in [rawDeformedDir] under [rawName], index-prefixed only
- * if that name is taken; returns the file it is kept as. An image from the
- * import cache is moved: both directories are app-private storage, so that
- * is a rename rather than a second multi-megabyte write, and the fallback
- * writes [bytes] rather than read the file a second time. One in another
- * session's directory (an analysis this wizard saved before) is copied and
- * left where it is: it is that session's own image.
- */
-internal fun keepDeformedFrame(
-    source: File,
-    bytes: ByteArray,
-    rawDeformedDir: File,
-    rawName: String,
-    frameIndex: Int,
-): File {
-    val target = File(rawDeformedDir, rawName).let {
-        if (it.exists()) File(rawDeformedDir, String.format(Locale.US, "%04d_%s", frameIndex, rawName)) else it
-    }
-    val sessionDir = rawDeformedDir.absoluteFile.parentFile
-    val copyOnly = sessionDir != null && SessionPaths.isInOtherSession(source, sessionDir)
-    if (copyOnly || !source.renameTo(target)) target.writeBytes(bytes)
-    return target
-}
-
-/** Persists [ranges], one entry per written frame, for [indices]; best-effort. */
-private fun writeSummaryRanges(batchDir: File, indices: IntArray, ranges: List<Map<Int, Pair<Float, Float>?>>) {
-    if (ranges.isEmpty()) return
-    runCatching {
-        FieldRangesStore.write(File(batchDir, FieldRangesStore.FILE_NAME), indices, ranges)
-    }.onFailure { Timber.w(it, "Could not persist summary field ranges") }
 }

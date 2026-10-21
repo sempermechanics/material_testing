@@ -27,13 +27,13 @@ display-size (≤ 1080 px) `reference.png`, and the mask was never written.
 
 1. **Results end the wizard.** When a run's results open (a full run, a
    partial stop's **View results**, a sweep's lattice) the wizard finishes
-   (`WizardRunOutcomes.openResults`), its draft is discarded, and Back from
+   (`BatchRunController.openResults`, since 2026-10-19; `WizardRunOutcomes` before), its draft is discarded, and Back from
    the results lands on Home.
 2. **No in-place re-run.** Once a run's row is saved the wizard lets go of the
-   session (`RunChannels.closeSavedSession`); `openRunSession` reuses a working
+   session (`RunChannels.applyRunOutcome`, once its outcome says saved); `openRunSession` reuses a working
    id only while no Home row names it (an unsaved or cancelled run's folder).
    Every run is admitted (`admitRun`, `ensureCanStart`), and the session id
-   reaches the results through `RunResult.sessionId`. The #439 staging, commit
+   reaches the results through `RunResult.sessionId` (since 2026-10-19 the run's outcome carries its saved row, which opens through `ViewerArgs.of`, the one builder Home uses too). The #439 staging, commit
    and cancel-discard stay.
 3. **Re-run from Home.** A saved run also writes `<session>/rerun/`
    (`SessionLayout.rerunDir`, `RerunKeeper`):
@@ -110,7 +110,7 @@ restored) is re-run by picking its reference again:
 - The `.dat` bytes and the batch loop are unchanged: `keepBatchRerun` runs
   after the loop, before the frame paths are repointed.
 - Tests: `RerunInputsTest`, `RerunWizardTest`, `SessionSelectionRerunTest`,
-  `WizardRunOutcomesTest`, `CancelDiscardsRunTest`, `RunKindOwnRecordTest`,
+  `WizardRunOutcomesTest` (since 2026-10-19 `BatchRunControllerTest`, `RunEndTest`), `CancelDiscardsRunTest`, `RunKindOwnRecordTest`,
   instrumented `EnginePipelineSmokeTest`.
 
 ## Action items

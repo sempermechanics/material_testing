@@ -27,11 +27,11 @@ class AnalysisLeaveController(
     }
 
     internal fun onBack() {
-        val previous = viewModel.step.previous
+        val previous = viewModel.inputs.value.step.previous
         when {
             chrome.isBusy -> chrome.confirmCancel()
             previous != null -> goToStep(previous)
-            viewModel.refBytes != null || viewModel.defFilePaths.isNotEmpty() -> confirmLeave()
+            viewModel.inputs.value.refBytes != null || viewModel.defFilePaths.isNotEmpty() -> confirmLeave()
             else -> activity.finish()
         }
     }

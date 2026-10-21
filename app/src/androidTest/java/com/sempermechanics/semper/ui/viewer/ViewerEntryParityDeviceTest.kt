@@ -1,7 +1,6 @@
 package com.sempermechanics.semper.ui.viewer
 
 import android.app.Activity
-import android.content.Intent
 import android.graphics.Bitmap
 import android.view.View
 import androidx.test.core.app.ActivityScenario
@@ -13,10 +12,6 @@ import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.ui.analysis.VsgLatticeActivity
-import com.sempermechanics.semper.ui.analysis.run.RunSpec
-import com.sempermechanics.semper.ui.analysis.wizard.AnalysisNavHelper
-import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
-import com.sempermechanics.semper.ui.home.SessionOpenHelper
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -29,10 +24,11 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * One session, opened the two ways a user reaches it (TD-61, ADR-003/004):
- * straight from the run that made it, and later from Home. The viewer must
- * parse the same arguments and the ⓘ sheet must show the same rows. The
- * lattice → viewer hop must carry the sweep's arguments to the node picked.
+ * The lattice → viewer hop must carry the sweep's arguments to the node
+ * picked. A session opened straight from the run that made it and later from
+ * Home used to be two builders kept equal only here (TD-61, ADR-003/004);
+ * both now open its saved row through [ViewerArgs.of], which the JVM
+ * `ViewerArgsTest` pins.
  */
 @RunWith(AndroidJUnit4::class)
 class ViewerEntryParityDeviceTest {
@@ -90,63 +86,6 @@ class ViewerEntryParityDeviceTest {
         SessionStore.delete(context, ID)
     }
 
-    /** The view model as the run that saved [record] leaves it. */
-    private fun finishedRun(): AnalysisViewModel = AnalysisViewModel().apply {
-        realRefWidth = IMG_W
-        realRefHeight = IMG_H
-        refName = record.refName
-        // The ROI the user drew; the run solved the inset one.
-        roiX = 0
-        roiY = 0
-        roiW = IMG_W
-        roiH = IMG_H
-        val spec = RunSpec.of(
-            SUBSET,
-            STEP,
-            STRAIN_WINDOW,
-            intArrayOf(ROI_X, ROI_Y, ROI_W, ROI_H),
-            mask = null,
-            use6x6 = false,
-            debugDir = null,
-        )
-        resetRunResult(dir.absolutePath, spec, ID)
-        recordRunSettings(spec.recordSettings())
-        lastRefPath = record.refPath
-        lastPlannedFrames = FRAMES
-    }
-
-    private class Seen(val args: ViewerArgs, val rows: List<Pair<String, String>>, val roi: List<Int>)
-
-    private fun open(intent: Intent): Seen {
-        var seen: Seen? = null
-        ActivityScenario.launch<ResultViewerActivity>(intent).use { scenario ->
-            scenario.onActivity { viewer ->
-                seen = Seen(
-                    viewer.args,
-                    SettingsUsedSheet.entriesFor(viewer),
-                    viewer.roi.let { listOf(it.x, it.y, it.w, it.h) },
-                )
-            }
-        }
-        return checkNotNull(seen)
-    }
-
-    @Test
-    fun theRunAndHomeOpenTheSameViewer() {
-        val fromRun = open(
-            AnalysisNavHelper.resultArgs(finishedRun(), sweep = false, frameNames = record.defNames)
-                .toIntent(context),
-        )
-        val fromHome = open(SessionOpenHelper.intentFor(context, record))
-
-        // defPath / defFilePaths are the run's own image paths; Home has the
-        // persisted originals instead, which the viewer prefers either way.
-        assertEquals(fromHome.args, fromRun.args.copy(defPath = null, defFilePaths = emptyList()))
-        assertEquals(fromHome.rows, fromRun.rows)
-        assertEquals(listOf(ROI_X, ROI_Y, ROI_W, ROI_H), fromRun.roi)
-        assertEquals(fromHome.roi, fromRun.roi)
-    }
-
     @Test
     fun aLatticeNodeOpensTheViewerOnThatCombination() {
         val sweep = ViewerSweepArgs(
@@ -156,7 +95,7 @@ class ViewerEntryParityDeviceTest {
             lineCutHorizontal = false,
             skippedJson = "[]",
         )
-        val lattice = SessionOpenHelper.argsFor(record).copy(sweep = sweep, frameNames = listOf("a", "b"))
+        val lattice = ViewerArgs.of(record).copy(sweep = sweep, frameNames = listOf("a", "b"))
         val monitor = instrumentation.addMonitor(ResultViewerActivity::class.java.name, null, false)
         try {
             ActivityScenario.launch<VsgLatticeActivity>(lattice.toIntent(context)).use { scenario ->

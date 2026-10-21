@@ -12,6 +12,7 @@ import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.data.prefs.WizardDraft
 import com.sempermechanics.semper.field.ImageSize
+import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.fixtures.awaitCondition
 import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
 import kotlinx.coroutines.runBlocking
@@ -71,19 +72,19 @@ class WizardDraftRestoreTest {
         val paths = (1..FRAMES).map { File(frames, "frame_$it.png").apply { writeBytes(byteArrayOf(it.toByte())) }.path }
         val before = AnalysisViewModel(SavedStateHandle()).apply {
             attachDraft(draft)
-            refBytes = REF
-            roiMaskBytes = MASK
-            realRefWidth = 640
-            realRefHeight = 480
-            refName = "speckle.png"
-            hasCustomRoi = true
-            roiX = 16
-            roiY = 16
-            roiW = 600
-            roiH = 440
-            deformedFrames = paths.map { DeformedFrame(it, File(it).name, size = ImageSize(640, 480)) }
-            wizardStep = 2
-            workingLocalId = "draft_device"
+            edit { current ->
+                current.copy(
+                    refBytes = REF,
+                    roiMaskBytes = MASK,
+                    refSize = ImageSize(640, 480),
+                    refName = "speckle.png",
+                    hasCustomRoi = true,
+                    roi = Roi(16, 16, 600, 440),
+                    deformedFrames = paths.map { DeformedFrame(it, File(it).name, size = ImageSize(640, 480)) },
+                    step = WizardStep.of(2),
+                    working = WorkingSession("draft_device", RunKind.BATCH),
+                )
+            }
         }
         awaitDraft("reference") { draft.readReference()?.contentEquals(REF) == true }
         awaitDraft("mask") { draft.readMask()?.contentEquals(MASK) == true }
@@ -93,13 +94,14 @@ class WizardDraftRestoreTest {
         after.attachDraft(WizardDraft(context))
 
         assertEquals(DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
-        assertArrayEquals(REF, after.refBytes)
-        assertArrayEquals(MASK, after.roiMaskBytes)
+        val restored = after.inputs.value
+        assertArrayEquals(REF, restored.refBytes)
+        assertArrayEquals(MASK, restored.roiMaskBytes)
         assertEquals(paths, after.defFilePaths)
         assertEquals(before.defFrameSizes, after.defFrameSizes)
-        assertEquals(listOf(16, 16, 600, 440), listOf(after.roiX, after.roiY, after.roiW, after.roiH))
-        assertEquals(2, after.wizardStep)
-        assertEquals("draft_device", after.workingLocalId)
+        assertEquals(Roi(16, 16, 600, 440), restored.roi)
+        assertEquals(2, restored.step.number)
+        assertEquals("draft_device", restored.working?.id)
         assertTrue(WizardDraft.isLive(context.filesDir))
     }
 
@@ -116,17 +118,19 @@ class WizardDraftRestoreTest {
         )
         val before = AnalysisViewModel(SavedStateHandle()).apply {
             attachDraft(draft)
-            refBytes = REF
-            realRefWidth = 640
-            realRefHeight = 480
-            deformedFrames = paths.map { DeformedFrame(it, File(it).name, size = ImageSize(640, 480)) }
-            defTimesAfterRefMs = listOf(500L, 1_000L, 1_500L)
-            testType = TestType.BENDING
-            this.geometry = geometry
+            val frameList = paths.map { DeformedFrame(it, File(it).name, size = ImageSize(640, 480)) }
+            edit { current ->
+                current.copy(
+                    refBytes = REF,
+                    refSize = ImageSize(640, 480),
+                    deformedFrames = frameList,
+                    lab = current.lab.copy(testType = TestType.BENDING, geometry = geometry),
+                ).withDefTimesAfterRefMs(listOf(500L, 1_000L, 1_500L))
+            }
             setLoadLog(parsed, "run1.csv", LOAD_LOG)
             refreshMachineLoads()
         }
-        assertEquals(FRAMES, before.machineLoads?.matchedFrames)
+        assertEquals(FRAMES, before.lab.machineLoads?.matchedFrames)
         awaitDraft("reference") { draft.readReference()?.contentEquals(REF) == true }
         awaitDraft("load log") { draft.readLoadLog() == LOAD_LOG }
 
@@ -135,12 +139,12 @@ class WizardDraftRestoreTest {
         after.attachDraft(WizardDraft(context))
 
         assertEquals(DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
-        assertEquals(TestType.BENDING, after.testType)
-        assertEquals(geometry, after.geometry)
+        assertEquals(TestType.BENDING, after.lab.testType)
+        assertEquals(geometry, after.lab.geometry)
         assertEquals(listOf(500L, 1_000L, 1_500L), after.defTimesAfterRefMs)
-        assertEquals("run1.csv", after.loadCsvName)
-        assertEquals(before.parsedLoadCsv, after.parsedLoadCsv)
-        assertEquals(before.machineLoads?.loadsN, after.machineLoads?.loadsN)
+        assertEquals("run1.csv", after.lab.loadCsvName)
+        assertEquals(before.lab.parsedLoadCsv, after.lab.parsedLoadCsv)
+        assertEquals(before.lab.machineLoads?.loadsN, after.lab.machineLoads?.loadsN)
         assertTrue(after.mechanicalInputsReady())
     }
 
@@ -149,7 +153,7 @@ class WizardDraftRestoreTest {
         val draft = WizardDraft(context)
         val vm = AnalysisViewModel(SavedStateHandle()).apply {
             attachDraft(draft)
-            refBytes = REF
+            edit { it.copy(refBytes = REF) }
         }
         awaitDraft("reference") { draft.readReference() != null }
         vm.discardDraft()

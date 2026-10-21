@@ -15,7 +15,6 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.checkbox.MaterialCheckBox
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.cloud.CloudSync
 import com.sempermechanics.semper.data.cloud.SessionDeletes
 import com.sempermechanics.semper.data.cloud.SessionMetadataSync
 import com.sempermechanics.semper.data.session.SessionRecord
@@ -49,6 +48,11 @@ class SessionSelectionController(
     private val fab: ImageButton,
     private val backCallback: OnBackPressedCallback,
     private val onRefresh: () -> Unit,
+    /**
+     * Erase these rows on the phone (only the phone copies when deviceOnly); the
+     * host runs it in [HomeViewModel] and hands the outcome to [showEraseOutcome].
+     */
+    private val onEraseLocally: (records: List<SessionRecord>, deviceOnly: Boolean) -> Unit,
     private val onDeviceOnlyDeleted: () -> Unit = {},
     /** False for an account that has no restore (demo), which hides the action. */
     private val restoreEnabled: () -> Boolean = { true },
@@ -327,35 +331,32 @@ class SessionSelectionController(
 
     /**
      * No network: [deviceOnly] drops the phone copy and keeps the backup;
-     * otherwise the rows have no backup and go entirely.
+     * otherwise the rows have no backup and go entirely. It runs in
+     * [HomeViewModel.eraseLocally], not on this screen's scope, so a rotation
+     * does not stop it part-way (ADR-016 rule 1); the selection stays until
+     * [showEraseOutcome].
      */
     private fun eraseLocally(records: List<SessionRecord>, deviceOnly: Boolean) {
-        activity.lifecycleScope.launch {
-            // A row whose backup is still being made can have a cloud copy the
-            // phone does not know of yet; eraseEverywhere looks, and keeps the row
-            // when it cannot.
-            var kept = 0
-            for (record in records) {
-                if (deviceOnly) {
-                    CloudSync.eraseLocalOnly(activity, record.id)
-                } else if (CloudSync.eraseEverywhere(activity, record.id) != CloudSync.EraseOutcome.ERASED_EVERYWHERE) {
-                    kept++
-                }
+        onEraseLocally(records, deviceOnly)
+    }
+
+    /** What an erase came to, once, on whichever Home is current: a toast, then the list re-reads. */
+    fun showEraseOutcome(outcome: HomeViewModel.LocalErase) {
+        val records = outcome.records
+        if (outcome.deviceOnly) {
+            onDeviceOnlyDeleted()
+        } else {
+            val kept = outcome.kept
+            val done = records.size - kept
+            val res = activity.resources
+            val message = when {
+                kept > 0 -> res.getQuantityString(R.plurals.delete_multi_partial, done, done, kept)
+                records.size == 1 -> activity.getString(R.string.delete_done_fmt, records.single().name)
+                else -> res.getQuantityString(R.plurals.delete_multi_done, done, done)
             }
-            if (deviceOnly) {
-                onDeviceOnlyDeleted()
-            } else {
-                val done = records.size - kept
-                val res = activity.resources
-                val message = when {
-                    kept > 0 -> res.getQuantityString(R.plurals.delete_multi_partial, done, done, kept)
-                    records.size == 1 -> activity.getString(R.string.delete_done_fmt, records.single().name)
-                    else -> res.getQuantityString(R.plurals.delete_multi_done, done, done)
-                }
-                Feedback.toast(activity, message, long = true)
-            }
-            clearSelection()
-            onRefresh()
+            Feedback.toast(activity, message, long = true)
         }
+        clearSelection()
+        onRefresh()
     }
 }

@@ -3,6 +3,7 @@ package com.sempermechanics.semper.report
 import android.graphics.Bitmap
 import androidx.core.graphics.createBitmap
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.Roi
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
@@ -61,7 +62,7 @@ class ReportBuilderBitmapOwnershipTest {
             subsetSize = 41,
             strainWindow = 15,
             strainMethod = "VSG",
-            roiData = RoiData(0, 0, w, h),
+            roi = Roi(0, 0, w, h),
             engineStats = EngineStats.EMPTY,
             referenceImageName = "ref.png",
             deformedImageName = "def.png",

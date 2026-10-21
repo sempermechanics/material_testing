@@ -540,6 +540,18 @@ test("a password-and-Google operator may leave the password blank to use Google"
   assert.equal(fake.callsTo("reauthenticateWithRedirect").length, 1);
 });
 
+test("stepUpFresh asks in its own words, and is a no-op on a fresh sign-in", async () => {
+  signIn(new FakeUser({ providers: ["password", "google.com"], authAgeSeconds: 60 }));
+  await auth.stepUpFresh({ action: "testAccountEnd", uid: "u1" }, "end this test account");
+  assert.equal(prompts.asked.length, 0);
+
+  signIn(readyUser({ authAgeSeconds: 600 }));
+  const resume = { action: "testAccountEnd", uid: "u1", email: "qc@test.example" };
+  assert.ok(await stillPending(auth.stepUpFresh(resume, "end this test account")));
+  assert.equal($("status").textContent, "Re-authenticating with Google to end this test account…");
+  assert.deepEqual(JSON.parse(storage.getItem(RESUME)), resume);
+});
+
 /* ------------------------------------------------------ confirmByTyping */
 
 test("confirmByTyping accepts only the exact label", async () => {

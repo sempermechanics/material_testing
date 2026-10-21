@@ -3,6 +3,7 @@ package com.sempermechanics.semper.ui.viewer.summary
 import android.content.res.Resources
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.ReportBuilder
 
 /**
@@ -12,12 +13,12 @@ import com.sempermechanics.semper.report.ReportBuilder
  */
 internal object SummaryCaption {
 
-    /** [bounds] as (bottom, top) in stored units, or null while unknown. */
-    fun text(res: Resources, bounds: Pair<Float, Float>?, dataIndex: Int, unit: String): String {
+    /** [bounds] in stored units, or null while unknown. */
+    fun text(res: Resources, bounds: ValueRange?, dataIndex: Int, unit: String): String {
         val multiplier = DicResult.strainMultiplier(dataIndex)
         val placeholder = res.getString(R.string.stat_empty)
-        val top = bounds?.let { ReportBuilder.formatMetric(it.second * multiplier) } ?: placeholder
-        val bottom = bounds?.let { ReportBuilder.formatMetric(it.first * multiplier) } ?: placeholder
+        val top = bounds?.let { ReportBuilder.formatMetric(it.max * multiplier) } ?: placeholder
+        val bottom = bounds?.let { ReportBuilder.formatMetric(it.min * multiplier) } ?: placeholder
         return res.getString(R.string.viewer_stats_sequence_fmt, top, bottom, unit)
     }
 }

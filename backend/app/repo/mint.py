@@ -3,7 +3,7 @@ and institution keys.
 """
 import logging
 
-from .. import apps, errors, statuses
+from .. import apps, errors
 from ..config import settings
 from ..licenses import (
     DURATION_PERPETUAL,
@@ -42,7 +42,9 @@ from .claims import (
     _public_claim_error,
 )
 from .holders import (
+    _eligible_holder,
     licence_is_live,
+    verified_address,
 )
 from .invites import (
     find_user_by_email,
@@ -93,6 +95,8 @@ def _license_public(license_id: str, data: dict) -> dict:
         # Set when an individual licence was converted to an institution one
         # (repo/upgrade.py): the id of the licence that replaced it.
         "supersededBy": data.get("supersededBy") or "",
+        # A staff test account's licence (ADR-027); false on every other.
+        "testAccount": data.get("testAccount") is True,
     }
 
 
@@ -114,8 +118,10 @@ def _write_license(
     support_until=None,
     max_analyses: int | None = None,
     note: str = "",
+    test_account: bool = False,
 ) -> tuple[str, str, dict]:
-    """Mint a key, persist the hash, return (plaintext, license_id, stored)."""
+    """Mint a key, persist the hash, return (plaintext, license_id, stored).
+    `test_account` tags a staff test account's licence (ADR-027)."""
     key = generate_key()
     license_id = key_hash(key)
     stored = {
@@ -162,6 +168,8 @@ def _write_license(
         stored["supportUntil"] = support_until
     if max_analyses is not None:
         stored["maxAnalyses"] = int(max_analyses)
+    if test_account:
+        stored["testAccount"] = True
     if redeemed_by_uid:
         stored["redeemedByUid"] = redeemed_by_uid
         stored["redeemedAt"] = _base.firestore.SERVER_TIMESTAMP
@@ -191,11 +199,9 @@ def ensure_demo_license(user: dict, device_id: str | None) -> dict:
     uid = user.get("uid")
     if not uid or user.get("licenseId"):
         return user
-    if user.get("access_status") != statuses.ACCESS_APPROVED:
+    if not _eligible_holder(user):
         return user
-    if not user.get("emailVerified"):
-        return user
-    email = normalize_email(user.get("email"))
+    email = verified_address(user)
     device = device_id or user.get("activeDeviceId") or user.get("claimedDeviceId")
     if not email or not device:
         return user
@@ -249,9 +255,11 @@ def create_individual_license(
     support_until=None,
     max_analyses: int | None = None,
     note: str = "",
+    test_account: bool = False,
 ) -> dict:
     """Ops mint of an individual licensed key. Returns the plaintext key
-    once; only the hash is stored.
+    once; only the hash is stored. `test_account` tags the licence of a
+    staff test account (ADR-027): hidden from the licence desk by default.
 
     Also records a pending invite against `email_lock`, which is how the
     licence actually reaches the customer: they sign in with that address and
@@ -275,6 +283,7 @@ def create_individual_license(
         support_until=support_until,
         max_analyses=max_analyses,
         note=note,
+        test_account=test_account,
     )
     err, _ = _write_invite(license_id, email_lock, created_by_uid)
     if err:
@@ -331,7 +340,7 @@ def _attach_to_existing_holder(license_id: str, lic: dict, email: str) -> tuple[
     holder = find_user_by_email(address) if address else None
     if not holder:
         return "", ""
-    if holder.get("access_status") != statuses.ACCESS_APPROVED or not holder.get("emailVerified"):
+    if not _eligible_holder(holder):
         return "", ""
     if not _holds_only_a_demo_key(holder):
         return "", errors.HOLDER_ALREADY_LICENSED

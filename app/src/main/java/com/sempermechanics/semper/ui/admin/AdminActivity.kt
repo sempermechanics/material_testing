@@ -4,25 +4,24 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.activity.viewModels
 import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.account.AccessStatus
 import com.sempermechanics.semper.data.net.AdminUserDto
-import com.sempermechanics.semper.data.net.SemperApi
-import com.sempermechanics.semper.data.net.TokenProvider
 import com.sempermechanics.semper.databinding.ActivityAdminBinding
 import com.sempermechanics.semper.databinding.ItemAdminUserBinding
 import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.dialog.Feedback
 import com.sempermechanics.semper.ui.common.setBusy
-import com.sempermechanics.semper.util.suspendRunCatching
 import kotlinx.coroutines.launch
 
 /**
@@ -33,7 +32,8 @@ import kotlinx.coroutines.launch
 @MainThread
 class AdminActivity : AppCompatActivity() {
 
-    private val api by lazy { SemperApi.get(applicationContext) }
+    /** The list and the approvals, kept across a rotation (ADR-016). */
+    private val viewModel: AdminViewModel by viewModels()
 
     private lateinit var binding: ActivityAdminBinding
     private val adapter = RequestAdapter()
@@ -47,60 +47,33 @@ class AdminActivity : AppCompatActivity() {
         binding.rvRequests.layoutManager = LinearLayoutManager(this)
         binding.rvRequests.adapter = adapter
 
-        load()
+        observeViewModel()
+        viewModel.start()
     }
 
-    private fun load() {
-        setLoading(true)
+    /** The list, the spinner and each call's outcome once, on whichever screen is started. */
+    private fun observeViewModel() {
         lifecycleScope.launch {
-            val token = TokenProvider.usableIdToken()
-            if (token == null) {
-                setLoading(false)
-                Feedback.toast(this@AdminActivity, R.string.error_generic, long = true)
-                finish()
-                return@launch
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch { viewModel.busy.collect(::setLoading) }
+                launch { viewModel.users.collect { users -> users?.let(::showUsers) } }
+                viewModel.outcomes.collect(::showOutcome)
             }
-            // Cancellation (the screen closed) propagates: it is not a load error.
-            suspendRunCatching { api.listUsers(token, AccessStatus.PENDING) }
-                .onSuccess { users ->
-                    adapter.submitList(users)
-                    binding.tvEmpty.isVisible = users.isEmpty()
-                }
-                .onFailure { e ->
-                    val message = getString(R.string.admin_load_error_fmt, e.message ?: "")
-                    Feedback.toast(this@AdminActivity, message, long = true)
-                }
-            setLoading(false)
         }
     }
 
-    private fun act(user: AdminUserDto, action: String) {
-        setLoading(true)
-        lifecycleScope.launch {
-            val token = TokenProvider.usableIdToken()
-            if (token == null) {
-                setLoading(false)
-                return@launch
+    private fun showUsers(users: List<AdminUserDto>) {
+        adapter.submitList(users)
+        binding.tvEmpty.isVisible = users.isEmpty()
+    }
+
+    private fun showOutcome(outcome: AdminViewModel.Outcome) {
+        when (outcome) {
+            is AdminViewModel.Outcome.Say -> Feedback.toast(this, outcome.text, long = outcome.long)
+            AdminViewModel.Outcome.SignedOut -> {
+                Feedback.toast(this, R.string.error_generic, long = true)
+                finish()
             }
-            suspendRunCatching { api.setUserStatus(token, user.uid, action) }
-                .onSuccess {
-                    val label = user.email ?: user.uid
-                    val message = if (action == "approve") {
-                        getString(R.string.admin_approved_toast_fmt, label)
-                    } else {
-                        getString(R.string.admin_denied_toast_fmt, label)
-                    }
-                    Feedback.toast(this@AdminActivity, message)
-                    load() // refresh the list
-                }
-                .onFailure { e ->
-                    setLoading(false)
-                    Feedback.toast(
-                        this@AdminActivity,
-                        getString(R.string.admin_action_error_fmt, e.message ?: ""),
-                        long = true,
-                    )
-                }
         }
     }
 
@@ -120,8 +93,8 @@ class AdminActivity : AppCompatActivity() {
             holder.row.tvEmail.text = u.email ?: u.uid
             holder.row.tvName.text = u.displayName ?: ""
             holder.row.tvName.isVisible = !u.displayName.isNullOrBlank()
-            holder.row.btnApprove.setOnClickListener { act(u, "approve") }
-            holder.row.btnDeny.setOnClickListener { act(u, "revoke") }
+            holder.row.btnApprove.setOnClickListener { viewModel.act(u, AdminViewModel.ACTION_APPROVE) }
+            holder.row.btnDeny.setOnClickListener { viewModel.act(u, AdminViewModel.ACTION_REVOKE) }
         }
     }
 

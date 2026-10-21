@@ -34,6 +34,14 @@ def parse_kill_switches(raw: str) -> list[str]:
     return [n for n in KILL_SWITCH_NAMES if n in named]
 
 
+def parse_domains(raw: str) -> frozenset[str]:
+    """Address domains from a list separated by commas, whitespace or `;`:
+    lowercased, a leading "@" dropped, blanks ignored."""
+    return frozenset(
+        d.lower().lstrip("@") for d in re.split(r"[\s,;]+", raw) if d.lstrip("@")
+    )
+
+
 class Settings:
     # There is deliberately no sign-in domain gate. Any account Firebase Auth
     # accepts may authenticate; whether it may *use* anything is decided by
@@ -125,6 +133,16 @@ class Settings:
         for e in re.split(r"[\s,;]+", os.environ.get("ADMIN_EMAILS", ""))
         if e
     }
+
+    # --- test accounts (QC and CI, ADR-027) ----------------------------------
+    # The address domains a staff-created test account may use, e.g.
+    # "qa.sempermechanics.com". Empty (the default) turns the feature off:
+    # every create answers 403 `test_accounts_disabled`. A test account can
+    # therefore never be made on a customer's address, only on a domain the
+    # company controls. Separated by commas, whitespace or `;`; prefer spaces
+    # for a list, for the reason ADMIN_EMAILS gives (the deploy action splits
+    # its env_vars block on commas). Lowercased; a leading "@" is dropped.
+    TEST_ACCOUNT_DOMAINS = parse_domains(os.environ.get("TEST_ACCOUNT_DOMAINS", ""))
 
     # --- browser dashboards ---------------------------------------------------
     # Origins allowed to call the API from a browser. The dashboards live on
@@ -230,7 +248,7 @@ class Settings:
     APP_CHECK_MODE = os.environ.get("APP_CHECK_MODE", "off").strip().lower()
 
     # --- revocation on the browser step-up (A3.4) ---------------------------
-    # On: a browser caller on the second-factor path (`deps.step_up_check`,
+    # On: a browser caller on the second-factor path (`step_up.step_up_check`,
     # via="mfa") has its ID token re-verified with check_revoked=True, so a
     # user revoked or disabled in Firebase Auth stops changing anything at
     # once rather than when the token expires (up to an hour). The device-
@@ -326,6 +344,12 @@ class Settings:
     # notification mail entirely: nothing is sent and nothing fails.
     NOTIFY_FROM = os.environ.get("NOTIFY_FROM", "")
     RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+    # Verified sender for the mail an account's holder gets when a new device
+    # registers to it (`notify.device_registered`, TD-295), e.g.
+    # "Semper security <security@sempermechanics.com>". Its own sender, so
+    # the holder's mail does not come from the support inbox's address.
+    # Empty (the default) leaves that mail off; it also needs RESEND_API_KEY.
+    NOTIFY_SECURITY_FROM = os.environ.get("NOTIFY_SECURITY_FROM", "")
 
     # The runtime service account email Cloud Run runs as. Used for the keyless
     # self-impersonation that mints Drive-scoped tokens.

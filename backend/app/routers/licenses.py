@@ -7,7 +7,8 @@ from .. import observability as obs
 from .. import rate_limit
 from ..errors import Refusal
 from ..licenses import key_hash, key_prefix
-from ..deps import attested_or_mfa_user, current_user, rate_limited, request_app
+from ..deps import current_user, rate_limited, request_app
+from ..step_up import attested_or_mfa_user
 from ..models import LicenseActivate, LicenseClaim
 from ..validation import require_header_identifier
 from ._shared import named_app
@@ -234,13 +235,14 @@ def claim_code(
     """
     user = ctx.user
     uid = user["uid"]
-    if not user.get("emailVerified"):
+    address = repo.verified_address(user)
+    if not address:
         raise HTTPException(403, errors.EMAIL_NOT_VERIFIED)
     device_id = ctx.device_id or ""
     via = _CLAIM_VIA.get(ctx.via, ctx.via or "web")
     detail = {"keyPrefix": key_prefix(body.code), "via": via}
     try:
-        config = repo.activate_license(uid, user.get("email") or "", device_id, body.code, app)
+        config = repo.activate_license(uid, address, device_id, body.code, app)
     except Refusal as refusal:
         _licence_event("activation", _typed_licence_id(body.code, refusal), refusal,
                        uid=uid, via=via)

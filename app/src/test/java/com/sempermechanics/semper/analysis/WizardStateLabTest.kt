@@ -20,9 +20,13 @@ import com.sempermechanics.semper.ui.analysis.wizard.DraftRestore
 import com.sempermechanics.semper.ui.analysis.wizard.WizardState
 import com.sempermechanics.semper.ui.analysis.wizard.defCaptureStamps
 import com.sempermechanics.semper.ui.analysis.wizard.defTimesAfterRefMs
+import com.sempermechanics.semper.ui.analysis.wizard.editLab
+import com.sempermechanics.semper.ui.analysis.wizard.lab
 import com.sempermechanics.semper.ui.analysis.wizard.saveWizardState
 import com.sempermechanics.semper.ui.analysis.wizard.setLoadLog
 import com.sempermechanics.semper.ui.analysis.wizard.typedLoadsKg
+import com.sempermechanics.semper.ui.analysis.wizard.withDefTimesAfterRefMs
+import com.sempermechanics.semper.ui.analysis.wizard.withTypedLoadsKg
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.junit.After
@@ -66,29 +70,32 @@ class WizardStateLabTest {
 
     /** A wizard with a reference and two photos, the first with an EXIF capture time. */
     private fun editedWizard(): AnalysisViewModel = AnalysisViewModel().apply {
-        refBytes = REF
-        realRefWidth = 400
-        realRefHeight = 300
-        refName = "ref.png"
-        refCapture = CaptureStamp(PHOTO_T0, subSeconds = false)
         val paths = listOf("f1.png", "f2.png").map { File(frames, it).apply { writeBytes(byteArrayOf(1)) }.path }
-        deformedFrames = listOf(
-            DeformedFrame(
-                paths[0],
-                "IMG_1.png",
-                100L,
-                ImageSize(400, 300),
-                captureTimeMs = PHOTO_T0 + 1_250L,
-                captureSubSec = true,
-            ),
-            DeformedFrame(paths[1], "IMG_2.png", Long.MAX_VALUE),
-        )
+        edit {
+            it.copy(
+                refBytes = REF,
+                refSize = ImageSize(400, 300),
+                refName = "ref.png",
+                deformedFrames = listOf(
+                    DeformedFrame(
+                        paths[0],
+                        "IMG_1.png",
+                        100L,
+                        ImageSize(400, 300),
+                        captureTimeMs = PHOTO_T0 + 1_250L,
+                        captureSubSec = true,
+                    ),
+                    DeformedFrame(paths[1], "IMG_2.png", Long.MAX_VALUE),
+                ),
+                lab = it.lab.copy(refCapture = CaptureStamp(PHOTO_T0, subSeconds = false)),
+            )
+        }
     }
 
     /** What the system hands back after the kill, with the draft the stop wrote. */
     private fun afterProcessDeath(before: AnalysisViewModel): AnalysisViewModel {
-        draft.writeReference(before.refBytes)
-        draft.writeMask(before.roiMaskBytes)
+        draft.writeReference(before.inputs.value.refBytes)
+        draft.writeMask(before.inputs.value.roiMaskBytes)
         draft.writeFrames(WizardState.encodeFrames(WizardState.frames(before)))
         val saved = before.saveWizardState()
         return AnalysisViewModel(SavedStateHandle(mapOf(WizardState.KEY to saved))).also { it.attachDraft(draft) }
@@ -99,7 +106,7 @@ class WizardStateLabTest {
         val before = editedWizard()
         val after = afterProcessDeath(before)
 
-        assertEquals(CaptureStamp(PHOTO_T0, subSeconds = false), after.refCapture)
+        assertEquals(CaptureStamp(PHOTO_T0, subSeconds = false), after.lab.refCapture)
         assertEquals(DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
         assertEquals(listOf(CaptureStamp(PHOTO_T0 + 1_250L, subSeconds = true), null), after.defCaptureStamps)
     }
@@ -109,8 +116,8 @@ class WizardStateLabTest {
         val before = editedWizard()
         // An older app wrote no precision, and no frames fingerprint either.
         val oldFrames = WizardState.frames(before).copy(captureSubSec = emptyList())
-        draft.writeReference(before.refBytes)
-        draft.writeMask(before.roiMaskBytes)
+        draft.writeReference(before.inputs.value.refBytes)
+        draft.writeMask(before.inputs.value.roiMaskBytes)
         draft.writeFrames(WizardState.encodeFrames(oldFrames))
         val saved = before.saveWizardState().apply {
             remove("refCaptureSubSec")
@@ -118,7 +125,7 @@ class WizardStateLabTest {
         }
         val after = AnalysisViewModel(SavedStateHandle(mapOf(WizardState.KEY to saved))).also { it.attachDraft(draft) }
 
-        assertEquals(CaptureStamp(PHOTO_T0, subSeconds = null), after.refCapture)
+        assertEquals(CaptureStamp(PHOTO_T0, subSeconds = null), after.lab.refCapture)
         assertEquals(DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
         assertEquals(listOf(CaptureStamp(PHOTO_T0 + 1_250L, subSeconds = null), null), after.defCaptureStamps)
     }
@@ -130,7 +137,7 @@ class WizardStateLabTest {
         File(before.defFilePaths[1]).delete()
 
         assertEquals(DraftRestore.LOST, runBlocking { after.restoreDraft() })
-        assertNull(after.refCapture)
+        assertNull(after.lab.refCapture)
         assertTrue(after.defCaptureStamps.isEmpty())
     }
 
@@ -143,48 +150,51 @@ class WizardStateLabTest {
             loadPoint = BeamEdgeTaps(topX = 200f, topY = 100f, bottomX = 200f, bottomY = 140f),
         )
         val before = editedWizard().apply {
-            testType = TestType.BENDING
-            crossSectionMm2 = 12.5f
-            loadAxisX = false
-            this.geometry = geometry
-            // A clip sampled from 3 s in: the frames sit at 3.5 s and 4 s.
-            refVideoTimeMs = 3_000L
-            defTimesAfterRefMs = listOf(500L, 1_000L)
+            editLab {
+                it.copy(
+                    testType = TestType.BENDING,
+                    crossSectionMm2 = 12.5f,
+                    loadAxisX = false,
+                    geometry = geometry,
+                    // A clip sampled from 3 s in: the frames sit at 3.5 s and 4 s.
+                    refVideoTimeMs = 3_000L,
+                )
+            }
+            edit { it.withDefTimesAfterRefMs(listOf(500L, 1_000L)) }
             setLoadLog((MachineLoadCsv.parse(LOAD_LOG) as LoadCsvParse.Ok).csv, "run1.csv", LOAD_LOG)
-            loadLogStartS = 0.5f
-            typedLoadsEntry = TypedLoads.Entry.INCREMENTAL
+            editLab { it.copy(loadLogStartS = 0.5f, typedLoadsEntry = TypedLoads.Entry.INCREMENTAL) }
         }
         draft.writeLoadLog(LOAD_LOG)
         val after = afterProcessDeath(before)
 
-        assertEquals(TestType.BENDING, after.testType)
-        assertEquals(12.5f, after.crossSectionMm2, 0f)
-        assertFalse(after.loadAxisX)
-        assertEquals(geometry, after.geometry)
-        assertEquals("run1.csv", after.loadCsvName)
-        assertEquals(0.5f, after.loadLogStartS, 0f)
-        assertEquals(TypedLoads.Entry.INCREMENTAL, after.typedLoadsEntry)
-        assertEquals(3_000L, after.refVideoTimeMs)
+        assertEquals(TestType.BENDING, after.lab.testType)
+        assertEquals(12.5f, after.lab.crossSectionMm2, 0f)
+        assertFalse(after.lab.loadAxisX)
+        assertEquals(geometry, after.lab.geometry)
+        assertEquals("run1.csv", after.lab.loadCsvName)
+        assertEquals(0.5f, after.lab.loadLogStartS, 0f)
+        assertEquals(TypedLoads.Entry.INCREMENTAL, after.lab.typedLoadsEntry)
+        assertEquals(3_000L, after.lab.refVideoTimeMs)
 
         assertEquals(DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
         assertEquals(listOf(500L, 1_000L), after.defTimesAfterRefMs)
-        assertEquals(listOf(3_500L, 4_000L), after.deformedFrames.map { it.timeMs })
-        assertEquals(before.parsedLoadCsv, after.parsedLoadCsv)
-        assertEquals(2, after.machineLoads?.matchedFrames)
+        assertEquals(listOf(3_500L, 4_000L), after.inputs.value.deformedFrames.map { it.timeMs })
+        assertEquals(before.lab.parsedLoadCsv, after.lab.parsedLoadCsv)
+        assertEquals(2, after.lab.machineLoads?.matchedFrames)
     }
 
     @Test
     fun `typed hanger loads survive a process death`() {
         val before = editedWizard().apply {
-            testType = TestType.BENDING
-            typedLoadsKg = listOf(0.5f, null)
+            editLab { it.copy(testType = TestType.BENDING) }
+            edit { it.withTypedLoadsKg(listOf(0.5f, null)) }
         }
         val after = afterProcessDeath(before)
 
         assertEquals(DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
         assertEquals(listOf(0.5f, null), after.typedLoadsKg)
-        assertEquals(LoadMapping.TYPED_KG, after.machineLoads?.mapping)
-        assertEquals(1, after.machineLoads?.matchedFrames)
+        assertEquals(LoadMapping.TYPED_KG, after.lab.machineLoads?.mapping)
+        assertEquals(1, after.lab.machineLoads?.matchedFrames)
     }
 
     @Test
@@ -204,8 +214,8 @@ class WizardStateLabTest {
         val after = afterProcessDeath(before)
 
         assertEquals(DraftRestore.LOST, runBlocking { after.restoreDraft() })
-        assertNull(after.parsedLoadCsv)
-        assertEquals("", after.loadCsvName)
+        assertNull(after.lab.parsedLoadCsv)
+        assertEquals("", after.lab.loadCsvName)
     }
 
     private companion object {

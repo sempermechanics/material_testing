@@ -27,6 +27,7 @@ import com.sempermechanics.semper.report.ElasticModulus
 import com.sempermechanics.semper.report.StressStrain
 import com.sempermechanics.semper.ui.home.SessionOpenHelper
 import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
+import com.sempermechanics.semper.ui.viewer.ViewerArgs
 import com.sempermechanics.semper.ui.viewer.mechanical.LabReportExporter
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -159,7 +160,7 @@ class LabWorkflowDeviceTest {
     @Test
     fun theViewerScrubsZoomsPansAndProbes() {
         val record = seedTensile()
-        val intent = SessionOpenHelper.argsFor(record).copy(startFrame = 0).toIntent(context)
+        val intent = ViewerArgs.of(record).copy(startFrame = 0).toIntent(context)
         ActivityScenario.launch<ResultViewerActivity>(intent).use { scenario ->
             awaitOn(scenario, "frame 1's field") { it.rawData != null && it.binding.imgBaseResult.drawable != null }
             val restScale = scaleOf(scenario)
@@ -167,13 +168,13 @@ class LabWorkflowDeviceTest {
             // At rest, a horizontal swipe is a scrub: one frame whether it is a
             // flick (the fling detector) or a slow drag (the swipe distance).
             swipeAcrossImage(FLICK_STEPS)
-            awaitOn(scenario, "the flick to reach frame 2") { it.currentFrameIndex >= 1 }
+            awaitOn(scenario, "the flick to reach frame 2") { it.viewModel.currentFrameIndex >= 1 }
             device.waitForIdle()
-            scenario.onActivity { assertEquals("one flick moved more than one frame", 1, it.currentFrameIndex) }
+            scenario.onActivity { assertEquals("one flick moved more than one frame", 1, it.viewModel.currentFrameIndex) }
             swipeAcrossImage(SLOW_STEPS)
-            awaitOn(scenario, "the slow swipe to reach frame 3") { it.currentFrameIndex >= 2 }
+            awaitOn(scenario, "the slow swipe to reach frame 3") { it.viewModel.currentFrameIndex >= 2 }
             device.waitForIdle()
-            scenario.onActivity { assertEquals("one slow swipe moved more than one frame", 2, it.currentFrameIndex) }
+            scenario.onActivity { assertEquals("one slow swipe moved more than one frame", 2, it.viewModel.currentFrameIndex) }
 
             image().pinchOpen(PINCH_PERCENT)
             device.waitForIdle()
@@ -183,7 +184,7 @@ class LabWorkflowDeviceTest {
             // Zoomed in, the same swipe pans instead of scrubbing.
             swipeAcrossImage(PAN_STEPS)
             device.waitForIdle()
-            scenario.onActivity { assertEquals("a pan changed the frame", 2, it.currentFrameIndex) }
+            scenario.onActivity { assertEquals("a pan changed the frame", 2, it.viewModel.currentFrameIndex) }
             assertEquals(zoomed, scaleOf(scenario), zoomed * 0.01f)
 
             // A short tap reads the nearest point.
@@ -240,7 +241,7 @@ class LabWorkflowDeviceTest {
             if (ok) return
             check(System.currentTimeMillis() < deadline) {
                 var frame = -1
-                scenario.onActivity { frame = it.currentFrameIndex }
+                scenario.onActivity { frame = it.viewModel.currentFrameIndex }
                 "timed out waiting for $what (on frame index $frame)"
             }
             Thread.sleep(POLL_MS)

@@ -3,17 +3,12 @@
 // Adjust curve / Adjust deflection writes. Split out of ResultViewerActivity.
 package com.sempermechanics.semper.ui.viewer
 
-import android.content.Context
-import androidx.lifecycle.lifecycleScope
-import com.sempermechanics.semper.data.cloud.SessionMetadataSync
 import com.sempermechanics.semper.data.mechanical.CurveCorrection
 import com.sempermechanics.semper.data.mechanical.LabSession
 import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.report.BeamDeflection
 import com.sempermechanics.semper.report.StressStrain
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 /** The session's geometry, with the deflection correction set in Results when there is one. */
 internal val ResultViewerActivity.geometry: SpecimenGeometry
@@ -23,13 +18,12 @@ internal val ResultViewerActivity.geometry: SpecimenGeometry
 internal val ResultViewerActivity.curveCorrection: CurveCorrection
     get() = viewModel.curveCorrection ?: args.labSession.curveCorrection
 
-/** The session's lab test with Results' corrections: what the curve, share sheet, report and CSV read. */
-internal val ResultViewerActivity.labSession: LabSession
-    get() = args.labSession.copy(geometry = geometry, curveCorrection = curveCorrection)
-
-/** How this session's loads become stress; axial for a plain DIC session. */
-internal val ResultViewerActivity.stressModel: StressStrain.Model
-    get() = labSession.stressModelOrAxial()
+/**
+ * The session's lab test with Results' corrections: what the curve, share
+ * sheet, report and CSV read ([ResultViewerActivity.labSession]).
+ */
+internal fun ResultViewerActivity.correctedLabSession(): LabSession =
+    args.labSession.copy(geometry = geometry, curveCorrection = curveCorrection)
 
 /**
  * Results' Adjust curve: redraws the cached curve under [correction]
@@ -41,7 +35,7 @@ internal fun ResultViewerActivity.applyCurveCorrection(correction: CurveCorrecti
     viewModel.curveCorrection = correction
     viewModel.stressStrain = viewModel.stressStrain?.let { StressStrain.recorrect(it, correction) }
     stressStrain.redraw()
-    saveOnSession(args.sessionLocalId) { appContext, id ->
+    viewModel.saveOnSession(args.sessionLocalId) { appContext, id ->
         SessionStore.setCurveCorrection(appContext, id, correction)
     }
 }
@@ -56,20 +50,7 @@ internal fun ResultViewerActivity.applyDeflectionCorrection(correction: BeamDefl
     viewModel.deflectionCorrection = correction
     viewModel.stressStrain = viewModel.stressStrain?.let { BeamDeflection.Correction.recorrect(it, stressModel) }
     stressStrain.redraw()
-    saveOnSession(args.sessionId) { appContext, id ->
+    viewModel.saveOnSession(args.sessionId) { appContext, id ->
         SessionStore.setDeflectionCorrection(appContext, id, correction)
-    }
-}
-
-/**
- * Runs [write] on session [id] off the main thread; a backed-up session's
- * cloud copy then gets the new metadata (ADR-013, TD-152).
- */
-private fun ResultViewerActivity.saveOnSession(id: String?, write: (Context, String) -> Unit) {
-    id ?: return
-    val appContext = applicationContext
-    lifecycleScope.launch(Dispatchers.IO) {
-        write(appContext, id)
-        if (SessionStore.get(appContext, id)?.metadataStale == true) SessionMetadataSync.enqueue(appContext, id)
     }
 }

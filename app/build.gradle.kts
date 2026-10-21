@@ -316,11 +316,12 @@ android {
                 // rest. 2 GB is headroom for the suite to grow, not a need.
                 test.maxHeapSize = "2g"
                 // The exit still recurs now and then with the same message and
-                // no failing test (full_ci run 39307512957, 2026-10-19; the same
-                // tree passed on the PR event 25 minutes before). So the worker
-                // leaves what ended it: a heap dump on an OutOfMemoryError, the
-                // JVM's error file on a crash. Both only on failure; CI uploads
-                // the folder with the test reports.
+                // no failing test (TD-312: firebase-bom 35 on #453, and the
+                // material_testing fork). So the worker leaves what ended it:
+                // a heap dump on an OutOfMemoryError, the JVM's error file on
+                // a crash, and a GC log of how full the heap ran. Tier 1 prints
+                // them on a failure (scripts/ci_test_crash_report.py) and
+                // uploads the folder with the test reports.
                 val crashDir =
                     project.layout.buildDirectory
                         .dir("test-crash")
@@ -330,8 +331,13 @@ android {
                     "-XX:+HeapDumpOnOutOfMemoryError",
                     "-XX:HeapDumpPath=$crashDir",
                     "-XX:ErrorFile=$crashDir/hs_err_pid%p.log",
+                    "-Xlog:gc:file=$crashDir/gc.log:uptime:filecount=2,filesize=10m",
                 )
-                test.doFirst { crashDir.mkdirs() }
+                test.doFirst {
+                    // A local rerun must not report the last run's crash.
+                    crashDir.deleteRecursively()
+                    crashDir.mkdirs()
+                }
                 // Golden oracles (fixtures/Goldens.kt): `-PupdateGoldens`
                 // rewrites the committed files under src/test/resources/oracles
                 // instead of comparing against them. Never in CI.

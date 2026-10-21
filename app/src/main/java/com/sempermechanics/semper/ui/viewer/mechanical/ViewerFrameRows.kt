@@ -5,8 +5,6 @@ import com.sempermechanics.semper.data.mechanical.TypedLoads
 import com.sempermechanics.semper.data.mechanical.loadOfFrame
 import com.sempermechanics.semper.report.StressStrain
 import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
-import com.sempermechanics.semper.ui.viewer.plannedFrameIndex
-import com.sempermechanics.semper.ui.viewer.stressModel
 import java.util.Locale
 
 /**
@@ -17,7 +15,7 @@ import java.util.Locale
 object ViewerFrameRows {
 
     fun of(host: ResultViewerActivity): List<Pair<String, String>> {
-        val loadN = host.loadsN.loadOfFrame(host.plannedFrameIndex(host.currentFrameIndex))
+        val loadN = host.loadsN.loadOfFrame(host.plannedFrameIndex(host.viewModel.currentFrameIndex))
             ?.takeUnless { host.isShowingSummary }
             ?: return emptyList()
         val model = host.stressModel

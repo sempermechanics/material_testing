@@ -21,6 +21,11 @@ this repo's own ADR-022 is [ADR-022-semper-ui-plus-lab-tests](ADR-022-semper-ui-
 The two numbers collided before this record; it names the fork's by file name. TD
 numbers are shared ([../ops/TECH_DEBT.md](../ops/TECH_DEBT.md)). Edit semperdic-app's
 copy first and mirror the change.
+Since the sync of semperdic-app `14b279d6` (2026-10-21) the fork's lab wizard state is
+one field of the wizard's inputs (`WizardInputs.lab`, a `LabWizardState`), changed through
+`AnalysisViewModel.edit` like the rest, not the view model's lab vars the Wizard row
+below counts, and a run's result reads the lab test from its saved row
+(`ViewerArgs.of`), not from `AnalysisNavHelper`.
 
 ## Context
 

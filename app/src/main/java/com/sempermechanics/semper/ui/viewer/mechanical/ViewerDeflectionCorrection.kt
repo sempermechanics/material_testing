@@ -9,7 +9,6 @@ import com.sempermechanics.semper.R
 import com.sempermechanics.semper.report.BeamDeflection
 import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
 import com.sempermechanics.semper.ui.viewer.applyDeflectionCorrection
-import com.sempermechanics.semper.ui.viewer.stressModel
 import java.util.Locale
 
 /**

@@ -7,10 +7,13 @@ package com.sempermechanics.semper.ui.viewer.summary
 
 import com.sempermechanics.semper.field.DatDecoder
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.Roi
+import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.FieldRangesStore
 import com.sempermechanics.semper.report.GifEncoder
+import com.sempermechanics.semper.report.HeatmapRequest
 import com.sempermechanics.semper.report.VisualizationEngine
 import com.sempermechanics.semper.ui.viewer.HeatmapFit
 import com.sempermechanics.semper.util.AtomicFiles
@@ -115,7 +118,7 @@ class SummaryAnimation(private val spec: Spec) {
      * True when [fileFor] is on disk and was built from these frames against
      * [bounds]. Reads the frames' file stats on first use: off the main thread.
      */
-    fun isBuilt(dataIndex: Int, label: String, bounds: Pair<Float, Float>): Boolean {
+    fun isBuilt(dataIndex: Int, label: String, bounds: ValueRange): Boolean {
         val out = fileFor(label)
         return builds[out.absolutePath] == Built(owner, dataIndex, bounds) && out.isFile
     }
@@ -138,7 +141,7 @@ class SummaryAnimation(private val spec: Spec) {
     suspend fun build(
         dataIndex: Int,
         label: String,
-        bounds: Pair<Float, Float>,
+        bounds: ValueRange,
         onProgress: (Int, Int) -> Unit = { _, _ -> },
     ): File? {
         val frameCount = spec.batchFiles.size
@@ -156,7 +159,7 @@ class SummaryAnimation(private val spec: Spec) {
         out: File,
         dataIndex: Int,
         label: String,
-        bounds: Pair<Float, Float>,
+        bounds: ValueRange,
         onProgress: (Int, Int) -> Unit,
     ): File? {
         // Encode to a sibling first: a cancelled or failed build must never leave
@@ -191,7 +194,7 @@ class SummaryAnimation(private val spec: Spec) {
         stream: OutputStream,
         dataIndex: Int,
         label: String,
-        bounds: Pair<Float, Float>,
+        bounds: ValueRange,
         onProgress: (Int, Int) -> Unit,
     ) {
         val frameCount = spec.batchFiles.size
@@ -253,7 +256,7 @@ class SummaryAnimation(private val spec: Spec) {
 
     /**
      * One frame as the viewer draws a frame on its own photo (ADR-011, TD-139):
-     * each point where it moved to, [VisualizationEngine.generateDeformedHeatmapIndices].
+     * each point where it moved to, [VisualizationEngine.indices].
      * The GIF carries no photo (its palette is the jet ramp and the canvas
      * colour), so every frame is drawn displaced, photo on disk or not.
      */
@@ -261,25 +264,26 @@ class SummaryAnimation(private val spec: Spec) {
         data: FloatArray,
         dataIndex: Int,
         index: Int,
-        bounds: Pair<Float, Float>,
+        bounds: ValueRange,
         fit: FloatArray,
     ): VisualizationEngine.IndexPlane {
         val renderCap = HeatmapFit.renderLongEdgeCap(spec.imgW, spec.imgH, fit, MAX_EDGE)
-        val plane = VisualizationEngine.generateDeformedHeatmapIndices(
-            data = data,
-            imgW = spec.imgW,
-            imgH = spec.imgH,
-            valIndex = dataIndex,
-            step = spec.stepAt(index),
-            customMin = bounds.first,
-            customMax = bounds.second,
-            maxLongEdge = renderCap,
+        val plane = VisualizationEngine.indices(
+            HeatmapRequest(
+                data = data,
+                size = ImageSize(spec.imgW, spec.imgH),
+                valIndex = dataIndex,
+                step = spec.stepAt(index),
+                bounds = bounds,
+                maxLongEdge = renderCap,
+                displaced = true,
+            ),
         )
         return HeatmapFit.cropAndScale(plane, spec.imgW, spec.imgH, fit, MAX_EDGE)
     }
 
     /** What the GIF at a path was rendered from. */
-    private data class Built(val owner: String, val dataIndex: Int, val bounds: Pair<Float, Float>)
+    private data class Built(val owner: String, val dataIndex: Int, val bounds: ValueRange)
 
     companion object {
         /**
@@ -304,14 +308,6 @@ class SummaryAnimation(private val spec: Spec) {
 
         /** Below ~20 ms many viewers substitute a delay of their own. */
         const val MIN_CENTIS = 2
-
-        val FIELDS = listOf(
-            "U" to DicResult.IDX_U,
-            "V" to DicResult.IDX_V,
-            "Exx" to DicResult.IDX_EXX,
-            "Eyy" to DicResult.IDX_EYY,
-            "Exy" to DicResult.IDX_EXY,
-        )
 
         /**
          * How long each frame is shown, in hundredths of a second.
@@ -353,13 +349,13 @@ class SummaryAnimation(private val spec: Spec) {
             batchFiles: List<File>,
             rangesFile: File? = null,
             onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
-        ): Map<Int, Pair<Float, Float>> {
-            val indices = FIELDS.map { it.second }.toIntArray()
+        ): Map<Int, ValueRange> {
+            val indices = FieldKind.entries.map { it.dataIndex }.toIntArray()
             val total = batchFiles.size
 
             val cached = rangesFile?.let { FieldRangesStore.read(it, indices) }
             if (cached != null && cached.size == total) {
-                val spans = mutableMapOf<Int, Pair<Float, Float>>()
+                val spans = mutableMapOf<Int, ValueRange>()
                 cached.forEachIndexed { index, frameRanges ->
                     currentCoroutineContext().ensureActive()
                     frameRanges.forEach { (valIndex, range) ->
@@ -370,9 +366,9 @@ class SummaryAnimation(private val spec: Spec) {
                 return spans
             }
 
-            val spans = mutableMapOf<Int, Pair<Float, Float>>()
+            val spans = mutableMapOf<Int, ValueRange>()
             // Kept for the sidecar; null once a frame fails to decode.
-            var perFrame: MutableList<Map<Int, Pair<Float, Float>?>>? = ArrayList(total)
+            var perFrame: MutableList<Map<Int, ValueRange?>>? = ArrayList(total)
             // One frame at a time. The previous chain kept every ByteArray and
             // FloatArray alive until the pass finished — a heavy PLC band OOM'd
             // the 512 MB heap before the first GIF frame was built.
@@ -417,7 +413,7 @@ class SummaryAnimation(private val spec: Spec) {
         private fun saveRanges(
             rangesFile: File?,
             indices: IntArray,
-            perFrame: List<Map<Int, Pair<Float, Float>?>>,
+            perFrame: List<Map<Int, ValueRange?>>,
         ) {
             if (rangesFile == null || perFrame.isEmpty()) return
             runCatching {
@@ -425,8 +421,13 @@ class SummaryAnimation(private val spec: Spec) {
             }.onFailure { Timber.w(it, "Could not save summary field ranges") }
         }
 
-        private fun widen(seen: Pair<Float, Float>?, range: Pair<Float, Float>): Pair<Float, Float> =
-            if (seen == null) range else minOf(seen.first, range.first) to maxOf(seen.second, range.second)
+        /** [seen] widened to take in [range], a frame's range as the engine and the sidecar hold it. */
+        private fun widen(seen: ValueRange?, range: ValueRange): ValueRange =
+            if (seen == null) {
+                range
+            } else {
+                ValueRange(minOf(seen.min, range.min), maxOf(seen.max, range.max))
+            }
     }
 }
 

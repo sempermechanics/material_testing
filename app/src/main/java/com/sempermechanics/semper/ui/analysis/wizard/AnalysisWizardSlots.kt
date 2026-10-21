@@ -22,19 +22,22 @@ class AnalysisWizardSlots(
     private val frameOrderAdapter: FrameOrderAdapter,
     private val onLineCutPreview: () -> Unit,
 ) {
+    /** The wizard's inputs as the view model holds them now. */
+    private val inputs: WizardInputs get() = viewModel.inputs.value
+
     private val activity = binding.root.context
 
     /** Reference slot: dropzone when empty, summary card when filled. */
     fun refreshRefSlot(preview: Bitmap?) {
-        val hasRef = viewModel.refBytes != null
+        val hasRef = inputs.refBytes != null
         binding.refDropzone.visibility = if (hasRef) View.GONE else View.VISIBLE
         binding.refCard.visibility = if (hasRef) View.VISIBLE else View.GONE
         if (hasRef) {
-            binding.tvRefName.text = viewModel.refName
+            binding.tvRefName.text = inputs.refName
             binding.tvRefMeta.text = activity.getString(
                 R.string.reference_meta_fmt,
-                viewModel.realRefWidth,
-                viewModel.realRefHeight,
+                inputs.refSize.width,
+                inputs.refSize.height,
             )
             preview?.let { binding.imgRefThumb.setImageBitmap(it) }
         }
@@ -52,15 +55,15 @@ class AnalysisWizardSlots(
             // Match the icon to what the user actually picked — the frames are
             // image files either way, so only the source tells them apart.
             binding.imgDefIcon.setImageResource(
-                if (viewModel.defFromVideo) R.drawable.ic_video else R.drawable.ic_photos_share,
+                if (inputs.defFromVideo) R.drawable.ic_video else R.drawable.ic_photos_share,
             )
             binding.rvFrameOrder.isVisible = true
             frameOrderAdapter.submit(viewModel.defFilePaths)
-            val showSort = n > 1 && !viewModel.defFromVideo
+            val showSort = n > 1 && !inputs.defFromVideo
             binding.btnFrameOrderSort.visibility = if (showSort) View.VISIBLE else View.GONE
             frameOrderAdapter.dragEnabled =
                 showSort &&
-                viewModel.defOrderMode == FrameOrderMode.MANUAL
+                inputs.defOrderMode == FrameOrderMode.MANUAL
         } else {
             binding.rvFrameOrder.isVisible = false
             binding.btnFrameOrderSort.isVisible = false
@@ -85,7 +88,7 @@ class AnalysisWizardSlots(
      */
     fun updateFormatChip() {
         val lossy = LossyFormatCheck.lossyLabels(
-            listOf(viewModel.refName) + viewModel.defOriginalNames.ifEmpty { viewModel.defFilePaths },
+            listOf(inputs.refName) + viewModel.defOriginalNames.ifEmpty { viewModel.defFilePaths },
         )
         val message = activity.getString(R.string.lossy_format_warning_fmt, lossy.joinToString(", "))
         formatChip.showOrHide(message.takeIf { lossy.isNotEmpty() })

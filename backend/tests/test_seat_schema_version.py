@@ -26,7 +26,7 @@ def _mint(seating="assigned", max_seats=None):
 
 def _roster(store, *uids):
     store._data["users"] = {
-        uid: {"email": f"{uid}@university.edu", "access_status": "APPROVED", "mode": "demo"}
+        uid: {"email": f"{uid}@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"}
         for uid in uids
     }
 

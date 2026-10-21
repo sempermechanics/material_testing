@@ -248,6 +248,26 @@ async def test_inline_create_hands_back_what_the_uploads_listing_would(
     assert [u["uploadUrl"] for u in uploads] == [f"https://drive/{n}" for n in "abc"]
 
 
+async def test_a_pending_upload_carries_the_hash_its_file_was_declared_with(
+    store, queued, client, monkeypatch,
+):
+    """TD-281: the app pairs a pending upload with its staged file by role, name,
+    size and this hash, so other bytes of the same size are never resumed into
+    a session that declared the old ones."""
+    monkeypatch.setattr(rate_limit.listing_bucket, "allow", lambda uid: True)
+    other = "b" * 64
+    sid = (await client.post(
+        "/v1/sessions",
+        json={"specimen": "s", "files": [_file("a"), {**_file("b"), "sha256": other}]},
+    )).json()["sessionId"]
+
+    provisioned = session_provision.provision_session(sid)
+    listed = (await client.get(f"/v1/sessions/{sid}/uploads")).json()["uploads"]
+
+    assert {u["name"]: u["sha256"] for u in provisioned["uploads"]} == {"a": _SHA, "b": other}
+    assert {u["name"]: u["sha256"] for u in listed} == {"a": _SHA, "b": other}
+
+
 def test_one_listing_page_holds_a_whole_session():
     """create_session returns the first page of upload targets. That page is
     the whole manifest only while the file cap stays below the page size."""
@@ -602,3 +622,110 @@ def test_task_callbacks_share_one_certificate_transport(oidc, monkeypatch):
     tasks.tasks_caller(authorization="Bearer a")
     tasks.tasks_caller(authorization="Bearer b")
     assert len(seen) == 2 and seen[0] is seen[1]
+
+
+# --- delete while provisioning (B6) ------------------------------------------
+
+async def test_delete_during_provision_leaves_no_folder(store, queued, client, monkeypatch):
+    """A delete that lands while the worker is creating the Drive folder used
+    to erase the session doc first; the worker then made the folder with
+    nothing left pointing at it. The delete is refused (409, retry later)
+    while provisioning runs, so the folder is recorded and the next delete
+    removes it with the session."""
+    deleted = []
+    monkeypatch.setattr(drive, "delete_file", lambda token, fid: deleted.append(fid))
+    sid = (await client.post(
+        "/v1/sessions", json={"specimen": "s", "files": [_file("a")]},
+    )).json()["sessionId"]
+
+    r = await client.delete(f"/v1/sessions/{sid}")
+
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"] == "session_provisioning"
+    assert r.headers["Retry-After"]
+    assert sid in store._data["sessions"]
+
+    session_provision.provision_session(sid)
+    r = await client.delete(f"/v1/sessions/{sid}")
+
+    assert r.status_code == 200, r.text
+    assert deleted == ["sf"]
+    assert sid not in store._data["sessions"]
+
+
+async def test_a_session_stuck_provisioning_can_still_be_deleted(store, queued, client):
+    """A task that never ran must not make an analysis unerasable: past the
+    longest a provisioning attempt can run, the delete goes ahead."""
+    from datetime import datetime, timedelta, timezone
+
+    sid = (await client.post(
+        "/v1/sessions", json={"specimen": "s", "files": [_file("a")]},
+    )).json()["sessionId"]
+    store._data["sessions"][sid]["updatedAt"] = (
+        datetime.now(timezone.utc) - session_provision.PROVISIONING_GRACE - timedelta(minutes=1))
+
+    r = await client.delete(f"/v1/sessions/{sid}")
+
+    assert r.status_code == 200, r.text
+    assert sid not in store._data["sessions"]
+
+
+async def test_a_late_retry_holds_off_a_delete_while_it_runs(store, queued, client, monkeypatch):
+    """TD-296: a Cloud Tasks retry that starts past the grace after the
+    session's last write stamps `updatedAt` first, so a delete that lands
+    while it creates the Drive folder is refused (409), not left behind."""
+    import asyncio
+    import threading
+    from datetime import datetime, timedelta, timezone
+
+    sid = (await client.post(
+        "/v1/sessions", json={"specimen": "s", "files": [_file("a")]},
+    )).json()["sessionId"]
+    stale = datetime.now(timezone.utc) - session_provision.PROVISIONING_GRACE - timedelta(minutes=1)
+    store._data["sessions"][sid]["updatedAt"] = stale
+    store._data["sessions"][sid]["createdAt"] = stale
+
+    in_drive, release = threading.Event(), threading.Event()
+
+    def slow_folders(*a, **k):
+        in_drive.set()
+        release.wait(5)
+        return {"sessionFolderId": "sf", "userFolderId": "uf", "bundle": "sf"}
+
+    monkeypatch.setattr(drive, "ensure_session_folders", slow_folders)
+    worker = asyncio.create_task(asyncio.to_thread(session_provision.provision_session, sid))
+    assert await asyncio.to_thread(in_drive.wait, 5)
+
+    r = await client.delete(f"/v1/sessions/{sid}")
+    release.set()
+    await worker
+
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"] == "session_provisioning"
+    assert store._data["sessions"][sid]["driveFolderId"] == "sf"
+
+
+async def test_a_retry_after_a_delete_creates_nothing(store, queued, client, monkeypatch):
+    """The stamp only touches a session still PROVISIONING: a delete that
+    went first wins, and the retry finds nothing to provision."""
+    monkeypatch.setattr(drive, "ensure_session_folders",
+                        lambda *a, **k: pytest.fail("a folder for an erased session"))
+    sid = (await client.post(
+        "/v1/sessions", json={"specimen": "s", "files": [_file("a")]},
+    )).json()["sessionId"]
+    repo.delete_session(sid)
+
+    assert session_provision.provision_session(sid)["status"] == "gone"
+    assert sid not in store._data["sessions"]
+
+
+def test_the_stamp_leaves_a_session_past_provisioning_alone(store):
+    """UPLOADING (or COMPLETED, PROVISION_FAILED) is read back unchanged:
+    the stamp is for the delete guard, which only asks about PROVISIONING."""
+    store._data["sessions"] = {"s1": {"uid": DEV_UID, "status": "UPLOADING", "updatedAt": "then"}}
+
+    session = repo.start_provisioning("s1")
+
+    assert session["status"] == "UPLOADING" and session["sessionId"] == "s1"
+    assert store._data["sessions"]["s1"]["updatedAt"] == "then"
+    assert repo.start_provisioning("missing") is None

@@ -51,6 +51,16 @@
                         android:textSize="12sp"
                         android:visibility="gone" />
 
+                    <!-- A QC or CI test account (ADR-027) and when it ends. -->
+                    <TextView
+                        android:id="@+id/tvAccountTestAccount"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"
+                        android:visibility="gone" />
+
                     <!-- Refresh licence: asks /v1/config now (LicenseRefresh). -->
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnRefreshLicense"

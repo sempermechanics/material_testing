@@ -345,6 +345,15 @@ object CloudRestore {
         )
     }
 
+    /**
+     * Drop the bundle download a stopped restore of cloud session [sessionId]
+     * kept for its rerun (the scratch and its `.part` / `.full`): the app
+     * cancelled it, so nothing will resume it (TD-283).
+     */
+    fun discardDownloads(context: Context, sessionId: String) {
+        discard(scratchFile(context.applicationContext.cacheDir, sessionId, RestoreBundleFetcher.BUNDLE_SCRATCH))
+    }
+
     /** Remove an interrupted restore's files while retaining its cloud-only index row. */
     fun clearPartialArtifacts(context: Context, localId: String) {
         val dir = SessionStore.dirFor(context.applicationContext, localId)

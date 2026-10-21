@@ -2,7 +2,9 @@
  * see the desk, and routes each licence row's buttons to the card or dialog
  * that handles them; the rest is in the modules imported below.
  */
-import { requireSignIn, api, setStatus, whileWaiting } from "../auth.js";
+import { requireSignIn } from "../auth.js";
+import { api } from "../api.js";
+import { setStatus, whileWaiting } from "../status.js";
 import { unfinishedStepUpText } from "../util.js";
 import { mountSwitcher } from "../switcher.js";
 import { licencesAdministered } from "../roles.js";
@@ -16,6 +18,7 @@ import {
 import { openVerified } from "./verify.js";
 import { revokeLicence, resumeRevoke, deleteLicence, resumeDelete } from "./lifecycle.js";
 import { openRoster } from "./roster-card.js";
+import { isTestAccountResume, resumeTestAccount } from "./test-accounts.js";
 
 requireSignIn(async (user, resume) => {
   $("signedOut").hidden = true;
@@ -35,6 +38,12 @@ requireSignIn(async (user, resume) => {
   showFactorPill();
   loadUsers(users);
   await loadLicences(licences);
+  // A test-account change that stepped up through Google finishes, or says
+  // it was not sent, in its own card's words.
+  if (isTestAccountResume(resume)) {
+    resumeTestAccount(resume);
+    return;
+  }
   // Back from the Google re-authentication a revoke asked for: finish it
   // now, while the fresh sign-in is inside the backend's window. If the
   // round trip failed, say so here — after the list load, whose own status

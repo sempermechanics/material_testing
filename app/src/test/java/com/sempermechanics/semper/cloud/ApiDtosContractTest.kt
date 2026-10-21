@@ -14,6 +14,7 @@ import com.sempermechanics.semper.data.net.SessionFilesResponse
 import com.sempermechanics.semper.data.net.SessionUploadsResponse
 import com.sempermechanics.semper.data.net.SessionsResponse
 import com.sempermechanics.semper.data.net.TermsAcceptRequest
+import com.sempermechanics.semper.data.net.TestAccountDto
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -141,6 +142,8 @@ class ApiDtosContractTest {
         assertEquals("metadata", u.role)
         assertEquals(2048L, u.sizeBytes)
         assertEquals(33554432, u.chunkSize)
+        // The declared hash, which the resume matches the staged bytes on (TD-281).
+        assertEquals(64, u.sha256?.length)
         assertNull(resp.provisionError)
     }
 
@@ -173,16 +176,39 @@ class ApiDtosContractTest {
         assertEquals(30, cfg.minSupportedVersionCode)
         assertEquals(36, cfg.recommendedVersionCode)
         assertEquals(listOf("restore"), cfg.killSwitches)
+        // A real account: the key is sent, and null.
+        assertNull(cfg.testAccount)
+    }
+
+    @Test
+    fun `config response decodes a QC test account and a CI one without an end`() {
+        val qc = json.decodeFromString<AppConfigDto>(
+            """{"mode":"licensed","testAccount":{"purpose":"qc","expiresAt":"2026-11-18T10:00:00.123456+00:00"}}""",
+        )
+        assertEquals(TestAccountDto(purpose = "qc", expiresAt = "2026-11-18T10:00:00.123456+00:00"), qc.testAccount)
+        val ci = json.decodeFromString<AppConfigDto>(
+            """{"mode":"licensed","testAccount":{"purpose":"ci","expiresAt":null}}""",
+        )
+        assertEquals(TestAccountDto(purpose = "ci", expiresAt = null), ci.testAccount)
+        // The nested names are the contract: every field the DTO knows is in the body.
+        val body = json.parseToJsonElement("""{"purpose":"ci","expiresAt":null}""")
+        assertEquals(body, json.encodeToJsonElement(TestAccountDto.serializer(), ci.testAccount!!))
+    }
+
+    @Test
+    fun `config response from a backend that predates test accounts decodes none`() {
+        assertNull(json.decodeFromString<AppConfigDto>("""{"mode":"licensed"}""").testAccount)
     }
 
     @Test
     fun `license activate response decodes the nested config`() {
         // The seat routes' answer (checkout, release) has this shape. Only
-        // GET /v1/config carries the token and the version and kill-switch
-        // fields; these answers leave them out (key absent).
+        // GET /v1/config carries the token, the version and kill-switch
+        // fields and testAccount; these answers leave them out (key absent).
         val resp = response<LicenseActivateResponse>(
             "license_activate_response",
-            absentOk = setOf("entitlement", "minSupportedVersionCode", "recommendedVersionCode", "killSwitches")
+            absentOk = listOf("entitlement", "minSupportedVersionCode", "recommendedVersionCode", "killSwitches")
+                .plus("testAccount")
                 .mapTo(HashSet()) { "$.config.$it" },
         )
         assertNull(resp.config.entitlement)
@@ -242,6 +268,16 @@ class ApiDtosContractTest {
     }
 
     // ------------------------------------------------- older backends' bodies
+
+    @Test
+    fun `a pending upload from a backend that sends no hash decodes a null hash`() {
+        // Before TD-281 the pending list carried no sha256; the resume then
+        // matches on role, name and size alone.
+        val resp = json.decodeFromString<SessionUploadsResponse>(
+            """{"sessionId":"s","uploads":[{"fileId":"f","uploadUrl":"u","sizeBytes":3}]}""",
+        )
+        assertNull(resp.uploads.single().sha256)
+    }
 
     @Test
     fun `config response missing mode still decodes the plan mirror`() {

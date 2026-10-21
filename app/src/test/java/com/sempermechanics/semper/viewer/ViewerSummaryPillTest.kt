@@ -9,6 +9,7 @@ import com.sempermechanics.semper.fixtures.launchViewer
 import com.sempermechanics.semper.fixtures.viewerArgs
 import com.sempermechanics.semper.fixtures.writeGridBatch
 import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
+import kotlinx.coroutines.asCoroutineDispatcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -23,6 +24,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
 import java.time.Duration
+import java.util.concurrent.Executor
 
 /**
  * [com.sempermechanics.semper.ui.viewer.summary.ViewerSummaryController]'s
@@ -63,7 +65,7 @@ class ViewerSummaryPillTest {
             idleUntil("the viewer and the summary's ranges") {
                 activity.frameSetLoaded &&
                     activity.rawData != null &&
-                    activity.summary.boundsFor(activity.currentDataIndex) != null
+                    activity.summary.boundsFor(activity.viewModel.field.dataIndex) != null
             }
         }
 
@@ -140,14 +142,17 @@ class ViewerSummaryPillTest {
     @Test
     fun `the scale reads a dash at both ends until the summary knows its range`() {
         // One frame: the viewer does not start the range pass on open (only a
-        // multi-frame batch does), so entering the summary starts it, and its
-        // result can only land in a later main-thread task than the click.
+        // multi-frame batch does), so entering the summary starts it. The pass
+        // is held: a one-frame read can finish before the launch suspends, and
+        // its result would then land in the click's own main-thread task.
         val single = temp.newFolder("single")
         writeGridBatch(single, 1, GRID, STEP)
         val activity = launchViewer(viewerArgs(single, GRID, STEP))
         idleUntil("the frame's heatmap") { activity.frameSetLoaded && activity.scale.cachedHeatmap != null }
         assertTrue("the frame labels its own ends", activity.scaleMax.startsWith("≥"))
-        assertNull(activity.summary.boundsFor(activity.currentDataIndex))
+        assertNull(activity.summary.boundsFor(activity.viewModel.field.dataIndex))
+        val held = mutableListOf<Runnable>()
+        activity.summary.rangesDispatcher = Executor { held += it }.asCoroutineDispatcher()
 
         activity.enterSummary()
 
@@ -156,8 +161,10 @@ class ViewerSummaryPillTest {
         assertEquals("the pill is up while it reads frames", View.VISIBLE, activity.pill.visibility)
         assertEquals(activity.getString(R.string.summary_scanning_fmt, 0, 1), activity.pillText)
         assertEquals("Reading frames · 0 of 1", activity.pillText)
+        assertEquals("the range pass was launched and is held", 1, held.size)
 
-        idleUntil("the summary's ranges") { activity.summary.boundsFor(activity.currentDataIndex) != null }
+        held.toList().forEach { it.run() }
+        idleUntil("the summary's ranges") { activity.summary.boundsFor(activity.viewModel.field.dataIndex) != null }
         shadowOf(activity.mainLooper).idle()
         assertTrue(activity.scaleMax, activity.scaleMax.startsWith("≥"))
         assertTrue(activity.scaleMin, activity.scaleMin.startsWith("≤"))

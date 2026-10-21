@@ -26,6 +26,10 @@ apps. The deploy and Firestore workflows only run in this repo
 
 ## Syncing into material_testing
 
+**Last sync:** semperdic-app `14b279d6` (its #453, #457–#460), merged on material_testing's
+`ccr-603fe346-1bw2fa` on 2026-10-21; the one before was `17d7bc8` (material_testing #139).
+`git log --merges --grep=semperdic-app` on the fork lists them all.
+
 1. `git fetch semperdic main` and branch `sync/semperdic-<short sha>` from its `main`.
 2. `git merge semperdic/main`. Keep its `applicationId`, `rootProject.name` and
    `google-services.json`. The benchmark module and CI read the package from
@@ -205,7 +209,7 @@ group is one commit, reviewable with `git diff -M`.
 | `TermsAcceptanceBody`, `ConsentUpdateBody`, `ListSessionsResponse` (`data/net/ApiDtos.kt`) | `TermsAcceptRequest`, `ConsentUpdateRequest`, `SessionsResponse` |
 | Tests: `RestoreFakeApi`, `SpeckleScaleInstrumentedTest`, `ExifOrientedSizeInstrumentedTest`, `BitmapDecodeTest`, `KeyboardExtTest`, `SessionRecordExtTest` | `FakeRestoreApi`, `SpeckleScaleDeviceTest`, `ExifOrientedSizeDeviceTest`, `BitmapDecoderTest`, `KeyboardTest`, `SessionRecordFieldsTest` |
 | **Functions** | |
-| `DicUploadWorker` `appInForeground()`, `DicBundleDownloadWorker` `mayPackInstead()`, `UploadStaging` `inputsGoneForGood()` | `isAppInForeground()`, `canPackInstead()`, `areInputsGoneForGood()` |
+| `DicUploadWorker` `appInForeground()`, `DicBundleDownloadWorker` `mayPackInstead()`, `UploadStaging` `inputsGoneForGood()` | `isAppInForeground()` (since 2026-10-19 gone: `AppForeground.isForeground`, `data/AppForeground.kt`, read through `DicUploadSeams.inForeground`), `canPackInstead()`, `areInputsGoneForGood()` |
 | `LicenseEntitlements.seatRequiredToStart`, `.unlimitedAnalysis`, `.inGrace` | `isSeatRequiredToStart`, `hasUnlimitedAnalysis`, `isInGrace` |
 | `AppRemoteConfig.inGrace` | `AppRemoteConfig.isInGrace` |
 | `UploadWorkOutcomes.bundleArtifactsReady`, `.stagingInputsOnDisk`, `.stagingReusable` | `areBundleArtifactsReady`, `areStagingInputsOnDisk`, `isStagingReusable` |
@@ -260,7 +264,7 @@ group is one commit, reviewable with `git diff -M`.
 | `VsgLatticeView` | `SweepLatticeView`; `VsgLatticeActivity`, `activity_vsg_lattice.xml` and its `vsg_lattice_*` strings keep their names (the Activity is pinned) |
 | `LatticeGraphExport`; files `LatticeControls.kt`, `LatticeProfiles.kt` | `SweepGraphExport`; `SweepControls.kt`, `SweepProfiles.kt` (the functions in them keep their names and package) |
 | `SweepSetupController.Callbacks.startVsgSweep`; `AnalysisViewModel.launchVsgSweep`, `.runVsgSweep` (`ui/analysis/wizard/`) | `startSweep`; `launchSweep`, `runSweep` |
-| `AnalysisViewModel.vsgFrameIndex` | `sweepFrameIndex` (saved-state key `"vsgFrameIndex"` unchanged) |
+| `AnalysisViewModel.vsgFrameIndex` | `sweepFrameIndex` (saved-state key `"vsgFrameIndex"` unchanged); since 2026-10-19 `sweepFrame: SweepFrame` (`Middle` or `At(index)`, `ui/analysis/sweep/SweepRanges.kt`), the key and its `Int` unchanged |
 | Tests: `VsgStudyTest`, `VsgStudyRunnerParamsTest`, `VsgPlotViewTest`, `VsgPlotViewportTest`, `VsgLatticeViewTest`, `LatticeControlsTest`; oracle `ui/common/vsg_plot_clamp_viewport.txt` | `SweepStudyTest`, `SweepStudyRunnerParamsTest`, `SweepPlotViewTest`, `SweepPlotViewportTest`, `SweepLatticeViewTest`, `SweepControlsTest`; `sweep_plot_clamp_viewport.txt` |
 | **`Dic` prefix** (prefs file `dic_settings` and every extra's value unchanged) | |
 | `data/prefs/DicSettings` | `data/prefs/AppSettings` |
@@ -283,6 +287,39 @@ group is one commit, reviewable with `git diff -M`.
 | `PrefFiles.CloudSync`, `PrefFiles.SessionDeletes` | `PrefFiles.CloudSyncPrefs`, `PrefFiles.SessionDeletesPrefs` (they no longer shadow `data/cloud/CloudSync` and `SessionDeletes`); the other ten nested objects keep their names |
 | **Seconds suffix** | |
 | Private: `SemperAnalytics.MS_1S`, `MS_5S`, `MS_30S` | `ONE_SECOND_MS`, `FIVE_SECONDS_MS`, `THIRTY_SECONDS_MS` (bucket values `lt_1s` … unchanged) |
+
+### The 2026-10-19 review (#457)
+
+Four of #457's commits are already in material_testing, cherry-picked by its #140:
+`6a8f86e` (upload restage, its `4e384d51`), `e4e4dca` (Save-to-Files on a stop,
+`af5bd1e2`), `a95d104` (the detekt split, `6d38abf5`) and `e2c30bb` (PDF render,
+byte units, SAF copy, `91699d09`). The rest touch files the fork hooks into, so they
+arrive with the next sync (its TD-305), and these API changes need the fork's lab code
+fixed by hand:
+
+| Before | After |
+|---|---|
+| `RunResult`, `lastRunResult`, the `last*` fields, `AnalysisNavHelper.resultArgs` / `openResults`, `WizardRunOutcomes`, `BatchRunController.Host` | Gone. A run's end is the sealed `RunEnd` (`RunEnd.of`, `ui/analysis/run/RunEnd.kt`); the saved row is `BatchAnalysisOutcome.record`, and every result opens through `ViewerArgs.of(record)` (was `SessionOpenHelper.argsFor`), so a lab argument the viewer needs must be read there; `ViewerArgs.forFailedSweep` for a sweep that solved nothing |
+| A run writing `workingLocalId`, the plan and skips from the native thread | The run returns them in its outcome and the view model takes them on Main (`applyRunOutcome`, `ui/analysis/wizard/RunChannels.kt`); a lab value a run learns goes in the outcome too |
+| `workingLocalId` + `workingIsSweep`; `sweepFrameIndex` | `working: WorkingSession(id, RunKind)?`; `sweepFrame: SweepFrame` (Bundle keys unchanged) |
+| Field tables in `ViewerFieldPills`, `ShareExportBuilder`, `SummaryAnimation`, `AnalysisCsvWriter`, `ReportBuilder` | `field/FieldKind` |
+| `ReportSource`'s copied fields, `RoiData` and its conversions | `ReportSource(frameParams, roi, size, …)`; `ReportData` carries a `Roi` |
+| `VisualizationEngine`'s five heatmap entry points | `render` / `indices` over one `HeatmapRequest` |
+| The viewer Activity's frame-set copies, `afterFrameSet`, `whenFrameSetLoaded`, `summaryBatchFiles`, `detailStatsText` | `ResultViewerViewModel.state: StateFlow<ViewerState>`; `batchFiles` and the like are getters over the set it opened |
+| Home's restore on `lifecycleScope`; the **+** chooser and Re-run in `HomeActivity` | `HomeViewModel`; `HomeNewAnalysis` (where the fork's **Which test?** hand-off now goes) |
+| `UploadWorkOutcomes.ResumeKind`, `classifyResume`; three foreground checks | `Resume.of` (`data/UploadSessionPlanner.kt`); `data/AppForeground.kt` |
+| `AnalysisViewModel`'s 36 per-field `var`s (`viewModel.refBytes`, `viewModel.step`, …), `lateinit sweepController` | Gone (TD-308): read `viewModel.inputs.value`, write one `viewModel.edit { it.copy(…) }` per change (`ui/analysis/wizard/AnalysisViewModel.kt`); only `cancelRequested` is left. A lab field set through such a property (the fork's `LabRerun.applyTo`, for one) becomes a `WizardInputs` / `LabWizardState` field changed in that edit. `sweepController` is `by lazy` |
+| `SessionMetadataDoc`'s nested field serializers | Top-level `internal object`s of the same names in `data/cloud/SessionMetadataSerializers.kt` (TD-292), a pure move: a sync conflict there is a move, not a change |
+| `VideoFrameExtractor.getFrame` returning a `Bitmap`; retriever frames timed as asked | `RetrievedFrame(bitmap, isSyncFrame)`; times from `RetrieverFrameClock` (TD-207) |
+
+material_testing took the rest of #457 with the sync of `14b279d6` (its TD-305, closed
+there): the lab wizard state is one field of the inputs, `WizardInputs.lab`
+(`LabWizardState`), changed through `edit {}` / `editLab {}` with its Bundle keys unchanged
+(`putLab` / `restoreLab`); `LabInputs.kt` became pure functions of `WizardInputs`; the
+lab test reaches a fresh result through `ViewerArgs.of(record)`; Home's **Which test?** and
+the lab Re-run live in `HomeNewAnalysis`; and the viewer's lab parts take the Results helper
+as a parameter (`ViewerSummaryController`, `ViewerChromeController`) or read
+`ShareControllerHost.labSession` / `stressModel` / `loadsN`.
 
 ## Porting back
 

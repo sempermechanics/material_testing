@@ -20,7 +20,6 @@ import com.sempermechanics.semper.fixtures.writeGridBatch
 import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
 import com.sempermechanics.semper.ui.viewer.ResultViewerViewModel
 import com.sempermechanics.semper.ui.viewer.ViewerSweepArgs
-import com.sempermechanics.semper.ui.viewer.frameDisplayName
 import com.sempermechanics.semper.ui.viewer.share.ShareCenter
 import com.sempermechanics.semper.ui.viewer.share.ShareExportBuilder
 import com.sempermechanics.semper.ui.viewer.share.ShareKind
@@ -78,7 +77,7 @@ class ShareCenterTest {
         val args = viewerArgs(batchDir, GRID, STEP, frameNames)
         val tensile = args.copy(labSession = LabSession("tensile", crossSectionMm2 = 10f), loadsN = loadsN)
         val activity = launchViewer(if (loadsN.isEmpty()) args else tensile)
-        idleUntil("the viewer") { activity.buildShareSnapshot() != null }
+        idleUntil("the viewer") { activity.share.buildShareSnapshot() != null }
         return activity
     }
 
@@ -91,7 +90,7 @@ class ShareCenterTest {
     fun `save to Files writes the whole batch as one csv`() {
         val activity = viewer()
         val dest = File(temp.root, "picked.csv")
-        ShareCenter(activity).writeKindToUri("csv", Uri.fromFile(dest))
+        ShareCenter(activity, activity.share).writeKindToUri("csv", Uri.fromFile(dest))
         idleUntil("the save toast") { ShadowToast.getLatestToast() != null }
 
         assertEquals(activity.getString(R.string.save_success), ShadowToast.getTextOfLatestToast())
@@ -107,7 +106,7 @@ class ShareCenterTest {
     /** The share CSV's point rows, keyed by their image column. */
     private fun csvRowsByImage(activity: ResultViewerActivity): Map<String, Int> {
         val dest = File(temp.root, "picked_${System.nanoTime()}.csv")
-        ShareCenter(activity).writeKindToUri("csv", Uri.fromFile(dest))
+        ShareCenter(activity, activity.share).writeKindToUri("csv", Uri.fromFile(dest))
         idleUntil("the save toast") { ShadowToast.getLatestToast() != null }
         val lines = dest.readLines()
         val header = lines.indexOfFirst { it.startsWith("image,") }
@@ -121,7 +120,7 @@ class ShareCenterTest {
         val activity = viewer(listOf("a.png", "b.png", "c.png"))
 
         assertEquals("c.png", activity.frameDisplayName(1))
-        val snapshot = activity.buildShareSnapshot()!!
+        val snapshot = activity.share.buildShareSnapshot()!!
         assertEquals(2, snapshot.plannedAt(1))
         assertEquals("c.png", snapshot.nameAt(1))
         // Same rows as the cloud bundle's CSV (SessionUploadBundlerTest).
@@ -135,7 +134,7 @@ class ShareCenterTest {
         File(batchDir, "frame_001.dat").delete()
         val activity = viewer(listOf("a.png", "b.png", "c.png"), loadsN = listOf(100f, 200f, 300f))
 
-        val snapshot = activity.buildShareSnapshot()!!
+        val snapshot = activity.share.buildShareSnapshot()!!
         assertEquals(100f, snapshot.loadAt(0)!!, 0f)
         assertEquals(300f, snapshot.loadAt(1)!!, 0f)
     }
@@ -153,7 +152,7 @@ class ShareCenterTest {
     fun `an unknown kind reports failure instead of saving`() {
         val activity = viewer()
         val dest = File(temp.root, "picked.bin")
-        ShareCenter(activity).writeKindToUri("bogus", Uri.fromFile(dest))
+        ShareCenter(activity, activity.share).writeKindToUri("bogus", Uri.fromFile(dest))
         idleUntil("the failure pill") { pillText(activity) != null }
 
         assertEquals(activity.getString(R.string.share_failed), pillText(activity))
@@ -163,7 +162,7 @@ class ShareCenterTest {
     /** The viewer, resumed and its frames listed; the caller keeps it to recreate it. */
     private fun controller(): ActivityController<ResultViewerActivity> {
         val controller = viewerController(viewerArgs(batchDir, GRID, STEP))
-        idleUntil("the viewer") { controller.get().buildShareSnapshot() != null }
+        idleUntil("the viewer") { controller.get().share.buildShareSnapshot() != null }
         return controller
     }
 
@@ -191,7 +190,7 @@ class ShareCenterTest {
         val activity = controller.get()
         val dest = File(temp.root, "picked.csv")
 
-        ShareCenter(activity).writeKindToUri("csv", Uri.fromFile(dest))
+        ShareCenter(activity, activity.share).writeKindToUri("csv", Uri.fromFile(dest))
         // Rotate before the job can report back to the main thread.
         val rebuilt = controller.recreate().get()
         idleUntil("the save toast") { ShadowToast.getLatestToast() != null || pillText(rebuilt) != null }
@@ -204,7 +203,7 @@ class ShareCenterTest {
     fun `a save-as picked across a rotation saves from the rebuilt viewer`() {
         val controller = controller()
         val activity = controller.get()
-        activity.pickShareDocument(ShareKind.CSV, "picked.csv")
+        activity.share.pickShareDocument(ShareKind.CSV, "picked.csv")
         val picker = shadowOf(activity).nextStartedActivityForResult
 
         // Rotated while the picker was up: its answer reaches the new viewer.
@@ -225,7 +224,7 @@ class ShareCenterTest {
     fun `a save-as answer that lands before the frames are read still saves`() {
         val held = mutableListOf<Runnable>()
         val activity = heldController(held).setup().get()
-        activity.pickShareDocument(ShareKind.CSV, "picked.csv")
+        activity.share.pickShareDocument(ShareKind.CSV, "picked.csv")
         val picker = shadowOf(activity).nextStartedActivityForResult
         val dest = File(temp.root, "picked.csv")
 
@@ -250,7 +249,7 @@ class ShareCenterTest {
         val held = mutableListOf<Runnable>()
         val controller = heldController(held)
         val activity = controller.setup().get()
-        activity.pickShareDocument(ShareKind.CSV, "picked.csv")
+        activity.share.pickShareDocument(ShareKind.CSV, "picked.csv")
         val picker = shadowOf(activity).nextStartedActivityForResult
         val dest = File(temp.root, "picked.csv")
         activity.activityResultRegistry.dispatchResult(
@@ -259,17 +258,22 @@ class ShareCenterTest {
             Intent().setData(Uri.fromFile(dest)),
         )
 
-        // Rotated before the frames were listed: the rebuilt viewer, which
-        // reads them, starts the export the old one was waiting to.
+        // Rotated before the frames were listed. The listing runs on in the
+        // view model, which lists once: the rebuilt viewer waits on it rather
+        // than reading the batch again, then starts the export the old one
+        // was waiting to.
         val rebuilt = controller.recreate().get()
+        shadowOf(rebuilt.mainLooper).idle()
+        assertEquals("one listing, kept across the rotation", 1, held.size)
+        assertTrue("nothing saved before the frames are listed", !dest.exists())
+        held.toList().forEach { it.run() }
         idleUntil("the save toast") { ShadowToast.getLatestToast() != null || pillText(rebuilt) != null }
         assertEquals(rebuilt.getString(R.string.save_success), ShadowToast.getTextOfLatestToast())
         assertEquals((1..FRAMES).associate { "Frame_$it" to GRID * GRID }, rowsByImage(dest))
 
-        // The save was handed out once: neither a later rotation nor the old
-        // viewer's frame listing finishing starts a second export.
+        // The save was handed out once: a later rotation, whose viewer finds
+        // the frames listed already, does not start a second export.
         dest.delete()
-        held.toList().forEach { it.run() }
         val again = controller.recreate().get()
         repeat(5) { shadowOf(again.mainLooper).idle() }
         assertEquals(1, ShadowToast.shownToastCount())
@@ -340,7 +344,7 @@ class ShareCenterTest {
     @Test
     fun `two exports of the same file name each keep their own bytes`() {
         val activity = viewer()
-        val whole = activity.buildShareSnapshot()!!
+        val whole = activity.share.buildShareSnapshot()!!
         val oneFrame = whole.copy(batchFiles = whole.batchFiles.take(1))
         val app = activity.applicationContext
 
@@ -367,7 +371,7 @@ class ShareCenterTest {
     @Test
     fun `an export's snapshot does not reach the viewer`() {
         val activity = viewer()
-        val snapshot = activity.buildShareSnapshot()!!
+        val snapshot = activity.share.buildShareSnapshot()!!
 
         // A job keeps its snapshot until it ends, past a rotation; anything in it
         // that reaches the Activity keeps the destroyed viewer (and its views) alive.
@@ -406,7 +410,7 @@ class ShareCenterTest {
 
     @Test
     fun `a sweep renders each frame at its own pitch`() {
-        val base = viewer().buildShareSnapshot()!!
+        val base = viewer().share.buildShareSnapshot()!!
         val source = base.reportSource
         val sweepArgs = ViewerSweepArgs(
             subsets = emptyList(),

@@ -8,6 +8,7 @@ import {
   errorDetail, licenceListPath, licenceSearchBody, searchableLicenceText, upsertLicence, alreadyLicensedId,
   isoDay, emailList, licenceEditPatch, daysLeft, reauthMethods, unfinishedStepUpText,
   normaliseClaimCode, claimCodeShaped, MAX_CLAIM_CODE,
+  reauthFailureText, testAccountBody, testAccountEnds, extendDays, TEST_ACCOUNT,
 } from "../public/console/util.js";
 
 const NOW = Date.parse("2026-09-23T12:00:00Z");
@@ -266,6 +267,65 @@ test("a failed re-authentication says the action was not sent", () => {
     /re-authentication failed \(auth\/network-request-failed\)/);
 });
 
+test("a failed re-authentication is said in words, an unknown reason as it came", () => {
+  assert.equal(reauthFailureText("cancelled"), "the authenticator code was not entered");
+  assert.equal(reauthFailureText("auth/x"), "re-authentication failed (auth/x)");
+});
+
+/* ------------------------------------------------------- test accounts */
+
+const taForm = (over = {}) => ({ email: "qc@test.example", purpose: "qc", days: "30", maxDevices: "3", note: "", ...over });
+
+test("a test account's body is the form's values, numbers as numbers, an empty note left out", () => {
+  assert.deepEqual(testAccountBody(taForm({ email: " qc@test.example ", note: " rack " })), {
+    body: { email: "qc@test.example", purpose: "qc", days: 30, maxDevices: 3, note: "rack" },
+  });
+  assert.deepEqual(testAccountBody(taForm({ maxDevices: "" })).body,
+    { email: "qc@test.example", purpose: "qc", days: 30 }, "blank phones: the backend's default");
+  assert.deepEqual(testAccountBody(taForm({ days: "90", maxDevices: "10" })).body.days, 90);
+  assert.deepEqual(testAccountBody(taForm({ days: "1", maxDevices: "1" })).body.maxDevices, 1);
+  assert.equal(testAccountBody(taForm({ note: "x".repeat(TEST_ACCOUNT.maxNote) })).body.note.length, 200);
+});
+
+test("a CI account without days never ends; a QC one must end", () => {
+  assert.deepEqual(testAccountBody(taForm({ purpose: "ci", days: " " })).body.days, null);
+  assert.deepEqual(testAccountBody(taForm({ purpose: "ci", days: "7" })).body.days, 7);
+  assert.match(testAccountBody(taForm({ days: "" })).error, /a QC account always ends/);
+});
+
+test("each field the backend would refuse is named before anything is sent", () => {
+  for (const [over, why] of [
+    [{ email: "" }, /email address/],
+    [{ email: "a@b" }, /email address/],
+    [{ email: "a b@c.d" }, /email address/],
+    [{ purpose: "demo" }, /QC or CI/],
+    [{ days: "0" }, /1 to 90/],
+    [{ days: "91" }, /1 to 90/],
+    [{ days: "2.5" }, /1 to 90/],
+    [{ days: "-3" }, /1 to 90/],
+    [{ purpose: "ci", days: "100" }, /or blank for a CI account/],
+    [{ maxDevices: "0" }, /Phones at once is 1 to 10/],
+    [{ maxDevices: "11" }, /Phones at once is 1 to 10/],
+    [{ note: "x".repeat(201) }, /at most 200/],
+  ]) {
+    const out = testAccountBody(taForm(over));
+    assert.equal(out.body, undefined, JSON.stringify(over));
+    assert.match(out.error, why, JSON.stringify(over));
+  }
+});
+
+test("Extend takes a whole number of days, 1 to 90", () => {
+  assert.equal(extendDays(" 45 "), 45);
+  assert.equal(extendDays("90"), 90);
+  for (const text of ["", "0", "91", "1.5", "ten", null]) assert.equal(extendDays(text), null, String(text));
+});
+
+test("a test account ends on its UTC day, or never", () => {
+  assert.equal(testAccountEnds({ expiresAt: "2026-11-18T23:59:59Z" }), day("2026-11-18T23:59:59Z"));
+  assert.equal(testAccountEnds({ expiresAt: null }), "Never");
+  assert.equal(testAccountEnds(null), "Never");
+});
+
 test("a past end is refused before the typed key is asked for", () => {
   const out = licenceEditPatch(timed, form({ expiry: "2026-09-22" }), NOW);
   assert.match(out.error, /already passed/);
@@ -296,5 +356,66 @@ test("a claim code is shaped as dash-split groups, eight to sixty-four long", ()
   for (const bad of ["", "ABC-1234", "SEMP--ABCD-EFGH", "-ABCDEFGH", "ABCDEFGH-", "abcdefgh",
     "ABCD EFGH", "A".repeat(MAX_CLAIM_CODE + 1), null, undefined]) {
     assert.equal(claimCodeShaped(bad), false, String(bad));
+  }
+});
+
+/* ------------------------------------------------------------ import graph */
+// auth.js holds the Firebase SDK and a top-level await on the project config.
+// A page that wants a DOM helper or an API call should not need to know that,
+// and a module that only draws or formats must not load Firebase at all, so
+// node --test can run it bare and a page can show a dialog before sign-in.
+
+import { readFileSync, readdirSync } from "node:fs";
+import { dirname, join, resolve as resolvePath } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const CONSOLE_DIR = fileURLToPath(new URL("../public/console/", import.meta.url));
+
+function staticImports(file) {
+  const source = readFileSync(file, "utf8");
+  return [...source.matchAll(/^\s*(?:import|export)\s[^;]*?from\s+"([^"]+)"/gms)].map((m) => m[1]);
+}
+
+function reaches(file, target, seen = new Set()) {
+  if (seen.has(file)) return false;
+  seen.add(file);
+  for (const spec of staticImports(file)) {
+    if (spec.startsWith("https:")) {
+      if (target === "https:") return true;
+      continue;
+    }
+    const next = resolvePath(dirname(file), spec);
+    if (next === target || reaches(next, target, seen)) return true;
+  }
+  return false;
+}
+
+test("the DOM and formatting modules load no Firebase", () => {
+  for (const name of ["util.js", "dialogs.js", "status.js", "messages.js"]) {
+    const file = join(CONSOLE_DIR, name);
+    assert.equal(reaches(file, join(CONSOLE_DIR, "auth.js")), false, `${name} reaches auth.js`);
+    assert.equal(reaches(file, "https:"), false, `${name} imports a remote module`);
+  }
+});
+
+test("auth.js re-exports nothing: each helper is imported from the module that owns it", () => {
+  const source = readFileSync(join(CONSOLE_DIR, "auth.js"), "utf8");
+  assert.doesNotMatch(source, /^\s*export\s*\{[^}]*\}\s*from/m);
+});
+
+test("auth.js is sign-in and the second factor only", () => {
+  const lines = readFileSync(join(CONSOLE_DIR, "auth.js"), "utf8").split("\n").length;
+  assert.ok(lines <= 600, `auth.js is ${lines} lines`);
+  const pages = readdirSync(CONSOLE_DIR, { recursive: true })
+    .filter((f) => f.endsWith(".js") && !f.startsWith("vendor"));
+  for (const page of pages) {
+    const source = readFileSync(join(CONSOLE_DIR, page), "utf8");
+    for (const m of source.matchAll(/import\s*\{([^}]*)\}\s*from\s*"(?:\.\.?\/)+auth\.js"/g)) {
+      for (const name of m[1].split(",").map((s) => s.trim()).filter(Boolean)) {
+        assert.ok(!["esc", "when", "day", "api", "apiBlob", "saveBlob", "setStatus", "whileWaiting",
+          "askInPage", "confirmInPage", "tellInPage", "confirmByTyping", "markFirstData"].includes(name),
+        `${page} imports ${name} from auth.js`);
+      }
+    }
   }
 });

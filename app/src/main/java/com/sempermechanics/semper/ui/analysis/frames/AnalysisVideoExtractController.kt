@@ -10,7 +10,7 @@ import com.sempermechanics.semper.imaging.video.VideoFrameExtractor
 import com.sempermechanics.semper.ui.analysis.StaticAnalysisActivity
 import com.sempermechanics.semper.ui.analysis.run.ComputeOverlayController
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
-import com.sempermechanics.semper.ui.analysis.wizard.onReferenceReplaced
+import com.sempermechanics.semper.ui.analysis.wizard.withoutBeamTaps
 import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
 import com.sempermechanics.semper.ui.common.dialog.Feedback
 import kotlinx.coroutines.CancellationException
@@ -112,16 +112,19 @@ class AnalysisVideoExtractController(
 
     private fun apply(result: VideoFrameExtractor.ExtractionResult) {
         viewModel.applyNewReference(result.reference.png, result.refName, result.reference.size)
-        // A video frame has no EXIF time, and the beam's taps were on the old reference.
-        viewModel.refCapture = null
-        viewModel.onReferenceReplaced()
-        // Each frame carries its clip time; less the reference's, that is what
-        // a timed load log is matched by (defTimesAfterRefMs). No typed loads come with it.
-        viewModel.refVideoTimeMs = result.reference.timeMs
-        viewModel.deformedFrames = result.batch.frames
-        viewModel.defOrderMode = FrameOrderMode.PICKER
-        viewModel.defOrderDirection = FrameOrderDirection.ASCENDING
-        viewModel.defFromVideo = result.batch.fromVideo
-        viewModel.defVideoName = result.batch.videoName
+        viewModel.edit {
+            it.copy(
+                deformedFrames = result.batch.frames,
+                defOrderMode = FrameOrderMode.PICKER,
+                defOrderDirection = FrameOrderDirection.ASCENDING,
+                defFromVideo = result.batch.fromVideo,
+                defVideoName = result.batch.videoName,
+                // A video frame has no EXIF time, and the beam's taps were on the old
+                // reference. Each frame carries its clip time; less the reference's,
+                // that is what a timed load log is matched by (defTimesAfterRefMs).
+                // No typed loads come with it.
+                lab = it.lab.copy(refCapture = null, refVideoTimeMs = result.reference.timeMs).withoutBeamTaps(),
+            )
+        }
     }
 }

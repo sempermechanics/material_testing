@@ -205,7 +205,9 @@ async def test_quota_race_accepts_soft_overshoot_window(client, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_unicode_specimen_and_device_model(client, monkeypatch):
-    fake_firestore.install(monkeypatch)
+    store = fake_firestore.install(monkeypatch)
+    store._data["users"] = {"dev-user": {"email": "dev@local", "access_status": "APPROVED",
+                                         "activeDeviceId": "dev-device"}}
     monkeypatch.setattr(audit, "record", lambda *a, **k: None)
     monkeypatch.setattr(drive, "access_token", lambda: "tok")
     monkeypatch.setattr(

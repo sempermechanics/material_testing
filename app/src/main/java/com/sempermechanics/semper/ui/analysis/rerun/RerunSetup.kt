@@ -32,11 +32,13 @@ internal class RerunSetup(
 
 /** The wizard's [RerunSetup] as it stands now; the frame list is copied. */
 @MainThread
-internal fun AnalysisViewModel.snapshotRerunSetup(): RerunSetup = RerunSetup(
-    hasCustomRoi = hasCustomRoi,
-    roi = roi,
-    frames = deformedFrames.toList(),
-    fromVideo = defFromVideo,
-    order = RerunSetup.Order(defOrderMode, defOrderDirection),
-    sweep = RerunSetup.Sweep(sweepRanges, subsetOverlap),
-)
+internal fun AnalysisViewModel.snapshotRerunSetup(): RerunSetup = inputs.value.let { now ->
+    RerunSetup(
+        hasCustomRoi = now.hasCustomRoi,
+        roi = now.roi,
+        frames = now.deformedFrames.toList(),
+        fromVideo = now.defFromVideo,
+        order = RerunSetup.Order(now.defOrderMode, now.defOrderDirection),
+        sweep = RerunSetup.Sweep(now.sweepRanges, now.subsetOverlap),
+    )
+}

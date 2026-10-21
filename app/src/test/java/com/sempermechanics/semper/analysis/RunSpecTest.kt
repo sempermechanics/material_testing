@@ -1,21 +1,27 @@
 package com.sempermechanics.semper.analysis
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
 import com.sempermechanics.semper.data.mechanical.LabSession
 import com.sempermechanics.semper.data.mechanical.MechanicalTestInputs
 import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.data.session.SessionRecordSettings
+import com.sempermechanics.semper.data.session.SkippedNode
 import com.sempermechanics.semper.field.DicParams
+import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.Roi
-import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.fixtures.sessionRecord
+import com.sempermechanics.semper.ui.analysis.VsgLatticeActivity
+import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
 import com.sempermechanics.semper.ui.analysis.run.RunSpec
+import com.sempermechanics.semper.ui.analysis.run.snapshotRunInputs
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
-import com.sempermechanics.semper.ui.analysis.wizard.AnalysisNavHelper
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
-import com.sempermechanics.semper.ui.home.SessionOpenHelper
+import com.sempermechanics.semper.ui.analysis.wizard.SweepSession
+import com.sempermechanics.semper.ui.viewer.ViewerArgs
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -30,11 +36,11 @@ import java.io.File
 @RunWith(RobolectricTestRunner::class)
 class RunSpecTest {
 
+    private val context: Context = ApplicationProvider.getApplicationContext()
     private val debugDir = File("debug")
     private val mask = byteArrayOf(1, 0, 1)
 
-    // The ROI the user drew, and the one the engine solves after the inset.
-    private val requested = intArrayOf(0, 0, 2000, 435)
+    // The ROI the engine solves, after the inset of the one the user drew (0, 0, 2000, 435).
     private val resolved = intArrayOf(20, 20, 1960, 395)
 
     private val spec = RunSpec.of(
@@ -96,22 +102,6 @@ class RunSpecTest {
 
     // --------------------------------------------------------------- TD-61
 
-    private fun finishedRun(spec: RunSpec = this.spec): AnalysisViewModel = AnalysisViewModel().apply {
-        realRefWidth = 2000
-        realRefHeight = 435
-        refName = "steel_24.png"
-        // The wizard's editing state: the requested ROI, as the user drew it.
-        roiX = requested[0]
-        roiY = requested[1]
-        roiW = requested[2]
-        roiH = requested[3]
-        resetRunResult("/sessions/f0f0406f-8c2", spec, "f0f0406f-8c2")
-        recordRunSettings(spec.recordSettings())
-        lastRefPath = "/sessions/f0f0406f-8c2/reference.png"
-        lastStop = RunStop.Finished
-        lastPlannedFrames = 2
-    }
-
     private fun savedRecord(settings: SessionRecordSettings) = sessionRecord(
         id = "f0f0406f-8c2",
         name = "steel_24",
@@ -131,30 +121,23 @@ class RunSpecTest {
     ).copy(plannedFrameCount = 2)
 
     @Test
-    fun `opening from the run and reopening from Home show the same settings`() {
-        val vm = finishedRun()
-        val fresh = AnalysisNavHelper.resultArgs(vm, sweep = false, frameNames = emptyList())
-        val home = SessionOpenHelper.argsFor(savedRecord(spec.recordSettings()))
+    fun `the viewer opens on the settings and ROI the run solved, as its saved row records them`() {
+        // The row a run saves records its spec (BatchAnalysis), and the run's
+        // result and Home both open from that row: one builder, one answer.
+        val args = ViewerArgs.of(savedRecord(spec.recordSettings()))
 
-        // The fields ADR-004 owns; the remaining entry-path differences
-        // (frame names, engine stats, deformed paths) are ADR-003's.
-        assertEquals(home.roiX, fresh.roiX)
-        assertEquals(home.roiY, fresh.roiY)
-        assertEquals(home.roiW, fresh.roiW)
-        assertEquals(home.roiH, fresh.roiH)
-        assertEquals(home.step, fresh.step)
-        assertEquals(home.subsetSize, fresh.subsetSize)
-        assertEquals(home.strainWindow, fresh.strainWindow)
-        assertEquals(home.sessionId, fresh.sessionId)
-        assertEquals(home.sessionLocalId, fresh.sessionLocalId)
-        assertEquals(home.plannedFrames, fresh.plannedFrames)
-        assertEquals(home.refPath, fresh.refPath)
-        assertEquals(home.batchDirPath, fresh.batchDirPath)
+        assertEquals(resolved.toList(), listOf(args.roiX, args.roiY, args.roiW, args.roiH))
+        assertEquals(listOf(21, 5, 15), listOf(args.subsetSize, args.step, args.strainWindow))
+        assertEquals("f0f0406f-8c2", args.sessionLocalId)
+        assertEquals(2, args.plannedFrames)
+        assertEquals("/sessions/f0f0406f-8c2", args.batchDirPath)
     }
 
     @Test
     fun `the lab test reaches a result opened right after a run, as Home would open it`() {
-        // TD-301: the run's ViewerArgs carry one LabSession, the record's own.
+        // TD-301, TD-305: a run's result and Home both open ViewerArgs.of the
+        // saved row, so the lab test must ride the row: one LabSession, the
+        // record's own, and the loads the run recorded.
         val geometry = SpecimenGeometry(80f, 10.5f, 4f, BeamEdgeTaps(100f, 40f, 112f, 90f))
         val mechanical = MechanicalTestInputs(
             testType = "bending",
@@ -162,54 +145,68 @@ class RunSpecTest {
             geometry = geometry,
             loadsN = listOf(0f, 100f),
         )
-        val vm = finishedRun(spec.copy(mechanical = mechanical))
-
-        val fresh = AnalysisNavHelper.resultArgs(vm, sweep = false, frameNames = listOf("f1.png", "f2.png"))
-        val home = SessionOpenHelper.argsFor(
-            savedRecord(spec.recordSettings()).copy(
-                testType = "bending",
-                loadAxisX = false,
-                geometry = geometry,
-                loadsN = listOf(0f, 100f),
-                defNames = listOf("f1.png", "f2.png"),
-            ),
+        // What SessionRepository.buildSessionRecord saves from spec.mechanical.
+        val record = savedRecord(spec.copy(mechanical = mechanical).recordSettings()).copy(
+            testType = mechanical.testType,
+            loadAxisX = mechanical.loadAxisX,
+            geometry = mechanical.geometry,
+            loadsN = mechanical.loadsN,
+            defNames = listOf("f1.png", "f2.png"),
         )
 
-        assertEquals(LabSession("bending", loadAxisX = false, geometry = geometry), fresh.labSession)
-        assertEquals(home.labSession, fresh.labSession)
-        assertEquals(listOf(0f, 100f), fresh.loadsN)
-        assertEquals(home.loadsN, fresh.loadsN)
-    }
+        val args = ViewerArgs.of(record)
 
-    @Test
-    fun `the viewer gets the solved ROI, not the one still being edited`() {
-        val vm = finishedRun()
-        vm.roiX = 300 // the user moves the ROI before tapping View
-
-        val args = AnalysisNavHelper.resultArgs(vm, sweep = false, frameNames = emptyList())
-
-        assertEquals(resolved.toList(), listOf(args.roiX, args.roiY, args.roiW, args.roiH))
+        assertEquals(LabSession("bending", loadAxisX = false, geometry = geometry), args.labSession)
+        assertEquals(record.labSession, args.labSession)
+        assertEquals(listOf(0f, 100f), args.loadsN)
     }
 
     @Test
     fun `a sweep that solved nothing shows its plan's settings`() {
         val plan = listOf(SweepStudy.Point(31, 10, 9))
         val sweep = RunSpec.Sweep(plan, listOf("a"), lineCutHorizontal = false, frameIndex = 0)
+        val sweepSpec = RunSpec.sweep(sweep, Roi.fromXywh(resolved)!!, null, use6x6 = false, debugDir = null)
         val vm = AnalysisViewModel().apply {
-            lastStop = RunStop.Other(-7) // a previous run's
-            resetRunResult(
-                "/sessions/x",
-                RunSpec.sweep(sweep, Roi.fromXywh(resolved)!!, null, use6x6 = false, debugDir = null),
-            )
+            edit {
+                it.copy(
+                    refBytes = ByteArray(8),
+                    refSize = ImageSize(2000, 435),
+                    refName = "steel_24.png",
+                    deformedFrames = listOf(DeformedFrame("/frames/a.png", "a.png")),
+                )
+            }
         }
+        val result = SweepStudyRunner.SweepResult(runs = emptyList(), firstMetrics = null, engineErrorCode = -3)
+        val run = SweepSession("x", File("/sessions/x"), vm.snapshotRunInputs(), result, sweepSpec, 0)
 
-        val args = AnalysisNavHelper.resultArgs(vm, sweep = true, frameNames = emptyList())
+        val args = ViewerArgs.forFailedSweep(run)
 
         assertEquals(31, args.subsetSize)
         assertEquals(10, args.step)
         assertEquals(81, args.strainWindow) // the VSG of 9 points at step 10
-        assertEquals("no stale stop code from the previous run", 0, args.stopCode)
+        assertEquals("the sweep's own code", -3, args.stopCode)
         assertEquals(false, args.sweep?.lineCutHorizontal)
-        assertNull(vm.runResult.value.settings)
+        assertEquals(listOf(SkippedNode(31, 10, 81, -3)), SkippedNode.decodeJson(args.sweep?.skippedJson))
+        assertEquals(VsgLatticeActivity::class.java.name, args.toIntent(context).component?.className)
+    }
+
+    @Test
+    fun `an incremental run records how often its reference moved`() {
+        val incremental = spec.copy(refUpdateInterval = 5)
+
+        assertEquals(true, incremental.incremental)
+        assertEquals(5, incremental.recordSettings().refUpdateInterval)
+        assertEquals("a fixed run records 0", 0, spec.recordSettings().refUpdateInterval)
+    }
+
+    @Test
+    fun `a sweep solves one frame pair, so it never moves the reference`() {
+        val plan = listOf(SweepStudy.Point(31, 10, 9))
+        val sweep = RunSpec.Sweep(plan, listOf("a"), lineCutHorizontal = false, frameIndex = 0)
+        val spec = RunSpec.sweep(sweep, Roi.fromXywh(resolved)!!, mask, use6x6 = false, debugDir = null)
+            .copy(refUpdateInterval = 2)
+
+        assertEquals(false, spec.incremental)
+        assertEquals(0, spec.recordSettings().refUpdateInterval)
     }
 }

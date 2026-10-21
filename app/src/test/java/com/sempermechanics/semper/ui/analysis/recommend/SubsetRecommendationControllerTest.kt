@@ -46,12 +46,13 @@ class SubsetRecommendationControllerTest {
     fun closeBed() = bed.close()
 
     private fun recommend(subset: Int, speckle: Double? = null, capped: Int = 0) {
-        bed.viewModel.subsetRecommendation = SubsetRecommender.Recommendation(
+        val rec = SubsetRecommender.Recommendation(
             subsetSize = subset,
             samples = 10,
             cappedSamples = capped,
             speckleDiameterPx = speckle,
         )
+        bed.viewModel.edit { it.copy(subsetRecommendation = rec) }
     }
 
     @Test
@@ -75,7 +76,7 @@ class SubsetRecommendationControllerTest {
 
     @Test
     fun `a size the user set is kept`() {
-        bed.viewModel.subsetUserModified = true
+        bed.viewModel.edit { it.copy(subsetUserModified = true) }
         bed.settings.sliderSubsetSize.value = 61f
         recommend(25)
         subsets.apply()
@@ -86,7 +87,7 @@ class SubsetRecommendationControllerTest {
 
     @Test
     fun `too fine a speckle shows the size chip, and it suppresses the span chip`() {
-        bed.viewModel.subsetUserModified = true
+        bed.viewModel.edit { it.copy(subsetUserModified = true) }
         bed.settings.sliderSubsetSize.value = 15f
         recommend(25, speckle = 1.5, capped = 10)
         subsets.apply()
@@ -100,7 +101,7 @@ class SubsetRecommendationControllerTest {
     fun `no measurement hides every speckle surface`() {
         recommend(25, speckle = 1.5)
         subsets.apply()
-        bed.viewModel.subsetRecommendation = null
+        bed.viewModel.edit { it.copy(subsetRecommendation = null) }
         subsets.apply()
 
         assertFalse(bed.settings.chipSpeckle.isVisible)
@@ -112,7 +113,7 @@ class SubsetRecommendationControllerTest {
     @Test
     fun `nothing is measured without a reference`() {
         subsets.request()
-        assertEquals(null, bed.viewModel.subsetRecommendationKey)
+        assertEquals(null, bed.viewModel.inputs.value.subsetRecommendationKey)
     }
 
     private fun idleFor(ms: Long) {
@@ -146,7 +147,7 @@ class SubsetRecommendationControllerTest {
         )
 
         // A size of the user's own leaves the band where the speckle put it.
-        bed.viewModel.subsetUserModified = true
+        bed.viewModel.edit { it.copy(subsetUserModified = true) }
         bed.settings.sliderSubsetSize.value = 61f
         subsets.showSpeckleFeedback()
         assertEquals(31, band().range?.first)
@@ -191,7 +192,7 @@ class SubsetRecommendationControllerTest {
         while (held.isNotEmpty()) held.removeAt(0).run()
         bed.idle()
         assertFalse("a failed measurement leaves no chip", readout.isVisible)
-        assertEquals(null, bed.viewModel.subsetRecommendation)
+        assertEquals(null, bed.viewModel.inputs.value.subsetRecommendation)
     }
 
     @Test

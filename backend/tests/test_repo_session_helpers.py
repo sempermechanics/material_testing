@@ -59,20 +59,21 @@ def test_upload_target_is_the_manifest_entry_the_app_reads(store):
     assert repo.upload_target("f1", "https://up/1", {"name": "a.png", "role": "raw",
                                                      "sizeBytes": 7, "sha256": "x"}) == {
         "fileId": "f1", "uploadUrl": "https://up/1", "chunkSize": 32 * 1024 * 1024,
-        "name": "a.png", "role": "raw", "sizeBytes": 7,
+        "name": "a.png", "role": "raw", "sizeBytes": 7, "sha256": "x",
     }
 
 
 def test_upload_target_defaults_a_missing_size_to_zero(store):
     out = repo.upload_target("f1", "u", {})
     assert out["sizeBytes"] == 0 and out["name"] is None and out["role"] is None
+    assert out["sha256"] is None  # a file doc written before the hash was kept
 
 
 # --------------------------------------------------- iter_unprovisioned_files
 
 def test_iter_unprovisioned_files_yields_only_files_with_no_uri(store):
     store._data["files"] = {
-        "s1_a": _file("s1", name="a"),
+        "s1_a": _file("s1", name="a", sha256="sha-a"),
         "s1_b": _file("s1", name="b", uploadUrl="https://up/b"),
         "s1_c": _file("s1", name="c", status=statuses.FILE_COMPLETED),
         "s1_d": _file("s1", name="d", uploadUrl=""),
@@ -80,7 +81,8 @@ def test_iter_unprovisioned_files_yields_only_files_with_no_uri(store):
     }
     out = list(repo.iter_unprovisioned_files("s1"))
     assert [f["fileId"] for f in out] == ["s1_a", "s1_d"]
-    assert out[0] == {"fileId": "s1_a", "name": "a", "role": "raw", "sizeBytes": 10}
+    # The declared hash rides along: provisioning answers it in the upload target (TD-281).
+    assert out[0] == {"fileId": "s1_a", "name": "a", "role": "raw", "sizeBytes": 10, "sha256": "sha-a"}
 
 
 def test_iter_unprovisioned_files_reads_past_one_batch(store):
@@ -220,6 +222,36 @@ def test_a_contended_status_write_never_reopens_a_completed_session(store, conte
 def test_a_contended_status_write_on_an_erased_session_is_a_no_op(store, contended):
     repo.set_session_status("gone", statuses.SESSION_UPLOADING)
     assert "gone" not in store._data.get("sessions", {})
+
+
+def test_a_contended_provisioning_start_still_stamps_the_session(store, contended):
+    """TD-296: losing the transaction still stamps `updatedAt`, so the delete
+    guard sees the retry running."""
+    store._data["sessions"] = {"s1": {"uid": "u1", "status": statuses.SESSION_PROVISIONING,
+                                      "updatedAt": datetime(2020, 1, 1)}}
+    session = repo.start_provisioning("s1")
+    assert session["sessionId"] == "s1"
+    assert store._data["sessions"]["s1"]["updatedAt"] != datetime(2020, 1, 1)
+
+
+def test_a_contended_provisioning_start_leaves_other_statuses_alone(store, contended):
+    store._data["sessions"] = {"s1": {"uid": "u1", "status": statuses.SESSION_COMPLETED}}
+    assert repo.start_provisioning("s1")["status"] == statuses.SESSION_COMPLETED
+    assert store._data["sessions"]["s1"] == {"uid": "u1", "status": statuses.SESSION_COMPLETED}
+    assert repo.start_provisioning("gone") is None
+
+
+def test_a_contended_provisioning_start_on_a_session_erased_meanwhile_is_none(
+        store, contended, monkeypatch):
+    """Read PROVISIONING, erased before the stamp: the retry is told it is gone."""
+    from app.repo import sessions
+    store._data["sessions"] = {"s1": {"uid": "u1", "status": statuses.SESSION_PROVISIONING}}
+
+    def erased(ref, patch):
+        raise NotFound("gone")
+
+    monkeypatch.setattr(sessions, "_update_doc", erased)
+    assert repo.start_provisioning("s1") is None
 
 
 def test_a_new_session_status_on_an_erased_session_is_a_no_op(store):

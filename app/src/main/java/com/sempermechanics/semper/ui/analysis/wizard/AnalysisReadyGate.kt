@@ -24,24 +24,32 @@ class AnalysisReadyGate(
     private val frameSizeChip: WarnChip,
 ) {
 
-    fun apply(isProcessing: Boolean, sweepController: SweepSetupController?) {
-        val ready = viewModel.isReadyToCompute() && viewModel.mechanicalInputsReady()
+    /** The wizard's inputs as the view model holds them now. */
+    private val inputs: WizardInputs get() = viewModel.inputs.value
+
+    /**
+     * Enables Next, Compute and Run sweep for what the wizard holds, unless
+     * [isProcessing]. [sweepController] is the sweep page's; before its
+     * views are found its Run button is not there to enable.
+     */
+    fun apply(isProcessing: Boolean, sweepController: SweepSetupController) {
+        val ready = viewModel.isReadyToCompute() && inputs.mechanicalInputsReady()
 
         binding.btnNext.isEnabled = ready && !isProcessing
         binding.tvNextReason.text = nextReason()
 
-        val sizeError = viewModel.frameSizeError
+        val sizeError = inputs.frameSizeError
         frameSizeChip.showOrHide(sizeError)
 
         // Compute and Run sweep share every condition but the mode.
         val canRun = ready &&
-            viewModel.settingsReviewed &&
+            inputs.settingsReviewed &&
             !isProcessing &&
             sizeError == null
-        binding.btnCalculateFullField.isEnabled = canRun && !viewModel.sweepMode
-        sweepController?.setRunSweepEnabled(canRun && viewModel.sweepMode && sweepController.currentPlan().isNotEmpty())
+        binding.btnCalculateFullField.isEnabled = canRun && !inputs.sweepMode
+        sweepController.setRunSweepEnabled(canRun && inputs.sweepMode && sweepController.currentPlan().isNotEmpty())
 
-        settings.btnDefineRoi.isEnabled = (viewModel.refBytes != null) && !isProcessing
+        settings.btnDefineRoi.isEnabled = (inputs.refBytes != null) && !isProcessing
         binding.btnBack.isEnabled = !isProcessing
         showEstimate()
     }
@@ -55,13 +63,13 @@ class AnalysisReadyGate(
     private fun showEstimate() {
         val subset = settings.sliderSubsetSize.value.toInt()
         val step = settings.sliderStepSize.value.toInt()
-        val roi = Roi.forSolve(subset, viewModel.hasCustomRoi, viewModel.roi, viewModel.refSize)
+        val roi = Roi.forSolve(subset, inputs.hasCustomRoi, inputs.roi, inputs.refSize)
         val points = roi?.let { RunEstimate.gridPoints(it.w, it.h, step) } ?: 0
         val res = binding.root.resources
         showRoi(points)
 
         val rate = AppSettings.runPointsPerSecond(binding.root.context)
-        val seconds = RunEstimate.seconds(points, viewModel.defCount, rate)
+        val seconds = RunEstimate.seconds(points, inputs.deformedFrames.size, rate)
         binding.btnCalculateFullField.text = if (seconds != null) {
             res.getString(R.string.run_compute_eta_fmt, RunEstimate.duration(res, seconds))
         } else {
@@ -78,32 +86,33 @@ class AnalysisReadyGate(
      */
     private fun showRoi(points: Int) {
         val res = binding.root.resources
-        val region = if (viewModel.hasCustomRoi) {
-            res.getString(R.string.roi_custom_fmt, viewModel.roiW, viewModel.roiH)
+        val region = if (inputs.hasCustomRoi) {
+            res.getString(R.string.roi_custom_fmt, inputs.roi.w, inputs.roi.h)
         } else {
             res.getString(R.string.roi_full_image)
         }
-        val counted = points > 0 && !viewModel.sweepMode
+        val counted = points > 0 && !inputs.sweepMode
         settings.tvInstruction.text = if (counted) RunEstimate.regionLabel(res, region, points) else region
     }
 
     /** Why Next is off: the first input still missing, the lab test's included; blank when none is. */
     private fun nextReason(): String {
         val context = binding.root.context
-        val testType = viewModel.testType
+        val inputs = inputs
+        val testType = inputs.lab.testType
         return when {
-            viewModel.refBytes == null -> context.getString(R.string.next_reason_ref)
-            viewModel.defFilePaths.isEmpty() -> context.getString(R.string.next_reason_def)
-            testType.hasMachineLoad && viewModel.machineLoads == null ->
+            inputs.refBytes == null -> context.getString(R.string.next_reason_ref)
+            inputs.deformedFrames.isEmpty() -> context.getString(R.string.next_reason_def)
+            testType.hasMachineLoad && inputs.lab.machineLoads == null ->
                 context.getString(
                     if (testType == TestType.BENDING) R.string.next_reason_load_typed else R.string.next_reason_load,
                 )
-            viewModel.typedLoadsMissing() > 0 -> context.resources.getQuantityString(
+            inputs.typedLoadsMissing() > 0 -> context.resources.getQuantityString(
                 R.plurals.next_reason_load_typed_missing_fmt,
-                viewModel.typedLoadsMissing(),
-                viewModel.typedLoadsMissing(),
+                inputs.typedLoadsMissing(),
+                inputs.typedLoadsMissing(),
             )
-            testType.hasMachineLoad -> loadReason(context)
+            testType.hasMachineLoad -> loadReason(context, inputs.lab)
             else -> ""
         }
     }
@@ -113,16 +122,16 @@ class AnalysisReadyGate(
      * matched a load, the stress model is missing a dimension, or bending's
      * load point is untapped. Blank when none of these holds.
      */
-    private fun loadReason(context: Context): String = when {
-        viewModel.machineLoads?.matchedFrames == 0 -> context.getString(R.string.next_reason_load_unmatched)
-        !viewModel.stressModel().isComplete -> context.getString(
-            if (viewModel.stressModel() is StressStrain.Model.Axial) {
+    private fun loadReason(context: Context, lab: LabWizardState): String = when {
+        lab.machineLoads?.matchedFrames == 0 -> context.getString(R.string.next_reason_load_unmatched)
+        !lab.stressModel().isComplete -> context.getString(
+            if (lab.stressModel() is StressStrain.Model.Axial) {
                 R.string.next_reason_cross_section
             } else {
                 R.string.next_reason_dimensions
             },
         )
-        viewModel.loadPointMissing() -> context.getString(R.string.next_reason_load_point)
+        lab.loadPointMissing() -> context.getString(R.string.next_reason_load_point)
         else -> ""
     }
 }

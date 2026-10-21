@@ -9,19 +9,22 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-/** The wizard's lab inputs are one value, [AnalysisViewModel.lab], behind its eleven properties. */
+/**
+ * The wizard's lab inputs are one value, [WizardInputs.lab], read as
+ * [AnalysisViewModel.lab] and changed through the view model's one edit.
+ */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class LabWizardStateTest {
 
     @Test
-    fun `each lab property reads and writes one field of the lab value`() {
+    fun `each lab edit changes one field of the lab value`() {
         val vm = AnalysisViewModel()
 
-        vm.testType = TestType.BENDING
-        vm.crossSectionMm2 = 78.54f
-        vm.loadLogStartS = 0.5f
-        vm.loadCsvName = "run1.csv"
+        vm.editLab { it.copy(testType = TestType.BENDING) }
+        vm.editLab { it.copy(crossSectionMm2 = 78.54f) }
+        vm.editLab { it.copy(loadLogStartS = 0.5f) }
+        vm.editLab { it.copy(loadCsvName = "run1.csv") }
 
         assertEquals(
             LabWizardState(
@@ -32,18 +35,18 @@ class LabWizardStateTest {
             ),
             vm.lab,
         )
+        assertEquals("the lab value is the wizard's inputs' own", vm.inputs.value.lab, vm.lab)
     }
 
     @Test
-    fun `a new lab value resets every lab property at once`() {
+    fun `a new lab value resets every lab field at once`() {
         val vm = AnalysisViewModel()
-        vm.testType = TestType.TENSILE
-        vm.refCapture = CaptureStamp(1_000L, subSeconds = true)
+        vm.editLab { it.copy(testType = TestType.TENSILE, refCapture = CaptureStamp(1_000L, subSeconds = true)) }
 
-        vm.lab = LabWizardState()
+        vm.edit { it.copy(lab = LabWizardState()) }
 
-        assertEquals(TestType.DIC_2D, vm.testType)
-        assertNull(vm.refCapture)
-        assertNull(vm.machineLoads)
+        assertEquals(TestType.DIC_2D, vm.lab.testType)
+        assertNull(vm.lab.refCapture)
+        assertNull(vm.lab.machineLoads)
     }
 }

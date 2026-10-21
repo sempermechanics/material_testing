@@ -112,6 +112,55 @@ support, and nothing is migrated.
   `backup_rules.xml` and `data_extraction_rules.xml` exclude, so it never
   moves to another phone with a backup.
 
+## Amendment (2026-10-19): device trust levels
+
+A registered device used to be one flat level of trust. `POST
+/v1/devices/register` takes a bare ID token, and a registered device then
+satisfied every step-up tier, staff and institution IT included. So a stolen
+staff token (password-only) plus the `X-App-Id` of an app the account had no
+phone for registered the thief's key, and its signed requests minted, revoked
+and edited rosters with no second factor ever asked for.
+
+1. **Trust is stamped at registration.** `devices/{id}.stepUpEligible` is
+   whether the registering token proved a second factor
+   (`firebase.sign_in_second_factor`; `routers/devices.py`,
+   `repo.register_device`). Stamped on every registration, a heal included:
+   a registration replaces the key, so it is judged afresh.
+2. **Staff and IT need it.** `step_up.step_up_check` takes
+   `device_needs_second_factor`: the admin tiers (`attested_or_mfa_admin`,
+   `_fresh`) and IT (`institution_admin_stepup`) refuse a device without the
+   stamp, `403 mfa_required`. The holder tier (`attested_or_mfa_user`: device
+   change, claim code, bundle) does not: an ordinary account has no second
+   factor, and its phone's signature already reaches every device-attested
+   route (`verified_device`: file content, export, erasure), so asking more of
+   that tier alone would lock every holder out and protect nothing.
+3. **A signature counts only for its app and its binding.** `verified_device`
+   also requires the account's `activeDeviceId` for the asking app to name the
+   device (`409 device_not_active` otherwise: a stale ACTIVE record cannot
+   sign), and the record's `app` to be the asking app (`401 bad_signature`
+   otherwise; no `app` is Semper). The second closes the shared-id case: a key
+   registered under Material Testing for the id Semper is bound to could sign
+   as Semper. `bad_signature` because that is what the phone sees when the
+   other app holds the slot, and `DeviceKeyRecovery` registers again and
+   resends, as before.
+4. **Registration is one transaction.** The "bound to another device"
+   (`device_conflict`) and "another account's device" (`device_in_use`) checks
+   moved into `repo.register_device`'s transaction and raise `Refusal`; two
+   phones registering at once used to both pass the router's read and both
+   stay ACTIVE. Contention is `503 claim_contended` (retry). The retired-app
+   and release-hold checks stay in the router.
+
+**Migration.** Devices registered before this have no stamp, so a staff or IT
+phone stops stepping up (`mfa_required`) until it registers once from a sign-in
+that completed the TOTP second factor: sign out and back in on the phone. The
+browser path is unchanged. Recorded in the
+[deploy checklist](../ops/DEPLOY_CHECKLIST_2026-10.md).
+
+**Not done:** a mail to the holder on a new device. `notify.py` sends one kind
+of mail (an access request, to support), deduplicated by uid alone; a holder
+notice needs a recipient, template and key of its own. The `DEVICE_REGISTER` /
+`DEVICE_REBIND` audit rows now carry `stepUpEligible`.
+
 ## Action items
 
 - [x] Phase 0: request-scoped mismatch (#279); TD-137.
@@ -126,3 +175,11 @@ support, and nothing is migrated.
       in licensed on a Pixel 6).
 - [ ] Register Material Testing for App Check (Play Integrity) and check the
       header against the token's `app_id`.
+- [x] Device trust levels (amendment 2026-10-19): `stepUpEligible`, the
+      binding and app checks in `verified_device`, transactional registration.
+- [ ] Staff and IT phones re-register once with a second factor after the
+      backend carrying the amendment deploys.
+- [x] Mail the holder when a new device registers: `notify.device_registered`,
+      from `routers/devices.py` after the registration commits, once per
+      account and device, to the verified address; off until
+      `NOTIFY_SECURITY_FROM` is set (TD-295).

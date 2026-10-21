@@ -1,6 +1,7 @@
 package com.sempermechanics.semper.results
 
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.ui.viewer.summary.SummaryAnimation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -37,7 +38,7 @@ class SummaryAnimationBuildTest {
         const val GRID = 10
         const val STEP = 4
         const val FRAMES = 4
-        val BOUNDS = -1f to 5f
+        val BOUNDS = ValueRange(-1f, 5f)
 
         /** Long enough for the second build to finish if nothing holds it back. */
         const val OVERLAP_WAIT_MS = 1_500L

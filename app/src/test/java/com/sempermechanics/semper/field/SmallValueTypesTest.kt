@@ -20,10 +20,11 @@ import org.robolectric.RobolectricTestRunner
 class SmallValueTypesTest {
 
     @Test
-    fun `value range is a Pair's first and second`() {
-        val pair = -1.5f to 2.25f
-        assertEquals(ValueRange(-1.5f, 2.25f), ValueRange.of(pair))
-        assertEquals(pair, ValueRange.of(pair).toPair())
+    fun `value range destructures as its min then its max`() {
+        // DeformedHeatmap reads a range as `val (minV, maxV) = ...`.
+        val (min, max) = ValueRange(-1.5f, 2.25f)
+        assertEquals(-1.5f, min, 0f)
+        assertEquals(2.25f, max, 0f)
     }
 
     @Test

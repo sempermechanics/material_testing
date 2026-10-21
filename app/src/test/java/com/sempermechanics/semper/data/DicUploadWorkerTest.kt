@@ -70,6 +70,36 @@ class DicUploadWorkerTest : UploadWorkerHarness() {
     }
 
     @Test
+    fun `a resumable session whose pending files carry the staged hashes uploads them`() {
+        seed(cloudSessionId = "cs1")
+        api.onSessionUploads = { uploading(it, hashed(pendingAll())) }
+
+        assertEquals(ListenableWorker.Result.success(), run())
+
+        assertEquals(3, api.completed.size)
+        assertEquals(setOf("cs1"), api.completed.map { it.sessionId }.toSet())
+        assertTrue(api.deleted.isEmpty())
+    }
+
+    @Test
+    fun `the same sizes with other bytes under a live session rebuild it and complete nothing into it`() {
+        seed(cloudSessionId = "cs1")
+        // cs1 declared other Session.zip bytes of the same size: a zip packed
+        // again has new entry timestamps. Resumed, :complete's md5 would pass on
+        // the new bytes and every restore fail the declared sha256 (TD-281).
+        val declared = hashed(pendingAll()).map { if (it.role == "bundle") it.copy(sha256 = "0".repeat(64)) else it }
+        api.onSessionUploads = { uploading(it, declared) }
+
+        assertEquals(ListenableWorker.Result.retry(), run())
+
+        assertEquals(listOf("cs1"), api.deleted)
+        assertTrue(api.completed.isEmpty())
+        assertTrue(api.calls.none { it == "uploadResumable" })
+        assertEquals("", row().cloudSessionId)
+        assertTrue("staging is kept for the recreate", File(staging, "Session.zip").isFile)
+    }
+
+    @Test
     fun `an outage while resuming keeps the half-uploaded session`() {
         seed(cloudSessionId = "cs1")
         api.onSessionUploads = { throw apiError(503, "firestore_unreachable") }

@@ -3,19 +3,41 @@ package com.sempermechanics.semper.ui.viewer
 import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.widget.ImageView
+import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.databinding.DialogCustomScaleBinding
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FieldKind
+import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.BakedHeatmap
+import com.sempermechanics.semper.report.HeatmapRequest
 import com.sempermechanics.semper.report.ReportBuilder
 import com.sempermechanics.semper.report.VisualizationEngine
 import com.sempermechanics.semper.ui.common.SerialJob
 import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
+import com.sempermechanics.semper.ui.viewer.summary.ViewerSummaryController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+/** What [ViewerScaleController] needs from the viewer. */
+internal interface ScaleHost : ViewerViews {
+    /** The field and frame on screen, their fixed scales and cached stats. */
+    val viewModel: ResultViewerViewModel
+    val imageSize: ImageSize
+
+    /** Grid pitch of the frame on screen. */
+    val step: Int
+
+    /** The frame on screen's data; null until one is decoded. */
+    val rawData: FloatArray?
+
+    /** True while the summary animation, not a frame, is on screen. */
+    val isShowingSummary: Boolean
+    val scrubCache: ScrubFrameCache
+}
 
 /**
  * The heatmap over the viewer's image and its colour scale: renders the field
@@ -23,9 +45,19 @@ import kotlinx.coroutines.withContext
  * aligned with the image's zoom, labels the scale's ends, and lets the user fix
  * the scale for a field.
  *
- * Constructed before onCreate; reads [ResultViewerActivity.binding] lazily.
+ * [activity] runs the renders and shows the scale dialog; [images] says
+ * whether the frame is on its own photo (a displaced map), [captions] takes
+ * the field's stats, and [summary] rebuilds its animation for a new fixed scale.
+ *
+ * Constructed before onCreate; reads [ViewerViews.binding] lazily.
  */
-internal class ViewerScaleController(private val host: ResultViewerActivity) {
+internal class ViewerScaleController(
+    private val activity: AppCompatActivity,
+    private val host: ScaleHost,
+    private val images: ViewerImageLoader,
+    private val captions: ViewerCaptions,
+    private val summary: ViewerSummaryController,
+) {
 
     private val binding get() = host.binding
 
@@ -39,6 +71,10 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
     private var isGeneratingHeatmap = false
 
     private val visualizationJob = SerialJob()
+
+    /** The field and the frame on screen, as the ViewModel holds them. */
+    private val field: FieldKind get() = host.viewModel.field
+    private val frameIndex: Int get() = host.viewModel.currentFrameIndex
 
     /** Fixed colour scales per field; in the ViewModel so a rotation keeps them. */
     private val customBoundsMap: MutableMap<Int, ValueRange> get() = host.viewModel.customBounds
@@ -60,19 +96,19 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
     }
 
     fun showCustomScaleDialog() {
-        val currentDataIndex = host.currentDataIndex
-        val dialog = DialogCustomScaleBinding.inflate(host.layoutInflater)
+        val currentDataIndex = field.dataIndex
+        val dialog = DialogCustomScaleBinding.inflate(activity.layoutInflater)
 
         val isStrain = DicResult.isStrainFieldIndex(currentDataIndex)
         val multiplier = DicResult.strainMultiplier(currentDataIndex)
-        val unit = host.getString(if (isStrain) R.string.scale_unit_strain else R.string.scale_unit_px)
+        val unit = activity.getString(if (isStrain) R.string.scale_unit_strain else R.string.scale_unit_px)
 
-        dialog.tilScaleMax.hint = host.getString(R.string.scale_max_value_fmt, unit)
-        dialog.tilScaleMin.hint = host.getString(R.string.scale_min_value_fmt, unit)
+        dialog.tilScaleMax.hint = activity.getString(R.string.scale_max_value_fmt, unit)
+        dialog.tilScaleMin.hint = activity.getString(R.string.scale_min_value_fmt, unit)
 
         val shown = shownRange.takeIf { cachedHeatmap != null && !host.isShowingSummary && !isGeneratingHeatmap }
         CustomScalePrefill.text(
-            custom = host.customBoundsFor(currentDataIndex),
+            custom = host.viewModel.customBounds[currentDataIndex],
             shown = shown,
             multiplier = multiplier,
         )?.let { (min, max) ->
@@ -80,29 +116,29 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
             dialog.etScaleMax.setText(max)
         }
 
-        MaterialAlertDialogBuilder(host)
-            .setTitle(host.getString(R.string.scale_dialog_title_fmt, host.currentTypeString))
+        MaterialAlertDialogBuilder(activity)
+            .setTitle(activity.getString(R.string.scale_dialog_title_fmt, field.label))
             .setView(dialog.root)
             .setPositiveButton(R.string.apply) { _, _ ->
                 val maxVal = dialog.etScaleMax.text?.toString()?.toFloatOrNull()
                 val minVal = dialog.etScaleMin.text?.toString()?.toFloatOrNull()
 
                 if (maxVal != null && minVal != null && maxVal > minVal) {
-                    customBoundsMap[host.currentDataIndex] = ValueRange(minVal / multiplier, maxVal / multiplier)
-                    updateVisualization(host.currentDataIndex)
-                    host.summary.onScaleChanged(host.currentDataIndex)
+                    customBoundsMap[field.dataIndex] = ValueRange(minVal / multiplier, maxVal / multiplier)
+                    updateVisualization(field.dataIndex)
+                    summary.onScaleChanged(field.dataIndex)
                 } else {
                     FaqRedirect.snackbar(
-                        host,
+                        activity,
                         R.string.invalid_scale_inputs,
                         R.string.url_faq_custom_scale,
                     )
                 }
             }
             .setNeutralButton(R.string.auto_scale) { _, _ ->
-                customBoundsMap.remove(host.currentDataIndex)
-                updateVisualization(host.currentDataIndex)
-                host.summary.onScaleChanged(host.currentDataIndex)
+                customBoundsMap.remove(field.dataIndex)
+                updateVisualization(field.dataIndex)
+                summary.onScaleChanged(field.dataIndex)
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
@@ -112,24 +148,24 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
         val data = host.rawData ?: return
         isGeneratingHeatmap = true
 
-        val custom = host.customBoundsFor(index)
-        val displaced = host.onFramePhoto
+        val custom = host.viewModel.customBounds[index]
+        val displaced = images.onFramePhoto
         val heatKey = ScrubFrameCache.HeatKey(
-            frame = host.currentFrameIndex,
+            frame = frameIndex,
             field = index,
             step = host.step,
             custom = custom,
             displaced = displaced,
         )
 
-        val frameAtStart = host.currentFrameIndex
+        val frameAtStart = frameIndex
 
         host.scrubCache.getHeat(heatKey)?.let { hit ->
             visualizationJob.cancel()
             showHeatmap(hit, index)
             // A heatmap hit means this (frame,field) was visited before, so its
             // metrics are already cached — this read is O(1) on the main thread.
-            host.captions.applyFieldMetrics(host.viewModel.fieldMetricsFor(frameAtStart, index, data), index)
+            captions.applyFieldMetrics(host.viewModel.fieldMetricsFor(frameAtStart, index, data), index)
             return
         }
 
@@ -137,27 +173,27 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
         val frameStep = host.step
         // Read on Main: viewModels() is a main-thread lazy.
         val viewModel = host.viewModel
-        visualizationJob.launch(host.lifecycleScope, Dispatchers.Default) {
+        visualizationJob.launch(activity.lifecycleScope, Dispatchers.Default) {
             // Warm the stats/extrema off the main thread, next to the heatmap render,
             // so the scrub settle never pays the O(n)+sort on the UI thread.
             val metrics = viewModel.fieldMetricsFor(frameAtStart, index, data)
-            val heatmap = VisualizationEngine.generateFrameHeatmap(
-                displaced,
-                data,
-                size.width,
-                size.height,
-                index,
-                frameStep,
-                custom?.min,
-                custom?.max,
-                maxLongEdge = VisualizationEngine.DISPLAY_MAX_EDGE,
+            val heatmap = VisualizationEngine.render(
+                HeatmapRequest(
+                    data = data,
+                    size = size,
+                    valIndex = index,
+                    step = frameStep,
+                    bounds = custom,
+                    maxLongEdge = VisualizationEngine.DISPLAY_MAX_EDGE,
+                    displaced = displaced,
+                ),
             )
             host.scrubCache.putHeat(heatKey, heatmap)
 
             withContext(Dispatchers.Main) {
-                if (host.currentDataIndex != index || host.currentFrameIndex != frameAtStart) return@withContext
+                if (field.dataIndex != index || frameIndex != frameAtStart) return@withContext
                 showHeatmap(heatmap, index)
-                host.captions.applyFieldMetrics(metrics, index)
+                captions.applyFieldMetrics(metrics, index)
             }
         }
     }
@@ -167,7 +203,7 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
         binding.imgHeatmapOverlay.scaleType = ImageView.ScaleType.MATRIX
         binding.imgHeatmapOverlay.setImageBitmap(heatmap.bitmap)
         applyHeatmapMatrix()
-        host.captions.openingDone()
+        captions.openingDone()
 
         shownRange = heatmap.range
 
@@ -176,7 +212,7 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
         if (!host.isShowingSummary) {
             val isStrain = DicResult.isStrainFieldIndex(index)
             val multiplier = DicResult.strainMultiplier(index)
-            val unit = host.getString(if (isStrain) R.string.scale_unit_strain else R.string.scale_unit_px)
+            val unit = activity.getString(if (isStrain) R.string.scale_unit_strain else R.string.scale_unit_px)
             // ≤/≥, not "Min:"/"Max:": these are the 2nd/98th-percentile clamp the
             // colour ramp is built on (VisualizationEngine.computeSigmaClampedRange),
             // not the field's true extrema -- the ⓘ details sheet shows those,
@@ -184,8 +220,8 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
             // (ViewerSummaryController) so the two paths agree.
             val minText = ReportBuilder.formatMetric(heatmap.min * multiplier)
             val maxText = ReportBuilder.formatMetric(heatmap.max * multiplier)
-            binding.tvScaleMin.text = host.getString(R.string.scale_min_fmt, minText, unit)
-            binding.tvScaleMax.text = host.getString(R.string.scale_max_fmt, maxText, unit)
+            binding.tvScaleMin.text = activity.getString(R.string.scale_min_fmt, minText, unit)
+            binding.tvScaleMax.text = activity.getString(R.string.scale_max_fmt, maxText, unit)
         }
         isGeneratingHeatmap = false
     }

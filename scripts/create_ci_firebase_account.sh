@@ -10,11 +10,38 @@
 # Needs: gcloud signed in as an owner of the auth project, gh with admin on the
 # repo, python. Usage:
 #   bash scripts/create_ci_firebase_account.sh [--rotate] [email]
+#
+# The account this makes is a Firebase sign-in only: it has no users doc and
+# no licence, so it cannot call the backend. The CI account that can is a
+# staff test account (ADR-027), made in the operator console (or
+# POST /v1/admin/test-accounts) with purpose "ci", on an address in
+# TEST_ACCOUNT_DOMAINS; the console shows its password once. Store that pair
+# as the same two secrets with:
+#   bash scripts/create_ci_firebase_account.sh --store <email>
+# which reads the password from the terminal (not echoed) or stdin and sends
+# it to gh on stdin, so it never reaches a command line or shell history. A new
+# password is the console's "New password", then --store again. The runbook is
+# docs/ops/OPERATING_MANUAL.md, "Test accounts (QC and CI)". An address that
+# already has a Firebase user (one this script made) is refused there with
+# email_in_use: delete that user in the Firebase console first.
 set -euo pipefail
 
 PROJECT=indicvision-dic-app-auth
 REPO=sempermechanics/semperdic-app
 ROTATE=false
+if [ "${1:-}" = "--store" ]; then
+  EMAIL=${2:?usage: --store <email>}
+  if [ -t 0 ]; then
+    read -r -s -p "Password for $EMAIL (from the console): " PASSWORD; echo
+  else
+    read -r PASSWORD
+  fi
+  [ -n "$PASSWORD" ] || { echo "no password given" >&2; exit 1; }
+  printf '%s' "$EMAIL" | gh secret set FIREBASE_TEST_EMAIL -R "$REPO"
+  printf '%s' "$PASSWORD" | gh secret set FIREBASE_TEST_PASSWORD -R "$REPO"
+  echo "Secrets FIREBASE_TEST_EMAIL and FIREBASE_TEST_PASSWORD set on $REPO."
+  exit 0
+fi
 if [ "${1:-}" = "--rotate" ]; then ROTATE=true; shift; fi
 EMAIL=${1:-ci-firebase-test@sempermechanics.com}
 API=https://identitytoolkit.googleapis.com/v1/projects/$PROJECT

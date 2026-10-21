@@ -10,6 +10,7 @@ import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.ui.analysis.frames.FrameOrderDirection
 import com.sempermechanics.semper.ui.analysis.frames.FrameOrderMode
 import com.sempermechanics.semper.ui.analysis.run.RunChrome
+import com.sempermechanics.semper.ui.analysis.sweep.SweepFrame
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.WizardStep
 import com.sempermechanics.semper.ui.common.dialog.Dialogs
@@ -110,28 +111,30 @@ internal class RerunImportController(
  */
 @MainThread
 internal fun AnalysisViewModel.applyRerun(loaded: LoadedRerun) {
-    val inputs = loaded.inputs
-    val size = ImageSize(inputs.reference.width, inputs.reference.height)
-    applyNewReference(loaded.reference, inputs.reference.name, size)
-    hasCustomRoi = inputs.hasCustomRoi
-    roi = if (inputs.hasCustomRoi) inputs.drawnRoi() else Roi.full(size)
-    roiMaskBytes = loaded.mask
-    deformedFrames = loaded.frames
-    frameSizeError = null
-    defFromVideo = inputs.fromVideo
-    defVideoName = inputs.videoName
-    defOrderMode = FrameOrderMode.entries.find { it.name == inputs.orderMode } ?: FrameOrderMode.NAME
-    defOrderDirection = FrameOrderDirection.entries.find { it.name == inputs.orderDirection }
-        ?: FrameOrderDirection.ASCENDING
-    // The saved run's subset stands: the recommendation must not move it.
-    subsetUserModified = true
-    val sweep = inputs.sweep
-    sweepMode = sweep != null
-    if (sweep != null) {
-        inputs.sweepRanges()?.let { sweepRanges = it }
-        subsetOverlap = sweep.overlap
-        lineCutHorizontal = sweep.lineCutHorizontal
-        sweepFrameIndex = sweep.frameIndex
+    val saved = loaded.inputs
+    val size = ImageSize(saved.reference.width, saved.reference.height)
+    applyNewReference(loaded.reference, saved.reference.name, size)
+    val sweep = saved.sweep
+    edit { current ->
+        current.copy(
+            hasCustomRoi = saved.hasCustomRoi,
+            roi = if (saved.hasCustomRoi) saved.drawnRoi() else Roi.full(size),
+            roiMaskBytes = loaded.mask,
+            deformedFrames = loaded.frames,
+            frameSizeError = null,
+            defFromVideo = saved.fromVideo,
+            defVideoName = saved.videoName,
+            defOrderMode = FrameOrderMode.entries.find { it.name == saved.orderMode } ?: FrameOrderMode.NAME,
+            defOrderDirection = FrameOrderDirection.entries.find { it.name == saved.orderDirection }
+                ?: FrameOrderDirection.ASCENDING,
+            // The saved run's subset stands: the recommendation must not move it.
+            subsetUserModified = true,
+            sweepMode = sweep != null,
+            sweepRanges = sweep?.let { saved.sweepRanges() } ?: current.sweepRanges,
+            subsetOverlap = sweep?.overlap ?: current.subsetOverlap,
+            lineCutHorizontal = sweep?.lineCutHorizontal ?: current.lineCutHorizontal,
+            sweepFrame = sweep?.let { SweepFrame.At(it.frameIndex) } ?: current.sweepFrame,
+            step = if (sweep != null) WizardStep.SWEEP else WizardStep.SETTINGS,
+        )
     }
-    step = if (sweep != null) WizardStep.SWEEP else WizardStep.SETTINGS
 }

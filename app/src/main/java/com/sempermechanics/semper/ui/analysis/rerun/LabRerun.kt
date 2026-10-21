@@ -8,9 +8,10 @@ import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.WizardStep
+import com.sempermechanics.semper.ui.analysis.wizard.editLab
 import com.sempermechanics.semper.ui.analysis.wizard.mechanicalInputsReady
-import com.sempermechanics.semper.ui.analysis.wizard.refreshMachineLoads
-import com.sempermechanics.semper.ui.analysis.wizard.typedLoadsKg
+import com.sempermechanics.semper.ui.analysis.wizard.withMachineLoadsMatched
+import com.sempermechanics.semper.ui.analysis.wizard.withTypedLoadsKg
 import java.math.BigDecimal
 import java.math.MathContext
 
@@ -45,10 +46,9 @@ internal data class LabRerun(
 
     /** The test and its dimensions into [viewModel], before the load card reads them. */
     fun applyTo(viewModel: AnalysisViewModel) {
-        viewModel.testType = testType
-        viewModel.crossSectionMm2 = crossSectionMm2
-        viewModel.loadAxisX = loadAxisX
-        viewModel.geometry = geometry
+        viewModel.editLab {
+            it.copy(testType = testType, crossSectionMm2 = crossSectionMm2, loadAxisX = loadAxisX, geometry = geometry)
+        }
     }
 
     /**
@@ -57,12 +57,14 @@ internal data class LabRerun(
      * needs anything there (a load log to import), else the page the Re-run
      * chose.
      */
-    fun applyLoadsTo(viewModel: AnalysisViewModel) {
-        if (typedLoadsN.isNotEmpty() && typedLoadsN.size == viewModel.deformedFrames.size) {
-            viewModel.typedLoadsKg = typedLoadsN.map(::typedKg)
+    fun applyLoadsTo(viewModel: AnalysisViewModel) = viewModel.edit { inputs ->
+        val typed = if (typedLoadsN.isNotEmpty() && typedLoadsN.size == inputs.deformedFrames.size) {
+            inputs.withTypedLoadsKg(typedLoadsN.map(::typedKg))
+        } else {
+            inputs
         }
-        viewModel.refreshMachineLoads()
-        if (!viewModel.mechanicalInputsReady()) viewModel.step = WizardStep.IMAGES
+        val matched = typed.withMachineLoadsMatched()
+        if (matched.mechanicalInputsReady()) matched else matched.copy(step = WizardStep.IMAGES)
     }
 
     companion object {

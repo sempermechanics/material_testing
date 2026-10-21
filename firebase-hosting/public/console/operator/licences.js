@@ -2,9 +2,10 @@
  * when one licence changes. What each row's buttons do lives with the card
  * or dialog the button opens; the entry module routes the clicks.
  */
-import { api, setStatus, esc, markFirstData, whileWaiting } from "../auth.js";
+import { api } from "../api.js";
+import { setStatus, markFirstData, whileWaiting } from "../status.js";
 import {
-  day, licenceStatePill, licenceListPath, licenceSearchBody, searchableLicenceText, upsertLicence,
+  esc, day, licenceStatePill, licenceListPath, licenceSearchBody, searchableLicenceText, upsertLicence,
   placeholderRows, retryRow,
 } from "../util.js";
 import { $, desk, demoCapNote } from "./state.js";

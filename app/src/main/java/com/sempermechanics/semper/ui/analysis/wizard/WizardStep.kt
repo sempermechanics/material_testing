@@ -9,12 +9,15 @@ enum class WizardStep {
 
     /**
      * The page's 1-based number: what the saved state holds
-     * ([AnalysisViewModel.wizardStep]) and what the toolbar shows.
+     * (of [WizardInputs.step]) and what the toolbar shows.
      */
     val number: Int get() = ordinal + 1
 
     /** The page before this one; null on the first. */
     val previous: WizardStep? get() = entries.getOrNull(ordinal - 1)
+
+    /** The page Next goes to from this one: the sweep page only in [sweepMode]; null from the last. */
+    fun next(sweepMode: Boolean): WizardStep? = entries.getOrNull(ordinal + 1)?.takeIf { shown(it, sweepMode) == it }
 
     companion object {
         /** The page numbered [number]: below the first is the first, past the last the last. */

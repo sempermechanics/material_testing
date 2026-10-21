@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.res.Resources
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.session.CacheJanitor
-import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.util.Mime
 import com.sempermechanics.semper.util.Zips
 import java.io.File
@@ -93,14 +92,6 @@ internal class ShareExportBuilder(
 
     internal companion object {
         const val HEATMAP_ALPHA = 180
-
-        val FIELDS = listOf(
-            "U" to DicResult.IDX_U,
-            "V" to DicResult.IDX_V,
-            "Exx" to DicResult.IDX_EXX,
-            "Eyy" to DicResult.IDX_EYY,
-            "Exy" to DicResult.IDX_EXY,
-        )
 
         /**
          * A fresh directory for one job's files under the share dir. The FileProvider

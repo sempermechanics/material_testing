@@ -28,18 +28,21 @@ class WizardRunLauncher(
     private val sweep: SweepSetupController,
     private val checkReady: () -> Unit,
 ) {
-    /** One solve per deformed frame with [params]; [use6x6] picks the Keys interpolator. */
-    fun startBatch(params: DicParams, use6x6: Boolean) {
+    /**
+     * One solve per deformed frame with [params]; [use6x6] picks the Keys
+     * interpolator, [refUpdateInterval] the reference ([RunSpec.refUpdateInterval]).
+     */
+    fun startBatch(params: DicParams, use6x6: Boolean, refUpdateInterval: Int = 0) {
         if (!viewModel.isReadyToCompute()) return
         val roi = resolveRoi(params.subset) ?: return
         // Frozen here: everything after Compute reads the run's spec, not the sliders.
         val spec = RunSpec.of(
             params = params,
             roi = roi,
-            mask = viewModel.roiMaskBytes,
+            mask = viewModel.inputs.value.roiMaskBytes,
             use6x6 = use6x6,
             debugDir = EngineDebug.dirFor(activity.cacheDir),
-        ).copy(mechanical = viewModel.mechanicalInputs(forSweep = false))
+        ).copy(refUpdateInterval = refUpdateInterval, mechanical = viewModel.mechanicalInputs(forSweep = false))
 
         // Hard stop: do not start a new analysis when the session quota is full.
         // Every run is a new analysis; a saved one is never written over.
@@ -74,11 +77,11 @@ class WizardRunLauncher(
             RunSpec.Sweep(
                 plan = plan,
                 labels = plan.map { sweep.combinationLabel(it) },
-                lineCutHorizontal = viewModel.lineCutHorizontal,
+                lineCutHorizontal = viewModel.inputs.value.lineCutHorizontal,
                 frameIndex = sweep.resolvedSweepFrame(),
             ),
             roi = roi,
-            mask = viewModel.roiMaskBytes,
+            mask = viewModel.inputs.value.roiMaskBytes,
             use6x6 = use6x6,
             debugDir = EngineDebug.dirFor(activity.cacheDir),
         ).copy(mechanical = viewModel.mechanicalInputs(forSweep = true))
@@ -110,7 +113,7 @@ class WizardRunLauncher(
      * subset.
      */
     private fun resolveRoi(subset: Int): Roi? {
-        val roi = Roi.forSolve(subset, viewModel.hasCustomRoi, viewModel.roi, viewModel.refSize)
+        val roi = viewModel.inputs.value.let { Roi.forSolve(subset, it.hasCustomRoi, it.roi, it.refSize) }
         if (roi == null) {
             FaqRedirect.snackbar(activity, R.string.roi_too_small, R.string.url_faq_roi_too_small)
         }

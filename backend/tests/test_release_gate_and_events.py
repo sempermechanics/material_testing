@@ -140,7 +140,7 @@ def test_events_outside_a_request_carry_no_client_fields():
 # ---------------- licence events ----------------
 @pytest.fixture
 def licensing(store, audited, monkeypatch):
-    store._data["users"] = {"dev-user": {"email": "dev@local", "access_status": "APPROVED"}}
+    store._data["users"] = {"dev-user": {"email": "dev@local", "access_status": "APPROVED", "emailVerified": True}}
     monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, "mode": "demo", "plan": "demo"})
     return store
 
@@ -201,7 +201,7 @@ async def test_a_checkout_logs_the_licence_it_leased(client, monkeypatch, caplog
     store = fake_firestore.install(monkeypatch)
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     store._data["users"] = {
-        "dev-user": {"email": "dev@university.edu", "access_status": "APPROVED", "mode": "demo"},
+        "dev-user": {"email": "dev@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"},
     }
     minted = repo.create_institution_license(
         domain_lock="university.edu", admin_emails=["it@university.edu"],

@@ -1,6 +1,5 @@
 package com.sempermechanics.semper.data
 
-import android.app.ActivityManager
 import android.content.Context
 import androidx.annotation.VisibleForTesting
 import androidx.work.CoroutineWorker
@@ -25,6 +24,7 @@ import com.sempermechanics.semper.data.net.TokenSource
 import com.sempermechanics.semper.data.net.UploadLinkExpiredException
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.SessionZip
+import com.sempermechanics.semper.data.session.StagingLayout
 import com.sempermechanics.semper.data.session.StorageBudget
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
 import com.sempermechanics.semper.navigation.IntentKeys
@@ -40,19 +40,9 @@ import timber.log.Timber
 import java.io.File
 
 /**
- * Whether one of this app's activities is on screen. Only then may a worker
- * start an activity: Android 10+ blocks background activity starts. Read from
- * the process's own importance — `lifecycle-process` is not on the compile
- * classpath. A foreground service alone (this worker) ranks below FOREGROUND.
- */
-private fun isAppInForeground(): Boolean {
-    val info = ActivityManager.RunningAppProcessInfo()
-    ActivityManager.getMyMemoryState(info)
-    return info.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
-}
-
-/**
- * How [DicUploadWorker] reaches the backend and a token. WorkManager builds the
+ * How [DicUploadWorker] reaches the backend and a token, and whether a screen
+ * of the app is up ([AppForeground]: only then may a worker start an activity,
+ * as Android 10+ blocks background activity starts). WorkManager builds the
  * worker, so these cannot be constructor parameters (ADR-002); tests swap them
  * for `FakeCloudApi` / `FakeTokens` and put them back.
  */
@@ -60,7 +50,7 @@ private fun isAppInForeground(): Boolean {
 internal object DicUploadSeams {
     var api: (Context) -> CloudApi = { SemperApi.get(it) }
     var tokens: TokenSource = TokenProvider
-    var inForeground: () -> Boolean = ::isAppInForeground
+    var inForeground: () -> Boolean = { AppForeground.isForeground }
 }
 
 /**
@@ -162,7 +152,8 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
     /**
      * [backUp]'s steps, every failure mapped by [UploadFailures]. A staging
      * that is not the one [started]'s cloud session declared ([UploadStaging.reuse]
-     * false) is built again only once that session is out of the way
+     * false: unfinished, or its [StagingBinding] names another session or other
+     * bytes) is built again only once that session is out of the way
      * ([UploadSessionPlanner.releaseForRestage]); the run then goes on with no
      * session, so the files are declared afresh.
      */
@@ -222,7 +213,8 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         progress.begin(TransferPhase.UPLOAD, 1)
         Timber.i("Uploading %s: %d files (%s)", run.localId, files.size, files.groupingBy { it.role }.eachCount())
         UploadLog.phase("start", count = files.size, stage = "upload")
-        return finish(run, run.planner().ensureSession(run.record, files), progress, stagingDir)
+        val step = run.planner().ensureSession(run.record, files, StagingLayout(stagingDir))
+        return finish(run, step, progress, stagingDir)
     }
 
     /** Do what the cloud session [step] says: upload into it and complete, record the sync, or end the run. */

@@ -1,33 +1,94 @@
 package com.sempermechanics.semper.ui.viewer
 
 import android.app.Application
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
+import com.sempermechanics.semper.data.cloud.SessionMetadataSync
 import com.sempermechanics.semper.data.mechanical.CurveCorrection
+import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.field.FieldStats
 import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.BeamDeflection
 import com.sempermechanics.semper.report.StressStrain
 import com.sempermechanics.semper.ui.viewer.share.ShareExportJobs
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Survives configuration changes for the results browser: frame scrubber index,
- * active field type, the user's fixed colour scales, running exports and each
+ * the field on screen (also across process death), the user's fixed colour scales, running exports and each
  * visited field's stats. Heavy bitmaps stay in the Activity (they are bound to
  * view lifetime).
  */
 class ResultViewerViewModel(
     app: Application,
-    private val state: SavedStateHandle,
+    private val savedState: SavedStateHandle,
 ) : AndroidViewModel(app) {
-    var currentFrameIndex: Int = 0
-    var currentDataIndex: Int = 2
-    var currentTypeString: String = "U"
+
+    private val mutableState = MutableStateFlow(ViewerState(field = savedField()))
+
+    /**
+     * What the viewer shows, as one value: the frame set once listed, the
+     * frame on screen and the field. A rebuilt viewer (a rotation) reads it
+     * back rather than listing the batch again.
+     */
+    internal val state: StateFlow<ViewerState> = mutableState.asStateFlow()
+
+    /** The frame on screen, by position in the listed batch. */
+    var currentFrameIndex: Int
+        get() = mutableState.value.frameIndex
+        set(value) {
+            mutableState.update { it.copy(frameIndex = value) }
+        }
+
+    /**
+     * The field on screen. One value (it was a data index and a label, set
+     * one after the other), kept in the saved state too so a restored viewer
+     * opens on it.
+     */
+    var field: FieldKind
+        get() = mutableState.value.field
+        set(value) {
+            savedState[KEY_FIELD] = value.name
+            mutableState.update { it.copy(field = value) }
+        }
+
+    /** The listing in flight; see [listFrames]. */
+    private var listing: Job? = null
+
+    /**
+     * Lists the batch with [read] on [dispatcher], once per view model: a
+     * viewer rebuilt by a rotation finds [ViewerState.frameSet] already there
+     * (or the listing still running) and starts none of its own. [read] must
+     * hold plain data only, never the viewer that asked.
+     */
+    internal fun listFrames(dispatcher: CoroutineDispatcher, read: () -> ViewerFrameLoader.FrameSet) {
+        if (mutableState.value.frameSet != null || listing?.isActive == true) return
+        listing = viewModelScope.launch {
+            val set = withContext(dispatcher) { read() }
+            useFrameListing(set.batchFiles)
+            mutableState.update { it.copy(frameSet = set) }
+        }
+    }
+
+    private fun savedField(): FieldKind =
+        savedState.get<String>(KEY_FIELD)?.let { name -> FieldKind.entries.firstOrNull { it.name == name } }
+            ?: FieldKind.U
 
     /** Built on first Results open when the session has loads; a full batch decode, so kept. */
     var stressStrain: StressStrain.Curve? = null
@@ -40,6 +101,24 @@ class ResultViewerViewModel(
 
     /** Bending's deflection correction set in Results; null keeps the one the viewer opened with. */
     var deflectionCorrection: BeamDeflection.Correction? = null
+
+    /**
+     * Runs [write] on session [id] off the main thread, then queues the new
+     * metadata for a backed-up session's cloud copy (ADR-013, TD-152). Results'
+     * Adjust curve and Adjust deflection save through here: on this scope a
+     * rotation does not drop the write (ADR-016), and the write and its queue
+     * are one short step that finishes even if the screen closes meanwhile.
+     */
+    fun saveOnSession(id: String?, write: (Context, String) -> Unit) {
+        id ?: return
+        val appContext: Context = getApplication()
+        viewModelScope.launch(Dispatchers.IO) {
+            withContext(NonCancellable) {
+                write(appContext, id)
+                if (SessionStore.get(appContext, id)?.metadataStale == true) SessionMetadataSync.enqueue(appContext, id)
+            }
+        }
+    }
 
     /**
      * Fixed colour-scale bounds per field, set in the custom-scale dialog.
@@ -57,17 +136,17 @@ class ResultViewerViewModel(
      * not listed yet. Held here, and in the saved state for process death, so
      * whichever viewer is current when the frames are known starts it — once.
      */
-    val hasPendingSave: Boolean get() = state.contains(KEY_SAVE_KIND)
+    val hasPendingSave: Boolean get() = savedState.contains(KEY_SAVE_KIND)
 
     fun setPendingSave(kind: String, uri: Uri) {
-        state[KEY_SAVE_URI] = uri
-        state[KEY_SAVE_KIND] = kind
+        savedState[KEY_SAVE_URI] = uri
+        savedState[KEY_SAVE_KIND] = kind
     }
 
     /** The pending save-as, cleared as it is handed out so its export starts once. */
     fun takePendingSave(): Pair<String, Uri>? {
-        val kind = state.remove<String>(KEY_SAVE_KIND)
-        val uri = state.remove<Uri>(KEY_SAVE_URI)
+        val kind = savedState.remove<String>(KEY_SAVE_KIND)
+        val uri = savedState.remove<Uri>(KEY_SAVE_URI)
         return if (kind != null && uri != null) kind to uri else null
     }
 
@@ -151,6 +230,7 @@ class ResultViewerViewModel(
     private companion object {
         const val KEY_SAVE_KIND = "pending_save_kind"
         const val KEY_SAVE_URI = "pending_save_uri"
+        const val KEY_FIELD = "field"
 
         /** Field metrics are tiny (5 floats + 2 ints); keep plenty across frames/fields. */
         const val FIELD_METRICS_CACHE_MAX = 64
@@ -159,3 +239,13 @@ class ResultViewerViewModel(
         const val LOW_32_BITS = 0xFFFF_FFFFL
     }
 }
+
+/**
+ * The result viewer's state, one value ([ResultViewerViewModel.state]):
+ * [frameSet] is null until the batch is listed.
+ */
+internal data class ViewerState(
+    val frameSet: ViewerFrameLoader.FrameSet? = null,
+    val frameIndex: Int = 0,
+    val field: FieldKind = FieldKind.U,
+)

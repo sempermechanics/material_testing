@@ -8,10 +8,12 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
+import com.sempermechanics.semper.data.mechanical.CaptureStamp
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.ui.analysis.load.PhotoCaptureTime
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
-import com.sempermechanics.semper.ui.analysis.wizard.onReferenceReplaced
+import com.sempermechanics.semper.ui.analysis.wizard.editLab
+import com.sempermechanics.semper.ui.analysis.wizard.withoutBeamTaps
 import com.sempermechanics.semper.ui.common.SerialJob
 import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
 import com.sempermechanics.semper.ui.common.media.displayNameOf
@@ -20,6 +22,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.io.IOException
 
 /**
  * Loads a picked reference image into the view model, decoding it on [io]:
@@ -49,11 +52,7 @@ class ReferenceImportController(
                 val isRaw = isRawName(name)
                 val loaded = if (busy != null) busy.decoding(isRaw) { read(uri, isRaw, busy) } else read(uri, isRaw)
                 // A second open: RAW decodes to RGBA, which keeps no EXIF.
-                val captured = withContext(io) {
-                    runCatching {
-                        activity.contentResolver.openInputStream(uri)?.use { PhotoCaptureTime.read(it) }
-                    }.getOrNull()
-                }
+                val captured = withContext(io) { captureTimeOf(uri) }
                 if (loaded == null) {
                     FaqRedirect.snackbar(
                         activity,
@@ -65,9 +64,7 @@ class ReferenceImportController(
                 viewModel.applyNewReference(loaded.bytes, name, loaded.size)
                 // The capture time a timed load log is matched from; the beam's
                 // taps were on the old reference.
-                viewModel.refCapture = captured
-                viewModel.refVideoTimeMs = null
-                viewModel.onReferenceReplaced()
+                viewModel.editLab { it.copy(refCapture = captured, refVideoTimeMs = null).withoutBeamTaps() }
                 onLoaded(loaded.preview)
             } catch (e: CancellationException) {
                 // A newer pick, or the screen closing: nothing failed.
@@ -77,6 +74,18 @@ class ReferenceImportController(
                 FaqRedirect.snackbar(activity, R.string.failed_load_reference, R.string.url_faq_import_reference)
             }
         }
+    }
+
+    /** The reference's EXIF capture time, or null when it has none or the document cannot be opened again. */
+    @WorkerThread
+    private fun captureTimeOf(uri: Uri): CaptureStamp? = try {
+        activity.contentResolver.openInputStream(uri)?.use { PhotoCaptureTime.read(it) }
+    } catch (e: IOException) {
+        Timber.w(e, "Reference capture time unreadable")
+        null
+    } catch (e: SecurityException) {
+        Timber.w(e, "Reference capture time unreadable")
+        null
     }
 
     /** Stops the pick still loading, if any: a video's first frame is about to become the reference. */

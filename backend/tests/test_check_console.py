@@ -338,3 +338,38 @@ def test_inline_script_on_a_legal_page_fails(checker, tree):
 def test_an_inline_handler_on_a_legal_page_fails(checker, tree):
     _edit(tree / "firebase-hosting/public/terms/index.html", "<p>", '<p onclick="go()">')
     _one_failure(checker, tree, "terms", "inline script, handler or javascript: URL")
+
+
+# ---------------- 12: the SDK is pinned in script-src ----------------
+_SDK = "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js"
+
+
+def _with_sdk(tree: Path, script_src: str) -> None:
+    """The shared module imports the Firebase SDK from gstatic (preloaded on
+    every page, as check 9 asks), and both console CSPs carry `script_src`."""
+    _edit(_console(tree, "shared.js"), "export const $",
+          f'import {{ initializeApp }} from "{_SDK}";\nexport const app = initializeApp;\nexport const $')
+    for sub in _CONSOLE_DIRS:
+        _edit(_console(tree, sub, "index.html"), "</head>",
+              f'  <link rel="modulepreload" href="{_SDK}" />\n</head>')
+    path = tree / "firebase-hosting/firebase.json"
+    _write(path, path.read_bytes().decode("utf-8").replace(
+        "script-src 'self';", f"script-src {script_src};"))
+
+
+def test_a_pinned_sdk_path_passes(checker, tree):
+    _with_sdk(tree, "'self' https://www.gstatic.com/firebasejs/12.4.0/")
+    assert checker.run(str(tree)) == []
+
+
+def test_the_whole_gstatic_host_in_script_src_fails(checker, tree):
+    _with_sdk(tree, "'self' https://www.gstatic.com")
+    found = checker.run(str(tree))
+    assert len(found) == 2 and all("whole www.gstatic.com host" in f for f in found), found
+
+
+def test_a_pin_to_another_sdk_version_fails(checker, tree):
+    _with_sdk(tree, "'self' https://www.gstatic.com/firebasejs/12.3.0/")
+    found = checker.run(str(tree))
+    assert any("12.4.0" in f and "not allowed" in f for f in found), found
+    assert any("12.3.0" in f and "no console module imports" in f for f in found), found

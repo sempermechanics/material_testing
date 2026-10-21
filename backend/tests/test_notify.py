@@ -131,3 +131,56 @@ def test_retries_on_transient_status(configured, monkeypatch):
     notify.access_request("uid-4", "retry@example.com", None, None)
     notify.flush_for_tests()
     assert attempts["n"] == 3
+
+
+# ---------------- a new device on the account (TD-295) ----------------
+@pytest.fixture
+def security_mail(configured, monkeypatch):
+    monkeypatch.setattr(settings, "NOTIFY_SECURITY_FROM", "Semper security <security@sempermechanics.com>")
+
+
+def test_a_new_device_mails_its_holder(security_mail, sent, caplog):
+    caplog.set_level("DEBUG")
+    notify.device_registered("uid-1", "holder@uni.edu", "phone-1", "semper", model="Pixel 8")
+    notify.flush_for_tests()
+
+    assert len(sent) == 1
+    _, kwargs = sent[0]
+    payload = kwargs["json"]
+    assert payload["to"] == ["holder@uni.edu"]
+    assert payload["from"] == "Semper security <security@sempermechanics.com>"
+    assert "Pixel 8" in payload["text"] and "Semper" in payload["subject"]
+    assert kwargs["headers"]["Idempotency-Key"] == "device-registered:uid-1:phone-1"
+    # TD-242: no address in the logs.
+    assert "holder@uni.edu" not in caplog.text
+
+
+def test_the_same_device_mails_once_and_another_device_again(security_mail, sent):
+    notify.device_registered("uid-1", "holder@uni.edu", "phone-1", "semper")
+    notify.device_registered("uid-1", "holder@uni.edu", "phone-1", "semper")
+    notify.flush_for_tests()
+    notify.device_registered("uid-1", "holder@uni.edu", "phone-2", "materialtesting")
+    notify.flush_for_tests()
+
+    assert [kw["headers"]["Idempotency-Key"] for _, kw in sent] == [
+        "device-registered:uid-1:phone-1", "device-registered:uid-1:phone-2"]
+    assert "Material Testing" in sent[1][1]["json"]["subject"]
+
+
+def test_the_device_mail_has_its_own_dedup_from_the_access_request(security_mail, sent):
+    notify.access_request("uid-1", "holder@uni.edu", None, None)
+    notify.device_registered("uid-1", "holder@uni.edu", "phone-1", "semper")
+    notify.flush_for_tests()
+
+    assert sorted(kw["headers"]["Idempotency-Key"] for _, kw in sent) == [
+        "access-request:uid-1", "device-registered:uid-1:phone-1"]
+
+
+def test_no_device_mail_without_its_sender_or_an_address(configured, sent, monkeypatch):
+    monkeypatch.setattr(settings, "NOTIFY_SECURITY_FROM", "")
+    notify.device_registered("uid-1", "holder@uni.edu", "phone-1", "semper")
+    monkeypatch.setattr(settings, "NOTIFY_SECURITY_FROM", "security@sempermechanics.com")
+    notify.device_registered("uid-1", "", "phone-1", "semper")
+    notify.flush_for_tests()
+
+    assert sent == []

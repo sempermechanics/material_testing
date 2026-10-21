@@ -59,4 +59,5 @@ internal fun engineOf(record: SessionRecord): Engine = Engine(
     } else {
         null
     },
+    refUpdateInterval = record.refUpdateInterval.takeIf { it > 0 },
 )

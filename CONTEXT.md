@@ -46,8 +46,8 @@ Engine pipeline (`engine/docs/ARCHITECTURE.md`): anchor-lattice seeds (phase cor
 ## Layout
 
 ```
-app/          Android UI (Kotlin). Gradle builds ../engine/CMakeLists.txt;
-              app/src/main/cpp/ holds only a redirect CMakeLists.txt
+app/          Android UI (Kotlin). Gradle builds ../engine/CMakeLists.txt
+              (app/build.gradle.kts externalNativeBuild); no app/src/main/cpp/
 engine/       Pinned submodule: sempermechanics/semper-dic-engine (solver, tests,
               docs, and the JNI adapter in engine/adapters/android/)
 backend/      FastAPI on Cloud Run — routers in backend/app/routers/, Firestore
@@ -130,30 +130,28 @@ no thresholds ([TESTING.md](docs/app/TESTING.md)); the phone-run gates (`benchma
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-19)
+## Current state (2026-10-21)
 
 - **Semper's UI plus two test choices ([ADR-022](docs/adr/ADR-022-semper-ui-plus-lab-tests.md)).**
   **Which test?** offers 2D DIC (Semper's analysis: no load card, no test type recorded),
   Tensile and Bending; a fork change to a shared screen runs only for a lab test.
   semperdic-app proposes making this a product flavour of its repo ([ADR-025](docs/adr/ADR-025-test-type-extension-points.md), mirrored).
 - **Synced with `semperdic-app`** (forked at `bfe00e5`; `git log --merges
-  --grep=semperdic-app`; rules in its `docs/ops/FORK_SYNC.md`). Last: `17d7bc8` by #139
-  (`71649bd6`), 2026-10-19, not deployed: its #454, #436–#447 and **Re-run as a copy**
-  (its [ADR-022](docs/adr/ADR-022-rerun-as-copy.md)), which here copies the lab test too
-  (`LabRerun`, #140). Metadata schema `/7` here (ours past `/3` are not the
-  parent's numbers). Lab inputs ride its seams: `RunSpec.mechanical` (ADR-004),
-  `ViewerArgs` (ADR-003), `WizardDraft` (ADR-005). ADR and TD numbers are shared; the
-  next TD free in both is TD-312.
-- **Open: #140** (`ccr-603fe346-1bw2fa`, the 2026-10-19 review; `main` merged in): load logs
+  --grep=semperdic-app`; rules in its `docs/ops/FORK_SYNC.md`). Last: `14b279d6`, 2026-10-21,
+  on `ccr-603fe346-1bw2fa` (open; not deployed): its #453 (`firebase-bom` 35), #457 (the
+  review fixes and tech-debt rounds), #458 (the incremental reference), #459 (unit-test JVM
+  diagnostics, TD-312) and #460 (staff test accounts, [ADR-027](docs/adr/ADR-027-test-accounts.md):
+  backend and console, deployed from there); it closed TD-305, TD-311 and TD-207. The lab
+  wizard state is `WizardInputs.lab`, changed through `edit {}`, and a run's result reads
+  the lab test from its saved row (`ViewerArgs.of`). Metadata schema `/7` here (ours past
+  `/3` are not the parent's numbers). Lab inputs ride its seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` (ADR-003),
+  `WizardDraft` (ADR-005). ADR and TD numbers are shared; the next TD free in both is TD-315.
+- **#140 merged 2026-10-20** (`a66606d9`, the 2026-10-19 review; not released): load logs
   in kgf/tf, decimal commas and the delimiter read after a long preamble, logged time units;
   photo times matched within 1 s when any lacks EXIF sub-seconds; E refitted over 10–40 % of
-  Rp0.2; bending strain along the beam from the thickness gradient (none without taps); Rp0.2
-  and peak in the CSV trailer; one `LabWizardState`, `LabSession` and Results panel, and
-  `ViewerArgs` carries one `LabSession` (TD-301); beam-edge taps that lie square to a tilted
-  beam, snapped within 3° (TD-310); Home's Re-run copies a tensile or bending test, typed
-  masses included (TD-280); #457's upload, download and ui-4 commits. Head `afefdb45`. Left:
-  TD-300, TD-305 (the rest of #457, its tech-debt batches included, at the next sync) and
-  TD-311 (`StaticAnalysisActivity.kt` 510 lines).
+  Rp0.2; bending strain along the beam from the thickness gradient (none without taps); one
+  `LabSession` and Results panel (TD-301); beam-edge taps square to a tilted beam (TD-310);
+  Home's Re-run copies a tensile or bending test (TD-280). Left: TD-300.
 - **Readiness port, merged 2026-10-19, not deployed** (#137, #138: semperdic-app's
   #448/#449; TD-214–TD-279, FI-17–FI-24): **minSdk 30**, the signed offline entitlement
   ([ADR-023](docs/adr/ADR-023-signed-offline-entitlement.md); tokens name `materialtesting`),
@@ -169,7 +167,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Releases.** `com.sempermechanics.materialtesting` (ADR-009, ADR-019) beside Semper, on
   its backend; last `v1.4-beta.2` (`d08aae07`, 2026-10-17, versionCode 1006), not yet
   smoked on a phone. Never hand out `main`'s CI APK (TD-148). App Check waits for Play.
-- **Owed by hand** ([WORKFLOWS.md](docs/app/WORKFLOWS.md)): ROI zoom and pan (§6.21–6.25);
+- **Owed by hand** ([WORKFLOWS.md](docs/app/WORKFLOWS.md)): after the 2026-10-21 sync,
+  `LabWorkflowDeviceTest` and `WizardDraftRestoreTest` on a device, and #458's incremental
+  reference on a lab clip; ROI zoom and pan (§6.21–6.25);
   §5.1a with a load log, a phone MP4 and a UTM clip; Material Testing beside Semper (§3b),
   ADR-022's screenshots; the synced tip cards, summary pill and Re-run (3.11a–3.11m); Pixel 6
   references (TD-135). Owner decision: Terms §1.2 and §1.3 against a student audience.
@@ -197,10 +197,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - `SubsetRecommender` runs on the paper's `NOISE_VARIANCE`; no import supplies a measured floor — [SubsetRecommender.kt](app/src/main/java/com/sempermechanics/semper/ui/analysis/recommend/SubsetRecommender.kt).
 - Viewer screens read `ViewerArgs.from(intent, …)`, never `intent.get…Extra(IntentKeys…)`; a new viewer field goes in `ViewerArgs`, its default and its `SessionRecord` mapping — [ADR-003](docs/adr/ADR-003-viewerargs-read-side.md).
 - A new wizard input must survive a kill: scalars go in `WizardState`'s Bundle, bytes and lists in `WizardDraft`; and `cacheDir/temp_deformed` is only safe from the janitor while the draft is live — [ADR-005](docs/adr/ADR-005-wizard-process-death.md).
-- After Compute, read the run's `RunSpec` / `RunResult` (`spec`, `settings`), never the wizard's sliders or ROI vars: they stay editable and drift — [ADR-004](docs/adr/ADR-004-runspec.md).
-- Since engine 0.2.3 two runs of one build give bit-identical `.dat` whatever the thread count (TD-65), so a `.dat` hash can prove "engine unchanged" again and any run-to-run difference is a defect — `EnginePipelineSmokeTest.repeatSolve_bitIdentical`, `engine/tests/integration/test_full_field_determinism.cpp`.
+- After Compute, read the run's `RunSpec` (`BatchAnalysisOutcome.spec`) and the saved row its outcome carries (`.record`, opened through `ViewerArgs.of`), never the wizard's sliders or ROI vars: they stay editable and drift — [ADR-004](docs/adr/ADR-004-runspec.md).
+- Since engine 0.2.3 two runs of one build give bit-identical `.dat` whatever the thread count (TD-65), so a `.dat` hash can prove "engine unchanged" again and any run-to-run difference is a defect — `EnginePipelineSmokeTest.repeatSolveIsBitIdentical`, `engine/tests/integration/test_full_field_determinism.cpp`.
 - `ConvergenceGate` is batch-only; a sweep runs its whole plan, smallest subset first — [ConvergenceGate.kt](app/src/main/java/com/sempermechanics/semper/ui/analysis/run/ConvergenceGate.kt).
 - The backend, console and Firestore rules deploy from `semperdic-app` only; the deploy workflows here fail if run. Keep `TERMS_VERSION` equal to the parent's.
-- A new lab input goes in `MechanicalTestInputs`, `RunSpec.mechanical`, `ViewerArgs` (both sides) and `WizardState`; missing one gives a viewer or a restored wizard that quietly reads "no test" — `ViewerArgsTest`, `WizardStateTest`.
+- A new lab input goes in `MechanicalTestInputs`, `RunSpec.mechanical`, `ViewerArgs` (both sides, `ViewerArgs.of` included) and `LabWizardState` (`WizardInputs.lab`, with its Bundle key in `putLab` / `restoreLab`); missing one gives a viewer or a restored wizard that quietly reads "no test" — `ViewerArgsTest`, `RunSpecTest`, `WizardStateLabTest`.
 
 **PRs target `main`.** Do not force-push `main`.

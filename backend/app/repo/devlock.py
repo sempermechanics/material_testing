@@ -6,7 +6,7 @@ import random
 import time
 from datetime import timedelta
 
-from .. import apps, audit, errors
+from .. import apps, audit, errors, statuses
 from ..config import settings
 from ..licenses import (
     as_utc,
@@ -19,6 +19,7 @@ from ..observability import DependencyError
 from . import _base
 from ._base import (
     SCHEMA_VERSION,
+    _active_devices,
     _is_institution,
     _is_revoked,
     db,
@@ -28,6 +29,8 @@ from ._base import (
     _seat_ref,
     _get,
     _update_doc,
+    max_test_devices,
+    test_account_of,
 )
 from .user_config import (
     effective_mode,
@@ -80,6 +83,9 @@ def _device_lock_state(user: dict, device_id: str,
     if _is_revoked(lic):
         return _Lock.REVOKED, None
     if not _is_institution(lic):
+        tag = test_account_of(user)
+        if tag is not None:
+            return _test_lock_verdict(user, tag, device_id, app), None
         return _lock_verdict(lic.get(apps.field("deviceIdLock", app)), device_id, ref)
     seat_ref = _seat_ref(license_id, user.get("uid") or "")
     seat_snap = _get(seat_ref)
@@ -89,6 +95,24 @@ def _device_lock_state(user: dict, device_id: str,
     if seat.get("status") in ("revoked", "disabled"):
         return _Lock.REVOKED, None
     return _lock_verdict(seat.get(apps.field("deviceIdLock", app)), device_id, seat_ref)
+
+
+def _test_lock_verdict(user: dict, tag: dict, device_id: str, app: str) -> _Lock:
+    """A test account's licence is not locked to one phone (ADR-027): any of
+    its devices ACTIVE for `app` is licensed, and so is a phone not yet
+    registered while the account holds fewer than `maxDevices` for the app,
+    as an unbound lock lets a first phone through. Anything else is a
+    mismatch, Demo for that request only. Nothing is bound or written: the
+    licence's `deviceIdLock` stays empty, and registration
+    (`repo.register_device`) is what holds the account to `maxDevices`."""
+    snap = _get(db().collection("devices").document(device_id))
+    dev = (snap.to_dict() or {}) if snap.exists else None
+    if (dev and dev.get("uid") == user.get("uid") and dev.get("status") == statuses.DEVICE_ACTIVE
+            and (dev.get("app") or apps.SEMPER) == app):
+        return _Lock.OK
+    if len(_active_devices(user.get("uid") or "", app)) < max_test_devices(tag):
+        return _Lock.OK
+    return _Lock.MISMATCH
 
 
 def _lock_verdict(locked, device_id: str, ref) -> tuple[_Lock, object | None]:

@@ -2,26 +2,73 @@ package com.sempermechanics.semper.ui.viewer
 
 import android.app.Activity
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import com.sempermechanics.semper.data.mechanical.LabSession
+import com.sempermechanics.semper.data.session.SessionRecord
+import com.sempermechanics.semper.field.FieldKind
+import com.sempermechanics.semper.field.ImageSize
+import com.sempermechanics.semper.report.StressStrain
+import com.sempermechanics.semper.ui.viewer.share.ExportReport
 import com.sempermechanics.semper.ui.viewer.share.ShareCenter
+import com.sempermechanics.semper.ui.viewer.share.ShareExportController
 import com.sempermechanics.semper.ui.viewer.share.ShareKind
+import com.sempermechanics.semper.ui.viewer.share.ShareSource
 import com.sempermechanics.semper.ui.viewer.share.ViewerReportFactory
-import com.sempermechanics.semper.ui.viewer.summary.SummaryAnimation
+import com.sempermechanics.semper.ui.viewer.summary.ViewerSummaryController
+import java.io.File
+
+/** What [ViewerShareController] needs from the viewer to snapshot it for an export. */
+internal interface ShareControllerHost {
+    /** The frame and field on screen, and the save-as picked but not yet started. */
+    val viewModel: ResultViewerViewModel
+    val args: ViewerArgs
+    val imageSize: ImageSize
+
+    /** True once the frame set is opened: the lists below are final. */
+    val frameSetLoaded: Boolean
+    val batchFiles: List<File>
+    val plannedFrames: List<Int>
+    val defImagePaths: List<String>
+    val isSweep: Boolean
+
+    /** The frame on screen's data; null while it is still loading. */
+    val rawData: FloatArray?
+
+    /** The stored record behind this viewer, or null when it was opened without one. */
+    val sessionRecord: SessionRecord?
+
+    /** The session's lab test with Results' corrections; [LabSession.NONE] for plain DIC. */
+    val labSession: LabSession
+
+    /** How this session's loads become stress; axial for a plain DIC session. */
+    val stressModel: StressStrain.Model
+
+    /** The machine load on each frame, N; empty for plain DIC. */
+    val loadsN: FloatArray
+}
 
 /**
- * What the viewer hands its exports: the snapshot [ShareCenter] builds every
- * export from, and the save-as document picker for the slow ones. Made while
- * the Activity is constructed, since it registers the picker's result.
- *
- * Constructed before onCreate; reads [ResultViewerActivity.binding] lazily.
+ * What the viewer hands its exports ([ShareSource]): the snapshot [ShareCenter]
+ * builds every export from, the save-as document picker for the slow ones, and
+ * [exports], which runs them. Made while the Activity is constructed, since it
+ * registers the picker's result with [activity]. The snapshot takes the
+ * reference from [images] and the sequence ranges from [summary].
  */
-internal class ViewerShareController(private val host: ResultViewerActivity) {
+internal class ViewerShareController(
+    private val activity: AppCompatActivity,
+    private val host: ShareControllerHost,
+    private val images: ViewerImageLoader,
+    private val summary: ViewerSummaryController,
+    private val exports: () -> ShareExportController,
+) : ShareSource {
 
     /** Stashed while the SAF save-as picker is open for a slow share export. */
     private var pendingShareKind: ShareKind? = null
 
-    private val createShareDocument = host.registerForActivityResult(
+    private val createShareDocument = activity.registerForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) { result ->
         val kind = pendingShareKind
@@ -33,13 +80,15 @@ internal class ViewerShareController(private val host: ResultViewerActivity) {
     }
 
     /**
-     * Starts the ViewModel's pending save-as export once the frames it covers
-     * are known. Taking it clears it, so a viewer recreated after the export
+     * Starts the ViewModel's pending save-as export, once this viewer has its
+     * frames: before then it waits, and the viewer calls this again when they
+     * are open. Taking it clears it, so a viewer recreated after the export
      * started does not start it again.
      */
-    fun startPendingSave() = host.whenFrameSetLoaded {
-        val (kind, uri) = host.viewModel.takePendingSave() ?: return@whenFrameSetLoaded
-        ShareCenter(host).writeKindToUri(kind, uri)
+    fun startPendingSave() {
+        if (!host.frameSetLoaded) return
+        val (kind, uri) = host.viewModel.takePendingSave() ?: return
+        ShareCenter(activity, this).writeKindToUri(kind, uri)
     }
 
     /** Puts back the save-as kind a recreated viewer was waiting on. */
@@ -57,7 +106,7 @@ internal class ViewerShareController(private val host: ResultViewerActivity) {
         imageSize = host.imageSize,
         plannedFrames = host.plannedFrames,
         defImagePaths = host.defImagePaths,
-        displayBase = host.cachedBaseImage,
+        displayBase = images.cachedBaseImage,
         stressModel = host.stressModel,
     )
 
@@ -77,25 +126,26 @@ internal class ViewerShareController(private val host: ResultViewerActivity) {
 
     /**
      * Everything an export needs, or null before the frame set is read or when
-     * there are no frames. The frame on screen may still be loading ([ResultViewerActivity.rawData]
+     * there are no frames. The frame on screen may still be loading ([ShareControllerHost.rawData]
      * null): only the photo kinds need it, and they read it from disk then.
      */
-    fun buildShareSnapshot(): ShareCenter.Snapshot? {
+    override fun buildShareSnapshot(): ShareCenter.Snapshot? {
         if (!host.frameSetLoaded || host.batchFiles.isEmpty()) return null
         val isSweep = host.isSweep
         return ShareCenter.Snapshot(
             data = host.rawData,
             batchFiles = host.batchFiles,
             baseName = shareBaseName(),
-            frameIndex = host.currentFrameIndex,
-            dataIndex = host.currentDataIndex,
-            typeString = host.currentTypeString,
-            summary = if (isSweep) null else host.summary.animation,
+            frameIndex = host.viewModel.currentFrameIndex,
+            dataIndex = host.viewModel.field.dataIndex,
+            typeString = host.viewModel.field.label,
+            summary = if (isSweep) null else summary.animation,
             summaryBounds = if (isSweep) {
                 emptyMap()
             } else {
-                SummaryAnimation.FIELDS.mapNotNull { (_, index) -> host.summary.boundsFor(index)?.let { index to it } }
-                    .toMap()
+                FieldKind.entries.mapNotNull { field ->
+                    summary.boundsFor(field.dataIndex)?.let { field.dataIndex to it }
+                }.toMap()
             },
             reportSource = reportSource(),
             lab = host.labSession,
@@ -105,7 +155,7 @@ internal class ViewerShareController(private val host: ResultViewerActivity) {
     }
 
     /** SAF CreateDocument for a slow export; generation starts only after a URI returns. */
-    fun pickShareDocument(kind: ShareKind, filename: String) {
+    override fun pickShareDocument(kind: ShareKind, filename: String) {
         pendingShareKind = kind
         createShareDocument.launch(
             Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
@@ -115,6 +165,14 @@ internal class ViewerShareController(private val host: ResultViewerActivity) {
             },
         )
     }
+
+    override fun startExport(
+        kind: ShareKind,
+        title: String,
+        destUri: Uri?,
+        direct: Boolean,
+        produce: suspend (report: ExportReport) -> Pair<File, String>,
+    ) = exports().start(kind, title, destUri, direct, produce)
 
     private companion object {
         // The viewer's own cap, not SessionNaming's 40: export names have

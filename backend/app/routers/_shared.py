@@ -4,7 +4,6 @@ Routers import from here, never from each other: `sessions` used to reach into
 `account` for `json_dumps`, which made the order routers are loaded in matter
 (TD-54).
 """
-import json
 import logging
 
 import requests
@@ -13,12 +12,6 @@ from fastapi import HTTPException
 from .. import apps, errors
 
 log = logging.getLogger("semper")
-
-
-def json_dumps(value) -> str:
-    """Compact JSON for the streamed export and bundle manifest. `default=str`
-    because Firestore hands back datetimes, which json cannot serialise."""
-    return json.dumps(value, separators=(",", ":"), default=str)
 
 
 def clamp_page_size(page_size: int, ceiling: int) -> int:

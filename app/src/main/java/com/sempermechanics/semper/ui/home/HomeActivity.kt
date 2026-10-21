@@ -1,25 +1,23 @@
-// Home owns its row actions, refreshes and result launchers as small private
-// steps; the + flow (checks, source chooser, hand-off) is in HomeNewAnalysis.kt.
+// Home owns its row actions, refreshes and pickers as small private steps.
 @file:Suppress("TooManyFunctions")
 
 package com.sempermechanics.semper.ui.home
 
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.snackbar.Snackbar
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.cloud.CloudBackupListing
-import com.sempermechanics.semper.data.cloud.CloudSync
 import com.sempermechanics.semper.data.cloud.SessionDeletes
-import com.sempermechanics.semper.data.cloud.restore.RestoreStart
-import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.policy.AppPolicy
 import com.sempermechanics.semper.data.policy.VersionVerdict
@@ -27,23 +25,17 @@ import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.isRestorable
 import com.sempermechanics.semper.databinding.ActivityHomeBinding
-import com.sempermechanics.semper.navigation.IntentKeys
-import com.sempermechanics.semper.ui.analysis.StaticAnalysisActivity
-import com.sempermechanics.semper.ui.analysis.rerun.LabRerun
-import com.sempermechanics.semper.ui.analysis.rerun.PickedReference
-import com.sempermechanics.semper.ui.analysis.rerun.RerunSource
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisNavHelper
-import com.sempermechanics.semper.ui.common.ConflatedRefresh
 import com.sempermechanics.semper.ui.common.Insets
-import com.sempermechanics.semper.ui.common.SerialJob
 import com.sempermechanics.semper.ui.common.auth.AuthRoute
 import com.sempermechanics.semper.ui.common.auth.SignOutRun
 import com.sempermechanics.semper.ui.common.dialog.CrispToast
 import com.sempermechanics.semper.ui.common.dialog.Dialogs
 import com.sempermechanics.semper.ui.common.dialog.Feedback
-import com.sempermechanics.semper.ui.common.media.MediaPickerSheet
 import com.sempermechanics.semper.ui.common.transfer.DeleteFeedback
+import com.sempermechanics.semper.ui.common.transfer.RestoreRequest
 import com.sempermechanics.semper.ui.limit.UpdateRequiredActivity
+import com.sempermechanics.semper.ui.settings.SettingsActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -57,45 +49,20 @@ import kotlinx.coroutines.withContext
 @MainThread
 class HomeActivity : AppCompatActivity() {
 
-    internal lateinit var binding: ActivityHomeBinding
+    private lateinit var binding: ActivityHomeBinding
     private lateinit var adapter: SessionListAdapter
     private lateinit var selection: SessionSelectionController
     private lateinit var cloudBackups: CloudBackupsCard
-    internal lateinit var quotaCard: HomeQuotaCard
+    private lateinit var quotaCard: HomeQuotaCard
     private lateinit var backupBadge: BackupBadgeActions
 
     private lateinit var deleteFeedback: DeleteFeedback
 
-    /**
-     * Rows just queued for deletion, hidden until WorkManager lists their job
-     * (the enqueue lands asynchronously) or it ends.
-     */
-    private val justQueuedDeletes = mutableSetOf<String>()
+    /** The list, queued deletes, offered backups and restores; kept across a rotation. */
+    private val viewModel: HomeViewModel by viewModels()
 
-    /** The phone-list read in flight ([refreshList]); a newer one replaces it. */
-    private val listRefresh = SerialJob()
-
-    /**
-     * The cloud check, one at a time: a burst of requests runs it at most once
-     * more, deep if any asked for deep. It is not cancelled mid-call, and it
-     * starts after the list read that was in flight when it began.
-     */
-    private val cloudCheck: ConflatedRefresh<Boolean> by lazy {
-        ConflatedRefresh<Boolean>(lifecycleScope, merge = { a, b -> a || b }) { deep ->
-            var completed = false
-            try {
-                listRefresh.join()
-                reconcileWithCloud(deep)
-                completed = true
-            } finally {
-                // The spinner tracks the cloud check, not the local list read —
-                // that's the part worth waiting for. After a check that ended
-                // normally it stays while a pull-to-refresh waits its turn; a
-                // check that threw or was cancelled takes the queue with it.
-                if (!completed || !cloudCheck.hasPending) binding.swipeRefresh.isRefreshing = false
-            }
-        }
-    }
+    /** The cloud check behind each [refresh], one at a time; built once [quotaCard] is. */
+    private lateinit var cloudCheck: HomeCloudCheck
 
     private val backCallback = object : androidx.activity.OnBackPressedCallback(false) {
         override fun handleOnBackPressed() = selection.clearSelection()
@@ -115,38 +82,19 @@ class HomeActivity : AppCompatActivity() {
         }
     }
 
-    /** Files tab: Storage Access Framework (Drive, storage, DNG). */
-    internal val pickDocument =
-        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-            routePickedMedia(uri)
-        }
-
-    internal var mediaPicker: MediaPickerSheet? = null
-
-    /**
-     * The test type picked on the sheet, waiting for the media picker to
-     * finish. Saved across recreation because the SAF picker can kill Home
-     * while it is open, and the wizard must not open typeless.
-     */
-    internal var pendingTestType: TestType? = null
-
-    /** An older analysis's Re-run: its reference picked again. Registers launchers, so built with the screen. */
-    private val rerunReference = RerunReferencePicker(this, onPicked = ::openRerun)
-    internal val requestMediaPermission =
-        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-            mediaPicker?.onPermissionResult()
-        }
+    /** The + button's source chooser and Re-run; registers its launchers, so built with the screen. */
+    private val newAnalysis = HomeNewAnalysis(this) { quotaCard.openLimitScreenIfReached() }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        pendingTestType?.let { outState.putString(IntentKeys.TEST_TYPE, it.wireName) }
+        newAnalysis.saveState(outState)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityHomeBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        pendingTestType = TestType.fromWire(savedInstanceState?.getString(IntentKeys.TEST_TYPE))
+        newAnalysis.restoreState(savedInstanceState)
         window.decorView.post { reportFullyDrawn() }
 
         // Edge-to-edge (enforced on API 35+): drop the header below the status
@@ -162,6 +110,14 @@ class HomeActivity : AppCompatActivity() {
             quotaView = binding.tvHomeQuota,
             licenseView = binding.tvHomeLicense,
             openSettings = { binding.btnHomeSettings.performClick() },
+        )
+        cloudCheck = HomeCloudCheck(
+            activity = this,
+            viewModel = viewModel,
+            quotaCard = quotaCard,
+            showsCloudState = ::showsCloudState,
+            onBackupsListed = ::updateCloudBackups,
+            stopSpinner = { binding.swipeRefresh.isRefreshing = false },
         )
         wireButtons()
 
@@ -180,6 +136,18 @@ class HomeActivity : AppCompatActivity() {
         if (savedInstanceState == null) nudgeIfUpdateRecommended()
         HomeTransferWatch(this, adapter, quotaCard, ::showsCloudState) { refresh() }.observe()
         deleteFeedback.observe()
+        observeViewModel()
+    }
+
+    /** Each list read, and each restore's and erase's outcome once, on whichever Home is current. */
+    private fun observeViewModel() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch { viewModel.list.collect { list -> list?.let(::showList) } }
+                launch { viewModel.eraseOutcomes.collect { selection.showEraseOutcome(it) } }
+                viewModel.restoreOutcomes.collect { showRestoreOutcome(it) }
+            }
+        }
     }
 
     private fun cloudBackupsCard() = CloudBackupsCard(
@@ -187,7 +155,7 @@ class HomeActivity : AppCompatActivity() {
         text = binding.tvCloudBackups,
         restoreButton = binding.btnCloudBackupsRestore,
         hideButton = binding.btnCloudBackupsHide,
-        onRestore = { targets -> queueRestores { targets } },
+        onRestore = { targets -> viewModel.restore { targets } },
         onHide = { backups -> hideCloudBackups(backups) },
     )
 
@@ -199,61 +167,19 @@ class HomeActivity : AppCompatActivity() {
         binding.sessionList.layoutManager = LinearLayoutManager(this)
     }
 
-    /**
-     * Whether new work may start, having opened the screen that says why not
-     * when it may not: the + button ([wireButtons]) and Re-run both ask. The
-     * version gate first, then two independent reasons: the seat check comes
-     * before the quota because an institution member is licensed, so the
-     * quota check is false for them by definition and would wave them
-     * through. At the account's analysis limit, new work is blocked behind
-     * the persistent limit screen (email support) instead of failing on
-     * upload.
-     */
-    internal fun mayStartNewAnalysis(): Boolean = when {
-        // A build the backend no longer supports: its gate screen is opened.
-        !AnalysisNavHelper.ensureUpToDate(this) -> false
-        LicenseEntitlements.isSeatRequiredToStart(this) -> {
-            AnalysisNavHelper.openSeatRequired(this)
-            false
+    /** The + button, the gear, and the empty state's button (which is the + button). */
+    private fun wireButtons() {
+        val fab = binding.fabNewAnalysis
+        HomeFabLayout.pinAtNineTenths(binding.homeRoot, fab, binding.sessionList)
+        // btnEmptyRestore delegates here via performClick(), so both entry
+        // points are covered by this one listener.
+        fab.setOnClickListener { newAnalysis.start() }
+        binding.btnHomeSettings.setOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
         }
-        else -> !quotaCard.openLimitScreenIfReached()
-    }
-
-    /**
-     * Re-run: opens the wizard on a new analysis copied from [record]'s
-     * photos and settings (owner decision, 2026-10-15: a saved analysis is
-     * never re-run in place). One saved before Re-run kept its reference, or
-     * restored, asks for its reference again ([RerunReferencePicker]); one
-     * whose frames are not here (freed up) says so. The new analysis counts
-     * toward the limit like any other, so the gates come first.
-     */
-    private fun startRerun(record: SessionRecord) {
-        lifecycleScope.launch {
-            val source = withContext(Dispatchers.IO) { RerunSource.of(record) }
-            when {
-                source == RerunSource.MISSING -> Dialogs.info(
-                    this@HomeActivity,
-                    R.string.rerun_unavailable_title,
-                    R.string.rerun_photos_missing_body,
-                )
-                !mayStartNewAnalysis() -> Unit
-                source == RerunSource.NEEDS_REFERENCE -> rerunReference.ask(record)
-                else -> openRerun(record, null)
-            }
+        binding.btnEmptyRestore.setOnClickListener {
+            fab.performClick()
         }
-    }
-
-    /** The wizard on [record]'s Re-run, with the reference picked again when [picked]. */
-    private fun openRerun(record: SessionRecord, picked: PickedReference?) {
-        val intent = Intent(this, StaticAnalysisActivity::class.java)
-            .putExtra(IntentKeys.RERUN_SESSION_ID, record.id)
-        // A tensile or bending analysis re-runs as one, not as plain DIC (TD-280).
-        LabRerun.of(record)?.putOn(intent)
-        if (picked != null) {
-            intent.putExtra(IntentKeys.RERUN_REFERENCE_PATH, picked.file.absolutePath)
-                .putExtra(IntentKeys.RERUN_REFERENCE_NAME, picked.name)
-        }
-        startActivity(intent)
     }
 
     /**
@@ -266,7 +192,7 @@ class HomeActivity : AppCompatActivity() {
         backupBadge = BackupBadgeActions(this, adapter) { binding.btnHomeSettings.performClick() }
         selection = selectionController()
         deleteFeedback = DeleteFeedback(this, binding.homeRoot) {
-            justQueuedDeletes.clear()
+            viewModel.clearQueuedDeletes()
             refresh(reconcile = false)
         }
         selection.bindBarActions(
@@ -308,12 +234,13 @@ class HomeActivity : AppCompatActivity() {
         fab = binding.fabNewAnalysis,
         backCallback = backCallback,
         onRefresh = { refresh() },
+        onEraseLocally = { records, deviceOnly -> viewModel.eraseLocally(records, deviceOnly) },
         onDeviceOnlyDeleted = { showDeviceOnlyKeptSnackbar() },
         restoreEnabled = { LicenseEntitlements.restoreEnabled(this) },
         onRestore = { records -> startRestore(records) },
-        onRerun = { record -> startRerun(record) },
+        onRerun = { record -> newAnalysis.rerun(record) },
         onDeleteQueued = { workId, items ->
-            justQueuedDeletes += items.filter { it.mode == SessionDeletes.Mode.EVERYWHERE }.map { it.localId }
+            viewModel.hideQueuedDeletes(items.filter { it.mode == SessionDeletes.Mode.EVERYWHERE }.map { it.localId })
             deleteFeedback.queued(workId, items.size)
             refresh(reconcile = false)
         },
@@ -371,67 +298,24 @@ class HomeActivity : AppCompatActivity() {
      *   here that the cloud check has nothing to add to.
      */
     private fun refresh(deep: Boolean = false, reconcile: Boolean = true) {
-        refreshList()
+        viewModel.refreshList()
         if (reconcile) cloudCheck.request(deep)
     }
 
-    /**
-     * Re-reads the phone's list. Latest wins: a newer call cancels the read
-     * still in flight, so an older list can never be submitted after a newer
-     * one (refresh runs on resume, on every finished transfer, delete, rename
-     * and restore, often several within a second).
-     */
-    private fun refreshList() {
-        listRefresh.launch(lifecycleScope) {
-            val sessions = visibleSessions()
-            submitSessions(sessions)
-            // Demo: analyses are recorded silently and there is no restore, so
-            // the list carries no sync badge, bar or "only in cloud" state.
-            adapter.setSyncVisible(showsCloudState())
-            binding.emptyState.isVisible = sessions.isEmpty()
-            updateCloudBackups()
-            quotaCard.render(sessions.size)
-            // A refresh can drop rows out from under a selection.
-            selection.updateSelectionBar()
-            // No quota count stored from here: these rows leave out the ones a
-            // queued delete is about to remove, and the quota counts every row
-            // the index holds, which SessionStore stores with each write.
-        }
-    }
-
-    /**
-     * Ask the backend what is actually backed up and repair any drift — a
-     * session whose cloud copy was deleted stops claiming "Synced" and is
-     * re-queued for upload.
-     *
-     * Offline and "not configured" stay silent (that's normal for an
-     * offline-first app), but a real backend fault is surfaced: otherwise the
-     * badges quietly go stale and the user trusts a backup that isn't there.
-     */
-    private suspend fun reconcileWithCloud(deep: Boolean) {
-        when (val outcome = CloudSync.reconcile(this@HomeActivity, deep = deep)) {
-            is CloudSync.Outcome.Ok -> {
-                // Record the account's quota; newly at the cap → open the
-                // persistent "email support" screen.
-                quotaCard.recordReconciled(outcome.quotaUsed)
-                // This check saved a fresh listing of the account's backups.
-                updateCloudBackups()
-                if (outcome.repaired > 0) {
-                    // The rows changed underneath us — show the corrected state.
-                    refreshList()
-                    if (!showsCloudState()) return
-                    val repaired = outcome.repaired
-                    val text = resources.getQuantityString(R.plurals.cloud_resync_fmt, repaired, repaired)
-                    Feedback.toast(this, text, long = true)
-                }
-            }
-            is CloudSync.Outcome.Failed -> if (showsCloudState()) {
-                Feedback.toast(this, getString(R.string.cloud_check_failed_fmt, outcome.reason), long = true)
-            }
-            // Normal for an offline-first app — don't nag. Skipped = checked
-            // recently (reconcile is throttled to protect the Firestore budget).
-            CloudSync.Outcome.Offline, CloudSync.Outcome.Disabled, CloudSync.Outcome.Skipped -> Unit
-        }
+    /** A list read from [HomeViewModel.refreshList], with which rows have no frames here. */
+    private fun showList(list: HomeViewModel.HomeList) {
+        adapter.submit(list.sessions, list.withoutLocalData)
+        // Demo: analyses are recorded silently and there is no restore, so
+        // the list carries no sync badge, bar or "only in cloud" state.
+        adapter.setSyncVisible(showsCloudState())
+        binding.emptyState.isVisible = list.sessions.isEmpty()
+        updateCloudBackups()
+        quotaCard.render(list.sessions.size)
+        // A refresh can drop rows out from under a selection.
+        selection.updateSelectionBar()
+        // No quota count stored from here: these rows leave out the ones a
+        // queued delete is about to remove, and the quota counts every row
+        // the index holds, which SessionStore stores with each write.
     }
 
     /**
@@ -462,77 +346,41 @@ class HomeActivity : AppCompatActivity() {
     /**
      * Queue background restores and stay on Home. Row progress comes from
      * [HomeTransferWatch] (same badge/bar as uploads) so the list stays
-     * interactive — no blocking "Downloading…" dialog. Rows go through
-     * [RestoreStart], the same path Settings uses.
+     * interactive — no blocking "Downloading…" dialog. The rows' cloud lookup
+     * and the queueing run in [HomeViewModel], through the same
+     * `RestoreStart.request` Settings uses, so a rotation does not lose them.
      */
     private fun startRestore(records: List<SessionRecord>) {
-        if (records.isEmpty()) return
-        if (!LicenseEntitlements.restoreEnabled(this)) {
-            Feedback.toast(this, R.string.restore_paused, long = true)
-            return
-        }
+        if (records.isEmpty() || !RestoreRequest.allowedOrSay(this)) return
         selection.clearSelection()
-        queueRestores {
-            records.map { record ->
-                val cloudId = CloudSync.resolveCloudIdFor(this@HomeActivity, record).orEmpty()
-                RestoreStart.Target(cloudId, record.id, record.name)
+        viewModel.restoreRows(records)
+    }
+
+    /** What a restore request came to, in one toast; the list re-reads for the rows it wrote. */
+    private fun showRestoreOutcome(outcome: RestoreRequest) {
+        when (outcome) {
+            RestoreRequest.Paused -> RestoreRequest.sayPaused(this)
+            is RestoreRequest.Queued -> {
+                refresh(reconcile = false)
+                val counts = outcome.counts
+                val summary = RestoreSummary.of(resources, outcome.total, counts.started, counts.alreadyRunning)
+                Feedback.toast(this, summary.text, long = summary.failed)
             }
         }
     }
 
-    /** Queue [targets] (rows, or backups from [cloudBackups]) and say what happened in one toast. */
-    private fun queueRestores(targets: suspend () -> List<RestoreStart.Target>) {
-        lifecycleScope.launch {
-            val batch = targets()
-            if (batch.isEmpty()) return@launch
-            val counts = withContext(Dispatchers.IO) { RestoreStart.startAll(this@HomeActivity, batch) }
-            refresh(reconcile = false)
-            val summary = RestoreSummary.of(resources, batch.size, counts.started, counts.alreadyRunning)
-            Feedback.toast(this@HomeActivity, summary.text, long = summary.failed)
-        }
-    }
-
-    /**
-     * Offer the backups this phone has no row for, from the listing the last
-     * reconcile saved. Demo accounts have no restore, so they are offered nothing.
-     */
+    /** Offer the backups this phone has no row for ([HomeViewModel.offeredBackups]). */
     private fun updateCloudBackups() {
-        cloudBackups.refresh(lifecycleScope, read = ::offeredBackups) { offered ->
+        cloudBackups.refresh(lifecycleScope, read = viewModel::offeredBackups) { offered ->
             val emptyTitle = if (offered.isEmpty()) R.string.home_empty_title else R.string.home_empty_title_cloud
             binding.tvEmptyTitle.setText(emptyTitle)
         }
-    }
-
-    private suspend fun offeredBackups(): List<CloudBackupListing.Backup> = if (showsCloudState()) {
-        withContext(Dispatchers.IO) { CloudBackupListing.offered(this@HomeActivity) }
-    } else {
-        emptyList()
     }
 
     private fun hideCloudBackups(backups: List<CloudBackupListing.Backup>) {
         CloudBackupListing.hide(this, backups.map { it.cloudId })
         updateCloudBackups()
         Feedback.toast(this, R.string.cloud_backups_hidden, long = true)
-    }
-
-    /**
-     * Shows [sessions] with which of them still have frames on this phone,
-     * read here on IO so binding, selecting and opening a row never do.
-     */
-    private suspend fun submitSessions(sessions: List<SessionRecord>) {
-        val withoutLocalData = withContext(Dispatchers.IO) {
-            sessions.filterNot { it.hasLocalData() }.map { it.id }.toSet()
-        }
-        adapter.submit(sessions, withoutLocalData)
-    }
-
-    /** The phone's analyses, less any a queued delete is about to remove. */
-    private suspend fun visibleSessions(): List<SessionRecord> {
-        val justQueued = justQueuedDeletes.toSet()
-        return withContext(Dispatchers.IO) {
-            val hidden = justQueued + SessionDeletes.pendingRowIds(this@HomeActivity)
-            SessionStore.list(this@HomeActivity).filterNot { it.id in hidden }
-        }
     }
 
     private fun showDeviceOnlyKeptSnackbar() {

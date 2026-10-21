@@ -16,6 +16,7 @@ from .config import settings
 from .routers import (
     account,
     admin,
+    admin_test_accounts,
     devices,
     files,
     health,
@@ -212,7 +213,7 @@ class EdgeMiddleware:
         obs.bind_uid(state.get("uid"))
         obs.bind_device(state.get("device_id"))
         method, path = scope["method"], scope["path"]
-        op_class, route_template = obs.classify_route(method, path)
+        op_class, route_template = obs.classify_route(method, path, obs.routed_template(scope))
         counts = state.get("usage_counts")
         obs.log_event(
             _access_log, logging.INFO, "http_access",
@@ -269,6 +270,7 @@ for _router in (
     files.router,
     provision_tasks.router,
     admin.router,
+    admin_test_accounts.router,
     institutions.router,
 ):
     app.include_router(_router)

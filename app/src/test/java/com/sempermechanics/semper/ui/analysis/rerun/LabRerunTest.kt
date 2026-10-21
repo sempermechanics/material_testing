@@ -11,6 +11,7 @@ import com.sempermechanics.semper.fixtures.sessionRecord
 import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.WizardStep
+import com.sempermechanics.semper.ui.analysis.wizard.lab
 import com.sempermechanics.semper.ui.analysis.wizard.typedLoadsKg
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -46,8 +47,8 @@ class LabRerunTest {
     private fun rerunWizard(lab: LabRerun): AnalysisViewModel = AnalysisViewModel().apply {
         lab.applyTo(this)
         // What applyRerun leaves: the copied frames (no masses on them) and the parameters page.
-        deformedFrames = listOf("f1.png", "f2.png", "f3.png").map { DeformedFrame("/copy/$it", it) }
-        step = WizardStep.SETTINGS
+        val copied = listOf("f1.png", "f2.png", "f3.png").map { DeformedFrame("/copy/$it", it) }
+        edit { it.copy(deformedFrames = copied, step = WizardStep.SETTINGS) }
         lab.applyLoadsTo(this)
     }
 
@@ -71,24 +72,24 @@ class LabRerunTest {
     fun `typed bending comes back with its masses and taps, ready to compute`() {
         val vm = rerunWizard(LabRerun.of(record("bending", TypedLoads.SOURCE, typedN))!!)
 
-        assertEquals(TestType.BENDING, vm.testType)
-        assertEquals(geometry, vm.geometry)
+        assertEquals(TestType.BENDING, vm.lab.testType)
+        assertEquals(geometry, vm.lab.geometry)
         assertEquals(listOf(0f, 0.5f, 1.2345f), vm.typedLoadsKg)
         // The loads the run reads are bit-identical to the saved ones.
-        assertEquals(typedN, vm.machineLoads?.loadsN)
-        assertEquals(LoadMapping.TYPED_KG, vm.machineLoads?.mapping)
-        assertEquals(WizardStep.SETTINGS, vm.step)
+        assertEquals(typedN, vm.lab.machineLoads?.loadsN)
+        assertEquals(LoadMapping.TYPED_KG, vm.lab.machineLoads?.mapping)
+        assertEquals(WizardStep.SETTINGS, vm.inputs.value.step)
     }
 
     @Test
     fun `a test that read a load log asks for it again on step 1`() {
         val vm = rerunWizard(LabRerun.of(record("tensile", "machine.csv", listOf(0f, 500f, 900f)))!!)
 
-        assertEquals(TestType.TENSILE, vm.testType)
-        assertEquals(19.63f, vm.crossSectionMm2, 0f)
-        assertEquals(false, vm.loadAxisX)
-        assertNull(vm.machineLoads)
-        assertEquals(WizardStep.IMAGES, vm.step)
+        assertEquals(TestType.TENSILE, vm.lab.testType)
+        assertEquals(19.63f, vm.lab.crossSectionMm2, 0f)
+        assertEquals(false, vm.lab.loadAxisX)
+        assertNull(vm.lab.machineLoads)
+        assertEquals(WizardStep.IMAGES, vm.inputs.value.step)
     }
 
     @Test
@@ -98,7 +99,7 @@ class LabRerunTest {
         val vm = rerunWizard(lab)
 
         assertEquals(emptyList<Float?>(), vm.typedLoadsKg)
-        assertEquals(WizardStep.IMAGES, vm.step)
+        assertEquals(WizardStep.IMAGES, vm.inputs.value.step)
     }
 
     @Test
