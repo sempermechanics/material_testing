@@ -9,6 +9,8 @@ import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.data.session.CacheJanitor
 import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.load.AnalysisLoadCard
+import com.sempermechanics.semper.ui.analysis.rerun.LabRerun
+import com.sempermechanics.semper.ui.analysis.wizard.editLab
 import com.sempermechanics.semper.ui.analysis.wizard.lab
 import com.sempermechanics.semper.ui.common.dialog.Dialogs
 import com.sempermechanics.semper.ui.common.dialog.Feedback
@@ -20,11 +22,34 @@ import java.io.File
 import java.io.IOException
 
 /*
- * The wizard's machine-load card on [StaticAnalysisActivity]: building it, and
- * the bending load-point editor it opens. The launchers and the card itself stay
- * on the Activity (result launchers register at construction); the steps are
- * here, as extensions.
+ * The wizard's lab test on [StaticAnalysisActivity]: the test it opens on, the
+ * machine-load card (building it), and the bending load-point editor it opens.
+ * The launchers and the card itself stay on the Activity (result launchers
+ * register at construction); the steps are here, as extensions.
  */
+
+/**
+ * The lab test the wizard opens on, then its load card ([setupLoadCard]). The
+ * test type stays on the Intent (not consumed): a recreation after process
+ * death re-reads it, and the view model is authoritative once set. On a
+ * [firstOpen] from Home's Re-run of a lab test, its dimensions and taps go in
+ * before the load card reads them (TD-280).
+ *
+ * @return that Re-run's lab test, whose typed masses go onto the frames once
+ *   they are copied ([LabRerun.applyLoadsTo]); null otherwise
+ */
+internal fun StaticAnalysisActivity.openLabTest(firstOpen: Boolean): LabRerun? {
+    TestType.fromWire(intent.getStringExtra(IntentKeys.TEST_TYPE))?.let { type ->
+        viewModel.editLab { it.copy(testType = type) }
+    }
+    val rerun = if (firstOpen && intent.hasExtra(IntentKeys.RERUN_SESSION_ID)) {
+        LabRerun.from(intent)?.also { it.applyTo(viewModel) }
+    } else {
+        null
+    }
+    setupLoadCard()
+    return rerun
+}
 
 /**
  * The machine-load card exists only for tests with a load log (tensile and
@@ -32,7 +57,7 @@ import java.io.IOException
  * one never pays for its views, and so the host layout stays under lint's
  * TooManyViews cap.
  */
-internal fun StaticAnalysisActivity.setupLoadCard() {
+private fun StaticAnalysisActivity.setupLoadCard() {
     if (!viewModel.lab.testType.hasMachineLoad) return
     val root = binding.stubLoadCard.inflate()
     loadCard = AnalysisLoadCard(

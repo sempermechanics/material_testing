@@ -18,7 +18,6 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
-import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.prefs.WizardDraft
@@ -60,7 +59,6 @@ import com.sempermechanics.semper.ui.analysis.wizard.DraftRestore
 import com.sempermechanics.semper.ui.analysis.wizard.ReferencePreviewLoader
 import com.sempermechanics.semper.ui.analysis.wizard.WizardParamFields
 import com.sempermechanics.semper.ui.analysis.wizard.WizardStep
-import com.sempermechanics.semper.ui.analysis.wizard.editLab
 import com.sempermechanics.semper.ui.analysis.wizard.lab
 import com.sempermechanics.semper.ui.common.CoachMarkController
 import com.sempermechanics.semper.ui.common.Insets
@@ -162,19 +160,11 @@ class StaticAnalysisActivity :
         }
         goToStep(viewModel.inputs.value.step, animate = false)
 
-        // The test type stays on the Intent (not consumed): a recreation
-        // after process death re-reads it, and the ViewModel is authoritative
-        // once set.
-        TestType.fromWire(intent.getStringExtra(IntentKeys.TEST_TYPE))?.let { type -> viewModel.editLab { it.copy(testType = type) } }
-        // Home's Re-run of a lab test: its dimensions and taps, before the load card reads them (TD-280).
-        if (savedInstanceState == null && intent.hasExtra(IntentKeys.RERUN_SESSION_ID)) {
-            labRerun = LabRerun.from(intent)?.also { it.applyTo(viewModel) }
-        }
+        labRerun = openLabTest(firstOpen = savedInstanceState == null)
         // The slider keeps its own value across recreation; set it only on first open.
         if (savedInstanceState == null) {
             settings.sliderStrainWindow.value = viewModel.lab.testType.defaultStrainWindow.toFloat()
         }
-        setupLoadCard()
         // Hand-off from Home's media picker: the selection type already
         // decided the branch — image becomes the reference, video enters
         // the extract-frames flow. Consumed once: a process death restores
