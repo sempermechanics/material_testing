@@ -41,7 +41,6 @@ import com.sempermechanics.semper.ui.viewer.mechanical.ViewerDeflectionCorrectio
 import com.sempermechanics.semper.ui.viewer.mechanical.ViewerStressStrainHelper
 import com.sempermechanics.semper.ui.viewer.share.ShareCenter
 import com.sempermechanics.semper.ui.viewer.share.ShareExportController
-import com.sempermechanics.semper.ui.viewer.share.ShareKind
 import com.sempermechanics.semper.ui.viewer.share.ViewerReportFactory
 import com.sempermechanics.semper.ui.viewer.summary.SummaryHost
 import com.sempermechanics.semper.ui.viewer.summary.ViewerSummaryController
