@@ -1,11 +1,14 @@
 package com.sempermechanics.semper.ui.viewer
 
 import android.app.Application
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
+import com.sempermechanics.semper.data.cloud.SessionMetadataSync
 import com.sempermechanics.semper.data.mechanical.CurveCorrection
+import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.field.FieldStats
@@ -14,7 +17,9 @@ import com.sempermechanics.semper.report.BeamDeflection
 import com.sempermechanics.semper.report.StressStrain
 import com.sempermechanics.semper.ui.viewer.share.ShareExportJobs
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -96,6 +101,24 @@ class ResultViewerViewModel(
 
     /** Bending's deflection correction set in Results; null keeps the one the viewer opened with. */
     var deflectionCorrection: BeamDeflection.Correction? = null
+
+    /**
+     * Runs [write] on session [id] off the main thread, then queues the new
+     * metadata for a backed-up session's cloud copy (ADR-013, TD-152). Results'
+     * Adjust curve and Adjust deflection save through here: on this scope a
+     * rotation does not drop the write (ADR-016), and the write and its queue
+     * are one short step that finishes even if the screen closes meanwhile.
+     */
+    fun saveOnSession(id: String?, write: (Context, String) -> Unit) {
+        id ?: return
+        val appContext: Context = getApplication()
+        viewModelScope.launch(Dispatchers.IO) {
+            withContext(NonCancellable) {
+                write(appContext, id)
+                if (SessionStore.get(appContext, id)?.metadataStale == true) SessionMetadataSync.enqueue(appContext, id)
+            }
+        }
+    }
 
     /**
      * Fixed colour-scale bounds per field, set in the custom-scale dialog.
