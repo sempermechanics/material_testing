@@ -227,7 +227,7 @@ combination fits.
 
 ## engine-features {#engine-features}
 
-**When you see it:** Engine failure — decorrelation / no seed: phase correlation could not lock and no anchor matched.
+**When you see it:** Engine failure — decorrelation / no seed: no feature match between the images and no anchor matched.
 
 **What to do:** Check focus and speckle; ensure reference and deformed frames are
 the same scene; improve [speckle contrast](#speckle-contrast).

@@ -91,7 +91,7 @@ Digital Image Correlation measures deformation from photographs:
    material stretched and sheared.
 
 That is enough theory for most contributions. The full pipeline — anchor-lattice
-seeding (phase correlation + ICGN) → Delaunay mesh → RGDIC propagation → ICGN
+seeding (AKAZE + RANSAC homography + ICGN) → Delaunay mesh → RGDIC propagation → ICGN
 refinement → VSG strain — is
 in `engine/docs/ARCHITECTURE.md` inside the engine submodule.
 

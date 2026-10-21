@@ -15,8 +15,8 @@ package com.sempermechanics.semper.field
  * them through [fromWireCode] would call that failure [Finished].
  *
  * The named codes come from three places, pinned to them by test:
- * the engine's frozen return codes (`ENGINE_APP_CONTRACT.md` and
- * `full_field_path_c.cpp` for `-1`; `EngineFailure.ENGINE_ERROR_*`),
+ * the engine's frozen return codes (`ENGINE_APP_CONTRACT.md`;
+ * `EngineFailure.ENGINE_ERROR_*`; `-1` only from engines before 0.5.0),
  * the app's own codes (defined only here), and
  * [SweepEngineFailed]'s `-97`, which the sweep runner
  * once defined and no code path produces any more (pinned as a literal).
@@ -29,8 +29,11 @@ sealed class RunStop(val wireCode: Int) {
     /** The run worked through every frame (stop code 0). */
     data object Finished : RunStop(FINISHED)
 
-    /** Engine `-1`: no seed (no anchor solved, no phase lock, and the centre search diverged). */
+    /** Engine `-1` before 0.5.0: no seed (no anchor solved, no global lock, and the centre search diverged). */
     data object FeaturesUnmatched : RunStop(FEATURES_UNMATCHED)
+
+    /** Engine `-5` (0.5.0 on): no seed (no anchor solved, no global-motion lock, and the centre search diverged). */
+    data object SeedFailed : RunStop(SEED_FAILED)
 
     /** Engine `-2`: the ROI (or mask) left no grid points. */
     data object InvalidRoi : RunStop(INVALID_ROI)
@@ -65,6 +68,7 @@ sealed class RunStop(val wireCode: Int) {
         private const val FEATURES_UNMATCHED = -1
         private const val INVALID_ROI = -2
         private const val INIT_FAILED = -3
+        private const val SEED_FAILED = -5
         private const val LOW_CONVERGENCE = -96
         private const val SWEEP_ENGINE_FAILED = -97
         private const val SESSION_LIMIT = -98
@@ -75,6 +79,7 @@ sealed class RunStop(val wireCode: Int) {
             FEATURES_UNMATCHED,
             INVALID_ROI,
             INIT_FAILED,
+            SEED_FAILED,
             LOW_CONVERGENCE,
             SWEEP_ENGINE_FAILED,
             SESSION_LIMIT,
@@ -87,6 +92,7 @@ sealed class RunStop(val wireCode: Int) {
             FEATURES_UNMATCHED -> FeaturesUnmatched
             INVALID_ROI -> InvalidRoi
             INIT_FAILED -> InitFailed
+            SEED_FAILED -> SeedFailed
             LOW_CONVERGENCE -> LowConvergence
             SWEEP_ENGINE_FAILED -> SweepEngineFailed
             SESSION_LIMIT -> SessionLimit

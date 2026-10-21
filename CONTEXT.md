@@ -29,7 +29,7 @@ Use these words. Do not invent synonyms.
 | `.dat` | Binary field: 8 floats/point (`x y u v exx eyy exy znssd`), 32 bytes |
 | session | One saved analysis on disk (and optionally in the cloud) |
 
-Engine pipeline (`engine/docs/ARCHITECTURE.md`): anchor-lattice seeds (phase correlation + ICGN) → Delaunay → RGDIC → ICGN → VSG → `.dat`.
+Engine pipeline (`engine/docs/ARCHITECTURE.md`): anchor-lattice seeds (AKAZE + RANSAC homography + ICGN, engine 0.6.0) → Delaunay → RGDIC → ICGN → VSG → `.dat`.
 
 ## Layout
 
@@ -151,15 +151,16 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   (`firebase-bom` 35). `main` @ `9992576`.
 - **Open: `ccr-603fe346-1bw2fa`**: staff test accounts for QC and CI
   ([ADR-027](docs/adr/ADR-027-test-accounts.md)); off until `TEST_ACCOUNT_DOMAINS` is set.
-- **Engine: semper-dic-engine#9 merged** (0.5.0, the review's engine fixes). The pin stays
-  `23034fe` (0.4.2); the bump, with re-captured oracles, is TD-299.
+- **Engine: pin bump to v0.6.0 open** (`chore/engine-0.6.0`; TD-299): 0.5.0's review fixes and
+  `-5`, then 0.6.0's AKAZE seeding (rotation past 90° and large stretch now seed) on OpenCV
+  4.14. `main` still pins `23034fe` (0.4.2).
 - **material_testing** merges this `main` (last `17d7bc8`, material_testing#139,
   [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); its #140 carries the lab fixes and four of #457's
   commits; the rest come with the next sync. It released `v1.4-beta.2` (`d08aae07`) 2026-10-17.
 - **CI.** Tiers follow the diff, coverage floors rise with every test PR
   ([TESTING.md](docs/app/TESTING.md#coverage-floors)), and `main` requires `CI OK`.
 - **Owed.** A device smoke of `v1.2-beta.4` ([RELEASING.md](docs/ops/RELEASING.md) step 5); the
-  on-device characterization at the 0.4.2 pin (TD-212); Pixel 6
+  on-device characterization at the 0.6.0 pin (TD-212, TD-299's solves/s floor); Pixel 6
   benchmark runs for #435. The public release with each PR's emulator and Pixel checks,
   ADR-015's queued-work upgrade check; a licensed-account smoke of share, PDF and Delete;
   transfer notifications and AVI import on a device ([WORKFLOWS.md](docs/app/WORKFLOWS.md)
