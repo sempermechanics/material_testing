@@ -79,3 +79,37 @@ data class SweepRanges(
         }
     }
 }
+
+/**
+ * The deformed frame a sweep is solved against, as the wizard edits it: the
+ * middle of the sequence until one is picked ([Middle]), or a picked one
+ * ([At]). It used to be an `Int` with -1 for the middle, which is still how
+ * the saved state holds it ([savedIndex], [fromSaved]).
+ */
+sealed interface SweepFrame {
+
+    /** The middle of the sequence: 0-based frame n/2, 1-based n/2+1. */
+    data object Middle : SweepFrame
+
+    /** The 0-based frame [index], as picked. */
+    data class At(val index: Int) : SweepFrame
+
+    /** The saved state's `Int`: -1 for [Middle]. */
+    val savedIndex: Int get() = (this as? At)?.index ?: -1
+
+    /**
+     * The 0-based frame of a sequence of [count] this is: the picked one while
+     * it exists, else the middle; 0 with no frames.
+     */
+    fun resolve(count: Int): Int {
+        if (count <= 0) return 0
+        val last = count - 1
+        val picked = (this as? At)?.index?.takeIf { it in 0..last }
+        return picked ?: (count / 2).coerceIn(0, last)
+    }
+
+    companion object {
+        /** From the saved state's `Int` ([savedIndex]): any negative is the middle. */
+        fun fromSaved(index: Int): SweepFrame = if (index < 0) Middle else At(index)
+    }
+}

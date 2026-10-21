@@ -16,7 +16,7 @@ from google.api_core.exceptions import (
 )
 from google.cloud import firestore
 
-from .. import errors
+from .. import apps, errors, statuses
 from ..config import settings
 from ..licenses import (
     KIND_INSTITUTION,
@@ -219,6 +219,55 @@ def _load_user(uid: str):
     return {**snap.to_dict(), "uid": uid}
 
 
+# ---------------- test accounts (ADR-027) ----------------
+#: The phones a test account may hold at once per app: the default staff get
+#: when they name none, and the most they may name.
+TEST_ACCOUNT_DEFAULT_DEVICES = 3
+TEST_ACCOUNT_MAX_DEVICES = 10
+
+
+def test_account_of(user: dict | None) -> dict | None:
+    """The account's `testAccount` tag, or None for a real account.
+
+    The one test every test-account branch makes (ADR-027): a staff-created
+    QC or CI login carries `users/{uid}.testAccount` (`purpose`,
+    `expiresAt`, `maxDevices`, ...), and a real account has no such field, so
+    every path that asks this and gets None does exactly what it did before
+    test accounts existed. Only `repo.testaccounts` writes the field.
+    """
+    tag = (user or {}).get("testAccount")
+    return tag if isinstance(tag, dict) and tag else None
+
+
+# Not a test, although pytest would collect the name if a test module ever
+# imported it: tests reach it as `repo.test_account_of`.
+test_account_of.__test__ = False
+
+
+def max_test_devices(tag: dict) -> int:
+    """How many phones per app the test account `tag` may hold: its
+    `maxDevices`, clamped to 1..`TEST_ACCOUNT_MAX_DEVICES`, the default when
+    it is missing or not a number."""
+    try:
+        wanted = int(tag.get("maxDevices"))
+    except (TypeError, ValueError):
+        return TEST_ACCOUNT_DEFAULT_DEVICES
+    return max(1, min(TEST_ACCOUNT_MAX_DEVICES, wanted))
+
+
+def _active_devices(uid: str, app: str, *, exclude: str = "") -> list[str]:
+    """The ids of the devices ACTIVE for `uid` in `app`, `exclude` left out.
+    A record from before devices named their app is Semper's. One equality
+    query on `uid` (the automatic index); for test accounts only."""
+    out = []
+    for snap in _stream(db().collection("devices").where("uid", "==", uid)):
+        dev = snap.to_dict() or {}
+        if (snap.id != exclude and dev.get("status") == statuses.DEVICE_ACTIVE
+                and (dev.get("app") or apps.SEMPER) == app):
+            out.append(snap.id)
+    return out
+
+
 def _mode_patch(mode: str) -> dict:
     """The user-document fields that record an entitlement mode.
 
@@ -347,9 +396,10 @@ def _update_refs(updates: list) -> None:
         _commit(batch)
 
 
-def _get_all(refs: list) -> list:
+def _get_all(refs: list, field_paths=None) -> list:
     """Snapshots for every reference, in `_BATCH_LIMIT` chunks, one call each,
-    each under the query deadline.
+    each under the query deadline. `field_paths` keeps only those fields of
+    each document, as a query's `select()` does.
 
     `get_all` answers in no particular order, so callers key the result by
     `snap.id` or `snap.reference`, never by position.
@@ -357,7 +407,8 @@ def _get_all(refs: list) -> list:
     out = []
     for start in range(0, len(refs), _BATCH_LIMIT):
         out.extend(db().get_all(
-            refs[start:start + _BATCH_LIMIT], retry=_QUERY_RETRY, timeout=_QUERY_TIMEOUT_S,
+            refs[start:start + _BATCH_LIMIT], field_paths=field_paths,
+            retry=_QUERY_RETRY, timeout=_QUERY_TIMEOUT_S,
         ))
     return out
 

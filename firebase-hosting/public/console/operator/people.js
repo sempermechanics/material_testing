@@ -2,8 +2,10 @@
  * moves on record, accounts waiting for approval, and a phone released from
  * an unlicensed account.
  */
-import { api, setStatus, esc, confirmInPage, tellInPage } from "../auth.js";
-import { seatDevices, placeholderRows, retryRow } from "../util.js";
+import { api } from "../api.js";
+import { confirmInPage, tellInPage } from "../dialogs.js";
+import { setStatus } from "../status.js";
+import { esc, seatDevices, placeholderRows, retryRow } from "../util.js";
 import { explain } from "../messages.js";
 import { $, labelOf } from "./state.js";
 import { showLicence } from "./licences.js";

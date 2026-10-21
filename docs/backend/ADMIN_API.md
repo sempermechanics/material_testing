@@ -22,9 +22,9 @@ window, using the ID token of a signed-in session.
   [ENVIRONMENTS.md](../ops/ENVIRONMENTS.md)).
 - **Authentication:** `Authorization: Bearer <Firebase ID token>` from the Auth
   project. The gateway checks it and forwards it as `X-Forwarded-Authorization`;
-  the backend verifies it again (`backend/app/deps.py:56-70`).
+  the backend verifies it again (`backend/app/deps.py:55-69`).
 - **Errors:** JSON `{"detail": "<code>"}`, sometimes `"<code>: <suffix>"`. The
-  code is stable; the status per code is `backend/app/errors.py:296-340`
+  code is stable; the status per code is `backend/app/errors.py:300-351`
   ([ADR-020](../adr/ADR-020-backend-refusal-model.md)). A 429 carries `Retry-After`.
 - **Paging:** `page_size` (or `limit`) and `page_token`; the answer's `page` block
   carries `nextPageToken` and `hasMore`.
@@ -38,8 +38,8 @@ window, using the ID token of a signed-in session.
 |---|---|---|---|
 | `user` | any approved account | ID token | 401 `invalid_token`, 403 `not_approved` |
 | `institution-stepup` | an address in this licence's `adminEmails`, verified | ID token + TOTP second factor on a sign-in younger than `ADMIN_WEB_REAUTH_SECONDS` (`backend/app/routers/institutions.py:58-74`) | 403 `email_not_verified`; 404 `license_not_found` for a licence that does not name the caller, exactly as for one that does not exist; then 403 `mfa_required` / `reauth_required` |
-| `admin` | Semper staff (`role: admin` or `ADMIN_EMAILS`) | ID token (`backend/app/deps.py:334-345`) | 403 `not_admin` |
-| `admin-stepup` | staff | a signed request from the staff phone, or the browser step-up as above | as above |
+| `admin` | Semper staff (`role: admin`, or a token proving an address in `ADMIN_EMAILS`) | ID token (`backend/app/deps.py:333-347`) | 403 `not_admin` |
+| `admin-stepup` | staff | a signed request from the staff phone, registered from a sign-in that completed the second factor (`stepUpEligible`; [ADR-010](../adr/ADR-010-device-binding-per-app.md) amendment), or the browser step-up as above | as above; a phone registered without the second factor is 403 `mfa_required` |
 | `admin-stepup-fresh` | staff | as `admin-stepup`, with a sign-in younger than `ADMIN_WEB_REVOKE_REAUTH_SECONDS` (default 120 s) | `reauth_required` |
 
 With `CHECK_REVOKED_ON_STEP_UP=true` (after TD-214), a step-up call by a revoked or
@@ -47,13 +47,13 @@ disabled Firebase user is 401 `invalid_token`. The check spends a per-instance b
 for Firebase Auth Admin calls (`AUTH_ADMIN_CALLS_PER_SECOND`, default 10, burst
 `AUTH_ADMIN_BURST` 20; `backend/app/rate_limit.py:138-147`). When it is spent the
 check is not made and the call answers **503 `auth_check_busy`** with `Retry-After`
-(`backend/app/deps.py:598-606`): the token is not judged, so retry after the delay.
+(`backend/app/step_up.py:207-215`): the token is not judged, so retry after the delay.
 The consoles say "The server is busy checking sign-ins — wait a few seconds and try again." (`firebase-hosting/public/console/messages.js:18`) and do not retry by themselves.
 
 **A paused feature.** While an operator has a kill switch on (`KILL_SWITCHES`,
 [ENVIRONMENTS.md](../ops/ENVIRONMENTS.md)), the routes it guards answer **503
 `feature_paused`** with `Retry-After: 300`, before any work and after the token
-check (`deps.unless_paused`, `backend/app/deps.py:293-331`): `upload` or `backup`
+check (`deps.unless_paused`, `backend/app/deps.py:292-330`): `upload` or `backup`
 refuse `POST /v1/sessions` and `POST /v1/files/{id}/complete`; `restore` refuses
 `GET /v1/files/{id}/content` and `GET /v1/sessions/{sid}/bundle`, the bundle being
 the one a script can call. Nothing is wrong with the request; send it again after
@@ -71,11 +71,11 @@ Prefix `/v1/institutions/licenses/{license_id}`. Rate limits: `institution_bucke
 |---|---|---|---|---|
 | `GET /v1/institutions/licenses` (no prefix) | `user` | — | `{"licenses": [...]}`: the institution licences whose `adminEmails` hold the caller's verified address (`institutions.py:77-97`) | 403 `email_not_verified` |
 | `GET …/seats` | `institution-stepup` | `page_size` (≤ 1000, default 500), `page_token` | `{license, seats[], invites[], page}`; a seat is `uid`, `email`, device locks, `status` (`active` / `disabled` / `revoked`), lease fields, times (`roster.py:128-152`) | 404 `license_not_found` |
-| `POST …/seats` | `institution-stepup` | `{"email": "…"}` | `{licenseId, seat, invite}`: exactly one of the two is set (`:154-168`) | 400 `invalid_email`; 409 `member_already_licensed`, `license_seats_exhausted`, `license_seat_disabled`; 503 `claim_contended` (retry) |
+| `POST …/seats` | `institution-stepup` | `{"email": "…"}` | `{licenseId, seat, invite}`: exactly one of the two is set (`:154-168`); an account that is pending or has not verified the address gets the invite, not a seat | 400 `invalid_email`; 409 `member_already_licensed`, `license_seats_exhausted`, `license_seat_disabled`; 503 `claim_contended` (retry) |
 | `POST …/seats/import` | `institution-stepup` | `{"csv": "<file text>"}`: one column `email`, or the first column when there is no header; ≤ 500 rows, ≤ 512 000 characters (`backend/app/roster_io.py:22-25`) | `{licenseId, rows, counts, results[]}`; `counts` has `seated`, `invited`, `exists`, `duplicate`, `invalid`, `refused`, `unprocessed`; each result is `{row, email, outcome, error}` (`roster.py:170-241`) | 400 `roster_import_empty`, `roster_import_malformed`, `roster_import_no_email_column`; 413 `roster_import_too_many_rows`. Re-import the same file to finish `unprocessed` rows: rows already on the roster answer `exists` |
 | `GET …/seats/export` | `institution-stepup` | — | `text/csv`, every seat then every invite, `email` first, so the file imports back (`:243-258`); a cell starting with `=`, `+`, `-` or `@` is prefixed with `'` against spreadsheet formulas, and the import drops that one `'` again (`roster_io.undefused`, `backend/app/roster_io.py:112-120`) | — |
 | `GET …/summary` | `institution-stepup` | — | `{licenseId, seating, maxSeats, seatsUsed, leasesActive (floating only), expiresAt, counts}`; `counts` holds `assigned`, `onHold`, `activeLast7Days`, `invited`, `revocationPending`, `revocationPendingNoCheckIn`, `removed`, `expiringWithin30Days` (`roster.py:260-272`; `backend/app/roster_io.py:202-247`) | — |
-| `GET …/audit` | `institution-stepup` | `format` = `json` or `csv`; `since`, `until` (ISO date or instant, UTC; a bare `until` date includes that day); `page_size` (1–5000, default 100); `page_token` | JSON `{licenseId, events[], page}`, newest first; each event `{id, ts, uid, action, outcome, target, detail}`, no IP or device id. CSV: the same page, next token in the `X-Next-Page-Token` response header (`roster.py:274-313`; `backend/app/audit.py:169-208`). The CORS answer does not expose that header, so only a non-browser client (a script) can read it and page on; a browser gets one page. The console's CSV export therefore asks for 5,000 events and says so when it stopped at that ceiling (`firebase-hosting/public/console/audit-log.js`, shared by the institution page and the operator desk); page CSV from a script, or narrow `since` / `until` | 400 `invalid_audit_range`. Events written before 2026-10-18 are absent (TD-246) |
+| `GET …/audit` | `institution-stepup` | `format` = `json` or `csv`; `since`, `until` (ISO date or instant, UTC; a bare `until` date includes that day); `page_size` (1–5000, default 100); `page_token` | JSON `{licenseId, events[], page}`, newest first; each event `{id, ts, uid, action, outcome, target, detail}`, no IP or device id. CSV: the same page, next token in the `X-Next-Page-Token` response header (`roster.py:274-313`; `backend/app/repo/audit_log.py:116-155`). The CORS answer does not expose that header, so only a non-browser client (a script) can read it and page on; a browser gets one page. The console's CSV export therefore asks for 5,000 events and says so when it stopped at that ceiling (`firebase-hosting/public/console/audit-log.js`, shared by the institution page and the operator desk); page CSV from a script, or narrow `since` / `until` | 400 `invalid_audit_range`. Events written before 2026-10-18 are absent (TD-246) |
 | `PATCH …/seats/{uid}` | `institution-stepup` | `{"clearDeviceLock": true}` and/or `{"enabled": false}` | `{licenseId, seat}` (`:334-366`) | 400 `empty_patch`; 404 `seat_not_found`; 409 `seat_revoked` |
 | `DELETE …/seats/{uid}` | `institution-stepup` | — | `{licenseId, uid, revoked: true}`: the holder drops to Demo, keeps their data, and the slot is freed (`:368-380`) | 404 `seat_not_found` |
 | `DELETE …/invites/{invite_key}` | `institution-stepup` | — | `{licenseId, inviteId, revoked: true}` (`:315-332`) | 404 `invite_not_found` |
@@ -92,7 +92,7 @@ signed entitlement's `graceUntil` passes (at most 14 days by default,
 Every route in the table above is also mounted for staff under
 `/v1/admin/licenses/{license_id}` (in place of `/v1/institutions/licenses/{license_id}`),
 for any institution licence, whether or not the caller is in its `adminEmails`
-(`backend/app/routers/admin.py:535-567`). An individual licence answers 404
+(`backend/app/routers/admin.py:480-512`). An individual licence answers 404
 `license_not_found`. The request and response bodies are the same.
 
 | Routes | Tier |
@@ -115,11 +115,11 @@ pasted CSV does not survive the round trip: paste it and import again on return.
 |---|---|---|
 | `GET /v1/admin/users` | `admin` | List accounts, `status` filter, paged |
 | `POST /v1/admin/users/{uid}/approve` | `admin-stepup` | Approve a PENDING account |
-| `POST /v1/admin/users/{uid}/revoke` | `admin-stepup` | Suspend an account and revoke its refresh tokens (best-effort until TD-214; the audit row says `sessionsRevoked`) |
+| `POST /v1/admin/users/{uid}/revoke` | `admin-stepup` | Suspend an account and revoke the refresh tokens of every Auth user that signs in to it, linked subs included (best-effort until TD-214; the audit row says `sessionsRevoked`, `authUsers`, `authUsersRevoked`) |
 | `PATCH /v1/admin/users/{uid}/config` | `admin-stepup` | Per-user limit overrides |
 | `POST /v1/admin/device-releases` | `admin-stepup` | `{"email"}`: free a Demo account's registered phone |
-| `GET /v1/admin/licenses` | `admin` | Licences, newest first, paged (`limit` ≤ 200, `page_token`, `include_demo`, `include_revoked`). `q` (exact address, domain or key prefix) is **deprecated**: it puts an address in the URL, which request logs keep. It still answers for one release and logs `deprecated_query_search` with the caller's uid, never the value (`backend/app/routers/admin.py:141-163`; removal TD-273) |
-| `POST /v1/admin/licenses/search` | `admin` | The search with its terms in the body: `{"q", "limit", "page_token", "include_demo", "include_revoked"}`, `q` required (at most 320 characters; empty pages the listing), any other field 422. On `admin_bucket`, no step-up; the answer has the GET's shape (`backend/app/routers/admin.py:166-174`; `AdminLicenseSearch`, `backend/app/models.py:458-472`). Declared at the gateway ahead of `/{licenseId}` (`backend/gateway/openapi.yaml:650-668`). The operator desk searches with it |
+| `GET /v1/admin/licenses` | `admin` | Licences, newest first, paged (`limit` ≤ 200, `page_token`, `include_demo`, `include_revoked`, `include_test`). A test account's licence (`testAccount: true` on every row, false on the rest) is left out unless `include_test=true`, filtered from the page, so a page may be short with more to come. `q` (exact address, domain or key prefix) is **deprecated**: it puts an address in the URL, which request logs keep. It still answers for one release and logs `deprecated_query_search` with the caller's uid, never the value (`backend/app/routers/admin.py:136-158`; removal TD-273) |
+| `POST /v1/admin/licenses/search` | `admin` | The search with its terms in the body: `{"q", "limit", "page_token", "include_demo", "include_revoked", "include_test"}`, `q` required (at most 320 characters; empty pages the listing), any other field 422. On `admin_bucket`, no step-up; the answer has the GET's shape (`backend/app/routers/admin.py:161-169`; `AdminLicenseSearch`, `backend/app/models.py:458-472`). Declared at the gateway ahead of `/{licenseId}` (`backend/gateway/openapi.yaml:650-668`). The operator desk searches with it |
 | `GET /v1/admin/licenses/{license_id}` | `admin` | One licence |
 | `POST /v1/admin/licenses` | `admin-stepup` | Mint; the plaintext key is returned once |
 | `PATCH /v1/admin/licenses/{license_id}` | `admin-stepup` | Terms, renewal, `clearDeviceLock` |
@@ -130,6 +130,11 @@ pasted CSV does not survive the round trip: paste it and import again on return.
 | `PATCH /v1/admin/licenses/{license_id}/seats/{uid}/device` | `admin-stepup` | Clear one seat's device lock |
 | `GET /v1/admin/licenses/{license_id}/reconcile` | `admin` | Per-seat check of what a licence actually entitles; `revokedStillRunning` |
 | `GET /v1/admin/licenses/{license_id}/device-history` | `admin` | Recent device moves |
+| `GET /v1/admin/test-accounts` | `admin` | Staff test accounts ([ADR-027](../adr/ADR-027-test-accounts.md)), newest first: `{"accounts": [{"uid", "email", "purpose", "expiresAt", "maxDevices", "note", "createdAt", "activeDevices", "status"}]}`. `activeDevices` counts ACTIVE phones over both apps; `status` is `active`, `expired` (past `expiresAt`, not yet ended by the daily job) or `suspended` (`backend/app/routers/admin_test_accounts.py:36-43`, `backend/app/repo/testaccounts.py`) |
+| `POST /v1/admin/test-accounts` | `admin-stepup-fresh` | Create a QC or CI login. Body `{"email", "purpose": "qc"\|"ci", "days"?, "maxDevices"?, "note"?}`: `days` 1..90 (a QC account without it lasts 30; a CI account without it never ends and holds a perpetual licence), `maxDevices` 1..10 (default 3), `note` at most 200 characters, any other field 422 (`AdminTestAccountCreate`, `backend/app/models.py:519-546`). 201 `{"uid", "email", "password", "purpose", "expiresAt", "maxDevices", "licenseId"}` with `Cache-Control: no-store`; the password (20 URL-safe characters) is in this answer only. 403 `test_accounts_disabled` when `TEST_ACCOUNT_DOMAINS` is empty or lacks the address's domain (exact match); 409 `email_in_use` for a staff address (`ADMIN_EMAILS`) or one that has an account, a Firebase Auth user or a licence or invite; 503 `auth_check_busy` / `internal_error` when the Auth project cannot be asked. Audited `test_account_created` (`backend/app/services/testaccounts.py:72-107`) |
+| `POST /v1/admin/test-accounts/{uid}/extend` | `admin-stepup-fresh` | Body `{"days"}` (1..90): the account and its licence now end `days` from now (sooner too, if that is what it says; a CI account with no end gets one). Answers the account's row as the list shows it. 404 `user_not_found` for a uid that is not a test account. Audited `test_account_extended` (`services/testaccounts.py:117-132`) |
+| `POST /v1/admin/test-accounts/{uid}/password` | `admin-stepup-fresh` | `{"password"}`, a new one, with `Cache-Control: no-store`; every refresh token the account holds is revoked. Audited `test_account_password_reset`, without the password (`services/testaccounts.py:135-146`) |
+| `DELETE /v1/admin/test-accounts/{uid}` | `admin-stepup-fresh` | 204. End the account now: suspended, tokens revoked, its test licences revoked, then the holder erasure's own steps (Drive tree, Firestore records, Firebase Auth users; `erase_data`, `backend/app/services/account.py`), run as staff. Audited `test_account_ended`, not `ACCOUNT_DELETE` (`services/testaccounts.py:149-167`) |
 
 ### Account routes a script may meet
 
@@ -159,7 +164,8 @@ curl -sS -H "Authorization: Bearer $TOKEN" -o audit.csv \
 
 `backend/tests/test_roster_bulk.py` (import, export, summary, audit),
 `backend/tests/test_licence_search_post.py` (the POST search and the deprecated `q`),
-`backend/tests/test_claim_code.py` (the claim route), `backend/tests/test_kill_switches.py`
+`backend/tests/test_claim_code.py` (the claim route), `backend/tests/test_test_accounts.py`
+(test accounts and their expiry job), `backend/tests/test_kill_switches.py`
 (`feature_paused`),
 `backend/tests/test_route_authz_matrix.py` (tiers and cross-tenant refusals),
 `backend/tests/test_gateway_parity.py` (every route declared at the gateway).

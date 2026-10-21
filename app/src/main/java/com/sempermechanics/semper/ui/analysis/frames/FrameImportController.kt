@@ -84,11 +84,12 @@ class FrameImportController(
  * Costs nothing: the sizes were measured during import.
  */
 internal fun AnalysisViewModel.checkFrameSizes(resources: Resources) {
-    val ref = refSize
-    val badNames = deformedFrames
+    val inputs = inputs.value
+    val ref = inputs.refSize
+    val badNames = inputs.deformedFrames
         .filter { it.size != null && it.size != ref }
         .map { frame -> frame.name.ifEmpty { File(frame.path).name } }
-    frameSizeError = if (!ref.isKnown || badNames.isEmpty()) {
+    val error = if (!ref.isKnown || badNames.isEmpty()) {
         null
     } else {
         resources.getQuantityString(
@@ -99,6 +100,7 @@ internal fun AnalysisViewModel.checkFrameSizes(resources: Resources) {
             mismatchNames(resources, badNames),
         )
     }
+    edit { it.copy(frameSizeError = error) }
 }
 
 /** First few mismatched filenames, then "and N more" when the list is long. */

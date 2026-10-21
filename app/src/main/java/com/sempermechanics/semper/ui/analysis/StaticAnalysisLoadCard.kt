@@ -9,6 +9,7 @@ import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.data.session.CacheJanitor
 import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.load.AnalysisLoadCard
+import com.sempermechanics.semper.ui.analysis.wizard.lab
 import com.sempermechanics.semper.ui.common.dialog.Dialogs
 import com.sempermechanics.semper.ui.common.dialog.Feedback
 import kotlinx.coroutines.Dispatchers
@@ -32,7 +33,7 @@ import java.io.IOException
  * TooManyViews cap.
  */
 internal fun StaticAnalysisActivity.setupLoadCard() {
-    if (!viewModel.testType.hasMachineLoad) return
+    if (!viewModel.lab.testType.hasMachineLoad) return
     val root = binding.stubLoadCard.inflate()
     loadCard = AnalysisLoadCard(
         activity = this,
@@ -45,7 +46,7 @@ internal fun StaticAnalysisActivity.setupLoadCard() {
         onChanged = ::checkReady,
         confirmOpenFaq = ::confirmOpenFaq,
     )
-    if (viewModel.testType == TestType.BENDING) bindBendingStrainInfo()
+    if (viewModel.lab.testType == TestType.BENDING) bindBendingStrainInfo()
 }
 
 /**
@@ -66,8 +67,8 @@ private fun StaticAnalysisActivity.bindBendingStrainInfo() {
 
 /** Bending: tap the beam's edges on the reference; needs the photo and the thickness first. */
 private fun StaticAnalysisActivity.openLoadPointEditor() {
-    val bytes = viewModel.refBytes
-    val thickness = viewModel.geometry.thicknessMm
+    val bytes = viewModel.inputs.value.refBytes
+    val thickness = viewModel.lab.geometry.thicknessMm
     when {
         bytes == null -> Feedback.toast(this, R.string.load_image_first)
         thickness <= 0f -> Feedback.toast(this, R.string.load_point_need_thickness, long = true)
@@ -98,10 +99,10 @@ private fun StaticAnalysisActivity.openBeamEdgeTaps(bytes: ByteArray, thicknessM
         }
         val intent = Intent(this@openBeamEdgeTaps, BeamEdgeTapActivity::class.java)
             .putExtra(IntentKeys.IMAGE_FILE_PATH, tempFile.absolutePath)
-            .putExtra(IntentKeys.IMAGE_WIDTH, viewModel.realRefWidth)
-            .putExtra(IntentKeys.IMAGE_HEIGHT, viewModel.realRefHeight)
+            .putExtra(IntentKeys.IMAGE_WIDTH, viewModel.inputs.value.refSize.width)
+            .putExtra(IntentKeys.IMAGE_HEIGHT, viewModel.inputs.value.refSize.height)
             .putExtra(IntentKeys.BEAM_THICKNESS_MM, thicknessMm)
-            .putExtra(IntentKeys.BEAM_EDGE_TAPS, viewModel.geometry.loadPoint.toArray())
+            .putExtra(IntentKeys.BEAM_EDGE_TAPS, viewModel.lab.geometry.loadPoint.toArray())
         pickLoadPoint.launch(intent)
     }
 }

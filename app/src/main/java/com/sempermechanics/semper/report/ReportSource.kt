@@ -2,6 +2,12 @@ package com.sempermechanics.semper.report
 
 import android.graphics.Bitmap
 import com.sempermechanics.semper.data.session.SessionRecord
+import com.sempermechanics.semper.data.session.frameParams
+import com.sempermechanics.semper.data.session.imageSize
+import com.sempermechanics.semper.data.session.roi
+import com.sempermechanics.semper.field.FrameParams
+import com.sempermechanics.semper.field.ImageSize
+import com.sempermechanics.semper.field.Roi
 
 /**
  * The per-session half of a report's inputs: what every frame's
@@ -13,8 +19,10 @@ import com.sempermechanics.semper.data.session.SessionRecord
  * (`ViewerReportFactory`, from its `Source`). They differ only in the values
  * they feed in, which is what the two factories capture.
  *
- * The per-frame lists are empty for an ordinary analysis; a frame past the
- * end of one uses the session value, as both callers did.
+ * Its inputs are the app's own value types ([FrameParams], [Roi],
+ * [ImageSize]) rather than copies of their fields: a frame's parameters are
+ * [FrameParams.at]'s, so a frame past the end of a sweep's per-frame list
+ * uses the session value, as both callers did.
  */
 data class ReportSource(
     val sessionId: String,
@@ -22,26 +30,17 @@ data class ReportSource(
     val refName: String,
     /** The names a frame's report prints, looked up by [forFrame]'s `nameIndex`. */
     val frameNames: List<String>,
-    val imgW: Int,
-    val imgH: Int,
-    val roi: RoiData,
+    /** The reference's size, in pixels. */
+    val size: ImageSize,
+    /** The ROI the run solved over. */
+    val roi: Roi,
     val strainMethod: String,
-    val subset: Int,
-    val step: Int,
-    val strainWindow: Int,
-    val subsetPerFrame: List<Int> = emptyList(),
-    val stepPerFrame: List<Int> = emptyList(),
-    val strainWindowPerFrame: List<Int> = emptyList(),
+    /** Every frame's solver parameters; a sweep varies them frame by frame. */
+    val frameParams: FrameParams,
     val engineStats: EngineStats = EngineStats.EMPTY,
     /** The viewer's PDFs draw the MIN marker too; the cloud bundle's draw MAX only. */
     val drawMinMarker: Boolean = true,
 ) {
-    fun subsetAt(frameIndex: Int): Int = subsetPerFrame.getOrElse(frameIndex) { subset }
-
-    fun stepAt(frameIndex: Int): Int = stepPerFrame.getOrElse(frameIndex) { step }
-
-    fun strainWindowAt(frameIndex: Int): Int = strainWindowPerFrame.getOrElse(frameIndex) { strainWindow }
-
     /**
      * Frame [frameIndex]'s build params. [nameIndex] picks its printed name
      * from [frameNames]: the viewer passes the planned frame (they differ past
@@ -60,26 +59,29 @@ data class ReportSource(
         nameIndex: Int = frameIndex,
         analysisDate: String = ReportBuilder.currentAnalysisDate(),
         onFramePhoto: Boolean = false,
-    ): ReportBuilder.ReportBuildParams = ReportBuilder.ReportBuildParams(
-        data = data,
-        baseImg = baseImg,
-        defImgForCover = defImgForCover,
-        imgW = imgW,
-        imgH = imgH,
-        step = stepAt(frameIndex),
-        sessionId = sessionId,
-        specimenName = ReportImageNames.specimen(refName),
-        analysisDate = analysisDate,
-        subsetSize = subsetAt(frameIndex),
-        strainWindow = strainWindowAt(frameIndex),
-        strainMethod = strainMethod,
-        roiData = roi,
-        engineStats = engineStats,
-        referenceImageName = ReportImageNames.reference(refName),
-        deformedImageName = ReportImageNames.deformed(frameNames, nameIndex),
-        drawMinMarker = drawMinMarker,
-        fieldsOnFramePhoto = onFramePhoto,
-    )
+    ): ReportBuilder.ReportBuildParams {
+        val params = frameParams.at(frameIndex)
+        return ReportBuilder.ReportBuildParams(
+            data = data,
+            baseImg = baseImg,
+            defImgForCover = defImgForCover,
+            imgW = size.width,
+            imgH = size.height,
+            step = params.step,
+            sessionId = sessionId,
+            specimenName = ReportImageNames.specimen(refName),
+            analysisDate = analysisDate,
+            subsetSize = params.subset,
+            strainWindow = params.strainWindow,
+            strainMethod = strainMethod,
+            roi = roi,
+            engineStats = engineStats,
+            referenceImageName = ReportImageNames.reference(refName),
+            deformedImageName = ReportImageNames.deformed(frameNames, nameIndex),
+            drawMinMarker = drawMinMarker,
+            fieldsOnFramePhoto = onFramePhoto,
+        )
+    }
 
     companion object {
         /** The viewer's session id when the analysis has none (never synced, or run offline). */
@@ -93,16 +95,10 @@ data class ReportSource(
             sessionId = record.id,
             refName = record.refName,
             frameNames = bundleFrameNames(record),
-            imgW = record.imgW,
-            imgH = record.imgH,
-            roi = RoiData(record.roiX, record.roiY, record.roiW, record.roiH),
+            size = record.imageSize,
+            roi = record.roi,
             strainMethod = record.strainMethod.ifBlank { DEFAULT_STRAIN_METHOD },
-            subset = record.subset,
-            step = record.step,
-            strainWindow = record.strainWindow,
-            subsetPerFrame = record.sweepSubsets,
-            stepPerFrame = record.sweepSteps,
-            strainWindowPerFrame = record.sweepStrainWindows,
+            frameParams = record.frameParams,
             engineStats = EngineStats.fromList(record.engineStats),
             drawMinMarker = false,
         )

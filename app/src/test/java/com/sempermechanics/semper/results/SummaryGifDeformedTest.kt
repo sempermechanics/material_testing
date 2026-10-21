@@ -1,6 +1,9 @@
 package com.sempermechanics.semper.results
 
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.ImageSize
+import com.sempermechanics.semper.field.ValueRange
+import com.sempermechanics.semper.report.HeatmapRequest
 import com.sempermechanics.semper.report.VisualizationEngine
 import com.sempermechanics.semper.ui.viewer.HeatmapFit
 import com.sempermechanics.semper.ui.viewer.summary.SummaryAnimation
@@ -42,7 +45,7 @@ class SummaryGifDeformedTest {
         const val X0 = 16
         const val Y0 = 12
         const val FRAMES = 3
-        val BOUNDS = 0f to 0.012f
+        val BOUNDS = ValueRange(0f, 0.012f)
     }
 
     /** Frame [f]: Exx rising left to right, every point moved (4 + 4·f, 0) px. */
@@ -108,27 +111,28 @@ class SummaryGifDeformedTest {
             fun expected(plane: VisualizationEngine.IndexPlane) =
                 HeatmapFit.cropAndScale(plane, W, H, fit, SummaryAnimation.MAX_EDGE)
             val deformed = expected(
-                VisualizationEngine.generateDeformedHeatmapIndices(
-                    data,
-                    W,
-                    H,
-                    DicResult.IDX_EXX,
-                    STEP,
-                    BOUNDS.first,
-                    BOUNDS.second,
-                    cap,
+                VisualizationEngine.indices(
+                    HeatmapRequest(
+                        data = data,
+                        size = ImageSize(W, H),
+                        valIndex = DicResult.IDX_EXX,
+                        step = STEP,
+                        bounds = BOUNDS,
+                        maxLongEdge = cap,
+                        displaced = true,
+                    ),
                 ),
             )
             val reference = expected(
-                VisualizationEngine.generateHeatmapIndices(
-                    data,
-                    W,
-                    H,
-                    DicResult.IDX_EXX,
-                    STEP,
-                    BOUNDS.first,
-                    BOUNDS.second,
-                    cap,
+                VisualizationEngine.indices(
+                    HeatmapRequest(
+                        data = data,
+                        size = ImageSize(W, H),
+                        valIndex = DicResult.IDX_EXX,
+                        step = STEP,
+                        bounds = BOUNDS,
+                        maxLongEdge = cap,
+                    ),
                 ),
             )
             val (size, indices) = read[f]

@@ -31,6 +31,8 @@ import com.sempermechanics.semper.data.mechanical.TypedLoads.Entry
 import com.sempermechanics.semper.imaging.video.VideoFrameExtractor
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.defTimesAfterRefMs
+import com.sempermechanics.semper.ui.analysis.wizard.editLab
+import com.sempermechanics.semper.ui.analysis.wizard.lab
 import com.sempermechanics.semper.ui.analysis.wizard.setTypedLoads
 import com.sempermechanics.semper.ui.analysis.wizard.typedLoadsKg
 import kotlinx.coroutines.Dispatchers
@@ -67,7 +69,7 @@ internal object TypedLoadsSheet {
      */
     fun showFor(activity: AppCompatActivity, viewModel: AnalysisViewModel, onSaved: () -> Unit) {
         val paths = viewModel.defFilePaths
-        val video = viewModel.defFromVideo
+        val video = viewModel.inputs.value.defFromVideo
         val labelRes = if (video) R.string.load_typed_frame_fmt else R.string.load_typed_photo_fmt
         val frames = paths.mapIndexed { index, path ->
             Frame(
@@ -81,8 +83,8 @@ internal object TypedLoadsSheet {
             )
         }
         val initial = viewModel.typedLoadsKg.takeIf { it.size == paths.size } ?: List(paths.size) { null }
-        show(activity, frames, initial, viewModel.typedLoadsEntry) { kg, entry ->
-            viewModel.typedLoadsEntry = entry
+        show(activity, frames, initial, viewModel.lab.typedLoadsEntry) { kg, entry ->
+            viewModel.editLab { it.copy(typedLoadsEntry = entry) }
             viewModel.setTypedLoads(kg)
             onSaved()
         }

@@ -23,13 +23,12 @@ internal val ResultViewerActivity.geometry: SpecimenGeometry
 internal val ResultViewerActivity.curveCorrection: CurveCorrection
     get() = viewModel.curveCorrection ?: args.labSession.curveCorrection
 
-/** The session's lab test with Results' corrections: what the curve, share sheet, report and CSV read. */
-internal val ResultViewerActivity.labSession: LabSession
-    get() = args.labSession.copy(geometry = geometry, curveCorrection = curveCorrection)
-
-/** How this session's loads become stress; axial for a plain DIC session. */
-internal val ResultViewerActivity.stressModel: StressStrain.Model
-    get() = labSession.stressModelOrAxial()
+/**
+ * The session's lab test with Results' corrections: what the curve, share
+ * sheet, report and CSV read ([ResultViewerActivity.labSession]).
+ */
+internal fun ResultViewerActivity.correctedLabSession(): LabSession =
+    args.labSession.copy(geometry = geometry, curveCorrection = curveCorrection)
 
 /**
  * Results' Adjust curve: redraws the cached curve under [correction]

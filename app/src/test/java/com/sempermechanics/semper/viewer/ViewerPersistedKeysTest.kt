@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.lifecycle.SavedStateHandle
 import androidx.test.core.app.ApplicationProvider
+import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.fixtures.viewerArgs
 import com.sempermechanics.semper.fixtures.viewerController
 import com.sempermechanics.semper.fixtures.writeGridBatch
@@ -42,7 +43,7 @@ class ViewerPersistedKeysTest {
         val batchDir = temp.newFolder("batch")
         writeGridBatch(batchDir, frames = 2, grid = 4, step = 4)
         val controller = viewerController(viewerArgs(batchDir, grid = 4, step = 4))
-        controller.get().pickShareDocument(ShareKind.CSV, "picked.csv")
+        controller.get().share.pickShareDocument(ShareKind.CSV, "picked.csv")
 
         val saved = Bundle()
         controller.saveInstanceState(saved)
@@ -51,6 +52,19 @@ class ViewerPersistedKeysTest {
         assertTrue(saved.containsKey("CURRENT_FRAME"))
         assertTrue(saved.containsKey("SHOWING_SUMMARY"))
         assertEquals("csv", saved.getString("PENDING_SHARE_KIND"))
+    }
+
+    @Test
+    fun `the field on screen is one saved value, U until set`() {
+        val state = SavedStateHandle()
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val vm = ResultViewerViewModel(app, state)
+        assertEquals(FieldKind.U, vm.field)
+
+        vm.field = FieldKind.EYY
+
+        assertEquals("EYY", state.get<String>("field"))
+        assertEquals("a restored process opens on it", FieldKind.EYY, ResultViewerViewModel(app, state).field)
     }
 
     @Test

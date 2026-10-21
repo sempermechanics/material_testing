@@ -2,6 +2,7 @@ package com.sempermechanics.semper.ui.analysis.run
 
 import android.content.Context
 import androidx.annotation.WorkerThread
+import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.BatchAnalysisOutcome
@@ -12,12 +13,17 @@ import com.sempermechanics.semper.util.AtomicFiles
 import timber.log.Timber
 import java.io.File
 import java.io.IOException
+import java.util.Locale
 
 /*
  * A cancelled run keeps nothing (owner decision, 2026-10-15), batch or sweep:
  * not its frames, not a row, not an upload. Its results never left the
  * session's staging folder ([RunSession.staging]); what a batch run did move
- * is the deformed images it reached, which go back to where it found them.
+ * is the deformed images it reached ([keepDeformedFrame]), which go back to
+ * where it found them ([returnMovedFrames]). A batch run that throws before
+ * its results are committed is undone the same way ([undoFailedBatch]), and
+ * so is one that throws after, before the wizard follows its frames
+ * ([undoCommittedBatch]).
  */
 
 /**
@@ -25,10 +31,11 @@ import java.io.IOException
  * combinations it solved ([discardRun]): no row, no upload, and any saved
  * sweep stays exactly as it was. A sweep moves no image before it
  * saves, so there is none to put back. Like a cancelled batch run, it sends
- * no analytics end event. [executionTimeMs] is how long it ran.
+ * no analytics end event, and its outcome names no session, so the wizard
+ * stays as it was. [executionTimeMs] is how long it ran.
  */
 @WorkerThread
-internal fun AnalysisViewModel.discardCancelledSweep(
+internal fun discardCancelledSweep(
     appContext: Context,
     session: RunSession,
     executionTimeMs: Int,
@@ -37,7 +44,10 @@ internal fun AnalysisViewModel.discardCancelledSweep(
     return cancelledOutcome(executionTimeMs)
 }
 
-/** How a cancelled run ends: nothing solved is kept, and there is no session to open. */
+/**
+ * How a cancelled run ends: nothing solved is kept, and there is no session
+ * to open or for the wizard to take ([BatchAnalysisOutcome.session]).
+ */
 internal fun cancelledOutcome(executionTimeMs: Int) = BatchAnalysisOutcome(
     engineErrorCode = RunStop.Cancelled.wireCode,
     firstFrameValidPoints = 0,
@@ -64,6 +74,79 @@ internal fun AnalysisViewModel.discardCancelledBatch(
     val stranded = paths != launched
     if (stranded) repointDeformedPathsOnMain(paths)
     discardRun(appContext, session, keepDir = stranded)
+}
+
+/**
+ * A batch run in [session] that threw before it committed its results (a
+ * full disk under `DicFieldIo.write`, say) is undone as a cancelled one is
+ * ([discardCancelledBatch]): each image it moved out of [launched] (to
+ * [resolved]) goes back, and nothing else of it is kept, so the next Compute
+ * finds its frames where the wizard left them. [failure] then goes on up as
+ * the run's outcome.
+ */
+@WorkerThread
+internal fun AnalysisViewModel.undoFailedBatch(
+    appContext: Context,
+    session: RunSession,
+    launched: List<String>,
+    resolved: List<String>,
+    failure: Exception,
+): Nothing {
+    Timber.w(failure, "Batch run failed before its results were committed; undoing it")
+    discardCancelledBatch(appContext, session, launched, resolved)
+    throw failure
+}
+
+/**
+ * A batch run in [session] that threw after it committed its results but
+ * before the wizard followed its frames ([repointDeformedPathsOnMain]): in the
+ * "Saving…" post, the stale-frame prune, or Re-run's keep past the
+ * `IOException` it catches itself (TD-285). The commit had moved the frames
+ * into the session while the wizard still named [launched], so it is undone
+ * as one that threw before its commit is ([undoFailedBatch]), its committed
+ * results first ([RunSession.dropResults]): each image goes back from
+ * [resolved], or the wizard is pointed at where it stayed, and nothing of the
+ * run is kept. [failure] then goes on up as the run's outcome.
+ */
+@WorkerThread
+internal fun AnalysisViewModel.undoCommittedBatch(
+    appContext: Context,
+    session: RunSession,
+    launched: List<String>,
+    resolved: List<String>,
+    failure: Exception,
+): Nothing {
+    Timber.w(failure, "Batch run failed after its results were committed; undoing it")
+    session.dropResults()
+    discardCancelledBatch(appContext, session, launched, resolved)
+    throw failure
+}
+
+/**
+ * Keeps frame [frameIndex]'s deformed image [source], whose [bytes] the run
+ * has already read, in [rawDeformedDir] under [rawName], index-prefixed only
+ * if that name is taken; returns the file it is kept as. An image from the
+ * import cache is moved: both directories are app-private storage, so that
+ * is a rename rather than a second multi-megabyte write, and the fallback
+ * writes [bytes] rather than read the file a second time. One in another
+ * session's directory (an analysis this wizard saved before) is copied and
+ * left where it is: it is that session's own image. [returnMovedFrames]
+ * undoes it.
+ */
+internal fun keepDeformedFrame(
+    source: File,
+    bytes: ByteArray,
+    rawDeformedDir: File,
+    rawName: String,
+    frameIndex: Int,
+): File {
+    val target = File(rawDeformedDir, rawName).let {
+        if (it.exists()) File(rawDeformedDir, String.format(Locale.US, "%04d_%s", frameIndex, rawName)) else it
+    }
+    val sessionDir = rawDeformedDir.absoluteFile.parentFile
+    val copyOnly = sessionDir != null && SessionPaths.isInOtherSession(source, sessionDir)
+    if (copyOnly || !source.renameTo(target)) target.writeBytes(bytes)
+    return target
 }
 
 /**

@@ -6,6 +6,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.fixtures.idleUntil
 import com.sempermechanics.semper.fixtures.launchViewer
 import com.sempermechanics.semper.fixtures.viewerArgs
@@ -89,7 +90,7 @@ class ViewerControllersTest {
 
         repeat(FRAMES + 2) { activity.click(R.id.btnNextFrame) }
 
-        assertEquals(FRAMES - 1, activity.currentFrameIndex)
+        assertEquals(FRAMES - 1, activity.viewModel.currentFrameIndex)
         assertEquals(FRAMES.toString(), activity.frameField())
         assertFalse(next.isEnabled)
         assertEquals(0.5f, next.alpha)
@@ -108,7 +109,7 @@ class ViewerControllersTest {
 
         activity.click(R.id.btnNextFrame)
         assertFalse(activity.isShowingSummary)
-        assertEquals(0, activity.currentFrameIndex)
+        assertEquals(0, activity.viewModel.currentFrameIndex)
         assertEquals("1", activity.frameField())
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.layoutFrameJump).visibility)
     }
@@ -141,7 +142,7 @@ class ViewerControllersTest {
     @Test
     fun `a fixed scale is stored in the field's own unit and Auto clears it`() {
         val activity = viewer()
-        activity.currentDataIndex = DicResult.IDX_EXX
+        activity.viewModel.field = FieldKind.EXX
         activity.idle()
 
         val dialog = activity.openScaleDialog()
@@ -151,15 +152,15 @@ class ViewerControllersTest {
         activity.idle()
 
         // Typed in millistrain, kept in strain — what the renderer compares.
-        val fixed = activity.customBoundsFor(DicResult.IDX_EXX)
+        val fixed = activity.viewModel.customBounds[DicResult.IDX_EXX]
         assertNotNull(fixed)
         assertEquals(-0.002f, fixed!!.min, 1e-7f)
         assertEquals(0.003f, fixed.max, 1e-7f)
-        assertNull("other fields keep their auto scale", activity.customBoundsFor(DicResult.IDX_U))
+        assertNull("other fields keep their auto scale", activity.viewModel.customBounds[DicResult.IDX_U])
 
         activity.openScaleDialog().getButton(AlertDialog.BUTTON_NEUTRAL).performClick()
         activity.idle()
-        assertNull(activity.customBoundsFor(DicResult.IDX_EXX))
+        assertNull(activity.viewModel.customBounds[DicResult.IDX_EXX])
     }
 
     @Test
@@ -171,7 +172,7 @@ class ViewerControllersTest {
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         activity.idle()
 
-        assertNull(activity.customBoundsFor(activity.currentDataIndex))
+        assertNull(activity.viewModel.customBounds[activity.viewModel.field.dataIndex])
     }
 
     @Test
@@ -191,11 +192,11 @@ class ViewerControllersTest {
         val activity = viewer()
         val top = activity.findViewById<View>(R.id.chromeTop)
 
-        activity.bumpChrome()
+        activity.chrome.bumpChrome()
         shadowOf(activity.mainLooper).idleFor(PAST_AUTO_HIDE)
         assertEquals(View.INVISIBLE, top.visibility)
 
-        activity.bumpChrome()
+        activity.chrome.bumpChrome()
         activity.idle()
         assertEquals(View.VISIBLE, top.visibility)
     }
@@ -205,18 +206,18 @@ class ViewerControllersTest {
     @Test
     fun `exports are named after the first frame, made filename-safe`() {
         val activity = viewer(frameNames = listOf("My Sample (1).png", "b.png", "c.png"))
-        val snapshot = activity.buildShareSnapshot()!!
+        val snapshot = activity.share.buildShareSnapshot()!!
 
         assertEquals("My_Sample_1", snapshot.baseName)
         assertEquals(FRAMES, snapshot.batchFiles.size)
-        assertEquals(activity.currentFrameIndex, snapshot.frameIndex)
+        assertEquals(activity.viewModel.currentFrameIndex, snapshot.frameIndex)
         assertNotNull("a single run carries its summary", snapshot.summary)
     }
 
     // ── ShareExportBuilder ───────────────────────────────────────────────
 
     private fun ResultViewerActivity.produce(kind: ShareKind): Pair<File, String> {
-        val snapshot = buildShareSnapshot()!!
+        val snapshot = share.buildShareSnapshot()!!
         return runBlocking {
             ShareExportBuilder(snapshot, resources, ShareExportBuilder.newJobDir(cacheDir)).produce(kind) { _, _ -> }
         }
@@ -247,7 +248,7 @@ class ViewerControllersTest {
         val activity = viewer()
         // The GIFs take each field's sequence range; let the summary find them.
         idleUntil("the summary ranges") {
-            ShareExportBuilder.FIELDS.all { (_, index) -> activity.summary.boundsFor(index) != null }
+            FieldKind.entries.all { activity.summary.boundsFor(it.dataIndex) != null }
         }
         val (file, mime) = activity.produce(ShareKind.GIFS)
 
@@ -269,7 +270,7 @@ class ViewerControllersTest {
     @Test
     fun `a sweep is refused animations rather than handed an empty file`() {
         val activity = viewer()
-        val base = activity.buildShareSnapshot()!!
+        val base = activity.share.buildShareSnapshot()!!
         val sweepArgs = ViewerSweepArgs(
             subsets = emptyList(),
             steps = listOf(3, 5, 7),

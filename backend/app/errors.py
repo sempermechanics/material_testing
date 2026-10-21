@@ -64,6 +64,10 @@ RANGE_NOT_SATISFIABLE = "range_not_satisfiable"
 # metadata file in the session (404), or a body that is not this session's
 # metadata (422) or is too big for one (413).
 SESSION_NOT_COMPLETE = "session_not_complete"
+# DELETE /v1/sessions/{sid} while the session is still PROVISIONING (409, with
+# Retry-After): the worker is creating its Drive folder, and erasing the
+# metadata now would leave that folder with nothing pointing at it.
+SESSION_PROVISIONING = "session_provisioning"
 METADATA_NOT_FOUND = "metadata_not_found"
 METADATA_INVALID = "metadata_invalid"
 METADATA_TOO_LARGE = "metadata_too_large"
@@ -74,6 +78,12 @@ USER_NOT_FOUND = "user_not_found"
 #: device lock: **New device** on the licence moves both bindings (TD-126).
 LICENSE_DEVICE_CLEAR_REQUIRED = "license_device_clear_required"
 EMPTY_PATCH = "empty_patch"
+#: 403 from `POST /v1/admin/test-accounts` (ADR-027): `TEST_ACCOUNT_DOMAINS`
+#: is empty, or the address is not in one of its domains.
+TEST_ACCOUNTS_DISABLED = "test_accounts_disabled"
+#: 409 from the same route: the address already has an account, a Firebase
+#: Auth user or a licence, or is a staff address (`ADMIN_EMAILS`).
+EMAIL_IN_USE = "email_in_use"
 
 # --- licensing, seats and leases -------------------------------------------
 # `feature_not_licensed` gates *retrieval* (file content, session bundle)
@@ -313,6 +323,7 @@ STATUS: dict[str, int] = {
     LICENSE_EMAIL_MISMATCH: 403,
     LICENSE_DEVICE_MISMATCH: 403,
     NOT_ELIGIBLE: 403,
+    TEST_ACCOUNTS_DISABLED: 403,
     # Conflicts with the state it is in.
     ALREADY_LICENSED: 409,
     LICENSE_ALREADY_REDEEMED: 409,
@@ -323,11 +334,16 @@ STATUS: dict[str, int] = {
     LICENSE_DEVICE_CLEAR_REQUIRED: 409,
     DEMO_KEY_NOT_DELETABLE: 409,
     LICENSE_EXISTS: 409,
+    EMAIL_IN_USE: 409,
     LICENSE_NOT_CONVERTIBLE: 409,
     MEMBER_ALREADY_LICENSED: 409,
     INVITE_EXISTS: 409,
     SEAT_REVOKED: 409,
     SEAT_BUSY: 409,
+    # Device registration (`repo.register_device`): the account is bound to
+    # another phone for this app, or this phone is another account's.
+    DEVICE_CONFLICT: 409,
+    DEVICE_IN_USE: 409,
     DELETED_LICENSE_PURGED: 410,
     # A licence edit or conversion that is not allowed as asked.
     CONVERT_DOMAIN_MISMATCH: 422,

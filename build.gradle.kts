@@ -29,7 +29,7 @@ tasks.register("ciReleaseGate") {
 spotless {
     kotlin {
         target("app/src/**/*.kt", "benchmark/src/**/*.kt")
-        targetExclude("**/build/**", "app/src/main/cpp/**", "engine/**")
+        targetExclude("**/build/**", "engine/**")
         ktlint(libs.versions.ktlint.get()).editorConfigOverride(
             mapOf(
                 // Keep the gate about consistency, not churn: these rules would

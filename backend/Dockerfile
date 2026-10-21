@@ -1,7 +1,7 @@
 # Pinned by digest for reproducible builds: the human tag can move, the digest
 # cannot. Re-resolve with `docker buildx imagetools inspect python:3.12-slim`
 # when intentionally bumping.
-FROM python:3.12-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f
+FROM python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
 WORKDIR /app
 # Install from the hashed lock, not requirements.txt. requirements.txt pins only
 # our direct dependencies, so transitive ones floated between builds — the image

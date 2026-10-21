@@ -2,17 +2,33 @@ package com.sempermechanics.semper.ui.viewer
 
 import android.view.View
 import android.view.ViewTreeObserver
+import com.sempermechanics.semper.databinding.ActivityResultViewerBinding
+
+/**
+ * The viewer's views, which each of its controllers draws into. Set in
+ * onCreate, after the controllers are built, so a controller reads [binding]
+ * when it draws, never when it is made.
+ */
+internal interface ViewerViews {
+    val binding: ActivityResultViewerBinding
+}
 
 /**
  * The viewer's edge chrome: the top bar, the scrubber, the field button and the
  * colour scale. Any interaction brings them back and schedules their auto-hide;
  * the image is fitted to the space between the bars.
  *
- * Constructed before onCreate; reads [ResultViewerActivity.binding] lazily.
+ * Constructed before onCreate; reads [ViewerViews.binding] lazily.
+ *
+ * @param resultsOnScreen whether the summary slot shows a lab test's Results,
+ *   where the field picker and colour scale do not apply; read as it draws
  */
-internal class ViewerChromeController(private val host: ResultViewerActivity) {
+internal class ViewerChromeController(
+    private val views: ViewerViews,
+    private val resultsOnScreen: () -> Boolean = { false },
+) {
 
-    private val binding get() = host.binding
+    private val binding get() = views.binding
 
     private var chromeVisible = true
 
@@ -74,7 +90,7 @@ internal class ViewerChromeController(private val host: ResultViewerActivity) {
         listOf(binding.btnFieldFab, binding.layoutColorScale).forEach { bar ->
             bar.animate().cancel()
             bar.visibility = when {
-                host.resultsOnScreen -> View.GONE
+                resultsOnScreen() -> View.GONE
                 chromeVisible -> View.VISIBLE
                 else -> View.INVISIBLE
             }
@@ -85,7 +101,7 @@ internal class ViewerChromeController(private val host: ResultViewerActivity) {
     private fun fadeChrome(visible: Boolean) {
         chromeVisible = visible
         // Results on the summary have no field or colour scale; keep those two out of the fade.
-        val fieldBars = if (host.resultsOnScreen) emptyList() else listOf(binding.btnFieldFab, binding.layoutColorScale)
+        val fieldBars = if (resultsOnScreen()) emptyList() else listOf(binding.btnFieldFab, binding.layoutColorScale)
         val bars = listOf(binding.chromeTop, binding.layoutScrubber) + fieldBars
         bars.forEach { bar ->
             bar.animate().cancel()

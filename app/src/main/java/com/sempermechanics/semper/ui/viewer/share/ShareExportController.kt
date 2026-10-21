@@ -1,6 +1,7 @@
 package com.sempermechanics.semper.ui.viewer.share
 
 import android.net.Uri
+import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -9,7 +10,6 @@ import com.sempermechanics.semper.ui.common.dialog.CrispToast
 import com.sempermechanics.semper.ui.common.dialog.DeterminateProgressDialog
 import com.sempermechanics.semper.ui.common.dialog.Feedback
 import com.sempermechanics.semper.ui.common.transfer.TransferBannerController
-import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -21,11 +21,13 @@ import java.io.File
  * It lives and dies with the viewer, while the jobs live in the ViewModel: a
  * viewer recreated by a rotation puts the still-running jobs back on screen
  * (dialog or banner, as the user left them) and delivers their results.
- * Main thread only.
+ * Main thread only. Its dialogs, sheets and toasts go on [activity]; a job sent
+ * to the background is a row in [banner].
  */
 internal class ShareExportController(
-    private val host: ResultViewerActivity,
+    private val activity: AppCompatActivity,
     private val jobs: ShareExportJobs,
+    private val banner: TransferBannerController,
 ) {
 
     private val dialogs = HashMap<String, DeterminateProgressDialog>()
@@ -33,10 +35,10 @@ internal class ShareExportController(
 
     /** Starts showing progress and results; once, from onCreate. */
     fun attach() {
-        host.lifecycleScope.launch {
+        activity.lifecycleScope.launch {
             // Results wait for a started screen: a share sheet cannot open from
             // a stopped or half-recreated viewer.
-            host.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            activity.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch { jobs.running.collect(::render) }
                 jobs.outcomes.collect(::deliver)
             }
@@ -71,7 +73,7 @@ internal class ShareExportController(
     private fun showInDialog(job: ShareExportJobs.Running) {
         val dialog = dialogs.getOrPut(job.id) {
             DeterminateProgressDialog(
-                host,
+                activity,
                 job.title,
                 onCancel = { jobs.cancel(job.id) },
                 onBackground = { jobs.sendToBackground(job.id) },
@@ -83,7 +85,7 @@ internal class ShareExportController(
     private fun showInBanner(job: ShareExportJobs.Running) {
         dialogs.remove(job.id)?.dismiss()
         if (inBanner.add(job.id)) {
-            host.shareBanner.upsert(
+            banner.upsert(
                 TransferBannerController.Transfer(
                     id = job.id,
                     title = job.title,
@@ -93,14 +95,14 @@ internal class ShareExportController(
                 ),
             )
         } else {
-            host.shareBanner.updateProgress(job.id, job.percent, job.status)
+            banner.updateProgress(job.id, job.percent, job.status)
         }
     }
 
     /** Takes job [id] off the screen, dialog and banner both. */
     private fun forget(id: String) {
         dialogs.remove(id)?.dismiss()
-        if (inBanner.remove(id)) host.shareBanner.remove(id)
+        if (inBanner.remove(id)) banner.remove(id)
     }
 
     private fun deliver(outcome: ShareExportJobs.Outcome) {
@@ -108,19 +110,19 @@ internal class ShareExportController(
         when (outcome) {
             is ShareExportJobs.Outcome.Ready ->
                 if (outcome.direct) {
-                    host.startActivity(SendToSheet.shareChooser(host, outcome.file, outcome.mime))
+                    activity.startActivity(SendToSheet.shareChooser(activity, outcome.file, outcome.mime))
                 } else {
                     // Our own "Send to" sheet: Save to Files (folder icon) + Share. Owning
                     // the rows is the only reliable way to show a folder icon — the system
                     // share sheet ignores custom icons on EXTRA_INITIAL_INTENTS on Android 12+.
-                    SendToSheet.show(host, outcome.file, outcome.mime)
+                    SendToSheet.show(activity, outcome.file, outcome.mime)
                 }
             is ShareExportJobs.Outcome.Saved ->
-                Feedback.toast(host, if (outcome.ok) R.string.save_success else R.string.save_failed, long = true)
+                Feedback.toast(activity, if (outcome.ok) R.string.save_success else R.string.save_failed, long = true)
             is ShareExportJobs.Outcome.Failed ->
-                CrispToast.show(host, host.getString(R.string.share_failed), long = true)
+                CrispToast.show(activity, activity.getString(R.string.share_failed), long = true)
             is ShareExportJobs.Outcome.Cancelled ->
-                CrispToast.show(host, host.getString(R.string.share_cancelled))
+                CrispToast.show(activity, activity.getString(R.string.share_cancelled))
         }
     }
 }

@@ -48,21 +48,28 @@ internal class SweepRangeFields(
      */
     var userModified = false
 
+    /** The sweep's axes as the view model holds them now. */
+    private val ranges: SweepRanges get() = viewModel.inputs.value.sweepRanges
+
+    /** Writes [change] of the sweep's axes to the view model, in one edit. */
+    private fun editRanges(change: (SweepRanges) -> SweepRanges) =
+        viewModel.edit { it.copy(sweepRanges = change(it.sweepRanges)) }
+
     init {
         rangeSubset.addOnChangeListener { slider, _, fromUser ->
             onSliderInput(fromUser) { commitSubsetRange(slider.values[0].toInt(), slider.values[1].toInt()) }
         }
-        wireSweepField(etSubsetMinValue, { viewModel.subsetMin }) { commitSubsetMin(it) }
-        wireSweepField(etSubsetMaxValue, { viewModel.subsetMax }) { commitSubsetMax(it) }
+        wireSweepField(etSubsetMinValue, { ranges.subsetMin }) { commitSubsetMin(it) }
+        wireSweepField(etSubsetMaxValue, { ranges.subsetMax }) { commitSubsetMax(it) }
         rangeStrainWin.addOnChangeListener { slider, _, fromUser ->
             onSliderInput(fromUser) { commitStrainWinRange(slider.values[0].toInt(), slider.values[1].toInt()) }
         }
-        wireSweepField(etStrainWinMinValue, { viewModel.strainWinMin }) { commitStrainWinMin(it) }
-        wireSweepField(etStrainWinMaxValue, { viewModel.strainWinMax }) { commitStrainWinMax(it) }
-        wireSweepField(etStepDepthValue, { viewModel.stepDenominator }) { commitStepDepth(it) }
+        wireSweepField(etStrainWinMinValue, { ranges.strainWinMin }) { commitStrainWinMin(it) }
+        wireSweepField(etStrainWinMaxValue, { ranges.strainWinMax }) { commitStrainWinMax(it) }
+        wireSweepField(etStepDepthValue, { ranges.stepDenominator }) { commitStepDepth(it) }
         wireSweepOverlapField()
-        wireSweepField(etSubsetSamplesValue, { viewModel.subsetSamples }) { commitSubsetSamples(it) }
-        wireSweepField(etStrainWinSamplesValue, { viewModel.strainWinSamples }) { commitStrainWinSamples(it) }
+        wireSweepField(etSubsetSamplesValue, { ranges.subsetSamples }) { commitSubsetSamples(it) }
+        wireSweepField(etStrainWinSamplesValue, { ranges.strainWinSamples }) { commitStrainWinSamples(it) }
     }
 
     /** Clears focus on the numeric fields so in-progress typing commits. */
@@ -77,9 +84,10 @@ internal class SweepRangeFields(
 
     /** Shows the two sample counts and the step depth / overlap pair as the view model holds them. */
     fun showCountsAndStepDepth() {
-        callbacks.renderParamField(etSubsetSamplesValue, viewModel.subsetSamples)
-        callbacks.renderParamField(etStrainWinSamplesValue, viewModel.strainWinSamples)
-        writeStepDepth(viewModel.stepDenominator)
+        val now = ranges
+        callbacks.renderParamField(etSubsetSamplesValue, now.subsetSamples)
+        callbacks.renderParamField(etStrainWinSamplesValue, now.strainWinSamples)
+        writeStepDepth(now.stepDenominator)
     }
 
     /**
@@ -98,12 +106,16 @@ internal class SweepRangeFields(
         val ceiling = effectiveSubsetCeiling()
         val rec = callbacks.currentSubsetSize().coerceIn(SubsetRecommender.MIN_SUBSET, ceiling)
         val (lo, hi) = suggestedSubsetWindow(rec, ceiling)
-        viewModel.subsetMin = lo
-        viewModel.subsetMax = hi
-        viewModel.strainWinMin = SweepStudy.DEFAULT_SWEEP_WINDOW_MIN
-        viewModel.strainWinMax = SweepStudy.DEFAULT_SWEEP_WINDOW_MAX
+        editRanges {
+            it.copy(
+                subsetMin = lo,
+                subsetMax = hi,
+                strainWinMin = SweepStudy.DEFAULT_SWEEP_WINDOW_MIN,
+                strainWinMax = SweepStudy.DEFAULT_SWEEP_WINDOW_MAX,
+            )
+        }
         writeSubsetRange(lo, hi)
-        writeStrainWinRange(viewModel.strainWinMin, viewModel.strainWinMax)
+        writeStrainWinRange(SweepStudy.DEFAULT_SWEEP_WINDOW_MIN, SweepStudy.DEFAULT_SWEEP_WINDOW_MAX)
     }
 
     /**
@@ -113,8 +125,9 @@ internal class SweepRangeFields(
      */
     fun adopt() {
         userModified = true
-        writeSubsetRange(viewModel.subsetMin, viewModel.subsetMax)
-        writeStrainWinRange(viewModel.strainWinMin, viewModel.strainWinMax)
+        val now = ranges
+        writeSubsetRange(now.subsetMin, now.subsetMax)
+        writeStrainWinRange(now.strainWinMin, now.strainWinMax)
         showCountsAndStepDepth()
     }
 
@@ -150,11 +163,11 @@ internal class SweepRangeFields(
      */
     private fun reclampSubsetRangeToRoi() {
         val ceiling = effectiveSubsetCeiling()
-        val clampedMax = viewModel.subsetMax.coerceAtMost(ceiling)
-        val clampedMin = viewModel.subsetMin.coerceAtMost(clampedMax)
-        if (clampedMin != viewModel.subsetMin || clampedMax != viewModel.subsetMax) {
-            viewModel.subsetMin = clampedMin
-            viewModel.subsetMax = clampedMax
+        val now = ranges
+        val clampedMax = now.subsetMax.coerceAtMost(ceiling)
+        val clampedMin = now.subsetMin.coerceAtMost(clampedMax)
+        if (clampedMin != now.subsetMin || clampedMax != now.subsetMax) {
+            editRanges { it.copy(subsetMin = clampedMin, subsetMax = clampedMax) }
             writeSubsetRange(clampedMin, clampedMax)
         }
     }
@@ -166,23 +179,23 @@ internal class SweepRangeFields(
         val ceiling = effectiveSubsetCeiling()
         val lo = oddSubset(rawLo).coerceIn(SubsetRecommender.MIN_SUBSET, ceiling)
         val hi = oddSubset(rawHi).coerceIn(lo, ceiling)
-        viewModel.subsetMin = lo
-        viewModel.subsetMax = hi
+        editRanges { it.copy(subsetMin = lo, subsetMax = hi) }
         writeSubsetRange(lo, hi)
         onChanged()
     }
 
     private fun commitSubsetMin(raw: Int) {
-        val currentMax = viewModel.subsetMax.takeIf { it > 0 } ?: effectiveSubsetCeiling()
-        viewModel.subsetMin = oddSubset(raw).coerceAtMost(currentMax)
-        writeSubsetRange(viewModel.subsetMin, viewModel.subsetMax)
+        val currentMax = ranges.subsetMax.takeIf { it > 0 } ?: effectiveSubsetCeiling()
+        editRanges { it.copy(subsetMin = oddSubset(raw).coerceAtMost(currentMax)) }
+        writeSubsetRange(ranges.subsetMin, ranges.subsetMax)
         onChanged()
     }
 
     private fun commitSubsetMax(raw: Int) {
-        val floor = viewModel.subsetMin.coerceAtLeast(SubsetRecommender.MIN_SUBSET)
-        viewModel.subsetMax = oddSubset(raw).coerceIn(floor, effectiveSubsetCeiling())
-        writeSubsetRange(viewModel.subsetMin, viewModel.subsetMax)
+        val floor = ranges.subsetMin.coerceAtLeast(SubsetRecommender.MIN_SUBSET)
+        val ceiling = effectiveSubsetCeiling()
+        editRanges { it.copy(subsetMax = oddSubset(raw).coerceIn(floor, ceiling)) }
+        writeSubsetRange(ranges.subsetMin, ranges.subsetMax)
         onChanged()
     }
 
@@ -191,23 +204,22 @@ internal class SweepRangeFields(
     private fun commitStrainWinRange(rawLo: Int, rawHi: Int) {
         val lo = oddWindow(rawLo)
         val hi = oddWindow(rawHi).coerceAtLeast(lo)
-        viewModel.strainWinMin = lo
-        viewModel.strainWinMax = hi
+        editRanges { it.copy(strainWinMin = lo, strainWinMax = hi) }
         writeStrainWinRange(lo, hi)
         onChanged()
     }
 
     private fun commitStrainWinMin(raw: Int) {
-        val currentMax = viewModel.strainWinMax.takeIf { it > 0 } ?: SweepSetupController.STRAIN_WIN_MAX_INPUT
-        viewModel.strainWinMin = oddWindow(raw).coerceAtMost(currentMax)
-        writeStrainWinRange(viewModel.strainWinMin, viewModel.strainWinMax)
+        val currentMax = ranges.strainWinMax.takeIf { it > 0 } ?: SweepSetupController.STRAIN_WIN_MAX_INPUT
+        editRanges { it.copy(strainWinMin = oddWindow(raw).coerceAtMost(currentMax)) }
+        writeStrainWinRange(ranges.strainWinMin, ranges.strainWinMax)
         onChanged()
     }
 
     private fun commitStrainWinMax(raw: Int) {
-        val floor = viewModel.strainWinMin.coerceAtLeast(SweepSetupController.STRAIN_WIN_MIN_INPUT)
-        viewModel.strainWinMax = oddWindow(raw).coerceAtLeast(floor)
-        writeStrainWinRange(viewModel.strainWinMin, viewModel.strainWinMax)
+        val floor = ranges.strainWinMin.coerceAtLeast(SweepSetupController.STRAIN_WIN_MIN_INPUT)
+        editRanges { it.copy(strainWinMax = oddWindow(raw).coerceAtLeast(floor)) }
+        writeStrainWinRange(ranges.strainWinMin, ranges.strainWinMax)
         onChanged()
     }
 
@@ -218,9 +230,8 @@ internal class SweepRangeFields(
     }
 
     private fun commitStepDepth(raw: Int) {
-        viewModel.stepDenominator = raw.coerceIn(SweepStudy.STEP_DENOM_MIN, SweepStudy.STEP_DENOM_MAX)
-        viewModel.subsetOverlap = SweepStudy.overlapForDenominator(viewModel.stepDenominator)
-        writeStepDepth(viewModel.stepDenominator)
+        // writeStepDepth clamps and stores it, with the overlap it implies.
+        writeStepDepth(raw)
         onChanged()
     }
 
@@ -230,12 +241,12 @@ internal class SweepRangeFields(
 
     private fun writeStepDepth(denominator: Int) {
         val n = denominator.coerceIn(SweepStudy.STEP_DENOM_MIN, SweepStudy.STEP_DENOM_MAX)
-        viewModel.stepDenominator = n
-        viewModel.subsetOverlap = SweepStudy.overlapForDenominator(n)
+        val overlap = SweepStudy.overlapForDenominator(n)
+        viewModel.edit { it.copy(sweepRanges = it.sweepRanges.copy(stepDenominator = n), subsetOverlap = overlap) }
         if (!etStepDepthValue.hasFocus()) {
             callbacks.renderParamField(etStepDepthValue, n)
         }
-        etSweepOverlapValue.showUnlessEditing(String.format(Locale.US, "%.2f", viewModel.subsetOverlap))
+        etSweepOverlapValue.showUnlessEditing(String.format(Locale.US, "%.2f", overlap))
     }
 
     /** The overlap field: a decimal (comma or point) that sets the step depth; unparseable puts it back. */
@@ -244,7 +255,7 @@ internal class SweepRangeFields(
             if (hasFocus) return@setOnFocusChangeListener
             val typed = etSweepOverlapValue.text.toString().trim().replace(',', '.').toDoubleOrNull()
             if (typed == null) {
-                writeStepDepth(viewModel.stepDenominator)
+                writeStepDepth(ranges.stepDenominator)
             } else {
                 userModified = true
                 commitOverlap(typed)
@@ -254,14 +265,16 @@ internal class SweepRangeFields(
     }
 
     private fun commitSubsetSamples(raw: Int) {
-        viewModel.subsetSamples = raw.coerceIn(SweepStudy.MIN_SAMPLES, SweepStudy.MAX_SAMPLES)
-        callbacks.renderParamField(etSubsetSamplesValue, viewModel.subsetSamples)
+        val samples = raw.coerceIn(SweepStudy.MIN_SAMPLES, SweepStudy.MAX_SAMPLES)
+        editRanges { it.copy(subsetSamples = samples) }
+        callbacks.renderParamField(etSubsetSamplesValue, samples)
         onChanged()
     }
 
     private fun commitStrainWinSamples(raw: Int) {
-        viewModel.strainWinSamples = raw.coerceIn(SweepStudy.MIN_SAMPLES, SweepStudy.MAX_SAMPLES)
-        callbacks.renderParamField(etStrainWinSamplesValue, viewModel.strainWinSamples)
+        val samples = raw.coerceIn(SweepStudy.MIN_SAMPLES, SweepStudy.MAX_SAMPLES)
+        editRanges { it.copy(strainWinSamples = samples) }
+        callbacks.renderParamField(etStrainWinSamplesValue, samples)
         onChanged()
     }
 

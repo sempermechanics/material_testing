@@ -3,6 +3,7 @@ package com.sempermechanics.semper.viewer
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.ReportBuilder
 import com.sempermechanics.semper.ui.viewer.summary.SummaryCaption
 import org.junit.Assert.assertEquals
@@ -25,7 +26,7 @@ class SummaryCaptionTest {
 
     @Test
     fun `the caption quotes the scale ends with the scale bar's signs`() {
-        val text = SummaryCaption.text(res, -0.002f to 0.003f, DicResult.IDX_EXX, "mε")
+        val text = SummaryCaption.text(res, ValueRange(-0.002f, 0.003f), DicResult.IDX_EXX, "mε")
 
         val top = ReportBuilder.formatMetric(0.003f * DicResult.strainMultiplier(DicResult.IDX_EXX))
         val bottom = ReportBuilder.formatMetric(-0.002f * DicResult.strainMultiplier(DicResult.IDX_EXX))
@@ -35,7 +36,7 @@ class SummaryCaptionTest {
 
     @Test
     fun `displacement ends are not scaled to millistrain`() {
-        val text = SummaryCaption.text(res, -1.5f to 2.5f, DicResult.IDX_U, "px")
+        val text = SummaryCaption.text(res, ValueRange(-1.5f, 2.5f), DicResult.IDX_U, "px")
 
         assertEquals(
             "colour scale ≥ ${ReportBuilder.formatMetric(2.5f)} · ≤ ${ReportBuilder.formatMetric(-1.5f)} px",

@@ -11,7 +11,8 @@ import com.sempermechanics.semper.R
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.ui.analysis.load.PhotoCaptureTime
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
-import com.sempermechanics.semper.ui.analysis.wizard.onReferenceReplaced
+import com.sempermechanics.semper.ui.analysis.wizard.editLab
+import com.sempermechanics.semper.ui.analysis.wizard.withoutBeamTaps
 import com.sempermechanics.semper.ui.common.SerialJob
 import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
 import com.sempermechanics.semper.ui.common.media.displayNameOf
@@ -65,9 +66,7 @@ class ReferenceImportController(
                 viewModel.applyNewReference(loaded.bytes, name, loaded.size)
                 // The capture time a timed load log is matched from; the beam's
                 // taps were on the old reference.
-                viewModel.refCapture = captured
-                viewModel.refVideoTimeMs = null
-                viewModel.onReferenceReplaced()
+                viewModel.editLab { it.copy(refCapture = captured, refVideoTimeMs = null).withoutBeamTaps() }
                 onLoaded(loaded.preview)
             } catch (e: CancellationException) {
                 // A newer pick, or the screen closing: nothing failed.

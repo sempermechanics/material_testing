@@ -34,7 +34,7 @@ def _mint_floating(max_seats=2):
 
 def _roster(store, *uids):
     store._data["users"] = {
-        uid: {"email": f"{uid}@university.edu", "access_status": "APPROVED", "mode": "demo"}
+        uid: {"email": f"{uid}@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"}
         for uid in uids
     }
 
@@ -103,7 +103,7 @@ def test_a_removed_seat_cannot_be_resumed(store):
     """Resume used to set a revoked seat active again: licensed, on the
     roster, and not counted in seatsUsed."""
     store._data["users"] = {
-        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "mode": "demo"},
+        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"},
     }
     minted = _mint_institution(max_seats=1)
     license_id = minted["license"]["id"]
@@ -120,7 +120,7 @@ def test_a_removed_seat_cannot_be_resumed(store):
 
 def test_a_seat_on_a_revoked_licence_cannot_be_resumed(store):
     store._data["users"] = {
-        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "mode": "demo"},
+        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"},
     }
     minted = _mint_institution()
     license_id = minted["license"]["id"]
@@ -150,6 +150,40 @@ def test_holding_a_seat_releases_its_lease(store):
     assert "leaseExpiresAt" not in store._data["users"]["u1"]
     err, _ = attempt(repo.checkout_lease, _user(store, "u2"), "dev-2")
     assert err == ""
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_a_hold_or_resume_writes_the_holder_in_the_seats_commit(store, monkeypatch, enabled):
+    """TD-294: the holder's mode moves in the same transaction as the seat.
+    It used to be a separate write after it, and a crash in between left a
+    held seat's holder licensed (or a resumed one's in Demo) until IT
+    pressed the button again. Any write outside the transaction now fails
+    the test."""
+    license_id = _leased_pool(store)
+    if enabled:
+        repo.set_seat_enabled(license_id, "u1", False)
+
+    def crash(*a, **k):
+        raise RuntimeError("the call died after the seat's commit")
+
+    repo.patch(monkeypatch, "_update_doc", crash)
+
+    assert attempt(repo.set_seat_enabled, license_id, "u1", enabled)[0] == ""
+
+    seat = store._data[f"licenses/{license_id}/seats"]["u1"]
+    assert seat["status"] == ("active" if enabled else "disabled")
+    assert store._data["users"]["u1"]["mode"] == ("licensed" if enabled else "demo")
+
+
+def test_a_hold_leaves_a_holder_who_moved_on_alone(store):
+    """Only a holder still pointed at this licence is dropped, as before."""
+    license_id = _leased_pool(store)
+    store._data["users"]["u1"].update({"licenseId": "elsewhere", "mode": "licensed"})
+
+    assert attempt(repo.set_seat_enabled, license_id, "u1", False)[0] == ""
+    assert store._data["users"]["u1"]["mode"] == "licensed"
+    assert attempt(repo.set_seat_enabled, license_id, "u1", True)[0] == ""
+    assert store._data["users"]["u1"]["licenseId"] == "elsewhere"
 
 
 def test_revoking_a_seat_clears_the_holders_lease_copy(store):
@@ -183,7 +217,7 @@ def test_revoking_a_floating_licence_clears_every_lease(store):
 
 def test_erasing_an_account_frees_its_institution_seat(store):
     store._data["users"] = {
-        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "mode": "demo"},
+        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"},
     }
     minted = _mint_institution(max_seats=1)
     license_id = minted["license"]["id"]
@@ -231,7 +265,7 @@ def test_erasing_a_demo_account_leaves_its_demo_key(store):
 def _full_roster_with_invite(store):
     """An assigned licence with its one seat taken, and a newcomer invited."""
     store._data["users"] = {
-        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "mode": "demo"},
+        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"},
     }
     minted = _mint_institution(max_seats=1)
     license_id = minted["license"]["id"]
@@ -298,8 +332,8 @@ async def test_resuming_a_removed_seat_over_http_is_a_conflict(client, monkeypat
     store = fake_firestore.install(monkeypatch)
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     store._data["users"] = {
-        "dev-user": {"email": "it@university.edu", "access_status": "APPROVED", "mode": "demo"},
-        "student": {"email": "a@university.edu", "access_status": "APPROVED", "mode": "demo"},
+        "dev-user": {"email": "it@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"},
+        "student": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"},
     }
     minted = _mint_institution()
     license_id = minted["license"]["id"]

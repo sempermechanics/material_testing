@@ -129,19 +129,22 @@ class AnalysisDeformedBatchController(
         )
     }
 
+    /** The imported [batch] (none: no frames) as the wizard's frames, in name order, in one edit. */
     private suspend fun apply(batch: ImportedBatch?) {
-        viewModel.clearPreviousResults()
-        viewModel.defOrderDirection = FrameOrderDirection.ASCENDING
-        viewModel.defOrderMode = FrameOrderMode.NAME
-        if (batch != null) {
-            val ordered = FrameOrderHelper.reorder(batch.frames, FrameOrderMode.NAME)
-            viewModel.deformedFrames = withContext(io) { FrameOrderHelper.reprefixTempFiles(ordered) }
-            viewModel.defFromVideo = batch.fromVideo
-            viewModel.defVideoName = batch.videoName
-        } else {
-            viewModel.deformedFrames = emptyList()
-            viewModel.defFromVideo = false
-            viewModel.defVideoName = null
+        val frames = batch?.let {
+            val ordered = FrameOrderHelper.reorder(it.frames, FrameOrderMode.NAME)
+            withContext(io) { FrameOrderHelper.reprefixTempFiles(ordered) }
+        }
+        viewModel.edit {
+            it.copy(
+                // New inputs, as clearPreviousResults: the next run starts in a new session folder.
+                working = null,
+                defOrderDirection = FrameOrderDirection.ASCENDING,
+                defOrderMode = FrameOrderMode.NAME,
+                deformedFrames = frames.orEmpty(),
+                defFromVideo = batch?.fromVideo ?: false,
+                defVideoName = batch?.videoName,
+            )
         }
     }
 

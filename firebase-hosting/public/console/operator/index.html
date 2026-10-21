@@ -23,6 +23,9 @@
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js" />
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js" />
   <link rel="modulepreload" href="../auth.js" />
+  <link rel="modulepreload" href="../api.js" />
+  <link rel="modulepreload" href="../dialogs.js" />
+  <link rel="modulepreload" href="../status.js" />
   <link rel="modulepreload" href="../config.js" />
   <link rel="modulepreload" href="../util.js" />
   <link rel="modulepreload" href="../messages.js" />
@@ -39,6 +42,7 @@
   <link rel="modulepreload" href="verify.js" />
   <link rel="modulepreload" href="lifecycle.js" />
   <link rel="modulepreload" href="roster-card.js" />
+  <link rel="modulepreload" href="test-accounts.js" />
 </head>
 <body data-auth="pending">
   <header>
@@ -448,6 +452,74 @@
           <button id="releasePhone">Release phone</button>
         </div>
       </section>
+
+      <!-- ----------------------------------------------- test accounts -->
+      <!-- Sign-ins for QC staff and CI (ADR-027, test-accounts.js): an
+           address on a test domain, a generated password shown once,
+           pre-approved and licensed, on up to N phones, and an end date.
+           Every change is held to the revoke window's fresh sign-in. -->
+      <section class="card" id="testAccountsCard">
+        <div class="row">
+          <h2 style="margin:0">Test accounts</h2>
+          <span class="spacer"></span>
+          <button id="loadTestAccounts" class="secondary">Show</button>
+        </div>
+        <p class="muted">
+          For QC staff and CI only, never a customer. The address must be on one
+          of the server's test domains. The account is approved and licensed at
+          once, may be signed in on several phones, and is ended — suspended and
+          its data erased — when its days run out. Its audit rows are kept.
+        </p>
+        <div class="grid">
+          <label>Email
+            <input id="taEmail" type="email" placeholder="qc-pixel6@test.example" autocomplete="off" />
+          </label>
+          <label>Purpose
+            <select id="taPurpose">
+              <option value="qc">QC — staff testing</option>
+              <option value="ci">CI — automated tests</option>
+            </select>
+          </label>
+          <label>Days <span class="muted" id="taDaysHint">(1–90)</span>
+            <input id="taDays" type="number" min="1" max="90" value="30" />
+          </label>
+          <label>Phones at once <span class="muted">(1–10)</span>
+            <input id="taMaxDevices" type="number" min="1" max="10" value="3" />
+          </label>
+          <label class="wide">Note <span class="muted">(who or what it is for)</span>
+            <input id="taNote" maxlength="200" placeholder="QC rack, Pixel 6 and 8" />
+          </label>
+        </div>
+        <div class="row">
+          <button id="taCreate">Create test account</button>
+        </div>
+        <div class="wrap" id="testAccountsWrap" hidden>
+          <table>
+            <thead>
+              <tr><th>Account</th><th>Purpose</th><th>Ends</th><th>Phones</th>
+                <th>Status</th><th>Note</th><th></th></tr>
+            </thead>
+            <tbody id="testAccountRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- The password of a test account just created or reset. Shown once:
+           the backend keeps no copy, and the text is removed from the page
+           as the dialog closes. -->
+      <dialog id="taPasswordDialog" aria-labelledby="taPasswordTitle">
+        <h2 id="taPasswordTitle">Password for <span id="taPasswordEmail" class="mono"></span></h2>
+        <div class="note">
+          <strong>Copy it now — it is shown once.</strong> Nothing keeps a copy,
+          so it cannot be shown again, only replaced with New password. Hand it
+          over the way QC or CI secrets are handed over, never by email.
+        </div>
+        <p class="mono key" id="taPassword"></p>
+        <div class="row">
+          <button id="taCopyPassword" type="button">Copy</button>
+          <button id="taPasswordClose" type="button" class="secondary">Close</button>
+        </div>
+      </dialog>
     </div>
 
     <p id="signedOut" class="muted">

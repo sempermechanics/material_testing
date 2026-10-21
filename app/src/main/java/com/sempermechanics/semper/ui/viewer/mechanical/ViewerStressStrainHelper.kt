@@ -23,8 +23,6 @@ import com.sempermechanics.semper.ui.analysis.sweep.SweepPlotView
 import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
 import com.sempermechanics.semper.ui.viewer.ResultViewerViewModel
 import com.sempermechanics.semper.ui.viewer.curveCorrection
-import com.sempermechanics.semper.ui.viewer.plannedFrameIndex
-import com.sempermechanics.semper.ui.viewer.stressModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -116,7 +114,7 @@ class ViewerStressStrainHelper(
         waiting += views
         if (job?.isActive == true) return
         job = host.lifecycleScope.launch {
-            val byFrame = SessionPaths.datByPlannedFrame(host.summaryBatchFiles())
+            val byFrame = SessionPaths.datByPlannedFrame(host.batchFiles)
             val built = withContext(Dispatchers.Default) {
                 // Not suspending inside, so the section opens and closes on one thread.
                 Trace.beginSection(TRACE_BUILD)
@@ -178,7 +176,7 @@ class ViewerStressStrainHelper(
         plot.compactAxes = true
         plot.scrubShowsPoint = true
         // The summary is the whole test, so no frame is highlighted there.
-        val current = if (host.isShowingSummary) null else curve.at(host.plannedFrameIndex(host.currentFrameIndex))
+        val current = if (host.isShowingSummary) null else curve.at(host.plannedFrameIndex(host.viewModel.currentFrameIndex))
         val (xAxis, yAxis) = axisLabels(host, curve.model)
         // E, Rp0.2, the peak and the fit line, worked out once for the plot, marks and text.
         val results = resultsOf(curve)

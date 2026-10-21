@@ -5,9 +5,9 @@
  * page (IT's routes) and the operator desk's roster card (the staff routes):
  * `base()` names the tier.
  */
-import { api, apiBlob, saveBlob, esc, when } from "./auth.js";
+import { api, apiBlob, saveBlob } from "./api.js";
 import { explain } from "./messages.js";
-import { auditQuery } from "./util.js";
+import { esc, when, auditQuery } from "./util.js";
 
 /** A page in the panel; an export is one request of the backend's largest page. */
 const PAGE = 50;

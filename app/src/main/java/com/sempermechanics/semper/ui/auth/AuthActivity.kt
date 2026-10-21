@@ -9,12 +9,15 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
+import androidx.activity.viewModels
 import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.credentials.CreatePasswordRequest
 import androidx.credentials.CredentialManager
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.AuthRepository
 import com.sempermechanics.semper.data.account.isTrustedAuthLink
@@ -42,12 +45,9 @@ import timber.log.Timber
 @MainThread
 class AuthActivity : AppCompatActivity() {
 
-    internal val authRepo by lazy { AuthRepository(applicationContext) }
+    /** The form, the calls and their outcomes; kept across a rotation. */
+    internal val viewModel: AuthViewModel by viewModels()
     private lateinit var binding: ActivityAuthBinding
-    internal var mode = AuthMode.SIGN_IN
-
-    /** The email/password just submitted, pending the outcome that validates it. */
-    internal var pendingCredential: Pair<String, String>? = null
 
     private lateinit var totp: AuthTotpController
     private lateinit var passwordReset: AuthPasswordReset
@@ -59,8 +59,8 @@ class AuthActivity : AppCompatActivity() {
         binding = ActivityAuthBinding.inflate(layoutInflater)
         setContentView(binding.root)
         window.decorView.post { reportFullyDrawn() }
-        totp = AuthTotpController(this, binding)
-        passwordReset = AuthPasswordReset(this, binding)
+        totp = AuthTotpController(viewModel, binding)
+        passwordReset = AuthPasswordReset(this, viewModel, binding)
 
         binding.btnGeneratePassword.setOnClickListener {
             val generated = PasswordPolicy.generate()
@@ -72,8 +72,9 @@ class AuthActivity : AppCompatActivity() {
             showMessage(getString(R.string.password_generated))
         }
 
-        if (intent.getBooleanExtra(EXTRA_REAUTH, false)) {
-            mode = AuthMode.REAUTH
+        val reauth = intent.getBooleanExtra(EXTRA_REAUTH, false)
+        viewModel.begin(if (reauth) AuthMode.REAUTH else AuthMode.SIGN_IN)
+        if (reauth) {
             // Re-auth must prove *this* account, so the address is fixed. Read
             // from the cached session rather than Firebase: it is only shown, and
             // the re-auth calls take the address from the live user themselves.
@@ -83,23 +84,36 @@ class AuthActivity : AppCompatActivity() {
 
         binding.btnMainAction.setOnClickListener { onMainAction() }
         binding.tvToggleMode.setOnClickListener {
-            mode = if (mode == AuthMode.REGISTER) AuthMode.SIGN_IN else AuthMode.REGISTER
-            updateMode()
+            viewModel.toggleRegister()
+            render()
         }
         binding.tvForgotPassword.setOnClickListener { passwordReset.sendResetMail() }
         binding.tvEmailLink.setOnClickListener { onSendEmailLink() }
         binding.btnGoogleSignIn.setOnClickListener { onGoogleSignIn() }
-        updateMode()
+        render()
 
         // Pad the scroll container (not the inner column) so the keyboard inset
         // shrinks the viewport and the focused field scrolls clear of the IME.
         Insets.padTopAndImeBottom(binding.rootLayout)
+        observeViewModel()
 
-        // Arriving via a tapped email sign-in or password-reset link?
-        maybeCompleteEmailLink(intent)
-        passwordReset.handleLink(intent)
+        // Arriving via a tapped email sign-in or password-reset link? Once: a
+        // rotation brings the same intent back, and its call is already running.
+        if (savedInstanceState == null) {
+            maybeCompleteEmailLink(intent)
+            passwordReset.handleLink(intent)
+            intent.getStringExtra(IntentKeys.ROUTING_ERROR)?.let { showMessage(it) }
+        }
+    }
 
-        intent.getStringExtra(IntentKeys.ROUTING_ERROR)?.let { showMessage(it) }
+    /** Busy while a call runs; each call's outcome once, on whichever screen is current. */
+    private fun observeViewModel() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch { viewModel.busy.collect { setLoading(it) } }
+                viewModel.outcomes.collect { onOutcome(it) }
+            }
+        }
     }
 
     /** The email sign-in / reset link may arrive while this activity is already open. */
@@ -126,10 +140,17 @@ class AuthActivity : AppCompatActivity() {
         val data = intent?.data ?: return
         if (!isTrustedAuthLink(data)) return
         val link = data.toString()
-        if (authRepo.isEmailSignInLink(link)) completeEmailLink(link)
+        if (viewModel.repo.isEmailSignInLink(link)) viewModel.completeEmailLink(link)
     }
 
-    internal fun updateMode() {
+    /** Draws [AuthViewModel.screen]: the authenticator card for a challenge, else the form for its mode. */
+    internal fun render() {
+        if (viewModel.screen is AuthScreen.Totp) {
+            totp.enterChallengeUi()
+            return
+        }
+        totp.leaveChallengeUi()
+        val mode = viewModel.screen.mode
         binding.tvSubtitle.setText(mode.subtitle)
         binding.tilEmail.isVisible = mode.showsEmail
         binding.tilConfirmPassword.isVisible = mode.choosesPassword
@@ -155,6 +176,7 @@ class AuthActivity : AppCompatActivity() {
             totp.submit()
             return
         }
+        val mode = viewModel.screen.mode
         if (mode == AuthMode.RESET_PASSWORD) {
             passwordReset.confirm()
             return
@@ -175,7 +197,7 @@ class AuthActivity : AppCompatActivity() {
             }
         }
         if (mode == AuthMode.REAUTH) {
-            runReauth { authRepo.reauthenticateWithPassword(password) }
+            viewModel.runReauth { reauthenticateWithPassword(password) }
             return
         }
         if (mode == AuthMode.REGISTER && password != binding.etConfirmPassword.text.toString()) {
@@ -184,12 +206,12 @@ class AuthActivity : AppCompatActivity() {
         }
         // Kept until the outcome is known: a password is only worth saving once
         // the app has accepted it.
-        pendingCredential = email to password
-        runAuth {
+        viewModel.pendingCredential = email to password
+        viewModel.runAuth {
             if (mode == AuthMode.REGISTER) {
-                authRepo.signUpWithPassword(email, password)
+                signUpWithPassword(email, password)
             } else {
-                authRepo.signInWithPassword(email, password)
+                signInWithPassword(email, password)
             }
         }
     }
@@ -197,64 +219,62 @@ class AuthActivity : AppCompatActivity() {
     private fun onSendEmailLink() {
         val email = binding.etEmail.text.toString().trim()
         if (!isValidEmail(email)) return
-        setLoading(true)
-        lifecycleScope.launch {
-            val result = authRepo.sendSignInLink(email)
-            setLoading(false)
-            result.fold(
-                onSuccess = { showMessage(getString(R.string.auth_link_sent_fmt, email)) },
-                onFailure = {
-                    showMessage(it.message ?: getString(R.string.auth_link_send_failed))
-                },
-            )
-        }
+        viewModel.sendSignInLink(email)
     }
 
+    /** Google's account picker is hosted by this screen; the token then goes to [AuthViewModel]. */
     private fun onGoogleSignIn() {
-        setLoading(true)
+        viewModel.setBusy(true)
         lifecycleScope.launch {
             try {
                 val idToken = GoogleSignInHelper.requestIdToken(this@AuthActivity)
-                if (mode == AuthMode.REAUTH) {
-                    finishReauth(authRepo.reauthenticateWithGoogle(idToken))
-                } else {
-                    routeResult(authRepo.signInWithGoogle(idToken))
-                }
+                viewModel.withGoogleToken(idToken)
             } catch (e: GoogleSignInHelper.NotConfiguredException) {
                 Timber.w(e, "Google sign-in is not configured")
-                setLoading(false)
+                viewModel.setBusy(false)
                 showMessage(getString(R.string.auth_google_unconfigured))
             } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
                 Timber.d(e, "Google sign-in cancelled by user")
-                setLoading(false)
+                viewModel.setBusy(false)
             } catch (e: androidx.credentials.exceptions.NoCredentialException) {
                 Timber.w(e, "No Google account available for sign-in")
-                setLoading(false)
+                viewModel.setBusy(false)
                 showMessage(getString(R.string.auth_google_no_account))
             } catch (e: CancellationException) {
                 // The screen is going away (or being recreated): there is no one
                 // to tell, and "Job was cancelled" is not a sign-in failure.
+                viewModel.setBusy(false)
                 throw e
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                setLoading(false)
+                viewModel.setBusy(false)
                 showMessage(e.message ?: getString(R.string.auth_google_failed))
             }
         }
     }
 
-    private fun completeEmailLink(link: String) {
-        if (mode == AuthMode.REAUTH) {
-            // Already signed in: the link proves the address rather than opening
-            // a new session, so it must not go through the sign-in path.
-            runReauth { authRepo.reauthenticateWithEmailLink(link) }
-            return
+    /** What a call in [AuthViewModel] came to; each arrives once. */
+    private suspend fun onOutcome(outcome: AuthViewModel.Outcome) {
+        render()
+        when (outcome) {
+            is AuthViewModel.Outcome.SignedIn -> {
+                // Awaited, not fired and forgotten: the save prompt is hosted by
+                // this Activity, so navigating away first cancels it out from
+                // under the user — which is exactly what it reported.
+                outcome.credential?.let { (email, password) -> offerToSavePassword(email, password) }
+                // Through the router so the Terms gate runs before Pending/Home
+                // for every provider: password, Google, email link alike.
+                startActivity(AccessRouter.intentFor(this, AccessRouter.afterSignIn(outcome.status)))
+                finish()
+            }
+            AuthViewModel.Outcome.Reauthed -> {
+                setResult(RESULT_OK)
+                finish()
+            }
+            is AuthViewModel.Outcome.VerificationPending -> onVerificationPending(outcome.error)
+            AuthViewModel.Outcome.TotpRequired -> totp.onOpened()
+            is AuthViewModel.Outcome.ResetReady -> passwordReset.onReady(outcome.email)
+            is AuthViewModel.Outcome.Say -> showMessage(outcome.text, outcome.long)
         }
-        val email = authRepo.pendingLinkEmail()
-        if (email.isNullOrBlank()) {
-            showMessage(getString(R.string.auth_link_wrong_device))
-            return
-        }
-        runAuth { authRepo.completeEmailLink(email, link) }
     }
 
     /**
@@ -272,61 +292,6 @@ class AuthActivity : AppCompatActivity() {
         }.onFailure { Timber.d(it, "Password not saved (declined or unsupported)") }
     }
 
-    /** Run a re-authentication call and answer the caller with its outcome. */
-    private fun runReauth(call: suspend () -> Result<Unit>) {
-        setLoading(true)
-        lifecycleScope.launch { finishReauth(call()) }
-    }
-
-    internal fun finishReauth(result: Result<Unit>) {
-        setLoading(false)
-        result.fold(
-            onSuccess = {
-                setResult(RESULT_OK)
-                finish()
-            },
-            onFailure = { error ->
-                if (error is AuthRepository.MfaTotpRequired) {
-                    totp.onRequired(error)
-                } else {
-                    showMessage(error.message ?: getString(R.string.reauth_failed))
-                }
-            },
-        )
-    }
-
-    /** Run an auth call that resolves to an access status, and route on the result. */
-    internal fun runAuth(call: suspend () -> Result<String>) {
-        setLoading(true)
-        lifecycleScope.launch {
-            routeResult(call())
-        }
-    }
-
-    internal suspend fun routeResult(result: Result<String>) {
-        setLoading(false)
-        result.fold(
-            onSuccess = { status ->
-                // Awaited, not fired and forgotten: the save prompt is hosted by
-                // this Activity, so navigating away first cancels it out from
-                // under the user — which is exactly what it reported.
-                pendingCredential?.let { (email, password) -> offerToSavePassword(email, password) }
-                totp.clear()
-                // Through the router so the Terms gate runs before Pending/Home
-                // for every provider: password, Google, email link alike.
-                startActivity(AccessRouter.intentFor(this, AccessRouter.afterSignIn(status)))
-                finish()
-            },
-            onFailure = { error ->
-                when (error) {
-                    is AuthRepository.EmailVerificationRequired -> onVerificationPending(error)
-                    is AuthRepository.MfaTotpRequired -> totp.onRequired(error)
-                    else -> showMessage(error.message ?: getString(R.string.auth_sign_in_failed))
-                }
-            },
-        )
-    }
-
     /** Shows the authenticator form with no live resolver; for tests ([AuthTotpController.enterChallengeUi]). */
     internal fun enterTotpChallengeUi() = totp.enterChallengeUi()
 
@@ -341,11 +306,11 @@ class AuthActivity : AppCompatActivity() {
         // worth keeping — they will need it to sign in once the link is opened.
         // This screen stays up, so the prompt has a host and can be launched
         // without blocking the switch back to sign-in.
-        pendingCredential?.let { (email, password) ->
+        viewModel.pendingCredential?.let { (email, password) ->
             lifecycleScope.launch { offerToSavePassword(email, password) }
         }
-        if (mode == AuthMode.REGISTER) mode = AuthMode.SIGN_IN
-        updateMode()
+        viewModel.leaveRegister()
+        render()
         binding.etEmail.setText(error.email)
         binding.etPassword.setText("")
         binding.etConfirmPassword.setText("")

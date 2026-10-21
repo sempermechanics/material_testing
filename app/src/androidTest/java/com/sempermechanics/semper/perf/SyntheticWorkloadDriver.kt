@@ -25,7 +25,9 @@ import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.SessionZip
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.report.EngineStats
+import com.sempermechanics.semper.report.HeatmapRequest
 import com.sempermechanics.semper.report.VisualizationEngine
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
@@ -321,13 +323,14 @@ class SyntheticWorkloadDriver {
 
         // Component: heatmap generate (indices + jet raster)
         timed("viewer_generate_heatmap") {
-            val (bmp, _, _) = VisualizationEngine.generateHeatmap(
-                data,
-                built.record.imgW,
-                built.record.imgH,
-                DicResult.IDX_EXX,
-                built.record.step,
-                maxLongEdge = VisualizationEngine.DISPLAY_MAX_EDGE,
+            val (bmp, _, _) = VisualizationEngine.render(
+                HeatmapRequest(
+                    data = data,
+                    size = ImageSize(built.record.imgW, built.record.imgH),
+                    valIndex = DicResult.IDX_EXX,
+                    step = built.record.step,
+                    maxLongEdge = VisualizationEngine.DISPLAY_MAX_EDGE,
+                ),
             )
             bmp.recycle()
         }

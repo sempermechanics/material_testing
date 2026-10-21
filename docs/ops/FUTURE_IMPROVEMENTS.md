@@ -84,7 +84,8 @@ which is TD-61. **Decided:** [ADR-004](../adr/ADR-004-runspec.md).
 
 **Done** (run-spec PR): `RunSpec` is built once at Compute; the batch params,
 the sweep, both session records and the viewer the run opens read it or the
-`RunResult` that carries it. The wizard keeps its mutable editing state. What
+`RunResult` that carried it (since 2026-10-19 the run's outcome and the saved row it
+opens through `ViewerArgs.of`). The wizard keeps its mutable editing state. What
 went in and what stayed out: [ADR-004 As built](../adr/ADR-004-runspec.md#as-built-2026-09-23).
 
 ## FI-7 Retire the unattested `/uploads` reader
@@ -224,7 +225,7 @@ shipped):
   if the settings open is measurably slow.
 - A session's file collection is paged twice on the **inline** provision path —
   once in `session_provision.py:51` and again by `list_pending_uploads` in
-  `routers/sessions.py:528` — not twice inside `session_provision` as previously
+  `services/sessions.py:116` — not twice inside `session_provision` as previously
   written. Each page also costs one extra document read to resolve its cursor
   (`backend/app/repo/_base.py:227-228`, `_cursor_page`).
 
@@ -288,7 +289,7 @@ seat revoke (`DELETE …/seats/{uid}`, `roster.py:368`) plus refresh-token revoc
 **Framework** 5.2; Part C "Console essentials" (role management).
 
 **Now.** Two roles, each all-or-nothing. Semper staff are `role: admin` or listed
-in `ADMIN_EMAILS` (`backend/app/deps.py:334-345`). Institution IT is any verified
+in `ADMIN_EMAILS` (`backend/app/deps.py:333-344`). Institution IT is any verified
 address in the licence's `adminEmails` (`backend/app/routers/institutions.py:53`),
 and every such address may read, add, hold, remove, import and export
 (`backend/app/routers/roster.py:104-382`, mounted for IT at
@@ -328,7 +329,7 @@ written to `audit_logs` with the token's id. A separate route tier in
 
 **Now.** Deprovisioning is manual. IT removes or holds a seat
 (`roster.py:334`, `:368`); staff suspend an account, which also revokes its
-refresh tokens (`backend/app/routers/admin.py:75-92`), best-effort until TD-214's
+refresh tokens (`backend/app/routers/admin.py:70-87`), best-effort until TD-214's
 IAM grant. A device that is offline keeps its signed entitlement until its
 `graceUntil` (`backend/app/entitlement_token.py:193-207`).
 
@@ -348,7 +349,7 @@ online; ≤ grace period offline')."
 `MIN_SUPPORTED_VERSION_CODE` / `RECOMMENDED_VERSION_CODE` for Semper and the
 `_MATERIAL_TESTING` pair for Material Testing (`settings.release_gate(app)`,
 `backend/app/config.py:286-300`) go into every `/v1/config` answer for that app
-(`backend/app/routers/account.py:147-174`), and the app gates
+(`backend/app/routers/account.py:145-172`), and the app gates
 itself (`VersionGate.decide`,
 `app/src/main/java/com/sempermechanics/semper/data/policy/VersionGate.kt:33`).
 
@@ -365,10 +366,10 @@ gating UX", for one institution while another stays ungated.
 
 **Framework** 8.5 ("per tenant").
 
-**Now.** Per user: `GET /v1/me/export` (`backend/app/routers/account.py:194`) and
+**Now.** Per user: `GET /v1/me/export` (`backend/app/routers/account.py:192`) and
 `DELETE /v1/me` (`:294`), which also deletes the Firebase Auth user when TD-214's
 grant is in place (`:350`). Per licence: delete into a 30-day hold
-(`backend/app/routers/admin.py:347`), which drops holders to Demo and leaves their
+(`backend/app/routers/admin.py:292`), which drops holders to Demo and leaves their
 data untouched by design. Nothing exports or erases every member's data for one
 institution in one operation.
 

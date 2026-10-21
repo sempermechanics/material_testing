@@ -23,6 +23,12 @@ import java.io.File
  * @property roi the ROI the engine solves, after [Roi.forSolve]'s inset
  * @property mask the ROI mask, empty when there is none
  * @property sweep set for a parameter sweep
+ * @property refUpdateInterval 0 solves every frame against the first image;
+ *   N >= 1 moves the reference to the latest solved frame every N frames
+ *   (incremental DIC). Results are relative to the first image either way.
+ *   For a video the wizard picks seconds of the clip and converts them at
+ *   its frame spacing (ReferenceIntervals), so N is always frames here.
+ *   A sweep ignores it: it solves one frame pair.
  * @property mechanical the test type, dimensions and loads the wizard held;
  *   a sweep's carries no loads
  */
@@ -35,8 +41,11 @@ data class RunSpec(
     /** Engine debug-export target; null in release, where the export is off. */
     val debugDir: File?,
     val sweep: Sweep? = null,
+    val refUpdateInterval: Int = 0,
     val mechanical: MechanicalTestInputs = MechanicalTestInputs.NONE,
 ) {
+    /** True when the reference moves during the run. */
+    val incremental: Boolean get() = sweep == null && refUpdateInterval > 0
 
     /**
      * @param labels one human-readable name per combination, index-aligned with
@@ -60,6 +69,7 @@ data class RunSpec(
         roiW = roi.w,
         roiH = roi.h,
         use6x6 = use6x6,
+        refUpdateInterval = if (incremental) refUpdateInterval else 0,
     )
 
     companion object {

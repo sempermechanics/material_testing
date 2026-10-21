@@ -59,17 +59,19 @@ class FrameImportControllerTest {
     @Test
     fun `frames the size of the reference pass`() {
         bed.viewModel.applyNewReference(ByteArray(1), "ref.png", ImageSize(W, H))
-        bed.viewModel.deformedFrames = listOf(DeformedFrame("/c/0001.png", "a.png", size = ImageSize(W, H)))
+        val frame = DeformedFrame("/c/0001.png", "a.png", size = ImageSize(W, H))
+        bed.viewModel.edit { it.copy(deformedFrames = listOf(frame)) }
         bed.viewModel.checkFrameSizes(bed.activity.resources)
-        assertNull(bed.viewModel.frameSizeError)
+        assertNull(bed.viewModel.inputs.value.frameSizeError)
     }
 
     @Test
     fun `mismatched frames are named, three and then a count`() {
         bed.viewModel.applyNewReference(ByteArray(1), "ref.png", ImageSize(W, H))
-        bed.viewModel.deformedFrames = (1..5).map { i ->
+        val frames = (1..5).map { i ->
             DeformedFrame("/c/000$i.png", if (i == 2) "" else "f$i.png", size = ImageSize(W + 1, H))
         }
+        bed.viewModel.edit { it.copy(deformedFrames = frames) }
         bed.viewModel.checkFrameSizes(bed.activity.resources)
 
         val names = bed.activity.resources.getQuantityString(
@@ -79,7 +81,7 @@ class FrameImportControllerTest {
             2,
         )
         val expected = bed.activity.resources.getQuantityString(R.plurals.frames_size_mismatch_fmt, 5, W, H, names)
-        assertEquals(expected, bed.viewModel.frameSizeError)
+        assertEquals(expected, bed.viewModel.inputs.value.frameSizeError)
     }
 
     private companion object {

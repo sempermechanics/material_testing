@@ -184,11 +184,18 @@ derived field for field; the proof is mechanical (identical `.dat` hashes).
   `RunResult.sessionId`, and `wouldCreateNewSession` is gone. The JNI call stays in the one loop; only the
   directory it writes to changed, so the `.dat` bytes (and oracles) are
   unchanged.
+- *Later (2026-10-19, #457):* `RunResult` is gone. A run hands its outcome back
+  (`BatchAnalysisOutcome`: the `spec` it solved, the session it wrote and the saved
+  row, `record`), the view model takes it once on Main (`applyRunOutcome`), and the
+  result opens through `ViewerArgs.of(record)`, the builder Home uses, so the viewer
+  reads what the saved row holds. A sweep that solved nothing opens through
+  `ViewerArgs.forFailedSweep`. The run no longer writes the `last*` fields.
 
 ## In material_testing (2026-09-24)
 
 `RunSpec.mechanical` snapshots `MechanicalTestInputs` at Compute — the test
 type, dimensions, beam taps and per-frame loads; a sweep's carries no loads.
-The batch and the sweep commit it to the session, and
-`AnalysisNavHelper.resultArgs` hands it to the viewer, so a load log re-imported
-during the run cannot reach either.
+The batch and the sweep commit it to the session, and the viewer reads it back
+from the saved row (`ViewerArgs.of(record)`, since the sync of semperdic-app
+#457; it was `AnalysisNavHelper.resultArgs`), so a load log re-imported during
+the run cannot reach either.

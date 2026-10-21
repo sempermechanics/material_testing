@@ -253,7 +253,8 @@ class DicBundleDownloadWorker internal constructor(
  * and grant. Only the app's own cancel (the user's Cancel) ends the work;
  * any other stop (connectivity, quota, the system) runs it again into the
  * same document. A cancellation with no stop at all
- * ([WorkInfo.STOP_REASON_NOT_STOPPED]) ends the work too.
+ * ([WorkInfo.STOP_REASON_NOT_STOPPED]) ends the work too. A restore keeps its
+ * bundle's `.part` on the same decision ([clearStoppedRestore]).
  */
 internal fun keepsDestinationOnStop(stopReason: Int): Boolean =
     stopReason != WorkInfo.STOP_REASON_CANCELLED_BY_APP && stopReason != WorkInfo.STOP_REASON_NOT_STOPPED
@@ -267,4 +268,4 @@ internal fun keepsDestinationOnStop(stopReason: Int): Boolean =
  * they read [WorkInfo.STOP_REASON_UNKNOWN], which keeps the document.
  */
 @SuppressLint("NewApi")
-private fun ListenableWorker.stopReasonNow(): Int = stopReason
+internal fun ListenableWorker.stopReasonNow(): Int = stopReason

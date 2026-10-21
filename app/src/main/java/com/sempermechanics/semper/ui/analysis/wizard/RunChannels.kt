@@ -1,25 +1,26 @@
 package com.sempermechanics.semper.ui.analysis.wizard
 
 import android.content.Context
+import android.os.Looper
 import android.os.Trace
 import androidx.annotation.AnyThread
 import androidx.annotation.MainThread
 import androidx.annotation.WorkerThread
 import androidx.lifecycle.viewModelScope
+import com.sempermechanics.semper.BuildConfig
 import com.sempermechanics.semper.SemperNativeLib
 import com.sempermechanics.semper.data.session.SessionLayout
 import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.data.session.SessionQuota
 import com.sempermechanics.semper.data.session.SessionStore
-import com.sempermechanics.semper.data.session.SkippedNode
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
 import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.ui.analysis.run.BatchRun
+import com.sempermechanics.semper.ui.analysis.run.RunEnd
 import com.sempermechanics.semper.ui.analysis.run.RunInputs
 import com.sempermechanics.semper.ui.analysis.run.RunSpec
 import com.sempermechanics.semper.ui.analysis.run.runBatchAnalysisBody
 import com.sempermechanics.semper.ui.analysis.run.snapshotRunInputs
-import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
 import com.sempermechanics.semper.util.AtomicFiles
 import kotlinx.coroutines.CancellationException
@@ -53,12 +54,12 @@ internal class RunChannels {
         extraBufferCapacity = PROGRESS_BUFFER,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
-    val batchOutcome = PendingOutcome<Result<BatchAnalysisOutcome>>()
+    val batchOutcome = PendingOutcome<RunEnd>()
     val sweepProgress = MutableSharedFlow<SweepStudyRunner.Progress?>(
         extraBufferCapacity = 1,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
-    val sweepOutcome = PendingOutcome<Result<BatchAnalysisOutcome>>()
+    val sweepOutcome = PendingOutcome<RunEnd>()
     var batchJob: Job? = null
     var sweepJob: Job? = null
 
@@ -107,10 +108,12 @@ internal class PendingOutcome<T : Any> {
 /**
  * Runs the batch on [viewModelScope] so destroying the Activity mid-run does
  * not cancel a minutes-long native solve. Progress is published on
- * [AnalysisViewModel.progress]; completion (or failure) is held on
+ * [AnalysisViewModel.progress]; how it ended ([RunEnd]) is held on
  * [AnalysisViewModel.batchOutcome] until the screen takes it. The run's
- * images, [inputs], are frozen by the caller on Main before it leaves for the
- * native thread ([snapshotRunInputs]).
+ * images and the working session, [inputs], are frozen by the caller on Main
+ * before it leaves for the native thread ([snapshotRunInputs]); what it
+ * learned comes back in its outcome, which the view model takes on Main
+ * before the screen sees it ([applyRunOutcome]).
  */
 @MainThread
 @Suppress("TooGenericExceptionCaught") // any failure is the run's outcome
@@ -133,7 +136,7 @@ internal fun AnalysisViewModel.launchBatchAnalysis(
             mapOf(
                 "mode" to "batch",
                 "frames" to SemperAnalytics.frameCountBucket(inputs.frames.paths.size),
-                "testType" to testType.wireName,
+                "testType" to spec.testTypeWire,
             ),
         )
         try {
@@ -141,7 +144,8 @@ internal fun AnalysisViewModel.launchBatchAnalysis(
             val outcome = runBatchAnalysis(appContext, newRun) { update ->
                 if (isActive) runs.progress.tryEmit(update)
             }
-            runs.batchOutcome.post(Result.success(outcome))
+            withContext(Dispatchers.Main) { applyRunOutcome(outcome) }
+            runs.batchOutcome.post(RunEnd.of(outcome))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -151,7 +155,7 @@ internal fun AnalysisViewModel.launchBatchAnalysis(
                 SemperAnalytics.ANALYSIS_FAILED,
                 mapOf("mode" to "batch", "reason" to "exception"),
             )
-            runs.batchOutcome.post(Result.failure(e))
+            runs.batchOutcome.post(RunEnd.unexpected(e))
         } finally {
             runs.progress.tryEmit(null)
         }
@@ -180,7 +184,8 @@ private suspend fun AnalysisViewModel.runBatchAnalysis(
  * own scope until now, which cancelled it on destroy and left the partial
  * session behind. Progress arrives on [AnalysisViewModel.sweepProgress], the
  * result is held on [AnalysisViewModel.sweepOutcome] until the screen takes it.
- * Its images are frozen here, as a batch run's are.
+ * Its images and the working session are frozen here, as a batch run's are,
+ * and the view model takes what it learned on Main ([applyRunOutcome]).
  */
 @MainThread
 @Suppress("TooGenericExceptionCaught") // any failure is the sweep's outcome
@@ -196,12 +201,13 @@ fun AnalysisViewModel.launchSweep(appContext: Context, spec: RunSpec) {
             val outcome = runSweep(appContext, spec, inputs) { update ->
                 if (isActive) runs.sweepProgress.tryEmit(update)
             }
-            runs.sweepOutcome.post(Result.success(outcome))
+            withContext(Dispatchers.Main) { applyRunOutcome(outcome) }
+            runs.sweepOutcome.post(RunEnd.of(outcome))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Timber.e(e, "Parameter sweep failed")
-            runs.sweepOutcome.post(Result.failure(e))
+            runs.sweepOutcome.post(RunEnd.unexpected(e))
         } finally {
             runs.sweepProgress.tryEmit(null)
         }
@@ -252,8 +258,11 @@ internal fun AnalysisViewModel.admitRun(appContext: Context, plannedFrames: Int)
 }
 
 /**
- * The session a run, a sweep when [sweep], writes, with an empty
- * [RunSession.staging] for its results.
+ * The session a run of [kind] writes, with an empty
+ * [RunSession.staging] for its results. [working] is the wizard's working
+ * session as the run was launched with it ([RunInputs.working]): this reads
+ * no field of the wizard and writes none, so the native thread it runs on
+ * never races Main over them.
  *
  * A saved analysis is never written over (owner decision, 2026-10-15): the
  * working session is reused only while no Home row names it, which is when
@@ -263,29 +272,32 @@ internal fun AnalysisViewModel.admitRun(appContext: Context, plannedFrames: Int)
  * mints a new id. A single run and a sweep never share a session.
  */
 @WorkerThread
-internal fun AnalysisViewModel.openRunSession(appContext: Context, sweep: Boolean): RunSession {
-    val before = WizardRunState(workingLocalId, workingIsSweep, runResult.value, sweepPlan, sweepSkippedNodes)
-    val unsaved = workingLocalId?.takeIf { workingIsSweep == sweep && SessionStore.get(appContext, it) == null }
-    val id = unsaved ?: UUID.randomUUID().toString().take(SESSION_ID_LENGTH).also {
-        workingLocalId = it
-        workingIsSweep = sweep
-    }
+internal fun openRunSession(appContext: Context, working: WorkingSession?, kind: RunKind): RunSession {
+    val unsaved = working?.takeIf { it.kind == kind && SessionStore.get(appContext, it.id) == null }?.id
+    val id = unsaved ?: UUID.randomUUID().toString().take(SESSION_ID_LENGTH)
     val dir = SessionStore.dirFor(appContext, id)
     // A process that died mid-run left its staging behind; it is no one's results.
     val staging = SessionPaths.runStaging(dir).apply {
         deleteRecursively()
         mkdirs()
     }
-    return RunSession(id, dir, staging, fresh = unsaved == null, before = before)
+    return RunSession(id, dir, staging, fresh = unsaved == null, kind = kind)
 }
 
 /**
- * A run's save went into the index: that analysis is finished, and the next
- * run in this wizard is a new one ([openRunSession]), never a re-run over it.
+ * Takes what a run that ended with [outcome] learned, once, on Main: the
+ * session the next run of its kind writes again, none once this one saved
+ * (a saved analysis is finished: the next run is a new one, never a re-run
+ * over it). A run writes none of the wizard's fields itself: they are
+ * Main's, and `WizardState.save` reads them there. A run that never got a
+ * session (the quota blocked it) or kept nothing (it was cancelled) changes
+ * nothing. What it shows is [RunEnd.of] the same outcome.
  */
-internal fun AnalysisViewModel.closeSavedSession() {
-    workingLocalId = null
-    workingIsSweep = false
+@MainThread
+internal fun AnalysisViewModel.applyRunOutcome(outcome: BatchAnalysisOutcome) {
+    if (BuildConfig.DEBUG) check(Looper.getMainLooper().isCurrentThread) { "a run's outcome is applied on Main" }
+    val session = outcome.session ?: return
+    edit { it.copy(working = if (outcome.saved) null else session) }
 }
 
 /**
@@ -294,16 +306,18 @@ internal fun AnalysisViewModel.closeSavedSession() {
  *
  * @property fresh whether this run minted [id]: a new session, which nothing
  *   saved before it
- * @property before what the wizard knew of its runs before this one started,
- *   which a cancelled run puts back
+ * @property kind what the run is
  */
 internal class RunSession(
     val id: String,
     val dir: File,
     val staging: File = SessionPaths.runStaging(dir),
     val fresh: Boolean = false,
-    val before: WizardRunState? = null,
+    val kind: RunKind = RunKind.BATCH,
 ) {
+    /** This session as the wizard's working session names it. */
+    val working: WorkingSession get() = WorkingSession(id, kind)
+
     /**
      * Replaces the session's previous results with this run's: the old `.dat`
      * files and the summary's field-range sidecar, which
@@ -313,24 +327,23 @@ internal class RunSession(
      */
     @WorkerThread
     fun commit() {
-        dir.listFiles { f -> f.extension == "dat" }?.forEach { it.delete() }
-        SessionLayout(dir).fieldRanges.delete()
+        dropResults()
         staging.listFiles()?.forEach { AtomicFiles.promote(it, File(dir, it.name)) }
         staging.deleteRecursively()
     }
-}
 
-/**
- * The wizard's view of its runs, as a run found it: the working session and
- * its kind, the last run's result, and the last sweep's plan and skips.
- */
-internal class WizardRunState(
-    val workingLocalId: String?,
-    val workingIsSweep: Boolean,
-    val runResult: RunResult,
-    val sweepPlan: List<SweepStudy.Point>,
-    val sweepSkippedNodes: List<SkippedNode>,
-)
+    /**
+     * Deletes the session's committed results: its `.dat` files and the
+     * summary's field-range sidecar. [commit] makes way for a run's with it,
+     * and a run that throws after its commit takes its own back out with it
+     * (`undoCommittedBatch`).
+     */
+    @WorkerThread
+    fun dropResults() {
+        dir.listFiles { f -> f.extension == "dat" }?.forEach { it.delete() }
+        SessionLayout(dir).fieldRanges.delete()
+    }
+}
 
 /**
  * Throws away everything a cancelled run in [session] wrote, so nothing of it
@@ -339,21 +352,15 @@ internal class WizardRunState(
  * names it ([SessionStore.deleteUnsavedDir]). A session that was there
  * before keeps its directory, its results and its row exactly as they were;
  * nothing is saved, so no upload is queued and Home does not change. The
- * wizard's working session and last result go back to what they were, so the
- * next run is admitted ([admitRun]) as if this one had never started.
+ * wizard's fields were never touched, so the next run is admitted
+ * ([admitRun]) as if this one had never started.
  * [keepDir] is for a deformed image the run could not put back where it found
  * it: the directory then still holds it, and the wizard reads it from there.
  */
 @WorkerThread
-internal fun AnalysisViewModel.discardRun(appContext: Context, session: RunSession, keepDir: Boolean = false) {
+internal fun discardRun(appContext: Context, session: RunSession, keepDir: Boolean = false) {
     session.staging.deleteRecursively()
     if (session.fresh && !keepDir) SessionStore.deleteUnsavedDir(appContext, session.id)
-    val before = session.before ?: return
-    workingLocalId = before.workingLocalId
-    workingIsSweep = before.workingIsSweep
-    lastRunResult = before.runResult
-    sweepPlan = before.sweepPlan
-    sweepSkippedNodes = before.sweepSkippedNodes
 }
 
 /** Characters of a random UUID a new working session's id keeps. */
@@ -374,8 +381,12 @@ private const val SESSION_ID_LENGTH = 12
  */
 @MainThread
 internal fun AnalysisViewModel.repointDeformedPaths(resolved: List<String>) {
-    deformedFrames = deformedFrames.mapIndexed { i, frame ->
-        frame.copy(path = resolved.getOrElse(i) { frame.path })
+    edit { current ->
+        current.copy(
+            deformedFrames = current.deformedFrames.mapIndexed { i, frame ->
+                frame.copy(path = resolved.getOrElse(i) { frame.path })
+            },
+        )
     }
 }
 

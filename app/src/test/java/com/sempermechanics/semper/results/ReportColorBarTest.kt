@@ -4,7 +4,9 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.ValueRange
+import com.sempermechanics.semper.report.HeatmapRequest
 import com.sempermechanics.semper.report.ReportBuilder
 import com.sempermechanics.semper.report.VisualizationEngine
 import org.junit.Assert.assertArrayEquals
@@ -117,14 +119,14 @@ class ReportColorBarTest {
             data[o + DicResult.IDX_U] = value
             data[o + DicResult.IDX_ZNSSD] = 0.01f // a well-correlated point
         }
-        val (heatmap, _, _) = VisualizationEngine.generateHeatmap(
-            data,
-            grid * step,
-            grid * step,
-            DicResult.IDX_U,
-            step,
-            customMin = 0f,
-            customMax = 1f,
+        val (heatmap, _, _) = VisualizationEngine.render(
+            HeatmapRequest(
+                data = data,
+                size = ImageSize(grid * step, grid * step),
+                valIndex = DicResult.IDX_U,
+                step = step,
+                bounds = ValueRange(0f, 1f),
+            ),
         )
         return heatmap.getPixel(heatmap.width / 2, heatmap.height / 2).also { heatmap.recycle() }
     }

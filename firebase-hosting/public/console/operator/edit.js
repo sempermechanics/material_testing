@@ -1,7 +1,9 @@
 /* The Edit and To-institution dialogs: a licence's terms, and an individual
  * licence carried over to an institution one.
  */
-import { api, setStatus, askInPage } from "../auth.js";
+import { api } from "../api.js";
+import { askInPage } from "../dialogs.js";
+import { setStatus } from "../status.js";
 import { day, isoDay, emailList, licenceEditPatch } from "../util.js";
 import { explain } from "../messages.js";
 import { $, findLicence, labelOf, demoCapNote } from "./state.js";

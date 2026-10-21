@@ -63,3 +63,7 @@ import inside `repo/devlock.py`.
   `test_route_authz_matrix` did this and was rewritten.
 - `fake_firestore.install` patches `app.repo._base` directly.
 - The suite (836) and the emulator tier (24) pass unchanged in what they assert.
+- Since TD-293 (2026-10-19) a route's multi-step flow lives in
+  `backend/app/services/<aggregate>.py`, which calls the package the same way
+  (`repo.<name>`), so `repo_view.patch` reaches it unchanged. Services never
+  import a router (`tests/test_layering.py`).

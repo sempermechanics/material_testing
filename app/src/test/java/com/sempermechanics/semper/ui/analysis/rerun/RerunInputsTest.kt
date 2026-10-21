@@ -16,6 +16,7 @@ import com.sempermechanics.semper.ui.analysis.frames.FrameOrderMode
 import com.sempermechanics.semper.ui.analysis.run.RunInputs
 import com.sempermechanics.semper.ui.analysis.run.RunSpec
 import com.sempermechanics.semper.ui.analysis.run.snapshotRunInputs
+import com.sempermechanics.semper.ui.analysis.sweep.SweepFrame
 import com.sempermechanics.semper.ui.analysis.sweep.SweepRanges
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
@@ -65,21 +66,30 @@ class RerunInputsTest {
     /** The wizard as a video run of three frames left it, frozen as a run freezes it. */
     private fun wizard(frames: List<File>, sweep: Boolean = false) = AnalysisViewModel().apply {
         applyNewReference(reference, "ref.dng", size)
-        hasCustomRoi = true
-        roi = drawn
-        roiMaskBytes = mask
-        deformedFrames = frames.mapIndexed { i, f ->
-            DeformedFrame(f.absolutePath, "clip_$i.png", date = 100L + i, size = size, timeMs = 500L * i)
+        edit {
+            it.copy(
+                hasCustomRoi = true,
+                roi = drawn,
+                roiMaskBytes = mask,
+                deformedFrames = frames.mapIndexed { i, f ->
+                    DeformedFrame(f.absolutePath, "clip_$i.png", date = 100L + i, size = size, timeMs = 500L * i)
+                },
+                defFromVideo = true,
+                defVideoName = "tensile_03",
+                defOrderMode = FrameOrderMode.PICKER,
+                defOrderDirection = FrameOrderDirection.DESCENDING,
+            )
         }
-        defFromVideo = true
-        defVideoName = "tensile_03"
-        defOrderMode = FrameOrderMode.PICKER
-        defOrderDirection = FrameOrderDirection.DESCENDING
         if (sweep) {
-            sweepMode = true
-            sweepRanges = SweepRanges(21, 41, 5, 9, subsetSamples = 3, strainWinSamples = 2, stepDenominator = 4)
-            subsetOverlap = SweepStudy.overlapForDenominator(4)
-            lineCutHorizontal = false
+            val ranges = SweepRanges(21, 41, 5, 9, subsetSamples = 3, strainWinSamples = 2, stepDenominator = 4)
+            edit {
+                it.copy(
+                    sweepMode = true,
+                    sweepRanges = ranges,
+                    subsetOverlap = SweepStudy.overlapForDenominator(4),
+                    lineCutHorizontal = false,
+                )
+            }
         }
     }
 
@@ -142,21 +152,21 @@ class RerunInputsTest {
         assertEquals(listOf("clip_0.png", "clip_1.png", "clip_2.png"), vm.defOriginalNames)
         assertEquals(listOf(0L, 500L, 1000L), vm.defFrameTimesMs)
         assertEquals(listOf(100L, 101L, 102L), vm.defFrameDates)
-        assertTrue(vm.defFromVideo)
-        assertEquals("tensile_03", vm.defVideoName)
-        assertEquals(FrameOrderMode.PICKER, vm.defOrderMode)
-        assertEquals(FrameOrderDirection.DESCENDING, vm.defOrderDirection)
-        assertArrayEquals(reference, vm.refBytes)
-        assertEquals("ref.dng", vm.refName)
-        assertEquals(size, vm.refSize)
-        assertTrue(vm.hasCustomRoi)
-        assertEquals(drawn, vm.roi)
-        assertArrayEquals(mask, vm.roiMaskBytes)
+        assertTrue(vm.inputs.value.defFromVideo)
+        assertEquals("tensile_03", vm.inputs.value.defVideoName)
+        assertEquals(FrameOrderMode.PICKER, vm.inputs.value.defOrderMode)
+        assertEquals(FrameOrderDirection.DESCENDING, vm.inputs.value.defOrderDirection)
+        assertArrayEquals(reference, vm.inputs.value.refBytes)
+        assertEquals("ref.dng", vm.inputs.value.refName)
+        assertEquals(size, vm.inputs.value.refSize)
+        assertTrue(vm.inputs.value.hasCustomRoi)
+        assertEquals(drawn, vm.inputs.value.roi)
+        assertArrayEquals(mask, vm.inputs.value.roiMaskBytes)
         assertEquals(RerunInputs.Params(31, 6, SweepStudy.vsgFor(9, 6), use6x6 = true), loaded.inputs.params)
-        assertFalse(vm.sweepMode)
-        assertEquals("lands on the parameters page", WizardStep.SETTINGS, vm.step)
-        assertTrue("the recommendation must not move the saved subset", vm.subsetUserModified)
-        assertNull("nothing names the saved analysis: the next run is a new one", vm.workingLocalId)
+        assertFalse(vm.inputs.value.sweepMode)
+        assertEquals("lands on the parameters page", WizardStep.SETTINGS, vm.inputs.value.step)
+        assertTrue("the recommendation must not move the saved subset", vm.inputs.value.subsetUserModified)
+        assertNull("nothing names the saved analysis: the next run is a new one", vm.inputs.value.working?.id)
         assertEquals("the saved analysis is untouched", before, hashes(dir))
     }
 
@@ -167,8 +177,9 @@ class RerunInputsTest {
         val before = hashes(dir)
         val vm = AnalysisViewModel().apply { applyRerun(checkNotNull(RerunLoader.load(dir, ctx.cacheDir))) }
 
-        val sorted = FrameOrderHelper.reorder(vm.deformedFrames, FrameOrderMode.NAME, FrameOrderDirection.DESCENDING)
-        vm.deformedFrames = FrameOrderHelper.reprefixTempFiles(sorted)
+        val loaded = vm.inputs.value.deformedFrames
+        val sorted = FrameOrderHelper.reorder(loaded, FrameOrderMode.NAME, FrameOrderDirection.DESCENDING)
+        vm.edit { it.copy(deformedFrames = FrameOrderHelper.reprefixTempFiles(sorted)) }
 
         assertEquals(listOf("image 2", "image 1", "image 0"), vm.defFilePaths.map { File(it).readText() })
         assertEquals("the saved analysis's files", before, hashes(dir))
@@ -193,7 +204,7 @@ class RerunInputsTest {
         importDir.mkdirs()
         val imported = (0 until 3).map { File(importDir, "000${it}_clip_$it.png").apply { writeText("image $it") } }
         val wizard = wizard(imported, sweep = true)
-        val ranges = wizard.sweepRanges
+        val ranges = wizard.inputs.value.sweepRanges
         val plan = ranges.plan(subsetCeiling = 41)
         val spec = RunSpec.sweep(
             RunSpec.Sweep(plan, plan.map { "$it" }, lineCutHorizontal = false, frameIndex = 1),
@@ -210,16 +221,16 @@ class RerunInputsTest {
         keepSweepRerun(dir, inputs, spec, "clip_1.png")
         val vm = AnalysisViewModel().apply { applyRerun(checkNotNull(RerunLoader.load(dir, ctx.cacheDir))) }
 
-        assertTrue(vm.sweepMode)
-        assertEquals(WizardStep.SWEEP, vm.step)
-        assertEquals(ranges, vm.sweepRanges)
-        assertEquals(plan, vm.sweepRanges.plan(subsetCeiling = 41))
-        assertEquals(wizard.subsetOverlap, vm.subsetOverlap, 0.0)
-        assertFalse(vm.lineCutHorizontal)
+        assertTrue(vm.inputs.value.sweepMode)
+        assertEquals(WizardStep.SWEEP, vm.inputs.value.step)
+        assertEquals(ranges, vm.inputs.value.sweepRanges)
+        assertEquals(plan, vm.inputs.value.sweepRanges.plan(subsetCeiling = 41))
+        assertEquals(wizard.inputs.value.subsetOverlap, vm.inputs.value.subsetOverlap, 0.0)
+        assertFalse(vm.inputs.value.lineCutHorizontal)
         assertEquals("its one frame, the one it solved against", listOf("clip_1.png"), vm.defOriginalNames)
-        assertEquals(0, vm.sweepFrameIndex)
+        assertEquals(SweepFrame.At(0), vm.inputs.value.sweepFrame)
         assertEquals(listOf("image 1"), vm.defFilePaths.map { File(it).readText() })
-        assertArrayEquals(mask, vm.roiMaskBytes)
+        assertArrayEquals(mask, vm.inputs.value.roiMaskBytes)
     }
 
     @Test

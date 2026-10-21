@@ -1,0 +1,17 @@
+# Broad catches and runCatching around a suspend call that may swallow
+# cancellation, checked by scripts/check_swallowed_cancellation.py (TD-171,
+# ADR-018 "Cancellation").
+#
+#   path (under app/src/main/java/com/sempermechanics/semper/) | function | construct | call | reason
+#
+# `function` is the one holding the construct (or the property it initialises),
+# `construct` and `call` as the check prints them (`runCatching`,
+# `catch Exception`; the first suspend call in its block). An entry that matches
+# nothing fails the check, so this list only shrinks. Every reason names a TD-
+# or ADR- pointer; a scope that is never cancelled says so here (ADR-018).
+#
+# Triaged 2026-10-19: no entries. TD-41 had already moved the suspend paths to
+# suspendRunCatching, and every broad catch around a suspend call rethrows
+# CancellationException or calls rethrowIfCallerCancelled() first. The one
+# finding of the first draft, `Tasks.await` in data/net/AppCheckHeader.kt, is
+# Play services' blocking call, not the suspend one; the check now knows it.

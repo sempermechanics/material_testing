@@ -15,6 +15,7 @@ from firebase_admin import app_check as fb_app_check, auth as fb_auth
 from google.auth import impersonated_credentials
 from google.auth.transport.requests import Request as GRequest
 
+from . import errors
 from . import observability as obs
 from . import rate_limit
 from .config import settings
@@ -76,7 +77,7 @@ def verify_id_token(token: str, *, check_revoked: bool = False) -> dict:
     tokens were revoked after this token was minted, or the account disabled
     (`fb_auth.RevokedIdTokenError` / `fb_auth.UserDisabledError`). That is a
     network call and needs the runtime account to hold Firebase Auth admin on
-    the Auth project, so only `deps.step_up_check` asks it, and only when
+    the Auth project, so only `step_up.step_up_check` asks it, and only when
     `CHECK_REVOKED_ON_STEP_UP` is on.
     """
     return fb_auth.verify_id_token(token, check_revoked=check_revoked)
@@ -133,6 +134,57 @@ def delete_auth_user(uid: str) -> bool:
                     uid, type(e).__name__, str(e)[:200])
         return False
     return True
+
+
+# --- Admin-SDK user creation, for staff test accounts (ADR-027) -------------
+# Unlike the two calls above these are the operation itself, not a
+# best-effort follow-up: a test account whose Auth user was not made does not
+# exist. So each raises, `obs.DependencyError` (503) when the budget is spent
+# or the Auth project fails, and the caller refuses the request. The password
+# goes to the Auth project and nowhere else: no log line below names it, and
+# a failure is logged by exception type alone, since an Admin-SDK message can
+# echo the address.
+
+
+class EmailInUse(Exception):
+    """The Auth project already holds a user with this address."""
+
+
+def _admin_call(uid: str, action: str, call):
+    if not _within_budget(uid, action):
+        raise obs.DependencyError(errors.AUTH_CHECK_BUSY, "firebase_auth")
+    try:
+        return call()
+    except fb_auth.EmailAlreadyExistsError as e:
+        raise EmailInUse() from e
+    except Exception as e:  # noqa: BLE001 - one refusal for every Auth failure
+        obs.log_event(log, logging.ERROR, "auth_admin_failed", uid=uid or None, action=action,
+                      outcome="error", errorCode=type(e).__name__, dependency="firebase_auth")
+        raise obs.DependencyError(errors.INTERNAL_ERROR, "firebase_auth") from e
+
+
+def auth_user_exists(email: str) -> bool:
+    """Whether the Auth project holds a user with this address."""
+    def lookup() -> bool:
+        try:
+            fb_auth.get_user_by_email(email)
+        except fb_auth.UserNotFoundError:
+            return False
+        return True
+
+    return _admin_call("", "get_user_by_email", lookup)
+
+
+def create_auth_user(email: str, password: str) -> str:
+    """Create an email/password Auth user with a verified address; its uid.
+    Raises `EmailInUse` when the address is taken."""
+    return _admin_call("", "create_user", lambda: fb_auth.create_user(
+        email=email, password=password, email_verified=True).uid)
+
+
+def set_auth_password(uid: str, password: str) -> None:
+    """Give the Auth user `uid` a new password."""
+    _admin_call(uid, "update_user", lambda: fb_auth.update_user(uid, password=password))
 
 
 def verify_app_check_token(token: str) -> dict:

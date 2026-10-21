@@ -48,6 +48,9 @@ internal class SweepFramePicker(
     private val viewModel: AnalysisViewModel,
     private val onPicked: (Int) -> Unit,
 ) {
+    /** How many deformed frames the wizard holds now. */
+    private val frameCount: Int get() = viewModel.inputs.value.deformedFrames.size
+
     /** The thumbnail decode; a new pick cancels it. */
     private val thumbDecode = SerialJob()
 
@@ -84,7 +87,7 @@ internal class SweepFramePicker(
     /** Shows frame [index] as the one picked. */
     fun show(index: Int) {
         val block = block ?: return
-        val count = viewModel.defCount
+        val count = frameCount
         block.isVisible = count > 1
         if (count <= 1) {
             thumbDecode.cancel()
@@ -111,7 +114,7 @@ internal class SweepFramePicker(
         content.tvSweepFrameOverlay.text = activity.getString(
             R.string.sweep_frame_overlay_caption_fmt,
             name.text,
-            activity.getString(R.string.sweep_frame_position_fmt, picked + 1, viewModel.defCount),
+            activity.getString(R.string.sweep_frame_position_fmt, picked + 1, frameCount),
         )
         content.root.setOnClickListener { dialog.dismiss() }
         dialog.setContentView(content.root)
@@ -144,7 +147,7 @@ internal class SweepFramePicker(
 
     /** Opens the frame dialog on frame [initial]; does nothing for a sequence of one frame. */
     private fun openDialog(initial: Int) {
-        val count = viewModel.defCount
+        val count = frameCount
         if (count <= 1) return
         var selected = initial.coerceIn(0, count - 1)
         val builder = MaterialAlertDialogBuilder(activity)

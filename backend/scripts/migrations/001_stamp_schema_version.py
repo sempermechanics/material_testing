@@ -12,6 +12,9 @@ from_version = 0
 to_version = 1
 
 collections = ("users", "devices", "challenges", "sessions", "files", "audit_logs")
+#: Applied before `audit_logs` was held append-only (TD-237); kept so the
+#: chain still loads. It adds `schemaVersion` and changes no other field.
+rewrites_append_only = "applied before TD-237; stamps schemaVersion only"
 
 
 def transform(doc: dict) -> dict | None:

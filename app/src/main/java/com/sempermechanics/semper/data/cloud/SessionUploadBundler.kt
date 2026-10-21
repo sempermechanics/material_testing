@@ -14,6 +14,7 @@ import com.sempermechanics.semper.data.session.StagingLayout
 import com.sempermechanics.semper.data.session.imageSize
 import com.sempermechanics.semper.data.session.paramsAt
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.imaging.BitmapDecoder
 import com.sempermechanics.semper.imaging.ImageEncoder
 import com.sempermechanics.semper.report.AnalysisCsvWriter
@@ -244,15 +245,15 @@ object SessionUploadBundler {
         )
         val ranges = SummaryAnimation.globalRanges(batchFiles, SessionLayout(sessionDir).fieldRanges)
         var gifs = 0
-        for ((label, dataIndex) in SummaryAnimation.FIELDS) {
+        for (field in FieldKind.entries) {
             currentCoroutineContext().ensureActive() // one GIF per check, like the frame loop
-            val bounds = ranges[dataIndex] ?: continue
+            val bounds = ranges[field.dataIndex] ?: continue
             try {
-                if (animation.build(dataIndex, label, bounds) != null) gifs++
+                if (animation.build(field.dataIndex, field.label, bounds) != null) gifs++
             } catch (e: CancellationException) {
                 throw e
             } catch (@Suppress("TooGenericExceptionCaught") e: Throwable) {
-                Timber.w(e, "Skipping %s animation for %s in backup", label, record.id)
+                Timber.w(e, "Skipping %s animation for %s in backup", field.label, record.id)
             }
         }
         return gifs

@@ -391,9 +391,18 @@ export function reset() {
 
 reset();
 
-/** auth.js, loaded through the hooks above. One instance per test file (process). */
-export function loadAuth() {
-  return import("../public/console/auth.js");
+/**
+ * The shared console modules, loaded through the hooks above, as one
+ * namespace: auth.js (sign-in, the second factor), api.js, dialogs.js and
+ * status.js. One instance of each per test file (process). The last three
+ * were part of auth.js; the tests that drive them through a signed-in page
+ * read them here, as they did then.
+ */
+export async function loadAuth() {
+  const modules = await Promise.all(
+    ["auth.js", "api.js", "dialogs.js", "status.js"].map((m) => import(`../public/console/${m}`)),
+  );
+  return Object.assign({}, ...modules);
 }
 
 /** An enrolled, second-factor session: the state every dashboard needs. */

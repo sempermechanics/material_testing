@@ -5,15 +5,13 @@ import android.content.Context
 import android.content.Intent
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.session.SessionRecord
-import com.sempermechanics.semper.data.session.SkippedNode
 import com.sempermechanics.semper.ui.common.dialog.Dialogs
 import com.sempermechanics.semper.ui.viewer.ViewerArgs
-import com.sempermechanics.semper.ui.viewer.ViewerSweepArgs
 
 /**
- * Packs a [SessionRecord] into the Intent that opens either the result viewer
- * or the VSG lattice (sweeps). The extras themselves are [ViewerArgs], shared
- * with the post-run entry point so the two cannot drift apart.
+ * Opens a [SessionRecord] in the result viewer or, for a sweep, the VSG
+ * lattice. The extras are [ViewerArgs.of] the row, the one builder a run that
+ * just saved its row opens with too, so the two cannot drift apart.
  */
 object SessionOpenHelper {
 
@@ -33,43 +31,5 @@ object SessionOpenHelper {
         activity.startActivity(intentFor(activity, session))
     }
 
-    fun intentFor(context: Context, session: SessionRecord): Intent = argsFor(session).toIntent(context)
-
-    fun argsFor(session: SessionRecord): ViewerArgs =
-        ViewerArgs(
-            imgW = session.imgW,
-            imgH = session.imgH,
-            step = session.step,
-            refName = session.refName,
-            refPath = session.refPath,
-            batchDirPath = session.sessionDir,
-            // A sweep names its frames after the combination behind them, and
-            // needs each frame's own settings to render and describe it.
-            frameNames = session.frameNames,
-            stopCode = session.stopCode,
-            plannedFrames = session.plannedFrameCount,
-            sessionId = session.id,
-            sessionLocalId = session.id,
-            subsetSize = session.subset,
-            strainWindow = session.strainWindow,
-            engineStats = session.engineStats.ifEmpty { null },
-            roiX = session.roiX,
-            roiY = session.roiY,
-            roiW = session.roiW,
-            roiH = session.roiH,
-            frameTimesMs = session.frameTimesMs.takeUnless { session.isSweep },
-            sweep = if (session.isSweep) {
-                ViewerSweepArgs(
-                    subsets = session.sweepSubsets,
-                    steps = session.sweepSteps,
-                    strainWindows = session.sweepStrainWindows,
-                    lineCutHorizontal = session.lineCutHorizontal,
-                    skippedJson = SkippedNode.encodeJson(session.resolvedSkipNodes()),
-                )
-            } else {
-                null
-            },
-            labSession = session.labSession,
-            loadsN = if (session.hasMachineLoads) session.loadsN else emptyList(),
-        )
+    fun intentFor(context: Context, session: SessionRecord): Intent = ViewerArgs.of(session).toIntent(context)
 }

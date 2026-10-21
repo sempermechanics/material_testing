@@ -9,6 +9,8 @@ import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
 import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.ui.analysis.BeamEdgeTapActivity
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
+import com.sempermechanics.semper.ui.analysis.wizard.editLab
+import com.sempermechanics.semper.ui.analysis.wizard.lab
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -32,7 +34,7 @@ class LoadPointRow(
     private val button: MaterialButton = row.findViewById(R.id.btnLoadPoint)
 
     init {
-        val bending = viewModel.testType == TestType.BENDING
+        val bending = viewModel.lab.testType == TestType.BENDING
         row.isVisible = bending
         root.findViewById<View>(R.id.rowLoadAxis).isVisible = !bending
         button.setOnClickListener { onMark() }
@@ -42,16 +44,20 @@ class LoadPointRow(
     /** Adopts taps the editor returned: the scale, the probe, and the beam's axis. */
     fun onPicked(taps: BeamEdgeTaps) {
         if (!taps.isSet) return
-        viewModel.geometry = viewModel.geometry.copy(loadPoint = taps)
-        // Edges one above the other: the beam lies along x.
-        viewModel.loadAxisX = abs(taps.bottomY - taps.topY) >= abs(taps.bottomX - taps.topX)
+        viewModel.editLab {
+            it.copy(
+                geometry = it.geometry.copy(loadPoint = taps),
+                // Edges one above the other: the beam lies along x.
+                loadAxisX = abs(taps.bottomY - taps.topY) >= abs(taps.bottomX - taps.topX),
+            )
+        }
         refresh()
         onChanged()
     }
 
     fun refresh() {
-        val taps = viewModel.geometry.loadPoint
-        val thickness = viewModel.geometry.thicknessMm
+        val taps = viewModel.lab.geometry.loadPoint
+        val thickness = viewModel.lab.geometry.thicknessMm
         button.setText(if (taps.isSet) R.string.load_point_remark else R.string.load_point_mark)
         tvMeta.text = if (taps.isSet && thickness > 0f) {
             row.context.getString(

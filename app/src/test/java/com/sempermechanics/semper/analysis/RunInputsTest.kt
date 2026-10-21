@@ -27,11 +27,15 @@ class RunInputsTest {
 
     @Test
     fun `the snapshot keeps the reference and frames the wizard held at launch`() {
-        vm.refBytes = ref
-        vm.refSize = ImageSize(640, 480)
-        vm.refName = "ref.png"
-        vm.deformedFrames = clip("a.png", "b.png")
-        vm.defVideoName = "tensile_03"
+        vm.edit {
+            it.copy(
+                refBytes = ref,
+                refSize = ImageSize(640, 480),
+                refName = "ref.png",
+                deformedFrames = clip("a.png", "b.png"),
+                defVideoName = "tensile_03",
+            )
+        }
 
         val inputs = vm.snapshotRunInputs()
 
@@ -46,19 +50,27 @@ class RunInputsTest {
 
     @Test
     fun `editing the wizard after launch does not change the run's inputs`() {
-        vm.refBytes = ref
-        vm.refSize = ImageSize(640, 480)
-        vm.refName = "ref.png"
-        vm.deformedFrames = clip("a.png", "b.png", "c.png")
-        vm.defVideoName = "tensile_03"
+        vm.edit {
+            it.copy(
+                refBytes = ref,
+                refSize = ImageSize(640, 480),
+                refName = "ref.png",
+                deformedFrames = clip("a.png", "b.png", "c.png"),
+                defVideoName = "tensile_03",
+            )
+        }
         val inputs = vm.snapshotRunInputs()
 
         // What the wizard may do on Main while the run solves.
-        vm.refBytes = null
-        vm.refSize = ImageSize(10, 10)
-        vm.refName = "other.png"
-        vm.deformedFrames = listOf(DeformedFrame("/frames/late.png", "late.png"))
-        vm.defVideoName = null
+        vm.edit {
+            it.copy(
+                refBytes = null,
+                refSize = ImageSize(10, 10),
+                refName = "other.png",
+                deformedFrames = listOf(DeformedFrame("/frames/late.png", "late.png")),
+                defVideoName = null,
+            )
+        }
 
         assertSame(ref, inputs.reference.bytes)
         assertEquals(ImageSize(640, 480), inputs.reference.size)
@@ -71,10 +83,12 @@ class RunInputsTest {
 
     @Test
     fun `a run's frames follow neither a repoint nor a reorder after launch`() {
-        vm.deformedFrames = clip("a.png", "b.png")
+        vm.edit { it.copy(deformedFrames = clip("a.png", "b.png")) }
         val inputs = vm.snapshotRunInputs()
 
-        vm.deformedFrames = vm.deformedFrames.reversed().map { it.copy(path = "/session/raw/${it.name}") }
+        vm.edit { cur ->
+            cur.copy(deformedFrames = cur.deformedFrames.reversed().map { it.copy(path = "/session/raw/${it.name}") })
+        }
 
         assertEquals(listOf("/frames/a.png", "/frames/b.png"), inputs.frames.paths)
         assertEquals(listOf("picked_a.png", "picked_b.png"), inputs.frames.originalNames)
@@ -82,7 +96,7 @@ class RunInputsTest {
 
     @Test
     fun `picked images carry no clip`() {
-        vm.deformedFrames = listOf(DeformedFrame("/frames/a.png", "a.png"))
+        vm.edit { it.copy(deformedFrames = listOf(DeformedFrame("/frames/a.png", "a.png"))) }
         val inputs = vm.snapshotRunInputs()
         assertNull(inputs.frames.timesMs)
         assertNull(inputs.frames.videoName)

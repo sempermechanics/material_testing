@@ -189,30 +189,8 @@ def _escape_q_value(value: str) -> str:
 
 
 def _find_or_create_folder(token: str, name: str, parent: str) -> str:
-    safe = _escape_q_value(name)
-    q = (
-        f"name='{safe}' and mimeType='{FOLDER_MIME}' and "
-        f"'{parent}' in parents and trashed=false"
-    )
-    r = _request_with_retry(
-        "GET",
-        f"{API}/files",
-        headers=_headers(token),
-        params={
-            "q": q,
-            "fields": "files(id)",
-            "supportsAllDrives": "true",
-            "includeItemsFromAllDrives": "true",
-            "corpora": "drive",
-            "driveId": settings.SHARED_DRIVE_ID,
-        },
-        timeout=30,
-    )
-    r.raise_for_status()
-    files = r.json().get("files", [])
-    if files:
-        return files[0]["id"]
-    return _create_folder(token, name, parent)
+    """The folder `name` under `parent`, created when there is none."""
+    return _find_folder(token, name, parent) or _create_folder(token, name, parent)
 
 
 def _create_folder(token: str, name: str, parent: str) -> str:
@@ -235,8 +213,9 @@ def _create_folder(token: str, name: str, parent: str) -> str:
     return r.json()["id"]
 
 
-def _find_folder(token: str, name: str, parent: str):
-    """Look a folder up WITHOUT creating it — used on the erasure path."""
+def _find_folder(token: str, name: str, parent: str) -> str | None:
+    """Look a folder up WITHOUT creating it: the erasure path, and the
+    lookup half of `_find_or_create_folder`."""
     safe = _escape_q_value(name)
     q = (
         f"name='{safe}' and mimeType='{FOLDER_MIME}' and "
@@ -261,8 +240,16 @@ def _find_folder(token: str, name: str, parent: str):
     return files[0]["id"] if files else None
 
 
-def find_user_folder(token: str, uid: str):
+#: The folder under "Research Storage" that holds every account's subtree,
+#: and the one that holds test accounts' instead (ADR-027), so test uploads
+#: never sit beside customers' and can be listed or cleared on their own.
+USERS_FOLDER = "user"
+TEST_USERS_FOLDER = "_test"
+
+
+def find_user_folder(token: str, uid: str, *, test: bool = False):
     """The user's whole Drive subtree (…/Research Storage/user/{uid}), or None.
+    A test account's is …/Research Storage/_test/{uid} (`test`).
 
     Best-effort cleanup only. Callers deleting real data must go through the
     stored `driveFolderId` per session — a name walk that quietly returns None
@@ -273,9 +260,10 @@ def find_user_folder(token: str, uid: str):
     if not research:
         log.warning("find_user_folder: no 'Research Storage' under root %s", settings.ROOT_FOLDER_ID)
         return None
-    user_dir = _find_folder(token, "user", research)
+    user_dir = _find_folder(token, TEST_USERS_FOLDER if test else USERS_FOLDER, research)
     if not user_dir:
-        log.warning("find_user_folder: no 'user' folder under Research Storage")
+        log.warning("find_user_folder: no '%s' folder under Research Storage",
+                    TEST_USERS_FOLDER if test else USERS_FOLDER)
         return None
     found = _find_folder(token, uid, user_dir)
     if not found:
@@ -285,7 +273,8 @@ def find_user_folder(token: str, uid: str):
 
 def ensure_session_folders(token: str, uid: str, sid: str, roles=None,
                            cached: dict | None = None,
-                           session_folder_id: str | None = None) -> dict:
+                           session_folder_id: str | None = None,
+                           *, test: bool = False) -> dict:
     """Build Research Storage/user/{uid}/session/{sid}/ plus the role subfolders
     the manifest actually uses. "bundle" (Session.zip), "extras" (Extras.zip) and
     "metadata" live at the session root — no subfolder, no extra Drive round-trips.
@@ -305,6 +294,9 @@ def ensure_session_folders(token: str, uid: str, sid: str, roles=None,
 
     Partial failure mid-walk may leave an empty orphan folder under session/;
     that is monitored / accepted rather than rolled back.
+
+    `test`: a test account's tree is under Research Storage/_test/ instead
+    of user/ (ADR-027).
     """
     cached = cached or {}
     uid_dir, sess_dir = cached.get("userFolderId"), cached.get("sessionsFolderId")
@@ -318,7 +310,8 @@ def ensure_session_folders(token: str, uid: str, sid: str, roles=None,
     if not alive:
         root = settings.ROOT_FOLDER_ID
         research = _find_or_create_folder(token, "Research Storage", root)
-        user_dir = _find_or_create_folder(token, "user", research)
+        user_dir = _find_or_create_folder(
+            token, TEST_USERS_FOLDER if test else USERS_FOLDER, research)
         uid_dir = _find_or_create_folder(token, uid, user_dir)
         sess_dir = _find_or_create_folder(token, "session", uid_dir)
         # Searched, not blindly created: after a walk nothing says whether an

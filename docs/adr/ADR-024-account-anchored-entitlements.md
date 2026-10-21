@@ -18,7 +18,7 @@ Three ways of reaching a paid entitlement had grown up side by side:
    signs in and the backend attaches what they are owed on their first request
    (`ensure_entitlement`, `backend/app/repo/entitlement.py:181`, called for
    every authenticated request through `get_or_create_user`,
-   `backend/app/repo/users.py:169-173`). Nothing is typed.
+   `backend/app/repo/users.py:172-176`). Nothing is typed.
 2. **A typed key.** `POST /v1/licenses/activate` redeems a key for the calling
    account. The branch added an in-app screen for it (c748630, "Licence
    activation screen (TD-259)"); no released build ever had one: v1.2-beta.4
@@ -76,11 +76,11 @@ revocation, grace and the 30-day hold apply unchanged.
 
 **The claim route.** `POST /v1/me/claim`, body `{"code"}` of 8–64 characters,
 any other field 422 (`LicenseClaim`, `backend/app/models.py:182-191`). Auth is
-`attested_or_mfa_user` (`backend/app/deps.py:512`): a browser with a second
+`attested_or_mfa_user` (`backend/app/step_up.py:110`): a browser with a second
 factor on a recent sign-in, or a signed device request. An unverified address is
 refused first, 403 `email_not_verified` (`licenses.py:236-237`). It runs the same
 `repo.activate_license` as the legacy route, so refusal codes and statuses are
-shared (`errors.STATUS`, `backend/app/errors.py:296-340`). A browser names no
+shared (`errors.STATUS`, `backend/app/errors.py:300-351`). A browser names no
 device, so no device lock is compared or bound
 (`backend/app/repo/activation.py:62-68`); the phone's next request binds it
 (`revalidate_device_lock`, `backend/app/repo/devlock.py:204`). It shares
@@ -128,12 +128,12 @@ There is nothing to type, so the app has to ask:
 Every authenticated request re-resolves the account (`get_or_create_user` →
 `ensure_entitlement`) and, when it carries `X-Device-Id`, re-validates the
 licence or seat device lock and drops to Demo on a mismatch or revocation
-(`backend/app/deps.py:182-189`). On top of that:
+(`backend/app/deps.py:181-188`). On top of that:
 
 | Route | Caller | Gates, in order |
 |---|---|---|
-| `POST /v1/sessions` (record an analysis) | signed device | rate limit; kill switch `upload` or `backup` → 503 `feature_paused`; files per session → 413; account cap: stored analyses (less `PROVISION_FAILED`) ≥ `maxSessions` → 409 `session_quota_exceeded`; **demo only**, device cap: every account's stored analyses from this device ≥ `maxSessions` → 409 `device_quota_exceeded` (TD-279; `backend/app/routers/sessions.py:504-549`) |
-| `POST /v1/files/{id}/complete` | signed device | rate limit; kill switch `upload` or `backup` → 503 (`backend/app/routers/files.py:106-110`) |
+| `POST /v1/sessions` (record an analysis) | signed device | rate limit; kill switch `upload` or `backup` → 503 `feature_paused`; files per session → 413; account cap: stored analyses (less `PROVISION_FAILED`) ≥ `maxSessions` → 409 `session_quota_exceeded`; **demo only**, device cap: every account's stored analyses from this device ≥ `maxSessions` → 409 `device_quota_exceeded` (TD-279; `backend/app/routers/sessions.py:335-366`, `backend/app/services/sessions.py:125-139`) |
+| `POST /v1/files/{id}/complete` | signed device | rate limit; kill switch `upload` or `backup` → 503 (`backend/app/routers/files.py:139-143`) |
 | `GET /v1/files/{id}/content` (restore) | signed device | rate limit; kill switch `restore` → 503; demo → 403 `feature_not_licensed` (`files.py:38-58`) |
 | `GET /v1/sessions/{sid}/bundle` (download) | signed device, or browser with a second factor | rate limit; kill switch `restore` → 503; demo → 403 `feature_not_licensed` (`sessions.py:355-387`) |
 | `GET /v1/sessions` | user | lists; `quota.used` is the **account's** count (`sessions.py:131`) |
@@ -143,7 +143,7 @@ licence or seat device lock and drops to Demo on a mismatch or revocation
 | Share (PNG, GIF, PDF, CSV, ZIP) | — | **No route.** The app checks the licence and the token (`LicenseEntitlements.shareLicensed`, `data/account/LicenseEntitlements.kt:85-86`; `ShareCenter.access`, `ui/viewer/share/ShareCenter.kt:250-251`) |
 
 **Kill switches are enforced, not only published.** `deps.unless_paused`
-(`backend/app/deps.py:296-331`) runs after the ID token and approval and before
+(`backend/app/deps.py:295-330`) runs after the ID token and approval and before
 the route's own parameters, so a paused request reads no record and, on a signed
 route, leaves its nonce unspent. The refusal is 503 `feature_paused` with
 `Retry-After: 300` (`:293`), logged `event="feature_paused"` with the switch and
@@ -159,12 +159,12 @@ route template; `feature_paused` is in `CLIENT_BRANCHED`
 `else -> Kind.TRANSIENT`). Tests `backend/tests/test_kill_switches.py`.
 
 **The demo device cap.** `repo.count_device_sessions`
-(`backend/app/repo/sessions.py:415-439`) counts sessions whose `deviceId` is
+(`backend/app/repo/sessions.py:466-490`) counts sessions whose `deviceId` is
 this device, across accounts, less `PROVISION_FAILED`, with two single-field
 counts (no composite index). `_device_cap_reached`
-(`backend/app/routers/sessions.py:473-486`) applies it to demo accounts only; a
+(`backend/app/services/sessions.py:81-94`) applies it to demo accounts only; a
 licensed account is held to its own cap. The refusal says neither the count nor
-whose analyses they are (`_device_quota_detail`, `:489-499`). Tests
+whose analyses they are (`_device_quota_detail`, `:97-109`). Tests
 `backend/tests/test_demo_device_cap.py`. A demo create costs 11 reads where it
 cost 9 ([request-volume.md](../perf/request-volume.md) Pass 4).
 

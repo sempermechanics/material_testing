@@ -1,6 +1,5 @@
 package com.sempermechanics.semper.data.policy
 
-import android.app.Activity
 import android.app.Application
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -9,6 +8,7 @@ import android.content.IntentFilter
 import android.content.RestrictionsManager
 import android.os.Bundle
 import androidx.core.content.ContextCompat
+import com.sempermechanics.semper.data.AppForeground
 import timber.log.Timber
 
 /**
@@ -44,10 +44,12 @@ object ManagedConfigReader {
         return config
     }
 
-    /** From [Application.onCreate]: listen for changes while any screen of the app is started. */
-    fun install(app: Application) {
-        app.registerActivityLifecycleCallbacks(ForegroundListener(app))
-    }
+    /**
+     * For [AppForeground.install], from [Application.onCreate]: listen for
+     * changes while any screen of the app is started, and read the
+     * restrictions again each time the first one starts.
+     */
+    fun foregroundListener(app: Application): AppForeground.Listener = ForegroundListener(app)
 
     private fun read(context: Context): ManagedConfig {
         val bundle = context.getSystemService(RestrictionsManager::class.java)?.applicationRestrictions
@@ -59,11 +61,8 @@ object ManagedConfigReader {
     private fun Bundle.value(key: String): Any? = get(key)
 
     /** Registers [receiver] when the first screen starts, and drops it when the last one stops. */
-    private class ForegroundListener(private val app: Application) : Application.ActivityLifecycleCallbacks {
-        private var started = 0
-
-        override fun onActivityStarted(activity: Activity) {
-            if (started++ > 0) return
+    private class ForegroundListener(private val app: Application) : AppForeground.Listener {
+        override fun onForeground() {
             ContextCompat.registerReceiver(
                 app,
                 ManagedConfigReader.receiver,
@@ -73,20 +72,8 @@ object ManagedConfigReader {
             ManagedConfigReader.refresh(app)
         }
 
-        override fun onActivityStopped(activity: Activity) {
-            if (--started > 0) return
-            started = 0
+        override fun onBackground() {
             runCatching { app.unregisterReceiver(ManagedConfigReader.receiver) }
         }
-
-        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
-
-        override fun onActivityResumed(activity: Activity) = Unit
-
-        override fun onActivityPaused(activity: Activity) = Unit
-
-        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
-
-        override fun onActivityDestroyed(activity: Activity) = Unit
     }
 }

@@ -5,11 +5,11 @@
  * fetch limits to find out whether a seat is held. The analyses come from
  * `/v1/sessions`, which carries the quota alongside the page.
  */
-import {
-  requireSignIn, api, apiBlob, saveBlob, setStatus, esc, when, day, confirmInPage, markFirstData,
-  whileWaiting,
-} from "../auth.js";
-import { errorDetail, holdsLicence, placeholderRows, retryRow } from "../util.js";
+import { requireSignIn } from "../auth.js";
+import { api, apiBlob, saveBlob } from "../api.js";
+import { confirmInPage } from "../dialogs.js";
+import { setStatus, markFirstData, whileWaiting } from "../status.js";
+import { esc, when, day, errorDetail, holdsLicence, placeholderRows, retryRow } from "../util.js";
 import { explain as refusalText, ACCOUNT } from "../messages.js";
 import { mountSwitcher } from "../switcher.js";
 import { licencesAdministered } from "../roles.js";

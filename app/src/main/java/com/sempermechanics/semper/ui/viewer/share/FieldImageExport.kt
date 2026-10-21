@@ -9,12 +9,12 @@ import android.graphics.Paint
 import android.graphics.Rect
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.scale
-import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.imaging.BitmapDecoder
 import com.sempermechanics.semper.imaging.ImageEncoder
+import com.sempermechanics.semper.report.HeatmapRequest
 import com.sempermechanics.semper.report.ReportBuilder
 import com.sempermechanics.semper.report.VisualizationEngine
-import com.sempermechanics.semper.ui.viewer.share.ShareExportBuilder.Companion.FIELDS
 import com.sempermechanics.semper.ui.viewer.share.ShareExportBuilder.Companion.HEATMAP_ALPHA
 import java.io.File
 
@@ -77,16 +77,15 @@ internal class FieldImageExport(
         var out: Bitmap? = null
         var done = false
         try {
-            val baked = VisualizationEngine.generateFrameHeatmap(
-                base.displaced,
-                data,
-                size.width,
-                size.height,
-                dataIndex,
-                s.stepAt(frameIndex),
-                null,
-                null,
-                maxLongEdge = VisualizationEngine.REPORT_MAX_EDGE,
+            val baked = VisualizationEngine.render(
+                HeatmapRequest(
+                    data = data,
+                    size = size,
+                    valIndex = dataIndex,
+                    step = s.stepAt(frameIndex),
+                    maxLongEdge = VisualizationEngine.REPORT_MAX_EDGE,
+                    displaced = base.displaced,
+                ),
             )
             heatmap = baked.bitmap
             out = createBitmap(renderW, renderH, Bitmap.Config.ARGB_8888)
@@ -96,7 +95,7 @@ internal class FieldImageExport(
             // Signed, as the PDF does: with absolute values "MIN" marked the strain
             // nearest zero under a label giving the most negative.
             val extrema = ReportBuilder.computeFieldExtrema(data, dataIndex, absoluteStrainValues = false)
-            val unit = if (DicResult.isStrainFieldIndex(dataIndex)) "mε" else "px"
+            val unit = FieldKind.unitOf(dataIndex)
             ReportBuilder.bakeAnnotationsToCanvas(
                 canvas,
                 renderW,
@@ -201,13 +200,14 @@ internal class FieldImageExport(
         val data = s.frameData()
         val baseCache = FrameBaseCache()
         return try {
-            FIELDS.mapIndexed { done, (label, idx) ->
-                onField(done, FIELDS.size, label)
+            val fields = FieldKind.entries
+            fields.mapIndexed { done, field ->
+                onField(done, fields.size, field.label)
                 writePng(
-                    renderAnnotated(data, idx, label, s.frameIndex, baseCache),
-                    "${s.baseName}_${label}_frame${s.frameIndex + 1}.png",
+                    renderAnnotated(data, field.dataIndex, field.label, s.frameIndex, baseCache),
+                    "${s.baseName}_${field.label}_frame${s.frameIndex + 1}.png",
                 )
-            }.also { onField(FIELDS.size, FIELDS.size, FIELDS.last().first) }
+            }.also { onField(fields.size, fields.size, fields.last().label) }
         } finally {
             recycleBaseCache(baseCache)
         }

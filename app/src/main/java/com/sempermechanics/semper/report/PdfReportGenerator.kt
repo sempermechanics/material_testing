@@ -225,8 +225,8 @@ object PdfReportGenerator {
         data.mechanical?.let { MechanicalPdfPages.drawCoverBlock(layout, it) }
 
         layout.drawSectionHeader("Analysis Region (ROI)")
-        layout.drawKeyValue("Origin (X, Y):", "(${data.roiData.startX}, ${data.roiData.startY})")
-        layout.drawKeyValue("Dimensions:", "${data.roiData.width} x ${data.roiData.height} px")
+        layout.drawKeyValue("Origin (X, Y):", "(${data.roi.x}, ${data.roi.y})")
+        layout.drawKeyValue("Dimensions:", "${data.roi.w} x ${data.roi.h} px")
         layout.advanceY(40f)
 
         layout.drawSectionHeader("Analyzed Images")
@@ -346,7 +346,7 @@ object PdfReportGenerator {
 /**
  * [PdfDocument.writeTo] drops an IOException its stream throws: the native
  * writer stops, and the call returns normally. A full disk would then
- * report Complete over a truncated file, so the stream's first failure is
+ * complete over a truncated file, so the stream's first failure is
  * kept and rethrown here.
  */
 private fun writeChecked(pdfDocument: PdfDocument, out: OutputStream) {

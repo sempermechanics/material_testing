@@ -2,15 +2,17 @@
 """
 from datetime import datetime, timedelta, timezone
 
-from google.api_core.exceptions import AlreadyExists
+from google.api_core.exceptions import AlreadyExists, NotFound
 
 from .. import apps, errors, notify, statuses
 from ..errors import Refusal
 from ..config import settings
 from ..licenses import (
+    KIND_INSTITUTION,
     MODE_LICENSED,
     as_utc,
     normalize_email,
+    normalize_kind,
 )
 
 from . import _base
@@ -25,6 +27,7 @@ from ._base import (
     _set_doc,
     _create_doc,
     _update_doc,
+    _seat_ref,
 )
 from .devices import (
     _release_devices,
@@ -47,9 +50,13 @@ _LAST_SEEN_THROTTLE = timedelta(hours=1)
 
 
 # ---------------- users ----------------
-def _is_admin_email(claims: dict) -> bool:
-    # Never grant admin off an unverified email — an email/password user could
-    # otherwise claim an admin address without proving they own it.
+def is_admin_email(claims: dict) -> bool:
+    """Whether the token proves an address in ADMIN_EMAILS.
+
+    Never grant admin off an unverified email — an email/password user could
+    otherwise claim an admin address without proving they own it. Read off
+    the token, not the stored profile: `deps.admin_user` asks it per request.
+    """
     return bool(claims.get("email_verified")) and \
         claims.get("email", "").lower() in settings.ADMIN_EMAILS
 
@@ -61,7 +68,7 @@ def _auto_approved(claims: dict) -> bool:
     Microsoft sign-ins are verified by construction; a new email/password user
     is not verified until they confirm, so they land PENDING until then.
     """
-    if _is_admin_email(claims):
+    if is_admin_email(claims):
         return True
     if not claims.get("email_verified"):
         return False
@@ -103,6 +110,25 @@ def _link_auth_uid(canonical_uid: str, firebase_sub: str) -> None:
         _update_doc(ref, {"linkedAuthUids": linked})
 
 
+def sign_in_uids(uid: str) -> list[str]:
+    """Every Firebase Auth uid that signs in to account `uid`, its own first.
+
+    An account adopted by a second Firebase sub (`_link_auth_uid`) is reached
+    by more than one Auth user, and each of them holds the address and the
+    name. Erasure deletes, and a suspension revokes, every one of them, not
+    only the canonical uid. Read from both records of the link: the profile's
+    `linkedAuthUids` and the `auth_links` that point at the account (one
+    equality filter, served by the automatic index).
+    """
+    out = [uid]
+    user = _load_user(uid) or {}
+    links = db().collection("auth_links").where("uid", "==", uid)
+    for sub in [*(user.get("linkedAuthUids") or []), *(snap.id for snap in _stream(links))]:
+        if sub and sub not in out:
+            out.append(sub)
+    return out
+
+
 def _user_for_device(device_id: str | None):
     if not device_id:
         return None
@@ -133,10 +159,19 @@ def _touch_existing(cur: dict, claims: dict, device_id: str | None) -> dict:
         changed["signInProvider"] = provider
     if cur.get("emailVerified") != verified:
         changed["emailVerified"] = verified
+    # The stored address follows the token, as `emailVerified` does. Kept
+    # from the first sign-in while the flag followed every token, an account
+    # that squatted someone's address unverified, then changed its email to
+    # one it owns and verified that, read as the victim's address verified:
+    # their invite, their roster seat, their IT membership. A token with no
+    # address leaves the stored one, and the flag above is then false.
+    email = claims.get("email")
+    if email and cur.get("email") != email:
+        changed["email"] = email
     if cur.get("schemaVersion") != SCHEMA_VERSION:
         changed["schemaVersion"] = SCHEMA_VERSION
     # Keep admin role in sync with ADMIN_EMAILS for pre-existing users.
-    if _is_admin_email(claims) and cur.get("role") != "admin":
+    if is_admin_email(claims) and cur.get("role") != "admin":
         changed["role"] = "admin"
     # A previously-PENDING user who has since verified a domain email (or been
     # made admin) is auto-approved on this sign-in.
@@ -170,7 +205,29 @@ def _touch_existing(cur: dict, claims: dict, device_id: str | None) -> dict:
 
     patch = {**changed, "lastSeenAt": _base.firestore.SERVER_TIMESTAMP}
     _update_doc(ref, patch)
+    if "email" in changed and verified:
+        _refresh_seat_address(cur, changed["email"])
     return ensure_entitlement({**cur, **patch, "uid": uid}, device_id)
+
+
+def _refresh_seat_address(user: dict, email: str) -> None:
+    """Give the seat `user` holds on their institution licence their new
+    verified address (TD-297).
+
+    The seat keeps a copy of the address it was claimed with, and the roster
+    and reconcile show that copy. An unverified address is not copied: it is
+    no address (`holders.verified_address`), and the seat keeps the one that
+    was proved. Display only; nothing is decided on the copy. Seats on
+    licences the account has left keep the address it had there. A seat that
+    is gone is left gone.
+    """
+    license_id = user.get("licenseId")
+    if not license_id or normalize_kind(user.get("licenseKind")) != KIND_INSTITUTION:
+        return
+    try:
+        _update_doc(_seat_ref(license_id, user["uid"]), {"email": normalize_email(email)})
+    except NotFound:
+        pass
 
 
 def get_or_create_user(claims: dict, device_id: str | None = None) -> dict:
@@ -205,7 +262,7 @@ def get_or_create_user(claims: dict, device_id: str | None = None) -> dict:
         "emailVerified": verified,
         "signInProvider": provider,
         "displayName": claims.get("name"),
-        "role": "admin" if _is_admin_email(claims) else "user",
+        "role": "admin" if is_admin_email(claims) else "user",
         "access_status": (statuses.ACCESS_APPROVED if _auto_approved(claims)
                           else statuses.ACCESS_PENDING),
         "activeDeviceId": None,

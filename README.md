@@ -122,7 +122,7 @@ Full commands, engine bumps, disk hygiene, and backend setup:
 | Path | What |
 |---|---|
 | `engine/` | **Submodule** — solver, strain, seeding, JNI, engine tests & docs |
-| `app/src/main/cpp/` | App-side JNI boundary |
+| `engine/adapters/android/` · `SemperNativeLib.kt` | JNI boundary: the C++ adapter (in the submodule; Gradle builds `engine/CMakeLists.txt` with `-DSEMPER_ANDROID=ON`) and its Kotlin side |
 | `app/src/main/java/.../ui/analysis/` | Setup wizard, ROI, parameter-sweep lattice |
 | `app/src/main/java/.../ui/viewer/` | Heatmaps, probe, exports |
 | `app/src/main/java/.../ui/auth/` · `ui/settings/` | Sign-in, access gating, settings |

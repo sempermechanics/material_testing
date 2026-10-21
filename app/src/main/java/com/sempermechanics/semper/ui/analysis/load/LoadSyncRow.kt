@@ -6,6 +6,8 @@ import androidx.core.view.isVisible
 import androidx.core.widget.doAfterTextChanged
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
+import com.sempermechanics.semper.ui.analysis.wizard.editLab
+import com.sempermechanics.semper.ui.analysis.wizard.lab
 import com.sempermechanics.semper.ui.analysis.wizard.refreshMachineLoads
 import java.util.Locale
 
@@ -25,11 +27,11 @@ class LoadSyncRow(
     private val field: EditText = row.findViewById(R.id.etLoadLogStart)
 
     init {
-        if (viewModel.loadLogStartS != 0f) field.setText(format(viewModel.loadLogStartS))
+        if (viewModel.lab.loadLogStartS != 0f) field.setText(format(viewModel.lab.loadLogStartS))
         field.doAfterTextChanged { text ->
             val seconds = text?.toString()?.trim()?.toFloatOrNull() ?: 0f
-            if (seconds != viewModel.loadLogStartS) {
-                viewModel.loadLogStartS = seconds
+            if (seconds != viewModel.lab.loadLogStartS) {
+                viewModel.editLab { it.copy(loadLogStartS = seconds) }
                 viewModel.refreshMachineLoads()
                 onChanged()
             }

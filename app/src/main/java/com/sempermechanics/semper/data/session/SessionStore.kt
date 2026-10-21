@@ -6,6 +6,7 @@
 package com.sempermechanics.semper.data.session
 
 import android.content.Context
+import androidx.annotation.VisibleForTesting
 import androidx.annotation.WorkerThread
 import com.sempermechanics.semper.data.cloud.SessionMetadataDoc
 import com.sempermechanics.semper.data.cloud.SessionMetadataSync
@@ -49,6 +50,25 @@ object SessionStore {
     /** In-process flag: last successful read of the index failed (primary + bak). */
     @Volatile
     private var indexCorrupt = false
+
+    /**
+     * The primary index's rows as this process last parsed or wrote them,
+     * keyed by the file's path, length and modified time; read and set under
+     * [lock]. A change then parses the file at most once, not two or three
+     * times (TD-284), and a write knows the primary it promotes to `.bak`
+     * parsed without parsing it again. A file changed behind the store's back
+     * no longer matches its key and is parsed afresh.
+     */
+    private var parsed: ParsedIndex? = null
+
+    /** How many times an index file has been decoded: tests pin "once per change" (TD-284). */
+    @VisibleForTesting
+    internal var indexParses = 0
+        private set
+
+    private class ParsedIndex(val path: String, val length: Long, val modified: Long, val rows: List<SessionRecord>) {
+        fun isOf(file: File): Boolean = file.path == path && file.length() == length && file.lastModified() == modified
+    }
 
     private fun root(context: Context): File = File(context.filesDir, SessionPaths.SESSIONS_ROOT).apply { mkdirs() }
 
@@ -310,8 +330,9 @@ object SessionStore {
 
     /** Drops row [id] and tells the quota how many remain; false when the index refused the write. */
     private fun removeRow(context: Context, id: String): Boolean {
-        if (!mutateIndex(context) { it.filterNot { r -> r.id == id } }) return false
-        AccountCache.onLocalSessionsRemoved(context, readRows(context)?.size ?: 0)
+        var remaining = 0
+        if (!mutateIndex(context) { rows -> rows.filterNot { it.id == id }.also { remaining = it.size } }) return false
+        AccountCache.onLocalSessionsRemoved(context, remaining)
         return true
     }
 
@@ -339,15 +360,28 @@ object SessionStore {
     fun deleteAll(context: Context) = synchronized(lock) {
         root(context).deleteRecursively()
         root(context).mkdirs()
+        parsed = null
         indexCorrupt = false
         AccountCache.onLocalSessionsRemoved(context, 0)
     }
 
     private fun decodeFile(f: File): List<SessionRecord>? = try {
+        indexParses++
         json.decodeFromString<List<SessionRecord>>(f.readText())
     } catch (e: Exception) {
         Timber.e(e, "Failed to parse %s", f.name)
         null
+    }
+
+    /**
+     * The primary index [f]'s rows: [parsed]'s while it is still that file,
+     * else decoded (and kept) once. Null when it does not parse.
+     */
+    private fun primaryRows(f: File): List<SessionRecord>? {
+        parsed?.takeIf { it.isOf(f) }?.let { return it.rows }
+        val length = f.length()
+        val modified = f.lastModified()
+        return decodeFile(f)?.also { parsed = ParsedIndex(f.path, length, modified, it) }
     }
 
     /**
@@ -362,7 +396,7 @@ object SessionStore {
             indexCorrupt = false
             return emptyList()
         }
-        val rows = primary.takeIf { it.exists() }?.let(::decodeFile)
+        val rows = primary.takeIf { it.exists() }?.let(::primaryRows)
             ?: bak.takeIf { it.exists() }?.let(::decodeFile)?.also { healed ->
                 Timber.w("Restored session index from .bak")
                 // Heal the primary so the next write starts from a good base.
@@ -426,7 +460,9 @@ object SessionStore {
             root(context).mkdirs()
             // Only promote a *parseable* primary to .bak — never overwrite a good
             // backup with a truncated file we're about to replace (e.g. heal path).
-            if (target.exists() && decodeFile(target) != null) {
+            // The one this process last parsed or wrote is known good without
+            // parsing it again.
+            if (target.exists() && (parsed?.isOf(target) == true || decodeFile(target) != null)) {
                 target.copyTo(bak, overwrite = true)
             }
             val payload = json.encodeToString(records)
@@ -436,8 +472,10 @@ object SessionStore {
                     out.fd.sync()
                 }
             }
+            parsed = ParsedIndex(target.path, target.length(), target.lastModified(), records)
             indexCorrupt = false
         } catch (e: Exception) {
+            parsed = null
             Timber.e(e, "Failed to write session index")
             return false
         }

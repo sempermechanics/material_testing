@@ -12,6 +12,7 @@ import com.sempermechanics.semper.data.prefs.WizardDraft
 import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisCancel
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
+import com.sempermechanics.semper.ui.analysis.wizard.lab
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -89,7 +90,7 @@ class WizardTestTypeTest {
         val activity = wizard(type = null)
         val vm = ViewModelProvider(activity)[AnalysisViewModel::class.java]
 
-        assertEquals(TestType.DIC_2D, vm.testType)
+        assertEquals(TestType.DIC_2D, vm.lab.testType)
         assertEquals(app.getString(R.string.info_strain_window), strainInfoText(activity))
     }
 }

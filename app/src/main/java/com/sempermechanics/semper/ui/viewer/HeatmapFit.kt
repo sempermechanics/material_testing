@@ -49,7 +49,7 @@ object HeatmapFit {
         Roi(roiX, roiY, roiW, roiH).isCustomFor(ImageSize(imgW, imgH))
 
     /**
-     * Long-edge cap to pass into [VisualizationEngine.generateHeatmapIndices] so
+     * Long-edge cap to pass into [VisualizationEngine.indices] so
      * that after cropping to [fit], the region's long edge is about [maxEdge].
      */
     fun renderLongEdgeCap(imgW: Int, imgH: Int, fit: FloatArray, maxEdge: Int): Int {

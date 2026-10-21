@@ -13,6 +13,7 @@ import com.sempermechanics.semper.data.net.SessionCreateRequest
 import com.sempermechanics.semper.data.net.SessionUploadsResponse
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
+import com.sempermechanics.semper.data.session.StagingLayout
 import com.sempermechanics.semper.util.Digests
 import com.sempermechanics.semper.util.suspendRunCatching
 import kotlinx.coroutines.delay
@@ -44,6 +45,54 @@ internal sealed interface SessionStep {
 
     /** End the backup with [reason] for the user. */
     data class Fail(val reason: String) : SessionStep
+}
+
+/** What resuming an existing session concluded ([UploadSessionPlanner]). */
+internal sealed interface Resume {
+    /** Continue this session — [work] is the still-pending files (never empty). */
+    data class Continue(val work: List<UploadJob>) : Resume
+
+    /** Already fully uploaded in the cloud. */
+    data object Done : Resume
+
+    /** Unusable (gone, or its files don't match ours): delete it and start fresh. */
+    data object Rebuild : Resume
+
+    /**
+     * The backend is still opening upload targets — poll again shortly. It
+     * opens Drive's resumable sessions in a Cloud Task rather than inside
+     * POST /v1/sessions, so an empty upload list means "not ready yet", not
+     * "nothing to do". Read as [Rebuild] it would spin, creating a fresh
+     * session on every poll.
+     */
+    data object Wait : Resume
+
+    /** Cloud Tasks / Drive failed to open targets — terminal for this session (never [Rebuild]: that spun). */
+    data object ProvisionFailed : Resume
+
+    /**
+     * The backend could not say (5xx, 429, a bare 404): keep the session and
+     * its pointer, and ask again later. Not evidence the session is gone.
+     */
+    data class Unreachable(val requestId: String?) : Resume
+
+    companion object {
+        /**
+         * What a session in [sessionStatus] comes to, given [work]: each of its
+         * pending uploads matched to a staged artifact, or null when one has
+         * none. The session's state wins over the match: nothing provisioned yet
+         * says nothing about a mismatch. A pending set that is empty or does not
+         * match ours can't be finished, so it is rebuilt rather than marked
+         * synced half-uploaded.
+         */
+        fun of(sessionStatus: String, work: List<UploadJob>?): Resume = when {
+            sessionStatus == UploadWorkOutcomes.STATUS_COMPLETED -> Done
+            sessionStatus == UploadWorkOutcomes.STATUS_PROVISION_FAILED -> ProvisionFailed
+            sessionStatus == UploadWorkOutcomes.STATUS_PROVISIONING -> Wait
+            work.isNullOrEmpty() -> Rebuild
+            else -> Continue(work)
+        }
+    }
 }
 
 /**
@@ -84,45 +133,25 @@ internal class UploadSessionPlanner(
     private val localId: String,
 ) {
 
-    /** What resuming an existing session concluded. */
-    private sealed interface Resume {
-        /** Continue this session — [work] is the still-pending files (never empty). */
-        data class Continue(val work: List<UploadJob>) : Resume
-
-        /** Already fully uploaded in the cloud. */
-        data object Done : Resume
-
-        /** Unusable (gone, or its files don't match ours): delete it and start fresh. */
-        data object Rebuild : Resume
-
-        /** The backend is still opening upload targets — poll again shortly. */
-        data object Wait : Resume
-
-        /** Cloud Tasks / Drive failed to open targets — terminal for this session. */
-        data object ProvisionFailed : Resume
-
-        /**
-         * The backend could not say (5xx, 429, a bare 404): keep the session and
-         * its pointer, and ask again later. Not evidence the session is gone.
-         */
-        data class Unreachable(val requestId: String?) : Resume
-    }
-
     /**
      * Continue the session a prior run created, tracked by [record]'s stored
-     * pointer, or create one declaring [files]; then decide what to do with it
-     * ([nextStep]).
+     * pointer, or create one declaring [files] and bind [staging] to it
+     * ([StagingBinding]); then decide what to do with it ([nextStep]).
      *
      * Deliberately NOT looked up by localSessionId: incomplete staging is
      * cleared when the pointer is blank, so resuming a session found any other
      * way would upload freshly-sized files into a session that expects the old
      * sizes → a size mismatch.
      */
-    suspend fun ensureSession(record: SessionRecord, files: List<UploadArtifact>): SessionStep {
+    suspend fun ensureSession(
+        record: SessionRecord,
+        files: List<UploadArtifact>,
+        staging: StagingLayout,
+    ): SessionStep {
         val cloudId = record.cloudSessionId.ifBlank {
             Timber.w("Upload — creating a new cloud session")
             UploadLog.phase("create_session")
-            createSession(record, files)
+            createSession(record, files, staging)
         }
         val step = nextStep(cloudId, files)
         if (step is SessionStep.Upload) SessionStore.setCloudSessionId(context, localId, step.plan.sessionId)
@@ -135,7 +164,8 @@ internal class UploadSessionPlanner(
      * pointer) or failing its check ([UploadStaging.reuse] false), and a
      * rebuild packs new zip timestamps: the same sizes, other bytes. Resumed,
      * the old session would take those bytes (`:complete` checks Drive's md5
-     * against the file sent, and [matchPending] only role, name and size)
+     * against the file sent, and [matchPending] only role, name and size when
+     * the backend sends no hash)
      * while the backup keeps the sha256 it was created with, so every restore
      * of it would fail `session_zip_sha256_mismatch`.
      *
@@ -178,7 +208,9 @@ internal class UploadSessionPlanner(
 
     /**
      * Declare the whole analysis and obtain one resumable target per file;
-     * returns the new session's id, already stored as the pointer.
+     * returns the new session's id, already stored as the pointer, with
+     * [staging] bound to it: the session and the sha256 declared for each
+     * file, which a later run's [UploadStaging.prepare] checks before resuming.
      *
      * The backend opens those targets in a Cloud Task rather than inside the
      * request (600 files was ~1200 sequential Drive round-trips in a 60s
@@ -191,9 +223,13 @@ internal class UploadSessionPlanner(
      * (`{sid}_{role}_{name}`), so `bundle/Session.zip` sorts *before*
      * `metadata/metadata.json`. Index pairing PUT the ~2 KB JSON onto the
      * ~84 MB zip resumable URI → Drive 400 Content-Range size mismatch.
-     * Always resolve via [resumeSession] / [awaitProvisioned] (role+name+size).
+     * Always resolve via [resumeSession] / [awaitProvisioned] (role+name+size+sha256).
      */
-    private suspend fun createSession(record: SessionRecord, artifacts: List<UploadArtifact>): String {
+    private suspend fun createSession(
+        record: SessionRecord,
+        artifacts: List<UploadArtifact>,
+        staging: StagingLayout,
+    ): String {
         val specs = artifacts.map {
             FileSpecDto(it.name, it.role, it.file.length(), it.sha256Hex ?: Digests.sha256Hex(it.file))
         }
@@ -219,6 +255,9 @@ internal class UploadSessionPlanner(
         // Persist the pointer before anything can fail: a session that exists in
         // the cloud but is not recorded here would be orphaned against quota.
         SessionStore.setCloudSessionId(context, localId, session.sessionId)
+        // Then the binding: a run that dies between the two finds a pointer with
+        // no binding, and releases the session rather than resuming it blind.
+        StagingBinding.of(session.sessionId, specs).write(staging)
         return session.sessionId
     }
 
@@ -292,8 +331,9 @@ internal class UploadSessionPlanner(
     /**
      * Decide whether an existing session can be continued.
      *
-     * Every pending file must match a current artifact by role, name **and
-     * size** — the session's resumable URIs were opened for exactly those sizes.
+     * Every pending file must match a current artifact by role, name, **size**
+     * and declared sha256 ([matchPending]) — the session's resumable URIs were
+     * opened for exactly those sizes, and its manifest keeps those hashes.
      * A single mismatch (an older build's report names, changed content) means
      * the session can't be finished, so we rebuild rather than silently upload a
      * partial set and mark it "synced". This is the guard against a false sync.
@@ -323,46 +363,33 @@ internal class UploadSessionPlanner(
     }
 
     private fun resumeFrom(state: SessionUploadsResponse, artifacts: List<UploadArtifact>): Resume {
-        val work = matchPending(state.uploads, artifacts)
-        val kind = UploadWorkOutcomes.classifyResume(
-            sessionStatus = state.status.orEmpty(),
-            pendingCount = work?.size ?: state.uploads.size,
-            allPendingMatchArtifacts = work != null,
-        )
-        if (kind == UploadWorkOutcomes.ResumeKind.CONTINUE && work != null) {
-            UploadLog.phase("resume_continue", count = work.size)
-            return Resume.Continue(work)
+        val resumed = Resume.of(state.status.orEmpty(), matchPending(state.uploads, artifacts))
+        when (resumed) {
+            is Resume.Continue -> UploadLog.phase("resume_continue", count = resumed.work.size)
+            Resume.Done -> UploadLog.phase("resume_done")
+            Resume.Rebuild -> UploadLog.phase("resume_rebuild")
+            Resume.Wait -> UploadLog.phase("resume_wait")
+            Resume.ProvisionFailed -> UploadLog.phase("provision_failed")
+            is Resume.Unreachable -> Unit
         }
-        return when (kind) {
-            UploadWorkOutcomes.ResumeKind.DONE -> {
-                UploadLog.phase("resume_done")
-                Resume.Done
-            }
-            // CONTINUE needs every pending file matched, so it is handled above.
-            UploadWorkOutcomes.ResumeKind.REBUILD, UploadWorkOutcomes.ResumeKind.CONTINUE -> {
-                UploadLog.phase("resume_rebuild")
-                Resume.Rebuild
-            }
-            UploadWorkOutcomes.ResumeKind.WAIT -> {
-                UploadLog.phase("resume_wait")
-                Resume.Wait
-            }
-            UploadWorkOutcomes.ResumeKind.PROVISION_FAILED -> {
-                UploadLog.phase("provision_failed")
-                Resume.ProvisionFailed
-            }
-        }
+        return resumed
     }
 
     /**
-     * Each pending upload paired with the artifact of the same role, name and
-     * size; null at the first one that has none.
+     * Each pending upload paired with the artifact of the same role, name,
+     * size and, when the backend sends it, declared sha256; null at the first
+     * one that has none. The hash is what tells a rebuilt zip (same size, new
+     * entry timestamps) from the bytes the session declared (TD-281); an older
+     * backend sends none, and the size match stands.
      */
     private fun matchPending(uploads: List<PendingUploadDto>, artifacts: List<UploadArtifact>): List<UploadJob>? {
         val byKey = artifacts.associateBy { it.role to it.name }
         return uploads.mapIndexed { index, u ->
-            val art = byKey[u.role to u.name]
-            if (art == null || art.file.length() != u.sizeBytes) {
+            val art = byKey[u.role to u.name]?.takeIf { a ->
+                a.file.length() == u.sizeBytes &&
+                    (u.sha256 == null || u.sha256.equals(a.sha256Hex ?: Digests.sha256Hex(a.file), ignoreCase = true))
+            }
+            if (art == null) {
                 // Role, index and size only: a name can be the user's own file
                 // name, and WARN reaches Crashlytics.
                 Timber.w(

@@ -9,6 +9,8 @@ import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
+import com.sempermechanics.semper.ui.analysis.wizard.editLab
+import com.sempermechanics.semper.ui.analysis.wizard.lab
 import java.util.Locale
 
 /**
@@ -38,7 +40,7 @@ class SpecimenGeometryFields(
     )
 
     init {
-        val shown = when (viewModel.testType) {
+        val shown = when (viewModel.lab.testType) {
             TestType.BENDING -> bending
             TestType.TENSILE, TestType.DIC_2D -> emptyList()
         }
@@ -49,11 +51,11 @@ class SpecimenGeometryFields(
     private fun bind(row: Row) {
         row.view.findViewById<TextView>(R.id.tvDimensionLabel).setText(row.labelRes)
         val field = row.view.findViewById<EditText>(R.id.etDimension)
-        val current = row.read(viewModel.geometry)
+        val current = row.read(viewModel.lab.geometry)
         if (current > 0f) field.setText(format(current))
         field.doAfterTextChanged { text ->
             val value = text?.toString()?.trim()?.toFloatOrNull()?.takeIf { it > 0f } ?: 0f
-            viewModel.geometry = row.write(viewModel.geometry, value)
+            viewModel.editLab { it.copy(geometry = row.write(it.geometry, value)) }
             onChanged()
         }
     }

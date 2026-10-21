@@ -239,7 +239,8 @@ object VideoFrameExtractor {
      * The last rung, which crashes on nothing. In Key frames mode the sync frames
      * come from a [android.media.MediaExtractor] of their own, uniform when it finds
      * fewer than two. `getFrameAtTime` cannot report the time of the frame it
-     * returns, so each frame keeps the time asked for (TD-207).
+     * returns, so each frame is timed from a [RetrieverFrameClock] sample walk
+     * (TD-207); the time asked for only when that walk finds no samples.
      * Internal so the device test can force this rung.
      */
     @VisibleForTesting
@@ -265,6 +266,7 @@ object VideoFrameExtractor {
             val plan = VideoKeyframeHelper.planFor(request, keyframesUs, rung = "Retriever")
             val timesUs = plan.timestampsUs
             val count = timesUs.size
+            val clock = RetrieverFrameClock.read(context, request)
 
             // A frame the retriever cannot read is skipped, with its time.
             val defPaths = mutableListOf<String>()
@@ -273,7 +275,8 @@ object VideoFrameExtractor {
 
             for ((i, timeUs) in timesUs.withIndex()) {
                 currentCoroutineContext().ensureActive()
-                val frame = getFrame(retriever, timeUs, onSyncFrame = plan.isKeyframePlan) ?: continue
+                val retrieved = getFrame(retriever, timeUs, onSyncFrame = plan.isKeyframePlan) ?: continue
+                val frame = retrieved.bitmap
                 try {
                     currentCoroutineContext().ensureActive()
                     if (i == 0) {
@@ -289,7 +292,7 @@ object VideoFrameExtractor {
                             frame.compress(Bitmap.CompressFormat.PNG, ImageEncoder.PNG_QUALITY_MAX, out)
                         }
                         defPaths.add(f.absolutePath)
-                        defTimesMs.add(timeUs / US_PER_MS)
+                        defTimesMs.add(clock.frameTimeUs(timeUs, retrieved.isSyncFrame) / US_PER_MS)
                     }
                 } finally {
                     frame.recycle()
@@ -314,12 +317,17 @@ object VideoFrameExtractor {
      * I-frame for every sample in a GOP, so it goes first only when [onSyncFrame]:
      * [timeUs] is itself a sync frame's time, and no decode forward is needed.
      */
-    private fun getFrame(retriever: MediaMetadataRetriever, timeUs: Long, onSyncFrame: Boolean): Bitmap? {
+    private fun getFrame(retriever: MediaMetadataRetriever, timeUs: Long, onSyncFrame: Boolean): RetrievedFrame? {
         val closest = MediaMetadataRetriever.OPTION_CLOSEST
         val sync = MediaMetadataRetriever.OPTION_CLOSEST_SYNC
-        return retriever.getFrameAtTime(timeUs, if (onSyncFrame) sync else closest)
-            ?: retriever.getFrameAtTime(timeUs, if (onSyncFrame) closest else sync)
+        retriever.getFrameAtTime(timeUs, if (onSyncFrame) sync else closest)
+            ?.let { return RetrievedFrame(it, isSyncFrame = onSyncFrame) }
+        return retriever.getFrameAtTime(timeUs, if (onSyncFrame) closest else sync)
+            ?.let { RetrievedFrame(it, isSyncFrame = !onSyncFrame) }
     }
+
+    /** A frame from [getFrame], and whether `OPTION_CLOSEST_SYNC` gave it ([RetrieverFrameClock] times those apart). */
+    private class RetrievedFrame(val bitmap: Bitmap, val isSyncFrame: Boolean)
 
     private fun compressPngToBytes(frame: Bitmap): ByteArray =
         ByteArrayOutputStream().use { out ->

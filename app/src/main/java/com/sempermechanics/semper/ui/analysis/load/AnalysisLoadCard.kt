@@ -24,7 +24,9 @@ import com.sempermechanics.semper.ui.analysis.wizard.AnalysisReadyGate
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.clearMachineLoads
 import com.sempermechanics.semper.ui.analysis.wizard.clearTypedLoads
+import com.sempermechanics.semper.ui.analysis.wizard.editLab
 import com.sempermechanics.semper.ui.analysis.wizard.hasTypedLoads
+import com.sempermechanics.semper.ui.analysis.wizard.lab
 import com.sempermechanics.semper.ui.analysis.wizard.refreshMachineLoads
 import com.sempermechanics.semper.ui.analysis.wizard.setLoadLog
 import com.sempermechanics.semper.ui.analysis.wizard.typedLoadsMissing
@@ -88,28 +90,29 @@ class AnalysisLoadCard(
             refresh()
             onChanged()
         }
-        if (viewModel.testType == TestType.BENDING) {
+        if (viewModel.lab.testType == TestType.BENDING) {
             root.findViewById<TextView>(R.id.tvLoadImportHint).setText(R.string.load_import_hint_bending)
         }
         root.findViewById<ImageButton>(R.id.btnLoadInfo).setOnClickListener {
-            LoadInfoDialog.show(activity, viewModel.testType)
+            LoadInfoDialog.show(activity, viewModel.lab.testType)
         }
         // Tensile enters an area; bending its own dimensions.
-        root.findViewById<View>(R.id.rowCrossSection).isVisible = viewModel.testType == TestType.TENSILE
+        root.findViewById<View>(R.id.rowCrossSection).isVisible = viewModel.lab.testType == TestType.TENSILE
         SpecimenGeometryFields(root, viewModel, onChanged)
         warnRow.findViewById<ImageButton>(R.id.btnWarnFaq).setOnClickListener {
             confirmOpenFaq(activity.getString(R.string.url_faq_load_csv))
         }
-        if (viewModel.crossSectionMm2 > 0f) {
-            etCrossSection.setText(formatArea(viewModel.crossSectionMm2))
+        if (viewModel.lab.crossSectionMm2 > 0f) {
+            etCrossSection.setText(formatArea(viewModel.lab.crossSectionMm2))
         }
         etCrossSection.doAfterTextChanged { text ->
-            viewModel.crossSectionMm2 = text?.toString()?.trim()?.toFloatOrNull()?.takeIf { it > 0f } ?: 0f
+            val area = text?.toString()?.trim()?.toFloatOrNull()?.takeIf { it > 0f } ?: 0f
+            viewModel.editLab { it.copy(crossSectionMm2 = area) }
             onChanged()
         }
-        toggleAxis.check(if (viewModel.loadAxisX) R.id.btnLoadAxisX else R.id.btnLoadAxisY)
+        toggleAxis.check(if (viewModel.lab.loadAxisX) R.id.btnLoadAxisX else R.id.btnLoadAxisY)
         toggleAxis.addOnButtonCheckedListener { _, checkedId, isChecked ->
-            if (isChecked) viewModel.loadAxisX = checkedId == R.id.btnLoadAxisX
+            if (isChecked) viewModel.editLab { it.copy(loadAxisX = checkedId == R.id.btnLoadAxisX) }
         }
         refresh()
     }
@@ -142,17 +145,17 @@ class AnalysisLoadCard(
     fun refresh() {
         loadPoint.refresh()
         viewModel.refreshMachineLoads()
-        val parsed = viewModel.parsedLoadCsv
+        val parsed = viewModel.lab.parsedLoadCsv
         val typed = viewModel.hasTypedLoads()
         val hasSource = parsed != null || typed
-        val offerTyping = viewModel.testType == TestType.BENDING && !hasSource
+        val offerTyping = viewModel.lab.testType == TestType.BENDING && !hasSource
         btnTypeLoads.isVisible = offerTyping
         btnTypeLoads.isEnabled = viewModel.defFilePaths.isNotEmpty()
         tvTypeLoadsHint.isVisible = offerTyping && viewModel.defFilePaths.isEmpty()
         dropzone.isVisible = !hasSource
         summary.isVisible = hasSource
         summary.isClickable = typed
-        loadSync.refresh(viewModel.machineLoads?.mapping == LoadMapping.TIME_NEAREST)
+        loadSync.refresh(viewModel.lab.machineLoads?.mapping == LoadMapping.TIME_NEAREST)
         if (typed) {
             val missing = viewModel.typedLoadsMissing()
             warnRow.isVisible = missing > 0
@@ -160,7 +163,7 @@ class AnalysisLoadCard(
             tvWarn.text = activity.resources.getQuantityString(R.plurals.load_typed_missing_fmt, missing, missing)
             tvName.setText(R.string.load_typed_name)
             val frames = viewModel.defFilePaths.size
-            val filled = viewModel.machineLoads?.matchedFrames ?: 0
+            val filled = viewModel.lab.machineLoads?.matchedFrames ?: 0
             tvMeta.text = activity.resources.getQuantityString(R.plurals.load_meta_typed_fmt, frames, filled, frames)
             return
         }
@@ -169,8 +172,8 @@ class AnalysisLoadCard(
             warnRow.isVisible = false
             return
         }
-        tvName.text = viewModel.loadCsvName
-        val table = viewModel.machineLoads
+        tvName.text = viewModel.lab.loadCsvName
+        val table = viewModel.lab.machineLoads
         tvMeta.text = if (table == null) {
             activity.resources.getQuantityString(
                 R.plurals.load_meta_waiting_fmt,
