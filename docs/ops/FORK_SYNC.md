@@ -26,6 +26,10 @@ apps. The deploy and Firestore workflows only run in this repo
 
 ## Syncing into material_testing
 
+**Last sync:** semperdic-app `14b279d6` (its #453, #457–#460), merged on material_testing's
+`ccr-603fe346-1bw2fa` on 2026-10-21; the one before was `17d7bc8` (material_testing #139).
+`git log --merges --grep=semperdic-app` on the fork lists them all.
+
 1. `git fetch semperdic main` and branch `sync/semperdic-<short sha>` from its `main`.
 2. `git merge semperdic/main`. Keep its `applicationId`, `rootProject.name` and
    `google-services.json`. The benchmark module and CI read the package from
@@ -307,6 +311,15 @@ fixed by hand:
 | `AnalysisViewModel`'s 36 per-field `var`s (`viewModel.refBytes`, `viewModel.step`, …), `lateinit sweepController` | Gone (TD-308): read `viewModel.inputs.value`, write one `viewModel.edit { it.copy(…) }` per change (`ui/analysis/wizard/AnalysisViewModel.kt`); only `cancelRequested` is left. A lab field set through such a property (the fork's `LabRerun.applyTo`, for one) becomes a `WizardInputs` / `LabWizardState` field changed in that edit. `sweepController` is `by lazy` |
 | `SessionMetadataDoc`'s nested field serializers | Top-level `internal object`s of the same names in `data/cloud/SessionMetadataSerializers.kt` (TD-292), a pure move: a sync conflict there is a move, not a change |
 | `VideoFrameExtractor.getFrame` returning a `Bitmap`; retriever frames timed as asked | `RetrievedFrame(bitmap, isSyncFrame)`; times from `RetrieverFrameClock` (TD-207) |
+
+material_testing took the rest of #457 with the sync of `14b279d6` (its TD-305, closed
+there): the lab wizard state is one field of the inputs, `WizardInputs.lab`
+(`LabWizardState`), changed through `edit {}` / `editLab {}` with its Bundle keys unchanged
+(`putLab` / `restoreLab`); `LabInputs.kt` became pure functions of `WizardInputs`; the
+lab test reaches a fresh result through `ViewerArgs.of(record)`; Home's **Which test?** and
+the lab Re-run live in `HomeNewAnalysis`; and the viewer's lab parts take the Results helper
+as a parameter (`ViewerSummaryController`, `ViewerChromeController`) or read
+`ShareControllerHost.labSession` / `stressModel` / `loadsN`.
 
 ## Porting back
 
