@@ -2,7 +2,11 @@ package com.sempermechanics.semper.data.session
 
 import com.sempermechanics.semper.data.cloud.SessionMetadataSync
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 import java.io.File
+
+/** [SessionRecord.extras] when no extension keeps anything with the analysis. */
+internal val NO_EXTRAS = JsonObject(emptyMap())
 
 /**
  * One completed (or re-run) analysis as shown on the Home list. Metadata only —
@@ -119,6 +123,14 @@ data class SessionRecord(
 
     /** Each deformed frame's time in the clip, ms, index-aligned with [defNames]. */
     val frameTimesMs: List<Long>? = null,
+
+    /**
+     * What an installed [com.sempermechanics.semper.ext.SessionExtension] keeps
+     * with this analysis, as one JSON object that shared code passes along and
+     * never reads (ADR-025). Empty in Semper, and an empty one is left out of
+     * `index.json`, so Semper's rows write as they always did.
+     */
+    val extras: JsonObject = NO_EXTRAS,
 
 ) {
 
