@@ -1,4 +1,4 @@
-﻿# Semper — agent context
+# Semper — agent context
 
 Read this before changing code. Commands: [CONTRIBUTING.md](CONTRIBUTING.md); screen maps:
 [ARCHITECTURE.md](docs/app/ARCHITECTURE.md); DIC primer: [docs/README.md](docs/README.md).
@@ -141,11 +141,12 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   #458 (Advanced → Reference, incremental reference; not yet run on a device), #459, #453
   (`firebase-bom` 35), #460's app half, #461 (a local test account for instrumented
   runs) and #462 (the engine pin below). Release blockers: TD-219, TD-226, TD-229–TD-232,
-  counsel on the Terms (TD-277). Left from #457: TD-237, TD-246, TD-294, TD-298, TD-299,
+  counsel on the Terms (TD-277). Left from #457: TD-237, TD-246, TD-294, TD-298,
   TD-309; from #460: TD-313, TD-314.
-- **Engine pinned to `59ac995` (v0.6.0, #462, 2026-10-22; TD-299):** 0.5.0's review fixes
-  and `-5`, then 0.6.0's AKAZE seeding (rotation past 90° and large stretch now seed) on
-  OpenCV 4.14. Not in a release; `v1.2-beta.4` carries `23034fe` (0.4.2).
+- **Engine pinned to `f072da0` (v0.6.1, 2026-10-22; v0.6.0 in #462; TD-299 closed):** 0.5.0's
+  review fixes and `-5`, then 0.6.0's AKAZE seeding (rotation past 90° and large stretch now
+  seed) on OpenCV 4.14, and 0.6.1's fixes (bending points near the load point; the OpenCV
+  module list survives a stale `.cxx`). Not in a release; `v1.2-beta.4` carries `23034fe` (0.4.2).
 - **material_testing** merges this `main` (last `17d7bc8`, material_testing#139,
   [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); its #140 carries the lab fixes and four of #457's
   commits; the rest come with the next sync. It released `v1.4-beta.2` (`d08aae07`) 2026-10-17.

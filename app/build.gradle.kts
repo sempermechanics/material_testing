@@ -166,14 +166,6 @@ android {
                 // Portable engine package at repo-root engine/; JNI adapter on.
                 arguments += "-DSEMPER_ANDROID=ON"
 
-                // The OpenCV modules the engine compiles (engine/cmake/SemperOpenCV.cmake).
-                // The engine sets this as a plain cache default, so a .cxx restored from
-                // an older pin (CI's prefix restore-keys, or a developer's tree) keeps
-                // that pin's list: 0.3.0–0.5.x dropped features2d, calib3d and flann,
-                // which engine 0.6.0's AKAZE seeding links. On the command line it wins
-                // over any cached value. Keep it equal to the engine's default.
-                arguments += "-DSEMPER_OPENCV_BUILD_LIST=core,imgproc,imgcodecs,features2d,calib3d,flann"
-
                 // Vendored OpenCV defaults ENABLE_CCACHE to ON for Ninja builds,
                 // and when it finds a ccache on PATH it installs it as a GLOBAL
                 // RULE_LAUNCH_COMPILE — so it wraps our targets too, not just
