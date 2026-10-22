@@ -11,6 +11,8 @@ from ..licenses import as_utc, normalize_email
 
 from . import _base
 from ._base import (
+    PURPOSE_CI,
+    PURPOSE_QC,
     SCHEMA_VERSION,
     _active_devices,
     _create_doc,
@@ -23,9 +25,6 @@ from ._base import (
 )
 from .users import _link_auth_uid
 
-#: `testAccount.purpose`: staff QC, or the CI pipeline's own login.
-PURPOSE_QC = "qc"
-PURPOSE_CI = "ci"
 PURPOSES = (PURPOSE_QC, PURPOSE_CI)
 
 #: `status` in the staff listing.
