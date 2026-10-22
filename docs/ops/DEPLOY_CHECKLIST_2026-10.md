@@ -1,21 +1,23 @@
 # Deploy checklist: readiness change (2026-10)
 
 What has to happen, in order, to put the readiness change live: #448, #449, #454
-and #455, merged to `main` on 2026-10-19 (`main` @ `2de605c`). Nothing in it is
-deployed yet. Tick the boxes in a copy, or in the PR that records the deploy.
+and #455, merged to `main` on 2026-10-19 (`main` @ `2de605c`). Deployed 2026-10-22 from
+`b940cc29`, with #457 and test accounts (#460); the boxes below are ticked for that
+deploy, and what it did is in [CHANGELOG.md](CHANGELOG.md). §5 and most of §6 are still open.
 
 Everything deploys **from semperdic-app only**. Never deploy Hosting from
 material_testing: any Hosting deploy replaces the whole site.
 
 ## 0. Prerequisites (once)
 
-- [ ] **Google credentials** for whoever runs steps 1, 4 and 5: Firestore index
+- [x] **Google credentials** for whoever runs steps 1, 4 and 5: Firestore index
       admin and Firebase Hosting admin on `indicvision-dic-app`, plus
       `roles/monitoring.editor` and `roles/logging.configWriter`.
 - [ ] **Revocation (TD-214)**, optional for the first deploy. Grant
       `gcloud projects add-iam-policy-binding indicvision-dic-app-auth --member=serviceAccount:indic-api@indicvision-dic-app.iam.gserviceaccount.com --role=roles/firebaseauth.admin`,
       then set the repo variable `CHECK_REVOKED_ON_STEP_UP=true`. Not before the
       grant: without it the check fails closed and refuses every step-up.
+      (2026-10-22: the grant is in place, made for test accounts; the variable is not set.)
 - [ ] **Offline entitlement (TD-215)**, optional for the first deploy. Follow
       [BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A8 in its order:
       create the P-256 key in Secret Manager; grant the runtime SA
@@ -30,7 +32,7 @@ material_testing: any Hosting deploy replaces the whole site.
       passed today, TD-309), then set the repo variable. Unset, that mail is off and the
       access-request mail is unaffected ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md)).
 
-- [ ] **Test accounts ([ADR-027](../adr/ADR-027-test-accounts.md))**, optional, and
+- [x] **Test accounts ([ADR-027](../adr/ADR-027-test-accounts.md))**, optional, and
       only once the branch carrying them is merged. Creating, resetting and ending
       one calls Firebase Auth admin, so it needs the same
       `roles/firebaseauth.admin` grant on `indicvision-dic-app-auth` as the
@@ -43,9 +45,11 @@ material_testing: any Hosting deploy replaces the whole site.
 
 ## 1. Firestore indexes (TD-216, TD-271)
 
-- [ ] `PROJECT=indicvision-dic-app scripts/deploy-firestore.sh indexes`. Never
-      with `--force`: it deletes any TTL policy the file omits.
-- [ ] Wait for READY: the composite `audit_logs (licenseId ASC, ts DESC)`, and
+- [x] `PROJECT=indicvision-dic-app scripts/deploy-firestore.sh indexes`. Never
+      with `--force`: it deletes any TTL policy the file omits. (2026-10-22: it stopped
+      on a 409 before creating anything, TD-316; the missing indexes went in by gcloud
+      and the REST API, as the [CHANGELOG](CHANGELOG.md) entry shows.)
+- [x] Wait for READY: the composite `audit_logs (licenseId ASC, ts DESC)`, and
       the `seats.uid` / `deleted_seats.uid` collection-group overrides
       (`gcloud firestore indexes fields describe uid --collection-group=seats`).
 
@@ -53,18 +57,20 @@ material_testing: any Hosting deploy replaces the whole site.
 
 Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
 
-- [ ] **Staging:** `environment=staging`, `project=indicvision-dic-app`,
+- [x] **Staging:** `environment=staging`, `project=indicvision-dic-app`,
       `region=asia-south1`, `gateway_mode=dry-run`. Read the gateway diff: it
       adds `/v1/me/claim`, `/v1/admin/licenses/search` and the roster and audit
       paths.
 - [ ] **Staging smoke:** `/readyz` answers 200; an anonymous `POST /v1/me/claim`
       answers **401, not 404**; `GET /v1/config` carries `killSwitches`,
-      `minSupportedVersionCode` and, if the key was set, `entitlement`.
-- [ ] **Staging gateway:** run again with `gateway_mode=apply`.
-- [ ] **Production:** `environment=production`, first `gateway_mode=dry-run`,
+      `minSupportedVersionCode` and, if the key was set, `entitlement`. (2026-10-22: the
+      first two held, the claim after the gateway apply; `/v1/config` needs a signed-in
+      caller and was not read.)
+- [x] **Staging gateway:** run again with `gateway_mode=apply`.
+- [x] **Production:** `environment=production`, first `gateway_mode=dry-run`,
       then `apply`. The candidate revision is smoke-tested on `/readyz` before
       traffic moves, and rolls back on failure.
-- [ ] **Licence fan-out task (TD-294, [ADR-026](../adr/ADR-026-licence-fanout-marker.md))**,
+- [x] **Licence fan-out task (TD-294, [ADR-026](../adr/ADR-026-licence-fanout-marker.md))**,
       once #457 is merged. A staff revoke or terms edit schedules a Cloud Task on
       `TASKS_QUEUE`, so check that the environment's `TASKS_QUEUE` and
       `TASKS_TARGET_BASE_URL` are set (provisioning already uses them); unset, no task
@@ -75,7 +81,7 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       diff must not add it. On staging, a revoke of a test licence leaves a
       `license-fanout-<id>` task that runs about 6 minutes later and finds nothing
       pending.
-- [ ] **Test-account expiry job (ADR-027)**, with the test-accounts item in §0. A
+- [x] **Test-account expiry job (ADR-027)**, with the test-accounts item in §0. A
       Cloud Scheduler job per environment calls the backend daily; like the Cloud
       Tasks callbacks it goes straight to Cloud Run with the invoker SA's OIDC token,
       and `POST /v1/tasks/test-account-expiry` is kept off the gateway
@@ -89,27 +95,31 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       the request log shows 200 and the answer `{"expiredTestAccounts": 0, ...}`.
       Without the job, accounts past their date are not erased; their licence has
       still lapsed, and the staff list shows them `expired`.
-- [ ] For the first deploy, leave unset (or 0): `MIN_SUPPORTED_VERSION_CODE`,
+- [x] For the first deploy, leave unset (or 0): `MIN_SUPPORTED_VERSION_CODE`,
       `RECOMMENDED_VERSION_CODE`, their `_MATERIAL_TESTING` pair, and
       `KILL_SWITCHES`.
 
 ## 3. Gateway checks (after `apply`)
 
-- [ ] An anonymous call to each new path answers 401: `/v1/me/claim`,
+- [x] An anonymous call to each new path answers 401: `/v1/me/claim`,
       `/v1/admin/licenses/search`,
       `/v1/institutions/licenses/{id}/seats/import`, `…/export`, `…/summary`,
-      and `…/audit`.
+      and `…/audit`. (2026-10-22: all of them on staging; on production the GETs
+      `licenses/search`, `test-accounts` and `…/summary`.)
 - [ ] `GET …/audit` answers 200 for a licence administrator.
-- [ ] With test accounts: an anonymous `GET /v1/admin/test-accounts` and
+- [x] With test accounts: an anonymous `GET /v1/admin/test-accounts` and
       `POST /v1/admin/test-accounts` answer 401, and
-      `POST /v1/tasks/test-account-expiry` through the gateway answers 404.
+      `POST /v1/tasks/test-account-expiry` through the gateway answers 404. (Staging;
+      production's `GET` answers 401.)
 
 ## 4. Hosting: consoles, account page, aligned Terms
 
-- [ ] From a **clean `main` checkout**:
+- [x] From a **clean `main` checkout**:
       `API_BASE_URL=<INDIC_API_BASE_URL repo variable> ./scripts/deploy-console.sh`.
-      Never a bare `firebase deploy`.
-- [ ] The script runs `scripts/check_live_console.py`; it must pass (no `__`
+      Never a bare `firebase deploy`. From Windows PowerShell, set the variable there
+      (`$env:API_BASE_URL = gh variable get INDIC_API_BASE_URL`) and run the script
+      through Git Bash; PowerShell 5.1 drops quotes nested inside `bash -c "…"`.
+- [x] The script runs `scripts/check_live_console.py`; it must pass (no `__`
       placeholder left live).
 - [ ] By hand: `/account` shows the licence facts and, for a demo account, the
       "Redeem a claim code" card; `/terms` shows 6.6 "No purchases in the App";
