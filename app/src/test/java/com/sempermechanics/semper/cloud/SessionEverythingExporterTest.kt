@@ -2,9 +2,12 @@ package com.sempermechanics.semper.cloud
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.sempermechanics.semper.data.integrity.RecordManifestWriter
 import com.sempermechanics.semper.data.session.SessionEverythingExporter
+import com.sempermechanics.semper.data.session.SessionLayout
 import com.sempermechanics.semper.data.session.SessionNaming
 import com.sempermechanics.semper.data.session.SessionPaths
+import com.sempermechanics.semper.data.session.SessionRecordSettings
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.fixtures.CleanAppState
@@ -18,6 +21,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
 
 /**
  * The local "export everything" archive. Entry names come from user-supplied
@@ -65,6 +70,24 @@ class SessionEverythingExporterTest {
         // banner read 100% while the last session was still being packed.
         assertEquals(listOf(0 to 2, 1 to 2, 2 to 2), ticks)
         assertEquals(2, result!!.sessionCount)
+    }
+
+    @Test
+    fun `a session's record manifest goes in beside its frames (ADR-028)`() = runBlocking {
+        seedSession("signed")
+        val dir = SessionStore.dirFor(context, "signed")
+        RecordManifestWriter.write(dir, SessionRecordSettings(21, 5, 15, 0, 0, 0, 0, false), signer = null)
+
+        val master = checkNotNull(SessionEverythingExporter.exportMasterZip(context)).file
+
+        val names = ZipFile(master).use { outer ->
+            val inner = outer.entries().asSequence().single()
+            ZipInputStream(outer.getInputStream(inner)).use { zin ->
+                generateSequence { zin.nextEntry }.map { it.name }.toList()
+            }
+        }
+        assertTrue(names.toString(), "dat/${SessionLayout.MANIFEST}" in names)
+        assertTrue(names.toString(), "dat/frame_0000.dat" in names)
     }
 
     @Test

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Details sheet: max/min (+ mean on a frame), then the frame histogram, then settings used. -->
+<!-- Details sheet: max/min (+ mean on a frame), then the frame histogram, then settings used
+     and the record's integrity. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -99,6 +100,15 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:orientation="vertical" />
+
+    <!-- Shown when the record no longer matches its signed manifest (ADR-028). -->
+    <include
+        android:id="@+id/integrityWarnRow"
+        layout="@layout/view_warn_chip"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:visibility="gone" />
 
     <LinearLayout
         android:id="@+id/lineCutSection"

@@ -1,6 +1,8 @@
 package com.sempermechanics.semper.ui.viewer.share
 
 import android.graphics.Bitmap
+import com.sempermechanics.semper.data.integrity.RecordIntegrity
+import com.sempermechanics.semper.data.integrity.RecordVerifier
 import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.field.FrameParams
 import com.sempermechanics.semper.field.ImageSize
@@ -9,6 +11,7 @@ import com.sempermechanics.semper.imaging.BitmapDecoder
 import com.sempermechanics.semper.report.ReportBuilder
 import com.sempermechanics.semper.report.ReportData
 import com.sempermechanics.semper.report.VisualizationEngine
+import com.sempermechanics.semper.report.recordFingerprintText
 import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
 import com.sempermechanics.semper.ui.viewer.ViewerArgs
 import java.io.File
@@ -34,8 +37,22 @@ object ViewerReportFactory {
         val defImagePaths: List<String>,
         /** The viewer's display-size reference, for when the reference file is gone. Never recycled by it. */
         val displayBase: Bitmap?,
+        /** The viewer's check of the record (ADR-028), when it had finished; else [recordFingerprint] runs one. */
+        val integrity: RecordIntegrity? = null,
     ) {
         val isSweep: Boolean get() = args.sweep != null
+
+        /**
+         * The cover's record fingerprint ([recordFingerprintText]), once per
+         * export: an all-frames report asks on every page, and a check hashes
+         * every frame. Disk reads when the viewer had not finished its own:
+         * read it off the main thread, as the pages are built.
+         */
+        val recordFingerprint: String by lazy {
+            recordFingerprintText(
+                integrity ?: args.batchDirPath?.let { RecordVerifier.verify(File(it)) } ?: RecordIntegrity.NotRecorded,
+            )
+        }
 
         /** Every frame's solver parameters. */
         /** Read from [args] once per source: every page and CSV row of an export asks for it. */
@@ -124,7 +141,7 @@ object ViewerReportFactory {
                 // own photo when that decoded, else on the reference.
                 onFramePhoto = defImg != null,
             )
-            return ReportBuilder.buildReport(params)
+            return ReportBuilder.buildReport(params).copy(recordFingerprint = source.recordFingerprint)
         } finally {
             defImg?.recycle()
             decodedBase?.recycle()

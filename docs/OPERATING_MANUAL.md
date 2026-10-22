@@ -663,8 +663,17 @@ bar for that bin's range and count. On the summary GIF the histogram is omitted.
 Then everything the result was computed with — and on a sweep, the
 line-cut plot. The strain-window row gives both numbers, e.g. "13-point window ·
 VSG 61 px", `(13 − 1) × 5 + 1` (the relation is in [§5](#5-parameters)). A session
-from before the window was counted in points shows "VSG 15 px" alone. A run that stopped early also
+from before the window was counted in points shows "VSG 15 px" alone. **Reference** says which
+image each frame was solved against, in the words of the Advanced → Reference choice
+("First image", "Every frame", "Every 2 frames"). A run that stopped early also
 carries **Stopped early** and **Frames solved** here.
+
+**Record integrity** checks the results against the signed record the analysis wrote
+beside them (ADR-028): **Verified** (every result file is as the analysis wrote it, and
+this or the original phone's key signed it), **Changed since analysis** (a file was
+edited, removed or added; an amber note names them), **Not signed** (the record has no
+signature, so it cannot rule out an edit) or **Not recorded** (an analysis from before
+records existed). The report's cover prints the same as **Record Fingerprint**.
 
 **Changing settings later never changes an old result.** This sheet is your
 provenance record.

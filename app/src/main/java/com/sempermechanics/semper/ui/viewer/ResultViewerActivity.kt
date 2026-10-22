@@ -17,6 +17,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.LicenseEntitlements
+import com.sempermechanics.semper.data.integrity.RecordIntegrity
+import com.sempermechanics.semper.data.integrity.RecordVerifier
 import com.sempermechanics.semper.data.policy.FeatureAccess
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
@@ -217,7 +219,11 @@ class ResultViewerActivity :
         // with it, everything the batch drives) starts once they are there.
         val knownSize = args.imageSize
         val viewerArgs = args
-        viewModel.listFrames(frameSetDispatcher) { ViewerFrameLoader.readFrameSet(viewerArgs, refPath, knownSize) }
+        val recordDir = args.batchDirPath?.let(::File)
+        viewModel.listFrames(
+            frameSetDispatcher,
+            check = { recordDir?.let(RecordVerifier::verify) ?: RecordIntegrity.NotRecorded },
+        ) { ViewerFrameLoader.readFrameSet(viewerArgs, refPath, knownSize) }
         lifecycleScope.launch {
             val set = viewModel.state.mapNotNull { it.frameSet }.first()
             onFrameSetRead(set, refPath, dimsKnown)

@@ -1,6 +1,7 @@
 package com.sempermechanics.semper.report
 
 import android.graphics.Bitmap
+import com.sempermechanics.semper.data.integrity.RecordIntegrity
 import com.sempermechanics.semper.field.Roi
 
 data class ReportData(
@@ -35,11 +36,33 @@ data class ReportData(
     val appBuild: String? = null,
 
     /**
+     * The cover's "Record Fingerprint" ([recordFingerprintText], ADR-028): the
+     * record manifest's fingerprint and what its check said. Set by each
+     * caller after [ReportBuilder.buildReport]; null prints no line.
+     */
+    val recordFingerprint: String? = null,
+
+    /**
      * How much of this frame's displacement was the whole scene moving. Null
      * when too few points converged to fit it — see [RigidBodyFit.MIN_POINTS].
      */
     val rigidBody: RigidBodyFit.Fit? = null,
 )
+
+/**
+ * [integrity] as the PDF cover prints it: the manifest's fingerprint (the
+ * first 16 hex digits of its SHA-256) and the check's answer, in the report's
+ * English. Every answer but "verified" is worded so it cannot read as a pass.
+ */
+fun recordFingerprintText(integrity: RecordIntegrity): String {
+    val fingerprint = integrity.fingerprint ?: "unreadable"
+    return when (integrity) {
+        is RecordIntegrity.Verified -> "$fingerprint (verified)"
+        is RecordIntegrity.Changed -> "$fingerprint (CHANGED since analysis: ${integrity.files.size} file(s))"
+        is RecordIntegrity.Unsigned -> "$fingerprint (not signed)"
+        RecordIntegrity.NotRecorded -> "Not recorded"
+    }
+}
 
 data class FieldResult(
     val fieldName: String,

@@ -96,6 +96,7 @@ internal class ViewerShareController(
         plannedFrames = host.plannedFrames,
         defImagePaths = host.defImagePaths,
         displayBase = images.cachedBaseImage,
+        integrity = host.viewModel.state.value.integrity,
     )
 
     /**

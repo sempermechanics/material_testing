@@ -303,6 +303,18 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     
     <string name="settings_used_roi_fmt">%1$d × %2$d at (%3$d, %4$d)</string>
     <string name="settings_used_size_fmt">%1$d × %2$d px</string>
+    <!-- The record's check against the signed manifest its run wrote (ADR-028). -->
+    <string name="settings_used_integrity">Record integrity</string>
+    <string name="record_integrity_checking">Checking…</string>
+    <string name="record_integrity_verified">Verified</string>
+    <string name="record_integrity_changed">Changed since analysis</string>
+    <string name="record_integrity_unsigned">Not signed</string>
+    <string name="record_integrity_not_recorded">Not recorded</string>
+    <string name="record_integrity_changed_warn_fmt">These files no longer match what the analysis wrote, so its results may have been edited: %1$s</string>
+    <plurals name="record_integrity_more_fmt">
+        <item quantity="one">%1$s and %2$d more file</item>
+        <item quantity="other">%1$s and %2$d more files</item>
+    </plurals>
     <string name="export_data">Export my data</string>
     <string name="export_progress_fmt">Exporting session %1$d of %2$d</string>
     <string name="export_data_failed">Couldn\'t prepare the export. Free up some storage and try again.</string>
@@ -953,6 +965,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="url_faq_no_batch_data" translatable="false">https://sempermechanics.com/support/troubleshooting/#reading</string>
     <string name="url_faq_viewer_oom" translatable="false">https://sempermechanics.com/support/troubleshooting/#reading</string>
     <string name="url_faq_custom_scale" translatable="false">https://sempermechanics.com/support/troubleshooting/#reading</string>
+    <string name="url_faq_record_integrity" translatable="false">https://sempermechanics.com/support/troubleshooting/#reading</string>
     <string name="url_report_bug">https://sempermechanics.com/support/</string>
     <string name="url_request_feature">https://sempermechanics.com/support/</string>
 

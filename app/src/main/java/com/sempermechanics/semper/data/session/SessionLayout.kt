@@ -60,6 +60,12 @@ class SessionLayout(val dir: File) {
     /** The per-field range sidecar the summary animation reads (`report.FieldRangesStore.FILE_NAME`). */
     val fieldRanges: File get() = File(dir, FIELD_RANGES)
 
+    /**
+     * The run's signed record of its results (`data.integrity.RecordManifest`,
+     * ADR-028). Not a `.dat`, so every frame listing passes it by.
+     */
+    val recordManifest: File get() = File(dir, MANIFEST)
+
     /** Integrity rebuilds since the last good upload (`RebuildBudget.INTEGRITY`). */
     val integrityRebuildsMarker: File get() = File(dir, INTEGRITY_REBUILDS_MARKER)
 
@@ -68,6 +74,7 @@ class SessionLayout(val dir: File) {
         const val METADATA_JSON = "metadata.json"
         const val REPORTS_SUBDIR = "reports"
         const val FIELD_RANGES = "field_ranges.bin"
+        const val MANIFEST = "record_manifest.json"
         const val INTEGRITY_REBUILDS_MARKER = "upload_integrity_rebuilds"
         const val RERUN_INPUTS = "inputs.json"
         const val RERUN_REFERENCE = "reference.bin"

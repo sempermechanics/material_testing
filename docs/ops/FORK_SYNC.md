@@ -308,6 +308,29 @@ fixed by hand:
 | `SessionMetadataDoc`'s nested field serializers | Top-level `internal object`s of the same names in `data/cloud/SessionMetadataSerializers.kt` (TD-292), a pure move: a sync conflict there is a move, not a change |
 | `VideoFrameExtractor.getFrame` returning a `Bitmap`; retriever frames timed as asked | `RetrievedFrame(bitmap, isSyncFrame)`; times from `RetrieverFrameClock` (TD-207) |
 
+### Tamper-evident records (ADR-028, 2026-10)
+
+material_testing gets the record manifest with the next sync of this `main`; nothing
+in it is Semper-only. What its lab code has to know:
+
+- Every run that is not cancelled ends in `RunSession.commitRecord` (was `commit()` in
+  `BatchAnalysis` and `endSweep`), which writes `record_manifest.json` into the staging
+  and then commits. The manifest hashes every `*.dat` and `field_ranges.bin` there, and
+  the verifier reads any other `*.dat` in the session folder as **Changed**: a lab file
+  ending in `.dat` must be staged before that call or take another extension.
+- The signature is the `DeviceKeys` Keystore key (same alias, `SemperDeviceKeyEc`), so
+  the fork's manifests are signed by its own install's key; the manifest carries the
+  public key, so they verify on any phone.
+- Backups carry it as `dat/record_manifest.json` in `Session.zip` (no new role, no
+  backend change); restore and "Export everything" bring it along.
+- API changes: `ResultViewerViewModel.listFrames(dispatcher, check, read)` and
+  `ViewerState.integrity`; `ReportData.recordFingerprint`, set by the callers of
+  `ReportBuilder.buildReport`; `ViewerReportFactory.Source.integrity`. The Details sheet
+  (`SettingsUsedSheet.entriesFor`) gains a "Reference" row (from the new
+  `ViewerArgs.refUpdateInterval`, `IntentKeys.REF_UPDATE_INTERVAL`, written only for an
+  incremental run) and a "Record integrity" row, plus an `integrityWarnRow` chip in
+  `sheet_settings_used.xml`.
+
 ## Porting back
 
 List the fork's commits that touch shared paths and are not here:

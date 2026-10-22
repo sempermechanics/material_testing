@@ -525,6 +525,10 @@ Their layout follows the `schema` in `metadata.json`
 | `/3` | `raw/` (reference as `raw/Reference.png`), `dat/` | `csv/`, `reports/`, `processed/` |
 | `/4` (since 2026-10-13) | `ref/Reference.png` (the reference), `raw/` (frames only), `dat/` | as `/3` |
 
+Since ADR-028 (no schema change) `dat/` also holds `record_manifest.json`, the run's
+signed record of its results, under the existing `dat` role: `Role` is a Literal and
+the backend never opens the archive. An older app restores it as an unread file.
+
 `/4` gives the reference its own folder because a frame keeps the user's file
 name, and one named `Reference.png` collided with it. A restore takes
 `ref/Reference.png` as the reference, and `raw/Reference.png` only from an
