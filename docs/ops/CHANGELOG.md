@@ -12,6 +12,68 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-10-22 — Backend, gateways and Hosting: the readiness change, #457 and test accounts
+
+Everything from `main` at `b940cc29` went live, in [checklist](DEPLOY_CHECKLIST_2026-10.md)
+order: Firestore indexes, staging, production, the expiry jobs, Hosting. Monitoring (§5)
+and the after-deploy steps (§6) have not run yet.
+
+- **Before the backend.** The repo variable `TEST_ACCOUNT_DOMAINS` is
+  `qa.sempermechanics.com`, so staff can make test accounts only on that subdomain
+  ([ADR-027](../adr/ADR-027-test-accounts.md)). `indic-api@` holds
+  `roles/firebaseauth.admin` on `indicvision-dic-app-auth`, which is also the TD-214 grant.
+  The Cloud Scheduler API is on in `indicvision-dic-app`.
+- **Firestore indexes.** `scripts/deploy-firestore.sh indexes` failed before creating
+  anything (TD-316). The two missing composites, `audit_logs (licenseId ASC, ts DESC)`
+  and `files (uid, sessionId)`, went in with `gcloud firestore indexes composite create`.
+  The `seats.uid` and `deleted_seats.uid` collection-group overrides went in with a REST
+  `PATCH …/collectionGroups/{seats,deleted_seats}/fields/uid?updateMask=indexConfig` that
+  sets the file's four indexes. All six composites and both overrides were READY, and the
+  three TTL policies still ACTIVE, before the backend.
+- **Staging.** Run 39722458180 (gateway dry run, `semper-api-staging-39722458180-1`), then
+  run 39723097621 (apply, config `v202610220438-102`). `/readyz` answered 200 (Firestore
+  and Drive ok). The gateway diff added 14 paths: `/v1/me/claim`,
+  `/v1/admin/licenses/search`, the admin and institution `seats/import`, `seats/export`,
+  `summary` and `audit` routes, and the four `/v1/admin/test-accounts` routes. It removed
+  only description text and added neither task callback. After the apply, anonymous calls
+  to the new paths answered 401 and `POST /v1/tasks/test-account-expiry` answered 404.
+- **Production.** Run 39724590027 (`semper-api-39724590027-1`, 100 % after `/readyz`
+  answered 200), with the same gateway diff as staging. Then run 39725270944 applied
+  config `v202610220502-104` to `semper-gw`; anonymous calls to the new paths answer 401.
+- **Expiry jobs.** `semper-test-account-expiry` and `semper-test-account-expiry-staging`
+  run daily at 03:17 UTC, POST to their service's `/v1/tasks/test-account-expiry` with an
+  OIDC token from `indic-api@`, audience the service URL. A manual run of each succeeded.
+- **Hosting.** The operator ran `scripts/deploy-console.sh` from `main` and
+  `check_live_console.py` passed.
+
+The Current state entries this deploy closes, as they stood:
+
+- **Deployed.** Cloud Run `semper-api` behind API Gateway `semper-gw`, and staging
+  `semper-api-staging` behind `semper-gw-staging`, from `c295639d` (2026-10-14; gateways
+  unchanged; Firestore deadlines #432, TD-210; backups by name #429).
+- **Readiness change merged, not deployed** (#448, #449; `main` @ `763ed7a` with the
+  docs-only #454–#456): the cross-check ([gate](PRODUCTION_READINESS_GATE.md#framework-cross-check-2026-10-18),
+  TD-214–TD-278, FI-17–FI-24), [ADR-023](../adr/ADR-023-signed-offline-entitlement.md),
+  **minSdk 30**, version gate, EMM config, IT roster tools, audit export, AAB, monitoring as
+  code and account-anchored entitlements ([ADR-024](../adr/ADR-024-account-anchored-entitlements.md)).
+  No release built from it. Owed at deploy, in [checklist](DEPLOY_CHECKLIST_2026-10.md)
+  order: indexes, backend, gateway, Hosting, monitoring; also TD-214, TD-215, TD-219, TD-226,
+  TD-229–TD-232, counsel on the Terms (TD-277).
+- **#457 merged, not deployed** (`main` @ `f5396c2`: the 2026-10-19 review and two tech-debt
+  rounds; closed TD-171, 198, 207, 281–293, 295–297, 306–308). Backend: device trust levels
+  (ADR-010 amendment), `step_up.py` and `services/`, a new-device mail, projected listings, a
+  licence fan-out finished by a Cloud Task ([ADR-026](../adr/ADR-026-licence-fanout-marker.md)),
+  `audit_logs` append-only in code and mirrored to Cloud Logging. App: uploads resume only on
+  the declared sha256, a failed batch undone, `WizardInputs` edited whole, viewer hosts, screen
+  work in ViewModels, retriever frames timed as decoded; CI checks file size, ADR-016 rule 1 and
+  swallowed cancellation; [ADR-025](../adr/ADR-025-test-type-extension-points.md) proposed.
+  At deploy ([checklist](DEPLOY_CHECKLIST_2026-10.md)): TOTP re-registration, C1/C2,
+  `NOTIFY_SECURITY_FROM` (TD-309), `TASKS_QUEUE` (TD-294), the audit bucket lock (TD-237).
+  Left: TD-237, TD-246, TD-294, TD-298, TD-299, TD-309.
+- **Open: `ccr-603fe346-1bw2fa`**: staff test accounts for QC and CI
+  ([ADR-027](../adr/ADR-027-test-accounts.md)); off until `TEST_ACCOUNT_DOMAINS` is set.
+  [Note 2026-10-22: merged as #460 on 2026-10-20.]
+
 ## 2026-10-17 — App release `v1.2-beta.4`
 
 Release run 39064532280 on `main` at `33dce87d`, after full-matrix CI run 39061205386

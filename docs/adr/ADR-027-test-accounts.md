@@ -1,8 +1,9 @@
 # ADR-027: Staff test accounts for QC and CI
 
-**Status:** Accepted (the product owner's decisions, 2026-10-19); the backend is built
-on `ccr-603fe346-1bw2fa-ta-backend`, not merged or deployed. The console and the app
-are built against the same contract on a separate branch.
+**Status:** Accepted (the product owner's decisions, 2026-10-19). Backend, console and
+app merged in #460 (2026-10-20) and deployed 2026-10-22 from `b940cc29`, on for
+`TEST_ACCOUNT_DOMAINS=qa.sempermechanics.com`
+([CHANGELOG](../ops/CHANGELOG.md)).
 **Date:** 2026-10-19
 **Deciders:** product owner, backend owner
 **Register:** TD-313 (CI does not call the backend with the CI account yet)
@@ -169,6 +170,11 @@ How the backend carries them out:
 
 - [x] Backend: tag, routes, expiry job, device, licence, Drive and demo-count
       branches; `backend/tests/test_test_accounts.py`.
-- [ ] Console and app (separate branch, same contract).
-- [ ] Deploy: the variable, the Auth admin grant, the Scheduler job.
+- [x] Console and app (#460).
+- [x] Deploy (2026-10-22): `TEST_ACCOUNT_DOMAINS=qa.sempermechanics.com`, the Auth admin
+      grant for `indic-api@`, and the Scheduler jobs `semper-test-account-expiry` and
+      `semper-test-account-expiry-staging` (daily 03:17 UTC; a manual run of each succeeded).
+- [ ] On staging: a QC account (`days: 1`) on two phones, its upload under
+      `Research Storage/_test/{uid}`, then End
+      ([checklist](../ops/DEPLOY_CHECKLIST_2026-10.md) §6).
 - [ ] TD-313: Tier 3 against staging with the CI test account.
