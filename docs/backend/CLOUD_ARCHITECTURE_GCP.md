@@ -741,8 +741,10 @@ audit_logs/{autoId}               (append-only)
   live policy as an override to delete; never deploy indexes with `--force`.
   Operator setup can also enable it by hand — step A2a of
   [BACKEND_SETUP_GCP.md](BACKEND_SETUP_GCP.md). `consume_nonce` deletes a nonce on
-  use; TTL reclaims the ones that are never consumed. An optional retention TTL on
-  `audit_logs.ts` (e.g. 400 days) is still just a suggestion.
+  use; TTL reclaims the ones that are never consumed. `audit_logs.expireAt` is a
+  TTL field too (TD-237: rows kept 365 days, `AUDIT_RETENTION_DAYS`), declared
+  there and enabled by hand after the audit-trail log bucket is locked
+  ([FIRESTORE_DATA_PROTECTION.md](FIRESTORE_DATA_PROTECTION.md)).
 
 Security: Firestore is **written only by the Cloud Run SA** (server-side). No
 Android SDK writes → Firestore Security Rules can be `allow read, write: if
@@ -1006,14 +1008,31 @@ Every Firestore call in `backend/app` now goes through a helper in
   than a second left the full timeout again, so the worst case is about twice
   the value. That is still under 60 s.
 - **`DEADLINE_EXCEEDED` is not retried.** An attempt that used up its time
-  ends the call. The route then answers 500, as it does for any other
-  Firestore error it does not handle (`readyz` answers 503
-  `firestore_unreachable`).
+  ends the call.
+- **An outage answers 503, not 500 (TD-250, decided 2026-10-22).** When a
+  route's Firestore call ends in `DEADLINE_EXCEEDED` or `UNAVAILABLE`, raw or
+  as the `RetryError` api-core raises once the retry window runs out on one,
+  the edge middleware answers 503 `firestore_unreachable` with
+  `Retry-After: 30` and logs `event="dependency_failure"`
+  (`_is_firestore_outage`, `backend/app/main.py:249-258`; the catch-all at
+  `:198-205`). That is the answer `/readyz` gives, through the same
+  `_dependency_response` (`backend/app/main.py:261-272`), which puts the same
+  `Retry-After` on every `obs.DependencyError`
+  (`DEPENDENCY_RETRY_AFTER_SECONDS`, `backend/app/deps.py:294-298`). It holds
+  locally as well as on Cloud Run. Any other Firestore error a route does not
+  handle (`INTERNAL`, a `RetryError` around one) is still 500
+  `internal_error`. `tests/test_firestore_outage.py` covers both.
 - **`_stream` returns a list.** The deadline covers the whole server stream,
   so the helper reads the stream to the end before the caller writes anything.
-- **Not covered.** A transaction's begin and commit take no timeout in the
-  client's public API (google-cloud-firestore 2.32), so they keep the 60 s
-  default. The reads inside a transaction are covered. Open as TD-210.
+- **Not covered, by decision.** A transaction's begin and commit take no
+  timeout in the client's public API (google-cloud-firestore 2.32:
+  `Transaction._begin` and `_commit` pass `metadata` only), so they keep the
+  60 s default, and a contended transaction may begin and commit up to
+  `_TX_ATTEMPTS` (10) times (`repo/_base.py:47`). The reads inside a
+  transaction are covered. Accepted on 2026-10-22 (product owner, TD-210): a
+  deadline around the whole call can give up while its commit still lands,
+  and a timeout through the client's private API breaks on a client bump.
+  Revisit when the client exposes a timeout on begin and commit.
 
 `tests/test_firestore_timeouts.py` fails on a raw `.get()`, `.stream()`,
 `get_all`, `.commit()` or document write anywhere in `backend/app` outside
@@ -1252,7 +1271,8 @@ Signing.
   `admin`, `license`, `institution`, `backup`, `sync`, `restore`, `other`;
   `tests/test_op_class.py` fails if a declared route lands in `other`.
   Client 500 bodies stay opaque (`internal_error`) on
-  Cloud Run.
+  Cloud Run. A Firestore outage is 503 `firestore_unreachable` with
+  `Retry-After: 30` instead ([§10.1](#101-firestore-call-deadlines), TD-250).
 - **Audit trail** in Firestore `audit_logs` — the compliance record (Cloud
   Logging is the operational one).
 - **Async Resend notify** — access-request mail is enqueued off the request
@@ -1268,7 +1288,7 @@ dedicated rotation exists.
 |---|---|---|---|
 | Unhandled / reported errors | Error Reporting ingests the `@type` ReportedErrorEvent lines (`jsonPayload`) and the `stack_trace` of a logged exception | New error group or >5 events / 5 min | Page on-call; check `/readyz` and recent deploys |
 | `outcome=server_error` access lines | Log-based metric on `jsonPayload.outcome="server_error"` | >10 / 5 min | Investigate revision; consider traffic rollback |
-| `errorCode=firestore_unreachable` or `drive_*` | Log-based metric on `jsonPayload.errorCode` | Any sustained >2 min | Dependency outage — do not roll app code first |
+| `errorCode=firestore_unreachable` or `drive_*` | Log-based metric on `jsonPayload.errorCode` (the `dependency_failure` line). Since TD-250 a Firestore outage on any route writes it, not only `/readyz`; before, a route's outage logged `unhandled_exception` with `internal_error` and only the 5xx signals saw it | Any sustained >2 min | Dependency outage — do not roll app code first |
 | `AUTH_DENIED` audit / auth warnings | Metric on audit action or `invalid_token` spike | >50 / 5 min from many IPs | Possible attack; tighten gateway quota |
 | Drive `429` / `notify_rejected` | Metric on dependency=drive/resend warnings | Sustained | Quota / Resend misconfig |
 | Uptime | Cloud Monitoring uptime check on `/readyz` (not only `/healthz`) | 2 failed regions | Page; run staging rollback drill if deploy-correlated |

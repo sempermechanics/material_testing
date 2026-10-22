@@ -30,6 +30,7 @@ from ._base import (
     _get,
     _update_doc,
     max_test_devices,
+    staff_released_from,
     test_account_of,
 )
 from .user_config import (
@@ -101,15 +102,19 @@ def _test_lock_verdict(user: dict, tag: dict, device_id: str, app: str) -> _Lock
     """A test account's licence is not locked to one phone (ADR-027): any of
     its devices ACTIVE for `app` is licensed, and so is a phone not yet
     registered while the account holds fewer than `maxDevices` for the app,
-    as an unbound lock lets a first phone through. Anything else is a
-    mismatch, Demo for that request only. Nothing is bound or written: the
-    licence's `deviceIdLock` stays empty, and registration
-    (`repo.register_device`) is what holds the account to `maxDevices`."""
+    as an unbound lock lets a first phone through. A phone staff released
+    from this account (`staff_released_from`, TD-314) is not one of those: it
+    may never come back, so it is a mismatch. Anything else is a mismatch,
+    Demo for that request only. Nothing is bound or written: the licence's
+    `deviceIdLock` stays empty, and registration (`repo.register_device`) is
+    what holds the account to `maxDevices`."""
     snap = _get(db().collection("devices").document(device_id))
     dev = (snap.to_dict() or {}) if snap.exists else None
     if (dev and dev.get("uid") == user.get("uid") and dev.get("status") == statuses.DEVICE_ACTIVE
             and (dev.get("app") or apps.SEMPER) == app):
         return _Lock.OK
+    if staff_released_from(dev, user.get("uid") or ""):
+        return _Lock.MISMATCH
     if len(_active_devices(user.get("uid") or "", app)) < max_test_devices(tag):
         return _Lock.OK
     return _Lock.MISMATCH

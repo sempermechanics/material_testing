@@ -130,19 +130,20 @@ no thresholds ([TESTING.md](docs/app/TESTING.md)); the phone-run gates (`benchma
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-21)
+## Current state (2026-10-22)
 
 - **Semper's UI plus two test choices ([ADR-022](docs/adr/ADR-022-semper-ui-plus-lab-tests.md)).**
   **Which test?** offers 2D DIC (Semper's analysis: no load card, no test type recorded),
   Tensile and Bending; a fork change to a shared screen runs only for a lab test.
-  semperdic-app proposes making this a product flavour of its repo ([ADR-025](docs/adr/ADR-025-test-type-extension-points.md), mirrored).
+  semperdic-app accepted making this a product flavour of its repo on 2026-10-22 ([ADR-025](docs/adr/ADR-025-test-type-extension-points.md), mirrored).
 - **Synced with `semperdic-app`** (forked at `bfe00e5`; `git log --merges
-  --grep=semperdic-app`; rules in its `docs/ops/FORK_SYNC.md`). Since then semperdic-app#470
-  (engine **v0.6.1**, `f072da0`: bending points near the load point kept, the Gradle OpenCV
-  list dropped; TD-299 closed) is here by `cherry-pick -x`. Last: `9d116f24`, 2026-10-22,
-  on `sync/semperdic-9d116f2`: its #461 (a local Firebase test account script) and #462
-  (**engine v0.6.0**, `59ac995`: AKAZE + RANSAC homography seeding, so rotation past 90° and
-  large stretch seed; `-5` read as no seed; TD-299). Before: `14b279d6`, 2026-10-21,
+  --grep=semperdic-app`; rules in its `docs/ops/FORK_SYNC.md`). Last: `968637cb`, 2026-10-22,
+  on `sync/semperdic-968637c`: its #463–#470, deploy and decision docs, the backend's Firestore
+  outage as 503 (TD-250), audit-row expiry (TD-237), a test account's phone released on its
+  own (TD-314), a staging round-trip device test (TD-313), ADR-025 phase 2's first part
+  (`SessionRecord.extras`, empty here: the lab fields stay top-level until an extension
+  moves them) and engine v0.6.1, already here by #143. Before: `9d116f24` (#461, #462: **engine v0.6.0**, AKAZE + RANSAC seeding).
+  Before: `14b279d6`, 2026-10-21,
   on `ccr-603fe346-1bw2fa` (merged as #141; not deployed): its #453 (`firebase-bom` 35), #457 (the
   review fixes and tech-debt rounds), #458 (the incremental reference), #459 (unit-test JVM
   diagnostics, TD-312) and #460 (staff test accounts, [ADR-027](docs/adr/ADR-027-test-accounts.md):
@@ -150,7 +151,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   wizard state is `WizardInputs.lab`, changed through `edit {}`, and a run's result reads
   the lab test from its saved row (`ViewerArgs.of`). Metadata schema `/7` here (ours past
   `/3` are not the parent's numbers). Lab inputs ride its seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` (ADR-003),
-  `WizardDraft` (ADR-005). ADR and TD numbers are shared; the next TD free in both is TD-315.
+  `WizardDraft` (ADR-005). ADR and TD numbers are shared; the next TD free in both is TD-317.
 - **#140 merged 2026-10-20** (`a66606d9`, the 2026-10-19 review; not released): load logs
   in kgf/tf, decimal commas and the delimiter read after a long preamble, logged time units;
   photo times matched within 1 s when any lacks EXIF sub-seconds; E refitted over 10–40 % of

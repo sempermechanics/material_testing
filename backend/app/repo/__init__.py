@@ -17,6 +17,7 @@ from ._base import (  # noqa: F401
     ping,
     get_license,
     max_test_devices,
+    staff_released_from,
     test_account_of,
 )
 from .audit_log import (  # noqa: F401
@@ -189,11 +190,13 @@ from .testaccounts import (  # noqa: F401
     STATUS_ACTIVE,
     STATUS_EXPIRED,
     STATUS_SUSPENDED,
+    active_test_devices,
     create_test_account_user,
     expired_test_accounts,
     get_test_account,
     licences_of_test_account,
     list_test_accounts,
+    release_test_device,
     row_of_test_account,
     set_test_account_expiry,
     status_of_test_account,

@@ -224,6 +224,10 @@ def _load_user(uid: str):
 #: when they name none, and the most they may name.
 TEST_ACCOUNT_DEFAULT_DEVICES = 3
 TEST_ACCOUNT_MAX_DEVICES = 10
+#: `testAccount.purpose`: staff QC, or the CI pipeline's own login. Here, not
+#: in `repo.testaccounts`, so `repo.devices` can read it without an import cycle.
+PURPOSE_QC = "qc"
+PURPOSE_CI = "ci"
 
 
 def test_account_of(user: dict | None) -> dict | None:
@@ -253,6 +257,21 @@ def max_test_devices(tag: dict) -> int:
     except (TypeError, ValueError):
         return TEST_ACCOUNT_DEFAULT_DEVICES
     return max(1, min(TEST_ACCOUNT_MAX_DEVICES, wanted))
+
+
+#: Stamped on a test-account phone staff released on its own (TD-314,
+#: `repo.testaccounts.release_test_device`): that phone may not register for
+#: the same account again, so it cannot take back the place it gave up.
+STAFF_RELEASED = "staffReleased"
+
+
+def staff_released_from(device: dict | None, uid: str) -> bool:
+    """Whether `device` (a devices document) is a phone staff released from
+    the test account `uid`. Another account's record, a CI rotation
+    (SUPERSEDED, no stamp) or a real account's release is not. Read by
+    registration (`repo.devices.register_device`) and the licence lock
+    (`repo.devlock._test_lock_verdict`), which both import this module."""
+    return bool(device) and device.get("uid") == uid and device.get(STAFF_RELEASED) is True
 
 
 def _active_devices(uid: str, app: str, *, exclude: str = "") -> list[str]:
