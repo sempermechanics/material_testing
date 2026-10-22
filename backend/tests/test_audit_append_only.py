@@ -44,7 +44,7 @@ def _mentions(path: Path, text: str) -> bool:
 
 
 def test_no_module_but_the_audit_repo_names_the_collection():
-    named = sorted(str(p.relative_to(APP)) for p in APP.rglob("*.py")
+    named = sorted(p.relative_to(APP).as_posix() for p in APP.rglob("*.py")
                    if _mentions(p, "audit_logs"))
     assert named == ["repo/audit_log.py"]
 
