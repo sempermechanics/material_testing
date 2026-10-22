@@ -224,6 +224,10 @@ def _load_user(uid: str):
 #: when they name none, and the most they may name.
 TEST_ACCOUNT_DEFAULT_DEVICES = 3
 TEST_ACCOUNT_MAX_DEVICES = 10
+#: `testAccount.purpose`: staff QC, or the CI pipeline's own login. Here, not
+#: in `repo.testaccounts`, so `repo.devices` can read it without an import cycle.
+PURPOSE_QC = "qc"
+PURPOSE_CI = "ci"
 
 
 def test_account_of(user: dict | None) -> dict | None:
