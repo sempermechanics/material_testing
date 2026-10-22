@@ -103,8 +103,9 @@ account's files as one stream ordered by session), three for the staff
 licence list (`licenses`: `mode` + `createdAt` DESC,
 `mode` + `status` + `createdAt` DESC, `status` + `createdAt` DESC), and the
 per-licence audit log's (`audit_logs`: `licenseId` + `ts` DESC). Its
-`fieldOverrides` hold the three TTL policies (A2a, and `purgeAt` on deleted
-licences and seats) and, since 2026-10-18, an ascending **COLLECTION_GROUP**
+`fieldOverrides` hold the four TTL policies (A2a, `purgeAt` on deleted
+licences and seats, and `audit_logs.expireAt`, enabled after the audit-trail
+bucket lock per FIRESTORE_DATA_PROTECTION.md) and, since 2026-10-18, an ascending **COLLECTION_GROUP**
 index on `uid` for `seats` and `deleted_seats`: account erasure finds every seat
 an account held with a collection-group query (`_seats_of`,
 `backend/app/repo/account.py:156-183`), and a collection-group query has no
@@ -441,6 +442,7 @@ Everything above is required (or near enough). These are the rest of what
 | `TASKS_PROVISION_WORKERS` | `8` | Fan-out when the provisioning task opens resumable sessions: how many of one session's calls run at once on the process-wide Drive pool (64 workers, the size of the Drive connection pool) |
 | `INLINE_PROVISION_MAX_FILES` | `8` | Manifests this small provision inside `POST /v1/sessions` instead of through the queue. `0` sends everything through Cloud Tasks |
 | `CLIENT_NONCE_WINDOW_SECONDS` | `120` | How far a device-minted `t1.` nonce's timestamp may be from server time ([CLOUD_ARCHITECTURE_GCP.md §3](CLOUD_ARCHITECTURE_GCP.md)). `0` refuses client nonces, so every signed call fetches a challenge |
+| `AUDIT_RETENTION_DAYS` | `365` | How long an `audit_logs` row is kept (TD-237, owner decision 2026-10-22): each new row is written with `expireAt` = now + this, which the TTL policy on `audit_logs.expireAt` deletes ([FIRESTORE_DATA_PROTECTION.md](FIRESTORE_DATA_PROTECTION.md)). Leave unset; it must match the `audit-trail` log bucket's locked retention, and a change moves only rows written after it |
 | `APP_CHECK_MODE` | `off` | `off` / `monitor` / `enforce`. Whether a caller sending `X-Device-Id` must also carry a valid Firebase App Check token. Roll out through `monitor` — see [AUTH_SETUP.md §3.2](AUTH_SETUP.md). A value outside the three fails startup. **Never `enforce` while a build without App Check is still installed** — every request from it would 403 |
 | `LICENSE_GRACE_DAYS_DEFAULT` | `14` | Grace applied at mint time when the request names none. A licence already stored without `graceDays` reads as zero, so changing this never reinstates an expired account |
 | `LICENSE_LEASE_HOURS` · `LICENSE_LEASE_HEARTBEAT_MINUTES` | `8` · `30` | Floating-seat lease length and how often the app renews it. A crashed client parks a seat for at most the lease |

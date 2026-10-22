@@ -128,3 +128,54 @@ def test_a_value_json_cannot_hold_is_written_as_text(store, caplog):
     with caplog.at_level(logging.INFO, logger=audit.TRAIL_LOGGER):
         audit.record("u1", action="ADMIN_LICENSE_EXTEND", detail={"expiresAt": when})
     assert _lines(caplog)[0]["auditRow"]["detail"] == {"expiresAt": str(when)}
+
+
+# ---------------- retention (TD-237) ----------------
+
+
+def _added_rows(monkeypatch):
+    """Rows `add_audit_row` adds, through a stub collection (the store double
+    implements no `.add()`)."""
+    from app.repo import _base
+
+    added: list[dict] = []
+
+    class _Collection:
+        def add(self, data, *, retry=None, timeout=None):
+            added.append(data)
+
+    class _Client:
+        def collection(self, name):
+            assert name == "audit_logs"
+            return _Collection()
+
+    monkeypatch.setattr(_base, "_DB", _Client())
+    return added
+
+
+@pytest.mark.parametrize("days", [365, 30])
+def test_a_new_row_carries_its_expiry(monkeypatch, days):
+    """TD-237: each row is added with `expireAt` = now + AUDIT_RETENTION_DAYS,
+    which the TTL policy on `audit_logs.expireAt` deletes; it is never
+    rewritten to carry one."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "AUDIT_RETENTION_DAYS", days)
+    added = _added_rows(monkeypatch)
+    before = datetime.now(timezone.utc)
+    audit.record("u1", action="ADMIN_LICENSE_EXTEND", target={"type": "license", "id": "L"})
+    after = datetime.now(timezone.utc)
+    [row] = added
+    assert row["ts"] is audit_log._base.firestore.SERVER_TIMESTAMP
+    assert before + timedelta(days=days) <= row["expireAt"] <= after + timedelta(days=days)
+    assert row["expireAt"].tzinfo is not None
+    assert (row["action"], row["licenseId"], row["schemaVersion"]) == (
+        "ADMIN_LICENSE_EXTEND", "L", audit_log.SCHEMA_VERSION)
+
+
+def test_the_default_retention_is_one_year():
+    from app.config import Settings
+
+    assert Settings.AUDIT_RETENTION_DAYS == 365
