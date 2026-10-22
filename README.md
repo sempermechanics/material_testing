@@ -26,7 +26,7 @@ emulator); cloud sync is optional for signed-in testers.
 
 | | |
 |---|---|
-| **Full-field 2D DIC** | ICGN sub-pixel solve, anchor-lattice (phase correlation) + Delaunay seeding, RGDIC propagation, VSG strain |
+| **Full-field 2D DIC** | ICGN sub-pixel solve, anchor-lattice (AKAZE homography) + Delaunay seeding, RGDIC propagation, VSG strain |
 | **Batch & video** | One reference vs many frames, or auto-extract from video |
 | **ROI** | Rectangle or freehand mask |
 | **Viewer & exports** | Per-field heatmaps, probe, custom scales, PDF / CSV / PNG / ZIP |

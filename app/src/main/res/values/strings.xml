@@ -536,9 +536,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
          (W − 1) × St + 1 px, so the label needs no VSG of its own. -->
     <string name="sweep_frame_label_fmt">S%1$d · St%2$d · W%3$d</string>
     
-    <string name="sweep_fail_features">The engine couldn\'t match the two images: it found no starting point (phase correlation could not lock and no anchor solved). \n\nThe image pair: during the test the specimen might have moved, or too much deformation could have decorrelated it from the reference.</string>
+    <string name="sweep_fail_features">The engine couldn\'t match the two images: it found no starting point (no feature match between the images and no anchor solved). \n\nThe image pair: during the test the specimen might have moved, or too much deformation could have decorrelated it from the reference.</string>
     <string name="sweep_fail_roi">The region of interest contains no valid points. Redraw it over the speckled area or use a different image.</string>
-    <string name="sweep_fail_init">The engine couldn\'t start — an image failed to decode. Re-import them as PNG or TIFF.</string>
+    <string name="sweep_fail_init">The engine couldn\'t start — an image failed to decode, or the frames or settings were rejected (frames of different sizes, an even subset, or a strain window too large for the region). Re-import the images as PNG or TIFF, or check the settings.</string>
     <string name="sweep_fail_unknown_fmt">The engine returned error %1$d.</string>
     <string name="run_stopped_early_fmt">⚠️ Stopped at frame %1$d of %2$d</string>
     <string name="run_stopped_early_title_fmt">Stopped at frame %1$d</string>
@@ -560,7 +560,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- One-line failure labels for lattice nodes, in measurement terms. -->
     <string name="sweep_reason_decorrelated">Decorrelated — the pair could not be matched</string>
     <string name="sweep_reason_subset_too_big">Subset too large for the region of interest</string>
-    <string name="sweep_reason_decode">Image could not be decoded</string>
+    <string name="sweep_reason_decode">Image or settings rejected</string>
     <string name="sweep_reason_low_convergence">Convergence collapsed before this combination</string>
     <string name="sweep_reason_vsg">VSG failure — no strain survived this window at this step</string>
     <string name="run_reason_cancelled">Cancelled before every frame was solved</string>

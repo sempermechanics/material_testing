@@ -8,8 +8,9 @@ and captured by a local `characterize.sh` harness (never committed — the drive
 is the reproducible half).
 
 **Engine:** measured with the AKAZE-seeded engine (pin `1284edf` and earlier). Engine 0.3.0 on
-seeds from an anchor lattice, so the seeding row and the step=20 note below predate it; re-measure
-before quoting them for a newer pin.
+seeds from an anchor lattice, and 0.6.0 seeds that lattice from an AKAZE + RANSAC homography, so
+the seeding row and the step=20 note below measure neither; re-measure before quoting them for a
+newer pin (TD-212).
 **Device:** Pixel 6 (`oriole`), arm64-v8a, wireless-debugging (adb-over-Wi-Fi).
 **Build:** debug-cloud (`SEMPER_DEV_AUTH_BYPASS=false`, prod `SEMPER_API_BASE_URL`) —
 native `.so` is `-O3` in every variant, so compute numbers are representative; the

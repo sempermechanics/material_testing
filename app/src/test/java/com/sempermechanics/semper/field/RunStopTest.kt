@@ -15,6 +15,7 @@ class RunStopTest {
         assertEquals(EngineFailure.ENGINE_ERROR_FEATURES, RunStop.FeaturesUnmatched.wireCode)
         assertEquals(EngineFailure.ENGINE_ERROR_ROI, RunStop.InvalidRoi.wireCode)
         assertEquals(EngineFailure.ENGINE_ERROR_INIT, RunStop.InitFailed.wireCode)
+        assertEquals(EngineFailure.ENGINE_ERROR_SEED, RunStop.SeedFailed.wireCode)
         // The app's own codes, which RunStop now defines, pinned as stored records hold them.
         assertEquals(-96, RunStop.LowConvergence.wireCode)
         // No code path produces -97 any more; the value is pinned as it was stored.
@@ -28,6 +29,7 @@ class RunStopTest {
         RunStop.FeaturesUnmatched,
         RunStop.InvalidRoi,
         RunStop.InitFailed,
+        RunStop.SeedFailed,
         RunStop.LowConvergence,
         RunStop.SweepEngineFailed,
         RunStop.SessionLimit,
@@ -40,6 +42,7 @@ class RunStopTest {
         RunStop.FeaturesUnmatched,
         RunStop.InvalidRoi,
         RunStop.InitFailed,
+        RunStop.SeedFailed,
         RunStop.LowConvergence,
         RunStop.SweepEngineFailed,
         RunStop.SessionLimit,
@@ -84,7 +87,7 @@ class RunStopTest {
     @Test
     fun `stoppedEarly is the record's stopCode != 0`() {
         assertFalse(RunStop.Finished.stoppedEarly)
-        for (code in listOf(-1, -2, -3, -96, -97, -98, -99, -4, 5)) {
+        for (code in listOf(-1, -2, -3, -5, -96, -97, -98, -99, -4, 5)) {
             assertTrue("$code", RunStop.fromWireCode(code).stoppedEarly)
         }
     }

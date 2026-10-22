@@ -72,7 +72,10 @@ data class EngineStats(
 
     val avgIcgnIterations: Float,
     val wallTimeMs: Float,
-    /** Slot 10: seeding time. Phase correlation + anchor lattice from engine 0.3.0; AKAZE + RANSAC before. */
+    /**
+     * Slot 10: seeding time. AKAZE + RANSAC homography + anchor lattice from engine 0.6.0;
+     * phase correlation + anchor lattice in 0.3.0–0.5.x; AKAZE + RANSAC alone before.
+     */
     val seedingMs: Float,
     val hessianPrepassMs: Float,
     val delaunayMs: Float,
@@ -149,8 +152,11 @@ data class EngineStats(
         const val SLOT_ANCHOR_POINTS = 19
 
         /**
-         * Slots the engine's JNI copies back from 0.4.1: [SLOT_COUNT] plus 19..22
-         * (anchor-solved, dropped by the strain filter, phase lock, mesh coverage).
+         * Slots the app asks the engine's JNI for: [SLOT_COUNT] plus 19..22
+         * (anchor-solved, dropped by the strain filter, global-motion lock — AKAZE
+         * from engine 0.6.0, phase correlation before — and mesh coverage).
+         * Engine 0.5.0 on writes a 24th slot (points dropped by the median test);
+         * the JNI copies only the prefix the array holds, so the app leaves it unread.
          */
         const val ENGINE_SLOT_COUNT = 23
 
