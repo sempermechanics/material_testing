@@ -291,6 +291,12 @@ def rate_limited(bucket: rate_limit.TokenBucket):
 #: route, short enough that work resumes soon after the switch is cleared.
 FEATURE_PAUSED_RETRY_AFTER_SECONDS = 300
 
+#: How long a 503 for a dependency outage (`obs.DependencyError`, a Firestore
+#: outage at the edge) tells the caller to wait. An outage that outlives the
+#: Firestore helpers' ~20-40 s retry window is not a one-second blip, but it
+#: is not a switch someone has to clear either.
+DEPENDENCY_RETRY_AFTER_SECONDS = 30
+
 
 def unless_paused(*switches: str):
     """Route dependency: 503 `feature_paused` while any of `switches` is in
