@@ -138,9 +138,13 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **On `main`, in no release yet:** the readiness change's app half (**minSdk 30**, version
   gate, EMM config, AAB, [ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md));
   #457's app half; #458 (incremental reference; re-run on an emulator 2026-10-22), #459,
-  #453, #460's app half, #461, #462 (engine `59ac995`, v0.6.0, TD-299; `v1.2-beta.4`
-  carries 0.4.2) and #464 (Tier 3 signs in to staging; CI accounts rotate). Release blockers: TD-219, TD-226, TD-229–TD-232, counsel on the Terms
-  (TD-277).
+  #453, #460's app half, #461, #462 (engine v0.6.0), #464 (Tier 3 signs in to staging; CI
+  accounts rotate) and #470 (the engine pin below). Release blockers: TD-219, TD-226,
+  TD-229–TD-232, counsel on the Terms (TD-277).
+- **Engine pinned to `f072da0` (v0.6.1, 2026-10-22; v0.6.0 in #462; TD-299 closed):** 0.5.0's
+  review fixes and `-5`, then 0.6.0's AKAZE seeding (rotation past 90° and large stretch now
+  seed) on OpenCV 4.14, and 0.6.1's fixes (bending points near the load point; the OpenCV
+  module list survives a stale `.cxx`). Not in a release; `v1.2-beta.4` carries `23034fe` (0.4.2).
 - **material_testing** merges this `main` (last `9d116f2`, material_testing#142, 2026-10-22;
   [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); it released `v1.4-beta.2` 2026-10-17.
 - **Owner decisions 2026-10-22:** ADR-025 accepted (TD-298, phases smallest first); TD-246
@@ -150,7 +154,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **CI.** Tiers follow the diff, coverage floors rise with every test PR
   ([TESTING.md](docs/app/TESTING.md#coverage-floors)), and `main` requires `CI OK`.
 - **Owed.** A device smoke of `v1.2-beta.4` ([RELEASING.md](docs/ops/RELEASING.md) step 5); the
-  on-device characterization at the 0.6.0 pin (TD-212, TD-299); Pixel 6 benchmarks for #435;
+  on-device characterization at the 0.6.1 pin (TD-212); Pixel 6 benchmarks for #435;
   ADR-015's queued-work upgrade check; transfer notifications and AVI import on a device
   ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a); Material Testing beside Semper on one phone;
   the privacy-policy values (TD-36). A licensed QC account's share, PDF, Delete and Re-run
