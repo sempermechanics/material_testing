@@ -124,8 +124,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   ([ADR-027](docs/adr/ADR-027-test-accounts.md)). Not done from the
   [checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md): monitoring (§5), staff/IT phones
   re-registering with TOTP, the 24 h log watch, the staging test-account round trip and
-  test-account erasure check (§6); optional and unset: `CHECK_REVOKED_ON_STEP_UP` (TD-214,
-  its grant is now in place), the offline-entitlement key (TD-215), `NOTIFY_SECURITY_FROM`
+  test-account erasure check (§6); `CHECK_REVOKED_ON_STEP_UP` is set and live
+  at the next production deploy (TD-214); optional and unset: the offline-entitlement key (TD-215), `NOTIFY_SECURITY_FROM`
   (TD-309), the audit bucket lock (TD-237). Licensing
   ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)), device binding per app
   ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md)) and sessions tagged by app
@@ -145,7 +145,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Owner decisions 2026-10-22:** ADR-025 accepted (TD-298, phases smallest first); TD-246
   backfill approved; TD-210 accepted as is (§10.1); a Firestore outage answers 503 (TD-250);
   TD-247 tamper-evident records to build (ADR-028); `CHECK_REVOKED_ON_STEP_UP` on (TD-214);
-  a production reviewer (TD-228); audit retention 1 year (TD-237).
+  a production reviewer, now required (TD-228); audit retention 1 year (TD-237).
 - **CI.** Tiers follow the diff, coverage floors rise with every test PR
   ([TESTING.md](docs/app/TESTING.md#coverage-floors)), and `main` requires `CI OK`.
 - **Owed.** A device smoke of `v1.2-beta.4` ([RELEASING.md](docs/ops/RELEASING.md) step 5); the

@@ -17,7 +17,8 @@ material_testing: any Hosting deploy replaces the whole site.
       `gcloud projects add-iam-policy-binding indicvision-dic-app-auth --member=serviceAccount:indic-api@indicvision-dic-app.iam.gserviceaccount.com --role=roles/firebaseauth.admin`,
       then set the repo variable `CHECK_REVOKED_ON_STEP_UP=true`. Not before the
       grant: without it the check fails closed and refuses every step-up.
-      (2026-10-22: the grant is in place, made for test accounts; the variable is not set.)
+      (2026-10-22: the grant is in place and the variable is set, for production
+      from its next deploy; staging has it deployed.)
 - [ ] **Offline entitlement (TD-215)**, optional for the first deploy. Follow
       [BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A8 in its order:
       create the P-256 key in Secret Manager; grant the runtime SA

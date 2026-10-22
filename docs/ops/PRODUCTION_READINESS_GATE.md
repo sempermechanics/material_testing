@@ -12,7 +12,7 @@ Secrets / Environments reality: [ENVIRONMENTS.md](ENVIRONMENTS.md).
 | Band | Count (approx.) | Notes |
 |------|-----------------|-------|
 | PASS / improved to PASS | Security headers, deny-all rules (checked in), validation, erasure without silent 2k cap, readiness, structured logs, async notify, authz tests, pagination/export, deploy template, legal drafts, candidate smoke deploy, attested uploads pin, live assetlinks + legal Hosting | Repo + pilot |
-| PARTIAL | Distributed rate limit (gateway YAML + in-process), backups/PITR, Crashlytics, WorkManager, GitHub Environment *reviewers* on Free plan | Need console / plan upgrade |
+| PARTIAL | Distributed rate limit (gateway YAML + in-process), backups/PITR, Crashlytics, WorkManager | Need console setup |
 | UNKNOWN | Firebase API-key restrictions, App Check, Auth abuse limits, vendor retention, cookie inventory | External — see below |
 | FAIL remaining | None intended in security/data-integrity **repo** scope; remaining gaps are console / process | |
 
@@ -97,8 +97,8 @@ The item-by-item check against the external readiness framework (2026-10-18) is
 - [x] GitHub Environments `staging`, `production`, `release`, `production-backup`
       and `restore-drill` exist. **Secrets are repo-level**, and so are most
       variables (`staging`, `production` and `production-backup` hold a few of their
-      own). No environment has protection rules or a branch policy (checked
-      2026-10-08). Still open: required reviewers. See [ENVIRONMENTS.md](ENVIRONMENTS.md).
+      own). `production` requires a reviewer (2026-10-22, TD-228); no environment has
+      a branch policy. See [ENVIRONMENTS.md](ENVIRONMENTS.md).
 - [x] Branch ruleset with required `CI OK`: ruleset `main` (id 24720948, set
       2026-10-08) on the default branch requires `CI OK` and blocks force-push
       and deletion (`gh api repos/sempermechanics/semperdic-app/rules/branches/main`).
@@ -472,7 +472,7 @@ no isolation and no retries):
 | Control | Evidence |
 |---------|----------|
 | Firebase MCP / active project | Confirm in console |
-| GitHub Environments | All five exist (`staging`, `production`, `release`, `production-backup`, `restore-drill`); none has reviewers or a branch policy, and `restore-drill` has no variables (2026-10-08) |
+| GitHub Environments | All five exist (`staging`, `production`, `release`, `production-backup`, `restore-drill`); `production` requires the owner as reviewer (2026-10-22); none has a branch policy, and `restore-drill` has no variables (2026-10-08) |
 | Secrets / vars | Prefer **repo-level** on Free private orgs; Environment names still select workflow targets |
 | Branch protection / ruleset | Ruleset `main` (id 24720948, 2026-10-08): requires `CI OK`, no force-push, no deletion; no bypass actors |
 | Project liens, `Prod` tag, owners through groups (framework 2.1) | Not read; `scripts/check_gcp_posture.sh` reports them (TD-221) |
@@ -597,7 +597,7 @@ owner id does not resolve.
 | C-update-control | Part C "Update control for IT" | PARTIAL | Minimum and recommended versions per app, not per institution; supported versions current plus two ([SUPPORT_POLICY.md](SUPPORT_POLICY.md)). No per-institution minimum or defer flag; no N-2 CI | FI-22, TD-251 |
 | D1 | Part D 1 "Versioning" | PASS | SemVer `versionName` and monotonic `versionCode` ([RELEASING.md](RELEASING.md), Versioning). Each backend deploy labels the service and the new revision `release-train`, from the `release_train` input or the newest `v*` tag (`.github/workflows/deploy-backend.yml:39-47`, `:136-156`, `:300-301`); first applied at the next deploy | — |
 | D2 | Part D 2 "Firestore schema evolution" | PASS | Expand/contract runbook, `SCHEMA_VERSION` stamped by the backend and `migrate_schema.py` ([FIRESTORE_SCHEMA_RUNBOOK.md](../backend/FIRESTORE_SCHEMA_RUNBOOK.md); `backend/app/repo/_base.py:40`), on every seat write too (`backend/app/repo/claims.py:253`; `backend/tests/test_seat_schema_version.py`) | — |
-| D3 | Part D 3 "Rules and functions deployment" | PARTIAL | Rules tested in CI; staging deploy with candidate smoke, then promote, auto-rollback on failure (`.github/workflows/deploy-backend.yml:369-503`); previous image kept as `rollback-prev`. No required approval for production; staging shares production data; no end-to-end suite against staging | TD-228, TD-248 |
+| D3 | Part D 3 "Rules and functions deployment" | PARTIAL | Rules tested in CI; staging deploy with candidate smoke, then promote, auto-rollback on failure (`.github/workflows/deploy-backend.yml:369-503`); previous image kept as `rollback-prev`. Production deploys wait for the owner's approval (2026-10-22); staging shares production data; no end-to-end suite against staging | TD-248 |
 | D4 | Part D 4 "Forced update and gating" | PARTIAL | `/v1/config` carries the minimum; below it the app keeps read-only access to local results (`data/policy/FeatureGates.kt:34-40`; Home's gate `ui/home/HomeActivity.kt:369-379`). Update opens the Play listing for a Play install and the GitHub Releases page for a sideloaded build (`ui/limit/UpdateSource.kt:28-36`). No in-app update flow | TD-233, TD-219 |
 | D5 | Part D 5 "Rollback" | PARTIAL | Levers written ([RELEASING.md](RELEASING.md), "Rollback levers"): kill switches (refused server-side since 2026-10-18, except `share`), minimum version, grace, backend revision, hotfix. Not drilled | TD-220 |
 | D6 | Part D 6 "Support/SLA (B2B)" | PARTIAL | [SUPPORT_POLICY.md](SUPPORT_POLICY.md): severities, supported versions, grace tied to outages; targets, windows and notice TBD; no status page | TD-258 |
