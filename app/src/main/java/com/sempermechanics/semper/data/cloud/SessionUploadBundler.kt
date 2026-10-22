@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.scale
 import com.sempermechanics.semper.R
+import com.sempermechanics.semper.data.integrity.RecordVerifier
 import com.sempermechanics.semper.data.session.SessionLayout
 import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.data.session.SessionRecord
@@ -23,6 +24,7 @@ import com.sempermechanics.semper.report.ReportBuilder
 import com.sempermechanics.semper.report.ReportImageNames
 import com.sempermechanics.semper.report.ReportSource
 import com.sempermechanics.semper.report.VisualizationEngine
+import com.sempermechanics.semper.report.recordFingerprintText
 import com.sempermechanics.semper.ui.viewer.HeatmapFit
 import com.sempermechanics.semper.ui.viewer.summary.SummaryAnimation
 import kotlinx.coroutines.CancellationException
@@ -91,7 +93,14 @@ object SessionUploadBundler {
 
         val baseImg = if (canReport) scaledBaseImage(record, refFile, rawDeformedDir) else null
         val render = baseImg?.let {
-            RenderContext(record, it, File(context.cacheDir, "upload_${record.id}_frame.pdf"), context.resources)
+            RenderContext(
+                record,
+                it,
+                File(context.cacheDir, "upload_${record.id}_frame.pdf"),
+                context.resources,
+                // Once per pass, not per page: the check hashes every frame (ADR-028).
+                recordFingerprint = recordFingerprintText(RecordVerifier.verify(context, sessionDir)),
+            )
         }
         val csv = csvFile?.let { AnalysisCsvWriter.open(it, record.isSweep, csvMetadata(record)) }
         val pass = FramePass(record, sessionDir, rawDeformedDir, staging, render, csv)
@@ -352,6 +361,8 @@ object SessionUploadBundler {
         /** Scratch PDF file, reused per frame. */
         val scratch: File,
         val resources: Resources,
+        /** The cover's record fingerprint ([recordFingerprintText]), the same on every page. */
+        val recordFingerprint: String,
     ) {
         /**
          * Build one frame's report: writes the classic single-frame PDF to
@@ -386,7 +397,7 @@ object SessionUploadBundler {
             val reportData = ReportBuilder.buildReport(
                 reportParams(record, frameIndex, data, baseImg, defImg)
                     .copy(fieldsOnFramePhoto = originalDefImg != null),
-            )
+            ).copy(recordFingerprint = recordFingerprint)
 
             var ok = true
             try {

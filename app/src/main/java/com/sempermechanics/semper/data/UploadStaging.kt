@@ -47,7 +47,8 @@ internal sealed interface StagingOutcome {
  * also skips the expensive report/zip work on every retry.
  *
  * Archives are split by what a restore actually needs: `Session.zip` holds only
- * ref/, raw/ and dat/ — everything needed to rebuild a working session — while the
+ * ref/, raw/ and dat/ (the `.dat` frames and the record manifest) — everything
+ * needed to rebuild a working session — while the
  * derived deliverables (csv/, reports/, processed/) go to `Extras.zip`. Nothing
  * reads those back after a restore; they are regenerated on export.
  */
@@ -100,7 +101,10 @@ internal class UploadStaging(private val context: Context, private val record: S
         return StagingOutcome.Ready(archive(sources + derivedArtifacts(), progress))
     }
 
-    /** Session-level metadata (generated once, then reused), the reference, and every frame's files. */
+    /**
+     * Session-level metadata (generated once, then reused), the reference,
+     * every frame's files and the record manifest.
+     */
     private fun sourceArtifacts(): List<UploadArtifact> {
         val metaFile = layout.metadataJson
         UploadWorkOutcomes.stageMetadataJson(metaFile) {
@@ -120,6 +124,13 @@ internal class UploadStaging(private val context: Context, private val record: S
         // would make Session.zip throw a duplicate-entry exception.
         val addedRaw = HashSet<String>()
         record.defNames.forEachIndexed { index, defName -> artifacts += stageFrame(index, defName, addedRaw) }
+
+        // The run's signed record of its results (ADR-028), restored beside them
+        // as `dat/record_manifest.json`. Under the `dat` role, not one of its own:
+        // the backend validates roles, and `dat/` is already restore-essential.
+        // Written once by the run, so its bytes are the same on every attempt.
+        val manifest = session.recordManifest
+        if (manifest.isFile) artifacts += UploadArtifact(ArtifactRoles.DAT, SessionLayout.MANIFEST, manifest)
         return artifacts
     }
 

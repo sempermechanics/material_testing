@@ -356,7 +356,18 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         // it then saves a record (a partial stop keeps its frames). The session is
         // never a saved analysis (openRunSession): at most the folder of a run in
         // this wizard that saved nothing.
-        if (stop != RunStop.Cancelled) session.commit()
+        if (stop != RunStop.Cancelled) {
+            // One entry per frame actually written above — matches what batchFiles
+            // will list on a later read, so SummaryAnimation.globalRanges's
+            // frame-count check accepts this cache. A partial or failed run's
+            // shorter list still writes correctly: it just describes fewer frames,
+            // consistent with fewer .dat files existing. Best-effort — a write
+            // failure here only costs the cache its speedup, never correctness
+            // (globalRanges falls back to decoding). Staged with the frames, so
+            // the record manifest the commit writes covers it (ADR-028).
+            FieldRangesStore.writeBestEffort(resultsDir, summaryFieldIndices, perFrameSummaryRanges)
+            session.commitRecord(appContext, spec.recordSettings())
+        }
     } catch (e: Exception) {
         undoFailedBatch(appContext, session, frames.paths, resolvedDefPaths, e)
     } finally {
@@ -387,14 +398,6 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
                 ),
             )
         }
-
-        // One entry per frame actually written above — matches what batchFiles will
-        // list on a later read, so SummaryAnimation.globalRanges's frame-count check
-        // accepts this cache. A partial or failed run's shorter list still writes
-        // correctly: it just describes fewer frames, consistent with fewer .dat files
-        // existing. Best-effort — a write failure here only costs the cache its
-        // speedup, never correctness (globalRanges falls back to decoding).
-        FieldRangesStore.writeBestEffort(batchDir, summaryFieldIndices, perFrameSummaryRanges)
 
         // Images an earlier run left behind that this one no longer has. This is
         // the wipe that used to run before the loop; done here it can never delete

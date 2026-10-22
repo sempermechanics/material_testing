@@ -63,7 +63,9 @@ internal object SessionZip {
     /**
      * Whether a [role] belongs in the restore-essential bundle: every original
      * image (`ref/` — the reference — and `raw/` — the deformed originals) plus the
-     * engine results (`dat/`). Restoring a session brings back everything a local analysis
+     * engine results (`dat/`, which also carries the run's `record_manifest.json`,
+     * ADR-028: the backend validates roles, so the manifest has none of its own).
+     * Restoring a session brings back everything a local analysis
      * run would have produced, so on-device re-export and the report covers work
      * without a second fetch.
      *

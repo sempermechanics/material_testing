@@ -104,6 +104,27 @@ listOf(
     }
 }
 
+// The engine submodule's checked-out commit, which every analysis records in its
+// record_manifest.json (ADR-028). A providers.exec value, so the configuration
+// cache tracks it. "unknown" when the submodule is not checked out (without its
+// .git, `git -C engine` would answer the superproject's HEAD) or git is missing.
+val enginePin: String =
+    rootProject
+        .file("engine")
+        .takeIf { File(it, ".git").exists() }
+        ?.let { engineDir ->
+            runCatching {
+                providers
+                    .exec {
+                        commandLine("git", "-C", engineDir.absolutePath, "rev-parse", "HEAD")
+                        isIgnoreExitValue = true
+                    }.standardOutput.asText
+                    .get()
+                    .trim()
+            }.getOrNull()
+        }?.takeIf { Regex("^[0-9a-f]{40}$").matches(it) }
+        ?: "unknown"
+
 // Release signing. The keystore and passwords come from the environment
 // (SIGNING_* — set by .github/workflows/release.yml and the tier-5 CI job),
 // never from the repo. When the keystore is absent — every local build, and
@@ -137,6 +158,7 @@ android {
         buildConfigField("String", "SEMPER_API_BASE_URL", "\"$semperApiBaseUrl\"")
         buildConfigField("String", "SEMPER_API_CERT_PINS", "\"$semperApiCertPins\"")
         buildConfigField("String", "SEMPER_ENTITLEMENT_PUBKEYS", "\"$semperEntitlementPubkeys\"")
+        buildConfigField("String", "ENGINE_PIN", "\"$enginePin\"")
         // Overridden per build type below; the default keeps the flag defined
         // for any variant that doesn't set it (androidTest, lint models).
         buildConfigField("boolean", "DEV_AUTH_BYPASS", "false")
@@ -473,7 +495,8 @@ kover {
             // unrelated PRs while a real drop does. Every PR that adds tests
             // re-measures (`koverXmlReport`, the totals in
             // build/reports/kover/report.xml) and raises both to measured − 2;
-            // never lower them. 2026-10-10: lines 77.12 %, branches 59.99 %.
+            // never lower them. 2026-10-22: lines 80.51 %, branches 62.69 %.
+            // 2026-10-10: lines 77.12 %, branches 59.99 %.
             // 2026-10-09: lines 76.38 %, branches 59.15 %.
             // 2026-10-08: lines 74.50 %, branches 56.41 %, the
             // first figure with the screens counted (76.84 / 60.80 % on the old,
@@ -481,10 +504,10 @@ kover {
             // measure, not lost coverage). The line floor once sat at 49 while
             // coverage climbed past 75, so a 26-point drop would have passed.
             rule("Line coverage") {
-                minBound(75)
+                minBound(78)
             }
             rule("Branch coverage") {
-                minBound(57, kotlinx.kover.gradle.plugin.dsl.CoverageUnit.BRANCH)
+                minBound(60, kotlinx.kover.gradle.plugin.dsl.CoverageUnit.BRANCH)
             }
         }
     }
