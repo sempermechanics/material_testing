@@ -151,9 +151,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   (`firebase-bom` 35). `main` @ `9992576`.
 - **Open: `ccr-603fe346-1bw2fa`**: staff test accounts for QC and CI
   ([ADR-027](docs/adr/ADR-027-test-accounts.md)); off until `TEST_ACCOUNT_DOMAINS` is set.
-- **Engine: pin bump to v0.6.0 open** (`chore/engine-0.6.0`; TD-299): 0.5.0's review fixes and
-  `-5`, then 0.6.0's AKAZE seeding (rotation past 90° and large stretch now seed) on OpenCV
-  4.14. `main` still pins `23034fe` (0.4.2).
+- **Engine: pin bump to `59ac995` (v0.6.0, released 2026-10-22) open** (`chore/engine-0.6.0`;
+  TD-299): 0.5.0's review fixes and `-5`, then 0.6.0's AKAZE seeding (rotation past 90° and
+  large stretch now seed) on OpenCV 4.14. Not in a release; `v1.2-beta.4` carries `23034fe` (0.4.2).
 - **material_testing** merges this `main` (last `17d7bc8`, material_testing#139,
   [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); its #140 carries the lab fixes and four of #457's
   commits; the rest come with the next sync. It released `v1.4-beta.2` (`d08aae07`) 2026-10-17.
