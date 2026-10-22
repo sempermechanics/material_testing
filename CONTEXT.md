@@ -124,8 +124,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   ([ADR-027](docs/adr/ADR-027-test-accounts.md)). Not done from the
   [checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md): monitoring (§5), staff/IT phones
   re-registering with TOTP, the 24 h log watch, ending the staging QC test account and
-  the erasure check (§6; the round trip itself passed 2026-10-22); optional and unset: `CHECK_REVOKED_ON_STEP_UP` (TD-214,
-  its grant is now in place), the offline-entitlement key (TD-215), `NOTIFY_SECURITY_FROM`
+  the erasure check (§6; the round trip itself passed 2026-10-22); `CHECK_REVOKED_ON_STEP_UP`
+  is set and live at the next production deploy (TD-214); optional and unset: the
+  offline-entitlement key (TD-215), `NOTIFY_SECURITY_FROM`
   (TD-309), the audit bucket lock (TD-237). Licensing
   ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)), device binding per app
   ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md)) and sessions tagged by app
@@ -135,28 +136,25 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   **Release `v1.2-beta.4`** (versionCode 1036, `33dce87d`, 2026-10-17; engine `23034fe`,
   0.4.2), the first under this id, so it installs beside the old app. `main` has moved past it.
 - **On `main`, in no release yet:** the readiness change's app half (**minSdk 30**, version
-  gate, EMM config, AAB, account-anchored entitlements,
-  [ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md)); #457's app half (uploads
-  resume only on the declared sha256, a failed batch undone, viewer hosts, ViewModel work);
-  #458 (Advanced → Reference, incremental reference; not yet run on a device), #459, #453
-  (`firebase-bom` 35), #460's app half, #461 (a local test account for instrumented
-  runs) and #462 (the engine pin below). Release blockers: TD-219, TD-226, TD-229–TD-232,
-  counsel on the Terms (TD-277). Left from #457: TD-237, TD-246, TD-294, TD-298, TD-299,
-  TD-309; from #460: TD-314.
-- **Engine pinned to `59ac995` (v0.6.0, #462, 2026-10-22; TD-299):** 0.5.0's review fixes
-  and `-5`, then 0.6.0's AKAZE seeding (rotation past 90° and large stretch now seed) on
-  OpenCV 4.14. Not in a release; `v1.2-beta.4` carries `23034fe` (0.4.2).
-- **material_testing** merges this `main` (last `17d7bc8`, material_testing#139,
-  [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); its #140 carries the lab fixes and four of #457's
-  commits; the rest come with the next sync. It released `v1.4-beta.2` (`d08aae07`) 2026-10-17.
+  gate, EMM config, AAB, [ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md));
+  #457's app half; #458 (incremental reference; re-run on an emulator 2026-10-22), #459,
+  #453, #460's app half, #461, #462 (engine `59ac995`, v0.6.0, TD-299; `v1.2-beta.4`
+  carries 0.4.2) and #464 (Tier 3 signs in to staging; CI accounts rotate). Release blockers: TD-219, TD-226, TD-229–TD-232, counsel on the Terms
+  (TD-277).
+- **material_testing** merges this `main` (last `9d116f2`, material_testing#142, 2026-10-22;
+  [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); it released `v1.4-beta.2` 2026-10-17.
+- **Owner decisions 2026-10-22:** ADR-025 accepted (TD-298, phases smallest first); TD-246
+  backfill approved; TD-210 accepted as is (§10.1); a Firestore outage answers 503 (TD-250);
+  TD-247 tamper-evident records to build (ADR-028); `CHECK_REVOKED_ON_STEP_UP` on (TD-214);
+  a production reviewer, now required (TD-228); audit retention 1 year (TD-237).
 - **CI.** Tiers follow the diff, coverage floors rise with every test PR
   ([TESTING.md](docs/app/TESTING.md#coverage-floors)), and `main` requires `CI OK`.
 - **Owed.** A device smoke of `v1.2-beta.4` ([RELEASING.md](docs/ops/RELEASING.md) step 5); the
-  on-device characterization at the 0.6.0 pin (TD-212, TD-299's solves/s floor); Pixel 6
-  benchmark runs for #435. The public release with each PR's emulator and Pixel checks,
-  ADR-015's queued-work upgrade check; a licensed-account smoke of share, PDF and Delete;
-  transfer notifications and AVI import on a device ([WORKFLOWS.md](docs/app/WORKFLOWS.md)
-  §5.1a); Material Testing beside Semper on one phone; the privacy-policy values (TD-36).
+  on-device characterization at the 0.6.0 pin (TD-212, TD-299); Pixel 6 benchmarks for #435;
+  ADR-015's queued-work upgrade check; transfer notifications and AVI import on a device
+  ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a); Material Testing beside Semper on one phone;
+  the privacy-policy values (TD-36). A licensed QC account's share, PDF, Delete and Re-run
+  (3.11a, e) passed on an emulator 2026-10-22.
 - **Look it up; this list rots.** `gh pr list --state open`, [CHANGELOG.md](docs/ops/CHANGELOG.md), [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
 ## Traps
