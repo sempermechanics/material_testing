@@ -15,8 +15,6 @@ import com.sempermechanics.semper.util.AtomicFiles
 import com.sempermechanics.semper.util.writeVia
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
@@ -39,10 +37,6 @@ import java.io.FileOutputStream
  */
 object SessionStore {
 
-    private val json = Json {
-        ignoreUnknownKeys = true
-        prettyPrint = false
-    }
     private val lock = Any()
 
     /** In-process flag: last successful read of the index failed (primary + bak). */
@@ -330,7 +324,7 @@ object SessionStore {
 
     private fun decodeFile(f: File): List<SessionRecord>? = try {
         indexParses++
-        json.decodeFromString<List<SessionRecord>>(f.readText())
+        SessionIndexJson.decode(f.readText())
     } catch (e: Exception) {
         Timber.e(e, "Failed to parse %s", f.name)
         null
@@ -428,7 +422,7 @@ object SessionStore {
             if (target.exists() && (parsed?.isOf(target) == true || decodeFile(target) != null)) {
                 target.copyTo(bak, overwrite = true)
             }
-            val payload = json.encodeToString(records)
+            val payload = SessionIndexJson.encode(records)
             AtomicFiles.writeVia(target, tmp = indexTmpFile(context)) { tmp ->
                 FileOutputStream(tmp).use { out ->
                     out.write(payload.toByteArray(Charsets.UTF_8))
