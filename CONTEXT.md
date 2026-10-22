@@ -114,11 +114,19 @@ emulator (`scripts/micro_ab.py`, [TESTING.md](docs/app/TESTING.md)); the phone-r
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-19)
+## Current state (2026-10-22)
 
 - **Deployed.** Cloud Run `semper-api` behind API Gateway `semper-gw`, and staging
-  `semper-api-staging` behind `semper-gw-staging`, from `c295639d` (2026-10-14; gateways
-  unchanged; Firestore deadlines #432, TD-210; backups by name #429). Licensing
+  `semper-api-staging` behind `semper-gw-staging`, from `b940cc29` (2026-10-22: the
+  readiness change, #457's backend and test accounts; gateway configs `v202610220502-104` /
+  `v202610220438-102`; Hosting the same day; [CHANGELOG](docs/ops/CHANGELOG.md)). Test
+  accounts are on for `qa.sempermechanics.com`, expired ones erased daily by Cloud Scheduler
+  ([ADR-027](docs/adr/ADR-027-test-accounts.md)). Not done from the
+  [checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md): monitoring (§5), staff/IT phones
+  re-registering with TOTP, the 24 h log watch, the staging test-account round trip and
+  test-account erasure check (§6); optional and unset: `CHECK_REVOKED_ON_STEP_UP` (TD-214,
+  its grant is now in place), the offline-entitlement key (TD-215), `NOTIFY_SECURITY_FROM`
+  (TD-309), the audit bucket lock (TD-237). Licensing
   ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)), device binding per app
   ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md)) and sessions tagged by app
   ([ADR-014](docs/adr/ADR-014-session-app-tag.md)) are live; consoles on
@@ -126,31 +134,14 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **App id `com.sempermechanics.semper`** ([ADR-019](docs/adr/ADR-019-sempermechanics-app-id.md)).
   **Release `v1.2-beta.4`** (versionCode 1036, `33dce87d`, 2026-10-17; engine `23034fe`,
   0.4.2), the first under this id, so it installs beside the old app. `main` has moved past it.
-- **Readiness change merged, not deployed** (#448, #449; `main` @ `763ed7a` with the
-  docs-only #454–#456): the cross-check ([gate](docs/ops/PRODUCTION_READINESS_GATE.md#framework-cross-check-2026-10-18),
-  TD-214–TD-278, FI-17–FI-24), [ADR-023](docs/adr/ADR-023-signed-offline-entitlement.md),
-  **minSdk 30**, version gate, EMM config, IT roster tools, audit export, AAB, monitoring as
-  code and account-anchored entitlements ([ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md)).
-  No release built from it. Owed at deploy, in [checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md)
-  order: indexes, backend, gateway, Hosting, monitoring; also TD-214, TD-215, TD-219, TD-226,
-  TD-229–TD-232, counsel on the Terms (TD-277).
-- **#457 merged, not deployed** (`main` @ `f5396c2`: the 2026-10-19 review and two tech-debt
-  rounds; closed TD-171, 198, 207, 281–293, 295–297, 306–308). Backend: device trust levels
-  (ADR-010 amendment), `step_up.py` and `services/`, a new-device mail, projected listings, a
-  licence fan-out finished by a Cloud Task ([ADR-026](docs/adr/ADR-026-licence-fanout-marker.md)),
-  `audit_logs` append-only in code and mirrored to Cloud Logging. App: uploads resume only on
-  the declared sha256, a failed batch undone, `WizardInputs` edited whole, viewer hosts, screen
-  work in ViewModels, retriever frames timed as decoded; CI checks file size, ADR-016 rule 1 and
-  swallowed cancellation; [ADR-025](docs/adr/ADR-025-test-type-extension-points.md) proposed.
-  At deploy ([checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md)): TOTP re-registration, C1/C2,
-  `NOTIFY_SECURITY_FROM` (TD-309), `TASKS_QUEUE` (TD-294), the audit bucket lock (TD-237).
-  Left: TD-237, TD-246, TD-294, TD-298, TD-299, TD-309.
-- **Merged after #457, not deployed:** #458 (#443/#444: Advanced → Reference, the engine's
-  `IncrementalSession` every N frames, a video's in seconds of the clip; fixed stays the
-  default; not yet run on a device), #459 (unit-test JVM diagnostics, TD-312), #453
-  (`firebase-bom` 35). `main` @ `9992576`.
-- **Open: `ccr-603fe346-1bw2fa`**: staff test accounts for QC and CI
-  ([ADR-027](docs/adr/ADR-027-test-accounts.md)); off until `TEST_ACCOUNT_DOMAINS` is set.
+- **On `main`, in no release yet:** the readiness change's app half (**minSdk 30**, version
+  gate, EMM config, AAB, account-anchored entitlements,
+  [ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md)); #457's app half (uploads
+  resume only on the declared sha256, a failed batch undone, viewer hosts, ViewModel work);
+  #458 (Advanced → Reference, incremental reference; not yet run on a device), #459, #453
+  (`firebase-bom` 35), #460's app half and #461 (a local test account for instrumented
+  runs). Release blockers: TD-219, TD-226, TD-229–TD-232, counsel on the Terms (TD-277).
+  Left from #457: TD-237, TD-246, TD-294, TD-298, TD-299, TD-309; from #460: TD-313, TD-314.
 - **Engine: semper-dic-engine#9 merged** (0.5.0, the review's engine fixes). The pin stays
   `23034fe` (0.4.2); the bump, with re-captured oracles, is TD-299.
 - **material_testing** merges this `main` (last `17d7bc8`, material_testing#139,
