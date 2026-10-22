@@ -20,42 +20,6 @@ is scheduled; take one deliberately, with its own PR.
 
 ---
 
-## FI-1 One pack/unpack for the viewer's session state
-
-**Affects** A7, A8 · §E2.1 · *accuracy, debuggability*
-
-~25 `IntentKeys` extras were packed in two places — `AnalysisNavHelper.openResults`
-(fresh run) and `ui/home/SessionOpenHelper.intentFor` (reopen) — and are read in
-four (`ResultViewerActivity`, `VsgLatticeActivity`, `SettingsUsedSheet`,
-`ViewerReportFactory`). The two packers did not write the same set, and a missing
-extra silently defaults, so the ⓘ sheet, the report header and the export
-filename could differ by entry path with nothing logged.
-
-**Half of it has landed.** `ViewerArgs` (`ui/viewer/`) is now the only writer:
-both entry points construct it and call `toIntent`, and `ViewerArgsTest` asserts
-their key sets against each other, so the two cannot drift apart again. Only the
-post-run launch's two extra keys differ, and the test names them.
-
-**Fix, what remains.** The unpack half: `fun from(intent)` on the same type, with
-the four readers taking the parsed object and a missing required field failing
-loudly (or resolving from the session record) instead of defaulting. Kept
-separate deliberately — the write side is one file and no format change, while
-the read side also has to keep working for an Intent already sitting in the back
-stack when the app updates.
-
-**Blast radius.** Four UI files and the lattice→viewer hop. No format, no
-`.dat`, no wire change.
-
-Already flagged as "next architecture" in [../../CONTEXT.md](../../CONTEXT.md)
-and in [TECH_DEBT.md](TECH_DEBT.md) — this is the concrete shape.
-
-**Decided (2026-09-23):** [ADR-003](../adr/ADR-003-viewerargs-read-side.md).
-The audit found the readers' defaults disagree (subset 41 vs 0, step 5 vs 1,
-ROI image-size vs 0), and the two writers disagree on values — the fresh run
-passes the requested ROI while the session saves the resolved one (TD-61) — so
-the read side resolves a missing field from the `SessionRecord` before falling
-back to one documented default.
-
 ## FI-5 A way back from on-screen copy to its string
 
 **Affects** all of §A · §E2.5 · *debuggability*
