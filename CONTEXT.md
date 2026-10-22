@@ -146,9 +146,13 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Engine pinned to `59ac995` (v0.6.0, #462, 2026-10-22; TD-299):** 0.5.0's review fixes
   and `-5`, then 0.6.0's AKAZE seeding (rotation past 90° and large stretch now seed) on
   OpenCV 4.14. Not in a release; `v1.2-beta.4` carries `23034fe` (0.4.2).
-- **material_testing** merges this `main` (last `17d7bc8`, material_testing#139,
-  [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); its #140 carries the lab fixes and four of #457's
-  commits; the rest come with the next sync. It released `v1.4-beta.2` (`d08aae07`) 2026-10-17.
+- **material_testing** merges this `main` (last `9d116f2`, engine v0.6.0, material_testing#142
+  merged 2026-10-22; [FORK_SYNC.md](docs/ops/FORK_SYNC.md)). It released `v1.4-beta.2`
+  (`d08aae07`) 2026-10-17.
+- **Owner decisions 2026-10-22:** ADR-025 accepted (TD-298, phases smallest first); TD-246
+  backfill approved; TD-210 accepted as is (§10.1); a Firestore outage answers 503 (TD-250);
+  TD-247 tamper-evident records to build (ADR-028); `CHECK_REVOKED_ON_STEP_UP` on (TD-214);
+  a production reviewer (TD-228); audit retention 1 year (TD-237).
 - **CI.** Tiers follow the diff, coverage floors rise with every test PR
   ([TESTING.md](docs/app/TESTING.md#coverage-floors)), and `main` requires `CI OK`.
 - **Owed.** A device smoke of `v1.2-beta.4` ([RELEASING.md](docs/ops/RELEASING.md) step 5); the

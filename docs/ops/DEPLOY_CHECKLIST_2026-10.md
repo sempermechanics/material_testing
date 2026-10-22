@@ -28,8 +28,8 @@ material_testing: any Hosting deploy replaces the whole site.
       is missing. Without a key the backend behaves as today and issues no token.
 - [ ] **New-device mail (TD-295, TD-309)**, optional, and only once #457 is merged.
       Verify a sender in Resend (for example `Semper security <security@yourdomain.com>`),
-      add `NOTIFY_SECURITY_FROM` to `deploy-backend.yml`'s `env_vars` block (it is not
-      passed today, TD-309), then set the repo variable. Unset, that mail is off and the
+      then set the repo variable `NOTIFY_SECURITY_FROM` (the workflow passes it since
+      `a02ef2f`, `deploy-backend.yml:332`) and redeploy. Unset, that mail is off and the
       access-request mail is unaffected ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md)).
 
 - [x] **Test accounts ([ADR-027](../adr/ADR-027-test-accounts.md))**, optional, and
