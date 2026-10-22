@@ -4,10 +4,12 @@
 app merged in #460 (2026-10-20) and deployed 2026-10-22 from `b940cc29`, on for
 `TEST_ACCOUNT_DOMAINS=qa.sempermechanics.com`
 ([CHANGELOG](../ops/CHANGELOG.md)). Amended 2026-10-22 (product owner): a full
-CI account gives up its oldest phone instead of refusing a new one (TD-313).
+CI account gives up its oldest phone instead of refusing a new one (TD-313);
+staff may release one phone of a test account, and the released phone may not
+take its place back (TD-314).
 **Date:** 2026-10-19
 **Deciders:** product owner, backend owner
-**Register:** TD-314 (a QC account's phone cannot be released on its own)
+**Register:** none open (TD-314, a test account's phone released on its own, closed by the per-phone release)
 
 Paths are from `backend/app/` unless they start at the repository root.
 
@@ -67,8 +69,9 @@ How the backend carries them out:
   customer's address. It is refused 409 `email_in_use` for an `ADMIN_EMAILS`
   address (so `role` stays "user" and staff device trust, `stepUpEligible`, is
   untouched) and for one that has a users doc, a Firebase Auth user, a licence
-  or an invite. Create, extend, a new password and end take the fresh staff
-  step-up (`attested_or_mfa_admin_fresh`); the list is an admin read.
+  or an invite. Create, extend, a new password, a phone release and end take
+  the fresh staff step-up (`attested_or_mfa_admin_fresh`); the list is an
+  admin read.
 - **Create** (`services/testaccounts.py`, `create`): the Firebase Auth user
   (address, a 20-character `token_urlsafe(15)` password, `emailVerified`), then
   the users doc as APPROVED with its sign-in link, then an individual licence
@@ -98,6 +101,21 @@ How the backend carries them out:
   the router audits each as `DEVICE_ROTATED` with `{app, by, testAccount}`. A
   `qc` account is still refused `device_conflict`, and no other account or app
   is touched.
+- **One phone released** (amendment, 2026-10-22, product owner; TD-314).
+  `POST /v1/admin/test-accounts/{uid}/devices/{device_id}/release` (fresh
+  step-up) frees one ACTIVE phone without ending the account: in one
+  transaction (`repo/testaccounts.py`, `release_test_device`) the device is
+  REVOKED and stamped `staffReleased: true`, and the app's `activeDeviceId` is
+  dropped when it names that phone. It is not the release hold
+  (`releasedDeviceId`, which a test account skips) and touches no session.
+  Audited `test_account_device_released` with `{deviceId, app}`. The released
+  phone may not take its place back: registration refuses it for the same
+  account with `device_conflict` (`repo/devices.py`, `staff_released_from`),
+  and the router audits that DENIED with `reason: "staff_released"`. Another
+  account may register it (its record is then that account's, without the
+  stamp); a CI rotation (SUPERSEDED, no stamp) and real accounts are unchanged.
+  The staff list carries each ACTIVE phone (`devices`), and the console's Test
+  accounts card a **Release** per phone.
 - **Separation.** A test account's sessions keep their device as
   `testDeviceId` and carry `testAccount: true`, so `count_device_sessions`, which
   matches on `deviceId`, does not count them; they still count toward the
@@ -149,9 +167,13 @@ How the backend carries them out:
 - **A phone not yet registered is licensed while there is room.** For a config
   call only, as an unbound licence already is for a real account's first phone;
   every signed route still needs a registered device.
-- **No per-phone release.** A QC phone beyond `maxDevices` is refused at
-  registration. Freeing a place is End and create again (TD-314); a staff
-  release of a test account's phones was not part of the decision.
+- **A released phone is gone for good from that login.** A QC phone beyond
+  `maxDevices` is refused at registration; staff free a place by releasing one
+  phone (TD-314). The phone released cannot register for the same account
+  again, by the product owner's decision, so a phone handed back to the bench
+  needs a new account (End and create) to rejoin that login. The stamp lives on
+  the device record, so the phone registering for another account in between
+  replaces it, and it could then come back.
 - **A CI phone can be retired under a running job.** Two CI runs at once on a
   full account can each retire the other's phone; the loser's next signed call
   answers `device_not_active`. Tier 3 runs one emulator per workflow run, and
@@ -179,8 +201,8 @@ How the backend carries them out:
   delete) when given `STAGING_API_BASE_URL` (repo variable) and the
   `STAGING_TEST_EMAIL` / `STAGING_TEST_PASSWORD` secrets, and skips otherwise.
 - `contracts/config_response.json` carries `testAccount`; the app's DTO reads it.
-- Routes: [ADMIN_API.md](../backend/ADMIN_API.md); the gateway declares the five
-  admin routes and not the task.
+- Routes: [ADMIN_API.md](../backend/ADMIN_API.md); the gateway declares the six
+  admin routes (the phone release since TD-314) and not the task.
 
 ## Action items
 
@@ -197,3 +219,5 @@ How the backend carries them out:
 - [x] TD-313: Tier 3 against staging with the CI test account, and CI rotation
       (`StagingRoundTripDeviceTest` passed on an emulator against staging,
       2026-10-22; the rotation needs the backend deployed before CI runs it often).
+- [ ] TD-314: release one phone (route, registration refusal, console **Release**);
+      built, not merged or deployed. Hosting and the backend go out together.

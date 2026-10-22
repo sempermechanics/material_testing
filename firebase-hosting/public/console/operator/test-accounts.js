@@ -1,6 +1,7 @@
 /* The Test accounts card (ADR-027): sign-ins for QC staff and CI, created
  * here with a generated password, listed, and per account extended, given a
- * new password, or ended now.
+ * new password, one phone released (TD-314: its place is free, and that
+ * phone cannot register for the account again), or ended now.
  *
  * Every change is held to the revoke window (`attested_or_mfa_admin_fresh`),
  * so each one first steps up with `stepUpFresh`, carrying what to finish on
@@ -27,9 +28,15 @@ const SENTENCES = {
     "not on one of its test domains (TEST_ACCOUNT_DOMAINS).",
   email_in_use: "That address already has a Semper account or sign-in. A test account " +
     "needs an address nobody has used.",
+  device_not_found: "That phone is no longer one of this account's active phones. " +
+    "Refresh the list.",
 };
 
 const PURPOSES = { qc: "QC", ci: "CI" };
+const APPS = { semper: "Semper", materialtesting: "Material Testing" };
+
+/** A phone as staff know it: its model, else its device id. */
+const phoneName = (d) => (d.model ? `${d.model} (${d.deviceId})` : d.deviceId);
 
 /** The accounts last listed, for the email a row's buttons act on. */
 let accounts = [];
@@ -156,7 +163,7 @@ function accountRow(a) {
       <td>${esc(a.email || a.uid)}</td>
       <td>${esc(PURPOSES[a.purpose] || a.purpose || "—")}</td>
       <td>${esc(testAccountEnds(a))}</td>
-      <td>${esc(a.activeDevices ?? 0)} of ${esc(a.maxDevices ?? "—")}</td>
+      <td>${esc(a.activeDevices ?? 0)} of ${esc(a.maxDevices ?? "—")}${(a.devices || []).map((d) => phoneLine(uid, d)).join("")}</td>
       <td><span class="pill ${live ? "ok" : "off"}">${esc(a.status || "—")}</span></td>
       <td class="muted">${esc(a.note || "—")}</td>
       <td class="actions">
@@ -167,12 +174,21 @@ function accountRow(a) {
     </tr>`;
 }
 
+/** One ACTIVE phone of the account (`uid` already escaped), with its Release. */
+function phoneLine(uid, d) {
+  return `
+        <div>${esc(phoneName(d))} · ${esc(APPS[d.app] || d.app || "—")}
+          <button class="secondary" data-ta-release="${uid}" data-ta-device="${esc(d.deviceId)}">Release</button>
+        </div>`;
+}
+
 $("testAccountRows").addEventListener("click", (ev) => {
   const btn = ev.target.closest("button");
   if (!btn) return;
   if ("retry" in btn.dataset) loadTestAccounts();
   if (btn.dataset.taExtend) extend(btn.dataset.taExtend);
   if (btn.dataset.taPassword) newPassword(btn.dataset.taPassword);
+  if (btn.dataset.taRelease) release(btn.dataset.taRelease, btn.dataset.taDevice);
   if (btn.dataset.taEnd) endNow(btn.dataset.taEnd);
 });
 
@@ -236,6 +252,37 @@ async function sendPassword(uid, email) {
   }
 }
 
+async function release(uid, deviceId) {
+  const email = emailOf(uid);
+  const account = accounts.find((a) => a.uid === uid) || {};
+  const phone = (account.devices || []).find((d) => d.deviceId === deviceId) || { deviceId };
+  const name = phoneName(phone);
+  if (!(await confirmInPage({
+    title: `Release a phone of ${email}`,
+    message: `Release ${name} from ${email}?\n\n` +
+      "Its place is free for another phone at once. This phone stops working " +
+      "with the account and cannot register for it again; its analyses stay.",
+    confirm: "Release",
+  }))) return;
+  await sendRelease(uid, email, deviceId, phone.app || "");
+}
+
+async function sendRelease(uid, email, deviceId, app) {
+  try {
+    await stepUpFresh({ action: "testAccountDeviceRelease", uid, email, deviceId, app },
+      "release this phone");
+    const phone = encodeURIComponent(deviceId);
+    await api(`/v1/admin/test-accounts/${encodeURIComponent(uid)}/devices/${phone}/release`, {
+      method: "POST",
+    });
+    setStatus(`Phone ${deviceId} released from ${email}: its place is free, and that phone ` +
+      "cannot register for this account again.");
+    loadTestAccounts();
+  } catch (e) {
+    refused(e, `release phone ${deviceId} from ${email}`);
+  }
+}
+
 async function endNow(uid) {
   const email = emailOf(uid);
   if (!(await confirmInPage({
@@ -293,6 +340,11 @@ const RESUMES = {
     what: (r) => `give ${r.email} a new password`,
     run: (r) => sendPassword(r.uid, r.email),
     valid: (r) => Boolean(r.uid && r.email),
+  },
+  testAccountDeviceRelease: {
+    what: (r) => `release phone ${r.deviceId} from ${r.email}`,
+    run: (r) => sendRelease(r.uid, r.email, r.deviceId, r.app || ""),
+    valid: (r) => Boolean(r.uid && r.email && r.deviceId),
   },
   testAccountEnd: {
     what: (r) => `end ${r.email}`,

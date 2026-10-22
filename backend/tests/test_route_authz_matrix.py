@@ -187,6 +187,7 @@ EXPECTED = {
     ("POST", "/v1/admin/test-accounts"): ADMIN_STEPUP_FRESH,
     ("POST", "/v1/admin/test-accounts/{uid}/extend"): ADMIN_STEPUP_FRESH,
     ("POST", "/v1/admin/test-accounts/{uid}/password"): ADMIN_STEPUP_FRESH,
+    ("POST", "/v1/admin/test-accounts/{uid}/devices/{device_id}/release"): ADMIN_STEPUP_FRESH,
     ("DELETE", "/v1/admin/test-accounts/{uid}"): ADMIN_STEPUP_FRESH,
     ("POST", "/v1/tasks/test-account-expiry"): TASK,
 }

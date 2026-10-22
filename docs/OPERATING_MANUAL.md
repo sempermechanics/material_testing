@@ -1479,8 +1479,15 @@ most). Use it when a phone or a person should no longer have it, or the
 password was shared too widely.
 
 **All its phones are taken.** A phone signing in beyond `maxDevices` is refused
-as "already linked". There is no per-phone release for a test account: end it
-and create a new one, or ask for a larger `maxDevices` when it is created.
+as "already linked" (a CI account instead gives up its oldest phone). To free a
+place, open the account's row on the console's **Test accounts** card and press
+**Release** beside the phone to give up (fresh step-up), or call
+`POST /v1/admin/test-accounts/{uid}/devices/{deviceId}/release`. The place is
+free at once, with no hold; the account, its other phones and its analyses are
+untouched, audited `test_account_device_released`. The released phone stops
+working with the account and can never register for it again (it is refused as
+"already linked"); it may still be signed in to a different account. To bring
+that phone back to the same login, end the account and create a new one.
 
 **Ending it.** `DELETE /v1/admin/test-accounts/{uid}` ends it now: the account
 is suspended, signed out, its licence revoked, and then everything it stored is

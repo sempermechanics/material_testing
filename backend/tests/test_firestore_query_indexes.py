@@ -158,7 +158,8 @@ QUERY_SHAPES: dict[str, list[Shape]] = {
     # Test accounts (ADR-027): one field each, so the automatic indexes.
     "app/repo/_base.py::_active_devices": [_q("devices", ("uid", "=="))],
     "app/repo/devices.py::_oldest_active_devices": [_q("devices", ("uid", "=="))],
-    "app/repo/testaccounts.py::licences_of_test_account": [_q("licenses", ("emailLock", "=="))],
+    "app/repo/testaccounts.py::active_test_devices": [_q("devices", ("uid", "=="))],
+    "app/repo/testaccounts.py::licences_of_test_account":[_q("licenses", ("emailLock", "=="))],
     "app/repo/testaccounts.py::list_test_accounts": [_q("users", ("testAccount.purpose", "in"))],
     "app/repo/testaccounts.py::expired_test_accounts": [
         _q("users", ("testAccount.expiresAt", "<")),
