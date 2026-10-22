@@ -186,6 +186,12 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
          older than a year go within about a day. The policy is declared in
          `backend/firestore.indexes.json`, so an indexes deploy before this step
          would create it early: run none until step 2 is done.
+         `PROJECT=indicvision-dic-app scripts/deploy-firestore.sh indexes` can
+         also do this step: it now runs a pinned `firebase-tools@15.33.0`, which
+         matches the six live composites and the five live overrides (TD-316,
+         fixed in file), so it writes only this policy. After the `gcloud`
+         command, run the script once anyway: it should print no "not present"
+         line and write nothing, which closes TD-316. Never with `--force`.
 - [ ] Move the merged-and-deployed entries from [CONTEXT.md](../../CONTEXT.md)
       "Current state" into [CHANGELOG.md](CHANGELOG.md), in both repos.
 
