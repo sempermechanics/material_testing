@@ -166,14 +166,20 @@ with `gateway_mode=dry-run`:
    open.
 3. Both unset (run 39755853906): the revision's env is back to `0` and empty,
    and after **Refresh licence** New analysis opens the import sheet again.
+4. `RECOMMENDED_VERSION_CODE=200` (run 39762144670). After **Refresh licence**,
+   the next Home opens with the Snackbar "A newer version of the app is
+   available." on both phones; analysing, backup and restore are unchanged.
+   It shows once: the key `100<200` is kept (`update_nudge`,
+   `data/policy/AppPolicy.kt:44-51`), so further launches stay quiet until the
+   recommended version or the build changes. Set back to `0` in run
+   39762952329.
 
 A running install sees a change on its next config read: launches within five
 minutes of the last reconcile reuse the cached `/v1/config`
 (`data/cloud/CloudSync.kt:412`, `RECONCILE_MIN_INTERVAL_MS`), and **Refresh
 licence** fetches it at once. Lifting a lever reaches phones the same way, so
-allow that long before calling a rollback done. `RECOMMENDED_VERSION_CODE`, the
-Material Testing pair and `ENTITLEMENT_OFFLINE_GRACE_DAYS` were not moved
-(TD-220).
+allow that long before calling a rollback done. The Material Testing pair and
+`ENTITLEMENT_OFFLINE_GRACE_DAYS` were not moved (TD-220).
 
 ## CI-based release (workflow_dispatch)
 
