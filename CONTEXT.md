@@ -123,9 +123,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   accounts are on for `qa.sempermechanics.com`, expired ones erased daily by Cloud Scheduler
   ([ADR-027](docs/adr/ADR-027-test-accounts.md)). Not done from the
   [checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md): monitoring (§5), staff/IT phones
-  re-registering with TOTP, the 24 h log watch, the staging test-account round trip and
-  test-account erasure check (§6); `CHECK_REVOKED_ON_STEP_UP` is set and live
-  at the next production deploy (TD-214); optional and unset: the offline-entitlement key (TD-215), `NOTIFY_SECURITY_FROM`
+  re-registering with TOTP, the 24 h log watch, ending the staging QC test account and
+  the erasure check (§6; the round trip itself passed 2026-10-22); `CHECK_REVOKED_ON_STEP_UP`
+  is set and live at the next production deploy (TD-214); optional and unset: the
+  offline-entitlement key (TD-215), `NOTIFY_SECURITY_FROM`
   (TD-309), the audit bucket lock (TD-237). Licensing
   ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)), device binding per app
   ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md)) and sessions tagged by app
@@ -137,8 +138,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **On `main`, in no release yet:** the readiness change's app half (**minSdk 30**, version
   gate, EMM config, AAB, [ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md));
   #457's app half; #458 (incremental reference; re-run on an emulator 2026-10-22), #459,
-  #453, #460's app half, #461 and #462 (engine `59ac995`, v0.6.0, TD-299; `v1.2-beta.4`
-  carries 0.4.2). Release blockers: TD-219, TD-226, TD-229–TD-232, counsel on the Terms
+  #453, #460's app half, #461, #462 (engine `59ac995`, v0.6.0, TD-299; `v1.2-beta.4`
+  carries 0.4.2) and #464 (Tier 3 signs in to staging; CI accounts rotate). Release blockers: TD-219, TD-226, TD-229–TD-232, counsel on the Terms
   (TD-277).
 - **material_testing** merges this `main` (last `9d116f2`, material_testing#142, 2026-10-22;
   [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); it released `v1.4-beta.2` 2026-10-17.

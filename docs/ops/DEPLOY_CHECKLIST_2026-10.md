@@ -158,6 +158,12 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       upload lands under `Research Storage/_test/{uid}`, then end it from the
       console; the audit trail has `test_account_created` and `test_account_ended`,
       and its Firebase user is gone.
+      2026-10-22, all but the end: `qc-emulator@qa.sempermechanics.com` (7 days)
+      on an Android 14 and an Android 12 emulator, both `DEVICE_REGISTER` with
+      `testAccount: true` and no new-device mail; one backup
+      (`SESSION_CREATE` `testAccount: true`, three `UPLOAD_COMPLETE`), which
+      `session_provision.py:102` sends under `_test/` (the Drive folder itself not
+      listed). End it from the console, then check the audit rows and the Auth user.
 - [ ] **Audit trail lock (TD-237)**, once #457 is deployed (it writes the `audit_row`
       lines) and the legal/privacy owners have set the retention period: create the
       `audit-trail` log bucket at that retention, the sink on
