@@ -77,9 +77,9 @@ class FrameImportController(
 /**
  * Every deformed frame must match the reference pixel for pixel. The engine
  * places its grid and subsets in reference coordinates and reads the deformed
- * image at them; on a frame of another size it skips the phase-correlation
- * seed and solves anyway, returning a wrong field with no error. Catching it
- * here turns a bad result into a clear, fixable message.
+ * image at them. Engines before 0.5.0 solved a frame of another size anyway,
+ * returning a wrong field with no error; 0.5.0 on reject it with the generic
+ * `-3`. Catching it here turns either into a clear, fixable message.
  *
  * Costs nothing: the sizes were measured during import.
  */

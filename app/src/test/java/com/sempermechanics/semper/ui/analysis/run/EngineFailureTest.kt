@@ -31,6 +31,17 @@ class EngineFailureTest {
     }
 
     @Test
+    fun `the engine's seed code reads like the older no-seed code`() {
+        assertEquals(-5, EngineFailure.ENGINE_ERROR_SEED)
+        val seed = EngineFailure.ENGINE_ERROR_SEED
+        val features = EngineFailure.ENGINE_ERROR_FEATURES
+        assertEquals(EngineFailure.reasonRes(features), EngineFailure.reasonRes(seed))
+        assertEquals(EngineFailure.shortReasonRes(features), EngineFailure.shortReasonRes(seed))
+        assertEquals(EngineFailure.faqUrlRes(features), EngineFailure.faqUrlRes(seed))
+        assertNull(EngineFailure.whyRes(seed))
+    }
+
+    @Test
     fun `no recorded code says only that the node was skipped and not a strain-window failure`() {
         assertEquals(R.string.sweep_node_skipped, EngineFailure.reasonRes(null))
         assertEquals(R.string.sweep_node_skipped, EngineFailure.shortReasonRes(null))

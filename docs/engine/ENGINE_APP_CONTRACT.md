@@ -54,13 +54,14 @@ int run_full_field(ReferenceCache& cache,
                    ProgressCallback on_progress = nullptr);
 ```
 
-- **Returns** *(Frozen)*: `>= 0` → number of valid output points. `-1` → no seed (see
-  [A.4](#return--error-codes--frozen)). `-2` → invalid ROI. `-3` → init/argument failure. `-4` →
-  `strain_window` too small for `step` (engine 0.3.0 on). `-99` (`kCancelled`) → cancelled mid-solve.
+- **Returns** *(Frozen)*: `>= 0` → number of valid output points. `-5` (`kSeedFailed`, engine
+  0.5.0 on; `-1` before) → no seed (see [A.4](#return--error-codes--frozen)). `-2` → invalid ROI.
+  `-3` → init/argument failure. `-4` → `strain_window` too small for `step` (engine 0.3.0 on).
+  `-99` (`kCancelled`) → cancelled mid-solve.
 - **Writes** *(Frozen)*: at most `output_capacity` floats, **8 per point** (see [A.4](#a4-frozen-data-formats-the-highest-risk-break-points)).
   Points beyond capacity are **dropped, never overflow** — do not weaken this guarantee.
 - **Metrics** *(Frozen layout)*: when `metrics != nullptr && metrics_len >= 16`, fill telemetry;
-  23 slots preferred. Slot indices are frozen.
+  24 slots from engine 0.5.0 (23 before); the app passes 23. Slot indices are frozen.
 - **Cancellation**: clears the cancel flag on entry, then polls it inside the point loops so a
   cancel lands within a point or two.
 - **You may** make it faster or more accurate however you like (that is Internal behavior, guarded
@@ -164,7 +165,7 @@ moves the reference to the latest solved frame every N frames. The output keeps 
 layout and stays on the **first image's grid** as total displacement from it, so `.dat` files,
 the viewer and exports read it unchanged. The metrics describe the solve against the current
 reference; `computeIncrementalFrame`'s `int[6]` carries the frame-0 bookkeeping
-(`SemperNativeLib.INC_INFO_*`); at the 0.4.2 pin its tracked count includes the
+(`SemperNativeLib.INC_INFO_*`); from engine 0.4.2 its tracked count includes the
 nodes coasting across a band the solve cannot correlate, which are followed but not reported
 on that frame. The batch loop gates such a frame on
 `ConvergenceGate.incremental`: the lower of the solve's convergence and the share of
@@ -190,12 +191,13 @@ field:  x   y   u   v    exx   eyy   exy   corr
 resizing the stride, or repurposing a slot is a **major** break — the app parses this layout
 verbatim by stride.
 
-### Metrics buffer — **23 × `float32`**
+### Metrics buffer — **24 × `float32`** (engine 0.5.0 on; 23 before)
 
 The per-slot table is the engine's (`engine/docs/CONTRACT.md`, "Metrics buffer"). Slot
 **indices are Frozen**; new telemetry appends at the next free slot (Additive-only).
-`metrics_len == 16` is the minimum honored; 23 is preferred. The JNI copies the largest prefix
-the Kotlin array holds (16, 17, 19…23) from engine **0.4.1**; before that it stopped at 19.
+`metrics_len == 16` is the minimum honored. The JNI copies the largest prefix the Kotlin array
+holds (16, 17, 19…24; 19…23 from engine **0.4.1**, before that it stopped at 19). Slot 23
+(points dropped by the displacement median test, 0.5.0 on) is not read by the app.
 
 What the app does with it:
 
@@ -203,8 +205,10 @@ What the app does with it:
   19 (`EngineStats.SLOT_COUNT`), the layout `EngineStats.fromArray` reads.
 - Points correlated on frame 0 are slots 3 + 4 + 19 (`EngineStats.correlatedPoints`). From
   engine 0.3.0, points the anchor lattice solved are in slot 19, not in slot 3 or 4.
-- Slot 10 is seeding time (phase correlation + anchor lattice; AKAZE + RANSAC before 0.3.0).
-  From 0.4.2 it includes the log-polar rotation and scale estimate the lattice is seeded with.
+- Slot 10 is seeding time. From engine 0.6.0: an AKAZE + RANSAC homography over the padded ROI
+  seeds the anchor lattice, and slot 10 covers both. In 0.3.0–0.5.x it was phase correlation +
+  anchor lattice (from 0.4.2 with a log-polar rotation and scale estimate); before 0.3.0, AKAZE +
+  RANSAC alone. Slot 21 is the global-motion lock (AKAZE from 0.6.0, phase correlation before).
   Slot 16 grades the seed mesh (2 full, 1 sparse, 0 Path C).
 
 ### Return / error codes — Frozen
@@ -212,10 +216,11 @@ What the app does with it:
 | Value | Meaning |
 |---|---|
 | `>= 0` | number of valid output points |
-| `-1` | no seed: no anchor solved, phase correlation did not lock, and the Path C centre search diverged (`full_field_path_c.cpp`; not in the engine's table) |
-| `-2` | invalid ROI |
-| `-3` | init / argument failure |
+| `-1` | engines before 0.5.0 only: no seed (undocumented there; now `-5`). Kept for stored records (`RunStop.FeaturesUnmatched`) |
+| `-2` | invalid ROI, or a ROI/mask with no point on the image |
+| `-3` | init / argument failure: undecodable image, a deformed frame of another size or type than the reference, an even or zero subset, a strain window that can never meet the fit's coverage rule (engine 0.5.0 on), or an internal exception caught at the boundary |
 | `-4` | `strain_window` too small for `step` (engine 0.3.0 on; before, 0 points) |
+| `-5` (`kSeedFailed`) | no seed: no anchor solved, the global-motion match (AKAZE from 0.6.0, phase correlation in 0.5.x) gave no lock, and the Path C centre search diverged (engine 0.5.0 on; `RunStop.SeedFailed`, read like `-1`) |
 | `-99` (`kCancelled`) | cancelled mid-solve |
 
 ---
