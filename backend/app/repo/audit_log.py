@@ -7,10 +7,11 @@ are the staff console's device history and a licence's own audit log (IT's
 roster page and its CSV export).
 """
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
+from ..config import settings
 from . import _base
-from ._base import SCHEMA_VERSION, _add_doc, _get, _stream, db
+from ._base import SCHEMA_VERSION, _add_doc, _get, _now, _stream, db
 
 log = logging.getLogger("audit")
 
@@ -33,10 +34,16 @@ DEVICE_HISTORY_ACTIONS = frozenset(
 
 def add_audit_row(row: dict) -> None:
     """Append one row to `audit_logs`, its `ts` stamped by the server.
-    Raises on failure; `audit.record` decides that a lost row never fails the
-    request."""
+
+    `expireAt` is when the row's retention ends (`AUDIT_RETENTION_DAYS` from
+    now, TD-237): the Firestore TTL policy on `audit_logs.expireAt` deletes it
+    then. It is set here, as the row is added, so the row is never rewritten
+    to carry it. Raises on failure; `audit.record` decides that a lost row
+    never fails the request."""
+    expire_at = _now() + timedelta(days=settings.AUDIT_RETENTION_DAYS)
     _add_doc(db().collection("audit_logs"), {
-        "ts": _base.firestore.SERVER_TIMESTAMP, **row, "schemaVersion": SCHEMA_VERSION,
+        "ts": _base.firestore.SERVER_TIMESTAMP, **row,
+        "expireAt": expire_at, "schemaVersion": SCHEMA_VERSION,
     })
 
 

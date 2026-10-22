@@ -733,8 +733,10 @@ audit_logs/{autoId}               (append-only)
   live policy as an override to delete; never deploy indexes with `--force`.
   Operator setup can also enable it by hand — step A2a of
   [BACKEND_SETUP_GCP.md](BACKEND_SETUP_GCP.md). `consume_nonce` deletes a nonce on
-  use; TTL reclaims the ones that are never consumed. An optional retention TTL on
-  `audit_logs.ts` (e.g. 400 days) is still just a suggestion.
+  use; TTL reclaims the ones that are never consumed. `audit_logs.expireAt` is a
+  TTL field too (TD-237: rows kept 365 days, `AUDIT_RETENTION_DAYS`), declared
+  there and enabled by hand after the audit-trail log bucket is locked
+  ([FIRESTORE_DATA_PROTECTION.md](FIRESTORE_DATA_PROTECTION.md)).
 
 Security: Firestore is **written only by the Cloud Run SA** (server-side). No
 Android SDK writes → Firestore Security Rules can be `allow read, write: if
