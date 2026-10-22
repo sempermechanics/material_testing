@@ -127,7 +127,7 @@ class RecordManifestRunTest {
         val manifest = checkNotNull(ManifestJson.parse(manifestOf(session.dir).readText())).manifest
         assertEquals(listOf("field_ranges.bin", "frame_0000.dat", "frame_0001.dat"), manifest.files.map { it.name })
         assertEquals(spec.recordSettings().subset, manifest.runSpec.subset)
-        val integrity = RecordVerifier.verify(session.dir)
+        val integrity = RecordVerifier.verify(ctx, session.dir)
         assertTrue("no Keystore under Robolectric: $integrity", integrity is RecordIntegrity.Unsigned)
     }
 
@@ -154,7 +154,7 @@ class RecordManifestRunTest {
 
         assertFalse(manifestOf(session.dir).exists())
         assertFalse(File(session.staging, SessionLayout.MANIFEST).exists())
-        assertEquals(RecordIntegrity.NotRecorded, RecordVerifier.verify(session.dir))
+        assertEquals(RecordIntegrity.NotRecorded, RecordVerifier.verify(ctx, session.dir))
     }
 
     @Test
@@ -176,7 +176,7 @@ class RecordManifestRunTest {
         val again = checkNotNull(ManifestJson.parse(manifestOf(first.dir).readText())).manifest
         assertEquals(listOf("frame_0000.dat"), again.files.map { it.name })
         assertTrue(before != manifestOf(first.dir).readText())
-        assertTrue(RecordVerifier.verify(first.dir) is RecordIntegrity.Unsigned)
+        assertTrue(RecordVerifier.verify(ctx, first.dir) is RecordIntegrity.Unsigned)
     }
 
     @Test
@@ -205,7 +205,8 @@ class RecordManifestRunTest {
 
         SessionPaths.frameDat(session.dir, 1).writeText("frame 1 edited")
 
-        assertEquals(listOf("frame_0001.dat"), (RecordVerifier.verify(session.dir) as RecordIntegrity.Changed).files)
+        val integrity = RecordVerifier.verify(ctx, session.dir)
+        assertEquals(listOf("frame_0001.dat"), (integrity as RecordIntegrity.Changed).files)
     }
 
     /** A two-combination sweep the runner left in [session] with [code]. */
@@ -239,7 +240,7 @@ class RecordManifestRunTest {
         val manifest = checkNotNull(ManifestJson.parse(manifestOf(session.dir).readText())).manifest
         assertEquals(listOf("frame_0000.dat", "frame_0001.dat"), manifest.files.map { it.name })
         assertEquals("the plan's first combination", 21, manifest.runSpec.subset)
-        assertTrue(RecordVerifier.verify(session.dir) is RecordIntegrity.Unsigned)
+        assertTrue(RecordVerifier.verify(ctx, session.dir) is RecordIntegrity.Unsigned)
     }
 
     @Test

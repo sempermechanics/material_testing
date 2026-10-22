@@ -67,20 +67,34 @@ analysis is the one the engine wrote:
    fault), the manifest is written with `signature`, `publicKey` and `keyThumbprint`
    null, and the viewer says "Not signed". A failure to write the manifest at all never
    fails the run; the analysis then reads "Not recorded".
-5. **One verifier, four answers** (`data/integrity/RecordVerifier.kt`):
-   `Verified`, `Changed(files)`, `Unsigned`, `NotRecorded`.
+5. **One verifier, five answers** (`data/integrity/RecordVerifier.kt`):
+   `Verified`, `SignedElsewhere(keyThumbprint)`, `Changed(files)`, `Unsigned`,
+   `NotRecorded`. It takes **this phone's** device-key thumbprint
+   (`RecordVerifier.verify(dir, localThumbprint)`; the production overload
+   `verify(context, dir)` reads it once from the Keystore through `LocalRecordKey`, and
+   gets null when the Keystore cannot give one).
    - No manifest: `NotRecorded` (every analysis from before this change).
    - A manifest that does not parse, whose `publicKey` does not match its
-     `keyThumbprint`, or whose signature does not verify: `Changed([record_manifest.json])`.
+     `keyThumbprint`, or whose signature does not verify against that `publicKey`:
+     `Changed([record_manifest.json])`.
    - A listed file that is missing or whose size or SHA-256 differ, or a `*.dat` in the
      folder the manifest does not list: `Changed` with those names.
      `field_ranges.bin` is a cache (`SummaryAnimation.globalRanges` rebuilds it, a
      restore does not bring it back): it is checked when present, and its absence is not
      a change.
-   - Otherwise `Unsigned` when there is no signature, else `Verified`.
-   The signature is checked against the `publicKey` the manifest carries, so a session
-   restored on another phone still verifies. Every answer but `NotRecorded` carries the
-   **fingerprint**: the first 16 hex digits of the manifest file's SHA-256.
+   - Every file matches but there is no signature: `Unsigned`.
+   - Every file matches and the signature holds: `Verified` **only when the manifest's
+     `keyThumbprint` equals this phone's**; any other key, or every key when this phone
+     has none, is `SignedElsewhere`, which names the key and is never a pass.
+   Why the binding: the manifest carries its own public key (so anyone can check the
+   signature's arithmetic), which means a valid signature alone proves only that
+   *someone* signed. Anyone can edit a `.dat`, re-hash, and sign with a fresh key of their
+   own; checked against the key it carries, that forgery verifies. Comparing the signer's
+   thumbprint with this phone's Keystore key closes it on the signing phone: the forger
+   cannot sign with this phone's non-exportable key. On any other phone the honest answer
+   is `SignedElsewhere`: whether that thumbprint is one of the account's registered
+   devices is the backend's to say (a later step). Every answer but `NotRecorded`
+   carries the **fingerprint**: the first 16 hex digits of the manifest file's SHA-256.
 6. **Backup, restore and export carry it, under an existing role.** The backend validates
    roles, so there is no `ArtifactRoles.MANIFEST`: `UploadStaging` stages the manifest
    into `Session.zip` as `dat/record_manifest.json` (role `dat`, already
@@ -94,9 +108,12 @@ analysis is the one the engine wrote:
    - The viewer verifies off the main thread once the frame set is listed
      (`ResultViewerViewModel.listFrames` then `ViewerState.integrity`), so hashing every
      frame never delays the first one. The Details sheet (`SettingsUsedSheet`) gains a
-     "Record integrity" row (Verified / Changed since analysis / Not signed / Not
-     recorded) and a `ui/common` `WarnChip` naming the changed files when `Changed`.
-   - The PDF cover's Session Details print "Record fingerprint:" (fingerprint and state),
+     "Record integrity" row (Verified / Signed on another device / Changed since
+     analysis / Not signed / Not recorded) and a `ui/common` `WarnChip`: the changed
+     files when `Changed`; the signing key's shortened thumbprint, and that it has to be
+     checked against the account's registered devices, when `SignedElsewhere`.
+   - The PDF cover's Session Details print "Record fingerprint:" (fingerprint and state,
+     `SignedElsewhere` with its key and "not verified here"),
      through a new `ReportData.recordFingerprint` set by each caller after
      `ReportBuilder.buildReport`; the fusion pass is untouched.
 
@@ -113,10 +130,17 @@ analysis is the one the engine wrote:
 
 ## Trade-offs
 
-- **The device key is not a notary.** The signature proves the files match what a
-  holder of that private key signed. It does not prove the key is a registered device;
-  the manifest's `keyThumbprint` is what an auditor compares with the backend's device
-  record. A rooted phone that can use the Keystore key can sign anything.
+- **The device key is not a notary.** A signature checked against the public key the
+  manifest carries proves only that the files match what *some* key signed: a forger
+  who edits a `.dat`, re-hashes and signs with a fresh key of their own passes that
+  check. So only this phone's own key earns `Verified` (§5): the forger cannot use this
+  phone's non-exportable Keystore key, so the forgery reads `SignedElsewhere` here.
+  Elsewhere, `SignedElsewhere` is all a phone can say; the manifest's `keyThumbprint` is
+  what an auditor (later, the backend) compares with the account's registered devices.
+  A rooted phone that can use its own Keystore key can still sign anything.
+- **A reinstall makes a new device key.** This phone's analyses from before a reinstall
+  then read "Signed on another device", as does every analysis restored on another
+  phone. Correct, if unwelcome: neither phone can vouch for a key it does not hold.
 - **Stripping the signature leaves "Not signed".** Someone who edits a `.dat`, rewrites
   the hashes and sets `signature` to null gets "Not signed", not "Changed". "Not signed"
   is therefore not a pass: the sheet and the PDF say so in words.
@@ -153,6 +177,12 @@ analysis is the one the engine wrote:
       (`SessionEverythingExporter`).
 - [x] Viewer row and warning chip; PDF cover fingerprint.
 - [x] JVM and Robolectric tests; `RecordManifestProcessDeathTest` (instrumented).
-- [ ] Run `RecordManifestProcessDeathTest` on an emulator.
+- [x] Run `RecordManifestProcessDeathTest` on an emulator: passed on the Semper_API30
+      AVD (API 30), 2026-10-22, on `d4d09231`.
+- [x] Verified only for this phone's own key; any other valid signature reads
+      `SignedElsewhere` (review of `d4d09231`).
 - [ ] A device check: a run on a phone reads "Verified"; a `.dat` edited with `adb`
-      reads "Changed since analysis"; a restore on a second phone reads "Verified".
+      reads "Changed since analysis"; a restore on a second phone reads "Signed on
+      another device".
+- [ ] Backend: check a `SignedElsewhere` thumbprint against the account's registered
+      devices (not decided).

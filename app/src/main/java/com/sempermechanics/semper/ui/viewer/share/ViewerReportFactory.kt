@@ -39,19 +39,26 @@ object ViewerReportFactory {
         val displayBase: Bitmap?,
         /** The viewer's check of the record (ADR-028), when it had finished; else [recordFingerprint] runs one. */
         val integrity: RecordIntegrity? = null,
+        /**
+         * This phone's device-key thumbprint, for when [recordFingerprint] runs its
+         * own check; null reads every signed record as signed elsewhere. A string,
+         * not a Context: the snapshot must not reach the viewer.
+         */
+        val localThumbprint: String? = null,
     ) {
         val isSweep: Boolean get() = args.sweep != null
 
         /**
          * The cover's record fingerprint ([recordFingerprintText]), once per
          * export: an all-frames report asks on every page, and a check hashes
-         * every frame. Disk reads when the viewer had not finished its own:
-         * read it off the main thread, as the pages are built.
+         * every frame. Disk reads when the viewer had not finished its own: read
+         * it off the main thread, as the pages are built.
          */
         val recordFingerprint: String by lazy {
-            recordFingerprintText(
-                integrity ?: args.batchDirPath?.let { RecordVerifier.verify(File(it)) } ?: RecordIntegrity.NotRecorded,
-            )
+            val checked = integrity ?: args.batchDirPath?.let { dir ->
+                RecordVerifier.verify(File(dir), localThumbprint)
+            }
+            recordFingerprintText(checked ?: RecordIntegrity.NotRecorded)
         }
 
         /** Every frame's solver parameters. */

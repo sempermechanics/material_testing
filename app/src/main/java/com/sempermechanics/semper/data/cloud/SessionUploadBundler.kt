@@ -99,7 +99,7 @@ object SessionUploadBundler {
                 File(context.cacheDir, "upload_${record.id}_frame.pdf"),
                 context.resources,
                 // Once per pass, not per page: the check hashes every frame (ADR-028).
-                recordFingerprint = recordFingerprintText(RecordVerifier.verify(sessionDir)),
+                recordFingerprint = recordFingerprintText(RecordVerifier.verify(context, sessionDir)),
             )
         }
         val csv = csvFile?.let { AnalysisCsvWriter.open(it, record.isSweep, csvMetadata(record)) }

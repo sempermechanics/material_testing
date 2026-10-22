@@ -319,8 +319,10 @@ in it is Semper-only. What its lab code has to know:
   the verifier reads any other `*.dat` in the session folder as **Changed**: a lab file
   ending in `.dat` must be staged before that call or take another extension.
 - The signature is the `DeviceKeys` Keystore key (same alias, `SemperDeviceKeyEc`), so
-  the fork's manifests are signed by its own install's key; the manifest carries the
-  public key, so they verify on any phone.
+  the fork's manifests are signed by its own install's key. Only that key reads
+  **Verified**; a manifest signed by any other key reads **Signed on another device**
+  (`RecordIntegrity.SignedElsewhere`). `RecordVerifier.verify(context, dir)` reads this
+  phone's thumbprint through `LocalRecordKey`; tests call `verify(dir, localThumbprint)`.
 - Backups carry it as `dat/record_manifest.json` in `Session.zip` (no new role, no
   backend change); restore and "Export everything" bring it along.
 - API changes: `ResultViewerViewModel.listFrames(dispatcher, check, read)` and

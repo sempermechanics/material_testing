@@ -1,6 +1,7 @@
 package com.sempermechanics.semper.data.integrity
 
 import android.content.Context
+import androidx.annotation.VisibleForTesting
 import com.sempermechanics.semper.data.account.DeviceKeys
 import com.sempermechanics.semper.data.account.entitlement.DeviceKeyThumbprint
 import timber.log.Timber
@@ -32,6 +33,35 @@ internal class DeviceRecordSigner(private val keys: DeviceKeys) : RecordSigner {
             .onFailure { Timber.w(it, "No device key for the record manifest; writing it unsigned") }
             .getOrNull()
     }
+}
+
+/**
+ * This phone's device-key thumbprint (`DeviceKeyThumbprint.of` its public key),
+ * which a manifest's `keyThumbprint` must equal to read Verified here
+ * (ADR-028). Read once from the Keystore and kept; null when the Keystore
+ * cannot give a key (Robolectric, a Keystore fault), and then every signed
+ * manifest reads as signed elsewhere. Keystore reads: off the main thread.
+ */
+object LocalRecordKey {
+
+    @Volatile
+    private var cached: String? = null
+
+    private var source: (Context) -> String? = ::fromKeystore
+
+    fun thumbprint(context: Context): String? = cached ?: source(context)?.also { cached = it }
+
+    /** Tests: answer [thumbprint] with [source] from now on, forgetting what was read. */
+    @VisibleForTesting
+    fun useForTest(source: (Context) -> String? = ::fromKeystore) {
+        this.source = source
+        cached = null
+    }
+
+    private fun fromKeystore(context: Context): String? =
+        runCatching { DeviceKeyThumbprint.of(DeviceKeys(context).publicKeyDer()) }
+            .onFailure { Timber.w(it, "No device key to check record manifests against") }
+            .getOrNull()
 }
 
 /** Checks a manifest's signature against the public key it carries. */

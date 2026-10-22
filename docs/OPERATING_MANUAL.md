@@ -670,7 +670,10 @@ carries **Stopped early** and **Frames solved** here.
 
 **Record integrity** checks the results against the signed record the analysis wrote
 beside them (ADR-028): **Verified** (every result file is as the analysis wrote it, and
-this or the original phone's key signed it), **Changed since analysis** (a file was
+this phone's own key signed it), **Signed on another device** (the files match a
+signature by some other key: a restore on another phone, an analysis from before a
+reinstall, or a re-signed forgery; this phone cannot tell which, so it is not a pass and
+the key has to be checked against the account's registered devices), **Changed since analysis** (a file was
 edited, removed or added; an amber note names them), **Not signed** (the record has no
 signature, so it cannot rule out an edit) or **Not recorded** (an analysis from before
 records existed). The report's cover prints the same as **Record Fingerprint**.

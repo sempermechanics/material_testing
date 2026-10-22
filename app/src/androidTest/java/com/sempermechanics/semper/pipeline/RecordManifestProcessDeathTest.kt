@@ -194,7 +194,7 @@ class RecordManifestProcessDeathTest {
         ids += killedFolders
         val killedDir = File(sessionsRoot, killedFolders.single())
         assertTrue("no manifest anywhere a killed run touched", manifestsUnder(killedDir).isEmpty())
-        assertEquals(RecordIntegrity.NotRecorded, RecordVerifier.verify(killedDir))
+        assertEquals(RecordIntegrity.NotRecorded, RecordVerifier.verify(ctx, killedDir))
         assertFalse("no frame was committed", SessionPaths.frameDat(killedDir, 0).exists())
         val stagedFrame0 = SessionPaths.frameDat(SessionPaths.runStaging(killedDir), 0)
         assertTrue("the frame it solved is still staged", stagedFrame0.isFile)
@@ -210,7 +210,7 @@ class RecordManifestProcessDeathTest {
         assertTrue(outcome.saved)
         val dir = File(outcome.batchDirPath)
 
-        assertTrue("signed with the Keystore device key", RecordVerifier.verify(dir) is RecordIntegrity.Verified)
+        assertTrue("signed with the Keystore device key", RecordVerifier.verify(ctx, dir) is RecordIntegrity.Verified)
         val manifest = checkNotNull(ManifestJson.parse(SessionLayout(dir).recordManifest.readText())).manifest
         assertNotNull(manifest.signature)
         assertEquals(spec.recordSettings().subset, manifest.runSpec.subset)

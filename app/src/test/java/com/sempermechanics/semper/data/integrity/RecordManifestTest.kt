@@ -66,6 +66,50 @@ class RecordManifestTest {
 
     private fun fingerprintOf(file: File) = Digests.sha256Hex(file).take(RecordVerifier.FINGERPRINT_HEX)
 
+    /** This phone's key, as the verifier knows it: [signer]'s. */
+    private val localThumbprint: String get() = DeviceKeyThumbprint.of(signer.publicKeyDer())
+
+    private fun verify(local: String? = localThumbprint) = RecordVerifier.verify(dir, local)
+
+    @Test
+    fun `a valid signature by another phone's key reads SignedElsewhere, naming that key`() {
+        stageResults()
+        val other = SoftwareRecordSigner()
+        write(other)
+
+        val result = verify()
+
+        val otherKey = DeviceKeyThumbprint.of(other.publicKeyDer())
+        assertEquals(RecordIntegrity.SignedElsewhere(otherKey, fingerprintOf(layout.recordManifest)), result)
+        assertEquals(otherKey.take(8) + "…", (result as RecordIntegrity.SignedElsewhere).shortThumbprint)
+    }
+
+    @Test
+    fun `a forger who edits a frame and re-signs with a fresh key of their own never reads Verified`() {
+        stageResults()
+        write()
+        val frame = SessionPaths.frameDat(dir, 1)
+        flipByte(frame)
+        // Everything re-hashed and re-signed: the signature holds, by the forger's key.
+        val forger = SoftwareRecordSigner()
+        write(forger)
+
+        val result = verify()
+
+        assertTrue("$result", result is RecordIntegrity.SignedElsewhere)
+        val named = (result as RecordIntegrity.SignedElsewhere).keyThumbprint
+        assertEquals(DeviceKeyThumbprint.of(forger.publicKeyDer()), named)
+    }
+
+    @Test
+    fun `with no key of its own a phone reads every signed manifest as SignedElsewhere`() {
+        stageResults()
+        write()
+
+        assertTrue(verify(local = null) is RecordIntegrity.SignedElsewhere)
+        assertTrue("its own key reads Verified", verify() is RecordIntegrity.Verified)
+    }
+
     @Test
     fun `a signed manifest over untouched results verifies`() {
         stageResults()
@@ -73,7 +117,7 @@ class RecordManifestTest {
 
         val manifest = write()
 
-        assertEquals(RecordIntegrity.Verified(fingerprintOf(layout.recordManifest)), RecordVerifier.verify(dir))
+        assertEquals(RecordIntegrity.Verified(fingerprintOf(layout.recordManifest)), verify())
         assertEquals(1, signer.signed)
         (0 until 3).forEach {
             assertArrayEquals("frame $it untouched", datBefore[it], SessionPaths.frameDat(dir, it).readBytes())
@@ -114,7 +158,7 @@ class RecordManifestTest {
 
         assertEquals(
             RecordIntegrity.Changed(listOf("frame_0001.dat"), fingerprintOf(layout.recordManifest)),
-            RecordVerifier.verify(dir),
+            verify(),
         )
     }
 
@@ -125,7 +169,7 @@ class RecordManifestTest {
         SessionPaths.frameDat(dir, 0).delete()
         SessionPaths.frameDat(dir, 5).writeBytes(ByteArray(32))
 
-        val result = RecordVerifier.verify(dir) as RecordIntegrity.Changed
+        val result = verify() as RecordIntegrity.Changed
 
         assertEquals(listOf("frame_0000.dat", "frame_0005.dat"), result.files)
     }
@@ -136,17 +180,17 @@ class RecordManifestTest {
         write()
 
         layout.fieldRanges.delete()
-        assertTrue("a cache a restore does not bring back", RecordVerifier.verify(dir) is RecordIntegrity.Verified)
+        assertTrue("a cache a restore does not bring back", verify() is RecordIntegrity.Verified)
 
         layout.fieldRanges.writeBytes(byteArrayOf(1))
-        assertEquals(listOf("field_ranges.bin"), (RecordVerifier.verify(dir) as RecordIntegrity.Changed).files)
+        assertEquals(listOf("field_ranges.bin"), (verify() as RecordIntegrity.Changed).files)
     }
 
     @Test
     fun `no manifest reads NotRecorded`() {
         stageResults()
 
-        assertEquals(RecordIntegrity.NotRecorded, RecordVerifier.verify(dir))
+        assertEquals(RecordIntegrity.NotRecorded, verify())
         assertNull(RecordIntegrity.NotRecorded.fingerprint)
     }
 
@@ -161,7 +205,7 @@ class RecordManifestTest {
         assertNull(manifest.keyThumbprint)
         val json = Json.parseToJsonElement(layout.recordManifest.readText()).jsonObject
         assertEquals("the file says it is unsigned", JsonNull, json[ManifestJson.SIGNATURE])
-        assertEquals(RecordIntegrity.Unsigned(fingerprintOf(layout.recordManifest)), RecordVerifier.verify(dir))
+        assertEquals(RecordIntegrity.Unsigned(fingerprintOf(layout.recordManifest)), verify())
     }
 
     @Test
@@ -175,7 +219,7 @@ class RecordManifestTest {
         val manifest = checkNotNull(write(refusing))
 
         assertNull(manifest.signature)
-        assertTrue(RecordVerifier.verify(dir) is RecordIntegrity.Unsigned)
+        assertTrue(verify() is RecordIntegrity.Unsigned)
     }
 
     @Test
@@ -197,7 +241,7 @@ class RecordManifestTest {
         val forged = parsed.copy(files = rehashed(parsed.files, frame))
         layout.recordManifest.writeText(ManifestJson.encode(forged))
 
-        assertEquals(listOf(SessionLayout.MANIFEST), (RecordVerifier.verify(dir) as RecordIntegrity.Changed).files)
+        assertEquals(listOf(SessionLayout.MANIFEST), (verify() as RecordIntegrity.Changed).files)
     }
 
     @Test
@@ -209,7 +253,7 @@ class RecordManifestTest {
             ManifestJson.encode(manifest.copy(keyThumbprint = DeviceKeyThumbprint.of(other.publicKeyDer()))),
         )
 
-        assertTrue(RecordVerifier.verify(dir) is RecordIntegrity.Changed)
+        assertTrue(verify() is RecordIntegrity.Changed)
     }
 
     @Test
@@ -221,7 +265,7 @@ class RecordManifestTest {
         val forged = manifest.copy(signature = null, files = rehashed(manifest.files, frame))
         layout.recordManifest.writeText(ManifestJson.encode(forged))
 
-        assertTrue(RecordVerifier.verify(dir) is RecordIntegrity.Unsigned)
+        assertTrue(verify() is RecordIntegrity.Unsigned)
     }
 
     @Test
@@ -229,12 +273,12 @@ class RecordManifestTest {
         stageResults()
         layout.recordManifest.writeText("[not a manifest")
 
-        val result = RecordVerifier.verify(dir) as RecordIntegrity.Changed
+        val result = verify() as RecordIntegrity.Changed
 
         assertEquals(listOf(SessionLayout.MANIFEST), result.files)
         assertEquals(fingerprintOf(layout.recordManifest), result.fingerprint)
         layout.recordManifest.writeText("[1, 2]")
-        assertTrue(RecordVerifier.verify(dir) is RecordIntegrity.Changed)
+        assertTrue(verify() is RecordIntegrity.Changed)
     }
 
     @Test
@@ -245,7 +289,7 @@ class RecordManifestTest {
             ManifestJson.encode(manifest.copy(files = manifest.files + RecordManifest.FileEntry("../x.dat", 1, "00"))),
         )
 
-        assertEquals(listOf("../x.dat"), (RecordVerifier.verify(dir) as RecordIntegrity.Changed).files)
+        assertEquals(listOf("../x.dat"), (verify() as RecordIntegrity.Changed).files)
     }
 
     @Test
@@ -299,7 +343,7 @@ class RecordManifestTest {
         val signature = JsonPrimitive(signer.sign(ManifestJson.canonicalBytes(obj)))
         layout.recordManifest.writeText(JsonObject(obj + (ManifestJson.SIGNATURE to signature)).toString())
 
-        assertTrue(RecordVerifier.verify(dir) is RecordIntegrity.Verified)
+        assertTrue(verify() is RecordIntegrity.Verified)
     }
 
     @Test
@@ -307,6 +351,10 @@ class RecordManifestTest {
         val fp = "0123456789abcdef"
         assertEquals("$fp (verified)", recordFingerprintText(RecordIntegrity.Verified(fp)))
         assertEquals("$fp (not signed)", recordFingerprintText(RecordIntegrity.Unsigned(fp)))
+        assertEquals(
+            "$fp (signed on another device, key abcdefgh…; not verified here)",
+            recordFingerprintText(RecordIntegrity.SignedElsewhere("abcdefghijklmnop", fp)),
+        )
         assertEquals(
             "$fp (CHANGED since analysis: 2 file(s))",
             recordFingerprintText(RecordIntegrity.Changed(listOf("a.dat", "b.dat"), fp)),

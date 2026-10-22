@@ -60,6 +60,8 @@ fun recordFingerprintText(integrity: RecordIntegrity): String {
         is RecordIntegrity.Verified -> "$fingerprint (verified)"
         is RecordIntegrity.Changed -> "$fingerprint (CHANGED since analysis: ${integrity.files.size} file(s))"
         is RecordIntegrity.Unsigned -> "$fingerprint (not signed)"
+        is RecordIntegrity.SignedElsewhere ->
+            "$fingerprint (signed on another device, key ${integrity.shortThumbprint}; not verified here)"
         RecordIntegrity.NotRecorded -> "Not recorded"
     }
 }

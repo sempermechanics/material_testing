@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.data.StagingOutcome
 import com.sempermechanics.semper.data.UploadArtifact
 import com.sempermechanics.semper.data.UploadStaging
+import com.sempermechanics.semper.data.account.entitlement.DeviceKeyThumbprint
 import com.sempermechanics.semper.data.cloud.UploadProgressSampler
 import com.sempermechanics.semper.data.cloud.restore.RestoreUnpacker
 import com.sempermechanics.semper.data.net.ArtifactRoles
@@ -32,8 +33,8 @@ import java.util.zip.ZipFile
  * The record manifest goes where the results go (ADR-028): into `Session.zip`
  * as `dat/record_manifest.json` (the backend validates roles, so it rides on
  * `dat`), the same bytes on every staging attempt, and back beside the frames
- * on a restore, where it still verifies, on any phone, since it carries its
- * public key.
+ * on a restore: Verified on the phone whose key signed it, "Signed on another
+ * device" on any other.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
@@ -119,14 +120,19 @@ class RecordManifestBackupTest {
     }
 
     @Test
-    fun `a restore puts the manifest back beside the frames, and it verifies there`() {
+    fun `a restore puts the manifest back beside the frames, Verified on the signing phone and not elsewhere`() {
         val zip = bundleOf(stage(record(), bake = true))
         val restored = SessionLayout(tmp.newFolder("restored")).apply { rawDeformedDir.mkdirs() }
 
         RestoreUnpacker.unpackBundle(zip, restored)
 
         assertTrue(restored.recordManifest.isFile)
-        assertTrue(RecordVerifier.verify(restored.dir) is RecordIntegrity.Verified)
+        val signingPhone = DeviceKeyThumbprint.of(signer.publicKeyDer())
+        assertTrue(RecordVerifier.verify(restored.dir, signingPhone) is RecordIntegrity.Verified)
+        val otherPhone = DeviceKeyThumbprint.of(SoftwareRecordSigner().publicKeyDer())
+        val elsewhere = RecordVerifier.verify(restored.dir, otherPhone)
+        assertEquals(RecordIntegrity.SignedElsewhere::class, elsewhere::class)
+        assertEquals(signingPhone, (elsewhere as RecordIntegrity.SignedElsewhere).keyThumbprint)
     }
 
     @Test
@@ -137,6 +143,7 @@ class RecordManifestBackupTest {
 
         restored.frameDat(0).writeBytes(ByteArray(64))
 
-        assertEquals(listOf("frame_0000.dat"), (RecordVerifier.verify(restored.dir) as RecordIntegrity.Changed).files)
+        val result = RecordVerifier.verify(restored.dir, DeviceKeyThumbprint.of(signer.publicKeyDer()))
+        assertEquals(listOf("frame_0000.dat"), (result as RecordIntegrity.Changed).files)
     }
 }

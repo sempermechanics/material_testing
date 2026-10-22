@@ -335,24 +335,31 @@ internal fun integrityText(host: ResultViewerActivity, integrity: RecordIntegrit
         is RecordIntegrity.Verified -> R.string.record_integrity_verified
         is RecordIntegrity.Changed -> R.string.record_integrity_changed
         is RecordIntegrity.Unsigned -> R.string.record_integrity_unsigned
+        is RecordIntegrity.SignedElsewhere -> R.string.record_integrity_signed_elsewhere
         RecordIntegrity.NotRecorded -> R.string.record_integrity_not_recorded
     },
 )
 
 /**
- * The warning under the rows when the record has [RecordIntegrity.Changed]:
- * which files, the first [MAX_NAMED_FILES] by name. Null otherwise.
+ * The warning under the rows: when the record has [RecordIntegrity.Changed],
+ * which files, the first [MAX_NAMED_FILES] by name; when another device's key
+ * signed it ([RecordIntegrity.SignedElsewhere]), that key and that it is not
+ * a pass. Null otherwise.
  */
-internal fun integrityWarning(host: ResultViewerActivity, integrity: RecordIntegrity?): String? {
-    val changed = (integrity as? RecordIntegrity.Changed)?.files ?: return null
+internal fun integrityWarning(host: ResultViewerActivity, integrity: RecordIntegrity?): String? = when (integrity) {
+    is RecordIntegrity.SignedElsewhere ->
+        host.getString(R.string.record_integrity_signed_elsewhere_warn_fmt, integrity.shortThumbprint)
+    is RecordIntegrity.Changed ->
+        host.getString(R.string.record_integrity_changed_warn_fmt, changedFiles(host, integrity.files))
+    else -> null
+}
+
+/** [changed] by name, the first [MAX_NAMED_FILES], then a count of the rest. */
+private fun changedFiles(host: ResultViewerActivity, changed: List<String>): String {
     val named = changed.take(MAX_NAMED_FILES).joinToString()
-    val files = if (changed.size > MAX_NAMED_FILES) {
-        val more = changed.size - MAX_NAMED_FILES
-        host.resources.getQuantityString(R.plurals.record_integrity_more_fmt, more, named, more)
-    } else {
-        named
-    }
-    return host.getString(R.string.record_integrity_changed_warn_fmt, files)
+    if (changed.size <= MAX_NAMED_FILES) return named
+    val more = changed.size - MAX_NAMED_FILES
+    return host.resources.getQuantityString(R.plurals.record_integrity_more_fmt, more, named, more)
 }
 
 /** Changed files the warning names before it counts the rest. */

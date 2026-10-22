@@ -6,8 +6,11 @@ import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.sempermechanics.semper.R
+import com.sempermechanics.semper.data.account.entitlement.DeviceKeyThumbprint
+import com.sempermechanics.semper.data.integrity.LocalRecordKey
 import com.sempermechanics.semper.data.integrity.RecordIntegrity
 import com.sempermechanics.semper.data.integrity.RecordManifestWriter
+import com.sempermechanics.semper.data.integrity.RecordSigner
 import com.sempermechanics.semper.data.session.SessionRecordSettings
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.fixtures.SoftwareRecordSigner
@@ -15,6 +18,7 @@ import com.sempermechanics.semper.fixtures.idleUntil
 import com.sempermechanics.semper.fixtures.launchViewer
 import com.sempermechanics.semper.fixtures.sessionRecord
 import com.sempermechanics.semper.fixtures.viewerArgs
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -42,6 +46,9 @@ class SettingsUsedSheetTest {
 
     private lateinit var batchDir: File
 
+    /** This phone's device key, as the viewer's check reads it (Robolectric has no Keystore). */
+    private val phoneKey = SoftwareRecordSigner()
+
     private companion object {
         const val FRAMES = 3
         const val GRID = 4
@@ -50,6 +57,7 @@ class SettingsUsedSheetTest {
 
     @Before
     fun writeBatch() {
+        LocalRecordKey.useForTest { DeviceKeyThumbprint.of(phoneKey.publicKeyDer()) }
         batchDir = temp.newFolder("batch")
         for (f in 0 until FRAMES) {
             val points = GRID * GRID
@@ -64,6 +72,9 @@ class SettingsUsedSheetTest {
             File(batchDir, "frame_%03d.dat".format(f)).writeBytes(buffer.array())
         }
     }
+
+    @After
+    fun forgetPhoneKey() = LocalRecordKey.useForTest()
 
     /** A plain three-frame run over the whole 16×16 image, opened on frame 1. */
     private fun baseArgs() = viewerArgs(batchDir, GRID, STEP).copy(strainWindow = 25, refName = "Dogbone A")
@@ -159,14 +170,14 @@ class SettingsUsedSheetTest {
 
     private fun integrityRow(host: ResultViewerActivity) = host.rows()[host.getString(R.string.settings_used_integrity)]
 
-    private fun writeManifest(signed: Boolean) {
+    private fun writeManifest(signer: RecordSigner?) {
         val settings = SessionRecordSettings(41, STEP, 25, 0, 0, GRID * STEP, GRID * STEP, false)
-        RecordManifestWriter.write(batchDir, settings, if (signed) SoftwareRecordSigner() else null)
+        RecordManifestWriter.write(batchDir, settings, signer)
     }
 
     @Test
-    fun `a record whose signed manifest holds reads Verified, with no warning`() {
-        writeManifest(signed = true)
+    fun `a record this phone's key signed reads Verified, with no warning`() {
+        writeManifest(phoneKey)
         val host = viewer()
 
         assertEquals("Verified", integrityRow(host))
@@ -177,14 +188,14 @@ class SettingsUsedSheetTest {
 
     @Test
     fun `an unsigned manifest reads Not signed`() {
-        writeManifest(signed = false)
+        writeManifest(signer = null)
 
         assertEquals("Not signed", integrityRow(viewer()))
     }
 
     @Test
     fun `an edited frame reads Changed since analysis and the warning names it`() {
-        writeManifest(signed = true)
+        writeManifest(phoneKey)
         File(batchDir, "frame_001.dat").appendBytes(ByteArray(DicResult.BYTES_PER_POINT))
         val host = viewer()
 
@@ -195,6 +206,21 @@ class SettingsUsedSheetTest {
         assertEquals(View.VISIBLE, warn.visibility)
         val text = warn.findViewById<TextView>(R.id.tvWarnText).text.toString()
         assertTrue(text, text.endsWith(": frame_001.dat"))
+    }
+
+    @Test
+    fun `a record another device's key signed reads Signed on another device, never Verified`() {
+        val other = SoftwareRecordSigner()
+        writeManifest(other)
+        val host = viewer()
+
+        assertEquals("Signed on another device", integrityRow(host))
+        SettingsUsedSheet.show(host)
+        val warn = ShadowDialog.getLatestDialog().findViewById<View>(R.id.integrityWarnRow)
+        assertEquals(View.VISIBLE, warn.visibility)
+        val text = warn.findViewById<TextView>(R.id.tvWarnText).text.toString()
+        val short = DeviceKeyThumbprint.of(other.publicKeyDer()).take(8) + "…"
+        assertTrue(text, text.contains("(key $short)") && text.contains("registered devices"))
     }
 
     @Test

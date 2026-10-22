@@ -220,9 +220,10 @@ class ResultViewerActivity :
         val knownSize = args.imageSize
         val viewerArgs = args
         val recordDir = args.batchDirPath?.let(::File)
+        val appContext = applicationContext
         viewModel.listFrames(
             frameSetDispatcher,
-            check = { recordDir?.let(RecordVerifier::verify) ?: RecordIntegrity.NotRecorded },
+            check = { recordDir?.let { RecordVerifier.verify(appContext, it) } ?: RecordIntegrity.NotRecorded },
         ) { ViewerFrameLoader.readFrameSet(viewerArgs, refPath, knownSize) }
         lifecycleScope.launch {
             val set = viewModel.state.mapNotNull { it.frameSet }.first()
