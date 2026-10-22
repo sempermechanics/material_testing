@@ -11,8 +11,10 @@ from ..models import DeviceReg
 
 from . import _base
 from ._base import (
+    PURPOSE_CI,
     _BATCH_LIMIT,
     _active_devices,
+    _stream,
     db,
     _load_user,
     _now,
@@ -20,7 +22,6 @@ from ._base import (
     SCHEMA_VERSION,
     _get,
     _commit,
-    _stream,
     _set_doc,
     _create_doc,
     max_test_devices,
@@ -111,6 +112,24 @@ def forget_device_sessions(uid: str, device_ids) -> int:
     return changed
 
 
+def _oldest_active_devices(uid: str, app: str, *, exclude: str, count: int) -> list[str]:
+    """The `count` devices ACTIVE for `uid` in `app` that registered first,
+    `exclude` left out: the ones a full CI test account gives up for a new
+    phone. A record without `registeredAt` counts as the oldest; ties go by id.
+    The same equality query as `_active_devices`."""
+    if count <= 0:
+        return []
+    found = []
+    for snap in _stream(db().collection("devices").where("uid", "==", uid)):
+        dev = snap.to_dict() or {}
+        if (snap.id != exclude and dev.get("status") == statuses.DEVICE_ACTIVE
+                and (dev.get("app") or apps.SEMPER) == app):
+            registered = dev.get("registeredAt")
+            found.append((registered is not None, registered or 0, snap.id))
+    found.sort(key=lambda row: (row[0], row[1], row[2]))
+    return [device_id for _, _, device_id in found[:count]]
+
+
 def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
                     step_up_eligible: bool = False) -> dict:
     """Bind `body.deviceId` to `uid` for `app`, or raise `Refusal`.
@@ -125,7 +144,11 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
 
     A test account (ADR-027) is not bound to one device: it may register
     while fewer than its `maxDevices` devices are ACTIVE for `app`, and its
-    `activeDeviceId` names the latest. A real account is unchanged.
+    `activeDeviceId` names the latest. A full QC account is refused
+    (`device_conflict`); a full CI account instead retires its oldest ACTIVE
+    phones as superseded in the same transaction, since every CI run is a
+    fresh emulator with a new key (TD-313). The answer's `rotated` lists them.
+    A real account is unchanged.
 
     `step_up_eligible` is whether the registering token proved a second factor
     (ADR-010, device trust). Stamped on every registration, a heal included,
@@ -151,9 +174,11 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
     # Only one device may be active per account and app (the app's
     # `activeDeviceId` field is the single binding, ADR-010).
     active_field = apps.field("activeDeviceId", app)
+    rotated: list[str] = []
 
     @_base.firestore.transactional
     def _register(tx):
+        rotated.clear()  # a contended transaction runs this again
         user_snap = _get(user_ref, tx)
         held_user = (user_snap.to_dict() or {}) if user_snap.exists else {}
         tag = test_account_of(held_user)
@@ -162,8 +187,11 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
             # Counted after the user document is read in this transaction:
             # every registration writes that document, so a second phone
             # registering at once retries and counts this one.
-            if len(_active_devices(uid, app, exclude=body.deviceId)) >= max_test_devices(tag):
+            over = (len(_active_devices(uid, app, exclude=body.deviceId))
+                    - max_test_devices(tag) + 1)
+            if over > 0 and tag.get("purpose") != PURPOSE_CI:
                 raise Refusal(errors.DEVICE_CONFLICT)
+            rotated.extend(_oldest_active_devices(uid, app, exclude=body.deviceId, count=over))
         else:
             bound = held_user.get(active_field) if user_snap.exists else None
             if bound and bound != body.deviceId:
@@ -172,6 +200,11 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
         held = (existing.to_dict() or {}) if existing.exists else {}
         if held.get("status") == statuses.DEVICE_ACTIVE and held.get("uid") != uid:
             raise Refusal(errors.DEVICE_IN_USE)
+        for old in rotated:  # the writes come after every read of the transaction
+            tx.update(db().collection("devices").document(old), {
+                "status": statuses.DEVICE_SUPERSEDED,
+                "revokedAt": _base.firestore.SERVER_TIMESTAMP,
+            })
         tx.set(device_ref, dev)
         # A registration ends any release hold: either the new phone has
         # arrived, or the hold has run out and the old one is back.
@@ -188,7 +221,7 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
     user = _load_user(uid)
     if user:
         ensure_entitlement(user, body.deviceId)
-    return {**dev, "deviceId": body.deviceId}
+    return {**dev, "deviceId": body.deviceId, "rotated": list(rotated)}
 
 
 # ---------------- challenge / nonce ----------------

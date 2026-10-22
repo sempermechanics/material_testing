@@ -561,15 +561,13 @@ Details and failure triage: [ops/CI.md](ops/CI.md).
 Ranked by how often it costs someone an afternoon. Each has a proposed fix in
 [ops/FUTURE_IMPROVEMENTS.md](ops/FUTURE_IMPROVEMENTS.md).
 
-**E2.1 The viewer's input state is packed in two places and read in four.**
-~25 `IntentKeys` extras are built by `AnalysisNavHelper.openResults` (fresh run) and
-again by `SessionOpenHelper.intentFor` (reopen from Home / Settings), and the two
-sets are not identical — `DEF_PATH` and `DEF_FILE_PATHS`, for instance, exist
-only on the fresh-run path. They are then read in `ResultViewerActivity` (~20
-sites), `VsgLatticeActivity` (~16), `SettingsUsedSheet` (~12) and
-`ViewerReportFactory` (~8). A missing extra is not an error: it silently becomes
-a default, so the same session can render differently depending on how it was
-opened, with nothing in the log. → **FI-1**
+**E2.1 The viewer's input state (resolved).** It was packed in two places and
+read in four, with a missing extra silently defaulting. `ViewerArgs`
+(`ui/viewer/ViewerArgs.kt`) is now the one writer (`toIntent`, both entry
+points; `ViewerArgsTest` compares their key sets) and the one parse
+(`ViewerArgs.from(intent, record)`, `:296`): a missing key is filled from the
+session record, else from one documented default, and logged
+([ADR-003](adr/ADR-003-viewerargs-read-side.md); FI-1, done).
 
 **E2.2 Upload/restore instrumentation.** *(Fixed 2026-08-31 — `TransferLog` JSON phase lines.)*
 

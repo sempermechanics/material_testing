@@ -8,11 +8,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from google.api_core import exceptions as gexc
 from starlette.datastructures import Headers, MutableHeaders
 
 from . import apps, errors
 from . import observability as obs
 from .config import settings
+from .deps import DEPENDENCY_RETRY_AFTER_SECONDS
 from .routers import (
     account,
     admin,
@@ -193,7 +195,14 @@ class EdgeMiddleware:
                     await refusal(scope, receive, send_with_headers)
                 else:
                     await self.app(scope, capped_receive, send_with_headers)
-            except Exception:
+            except Exception as exc:
+                if not started and _is_firestore_outage(exc):
+                    # A contract answer, not a hidden failure, so it is the
+                    # same locally and on Cloud Run (as `/readyz`'s is).
+                    outage = obs.DependencyError(errors.FIRESTORE_UNREACHABLE, "firestore")
+                    outage.__cause__ = exc
+                    await _dependency_response(outage)(scope, receive, send_with_headers)
+                    return
                 obs.report_exception(log, error_code=errors.INTERNAL_ERROR)
                 # In production, never leak exception text to clients. Locally
                 # and in tests, re-raise so pytest and debuggers still see the
@@ -235,14 +244,37 @@ class EdgeMiddleware:
 app.add_middleware(EdgeMiddleware)
 
 
-@app.exception_handler(obs.DependencyError)
-async def dependency_error_handler(request: Request, exc: obs.DependencyError):
+#: Firestore failures that mean "Firestore is not answering", not "this call
+#: was wrong": the client's own retry gave up on them (`repo/_base.py`).
+_FIRESTORE_OUTAGES = (gexc.ServiceUnavailable, gexc.DeadlineExceeded)
+
+
+def _is_firestore_outage(exc: BaseException) -> bool:
+    """`UNAVAILABLE` or `DEADLINE_EXCEEDED` from a Firestore call, raw or as
+    the `RetryError` api-core raises when the retry window runs out on one
+    (TD-250). Anything else stays a 500."""
+    if isinstance(exc, gexc.RetryError):
+        exc = exc.cause
+    return isinstance(exc, _FIRESTORE_OUTAGES)
+
+
+def _dependency_response(exc: obs.DependencyError) -> JSONResponse:
+    """The one answer and log line for a dependency outage, whether a route
+    raised `obs.DependencyError` or the edge mapped a Firestore outage."""
     obs.log_event(
         log, logging.ERROR, "dependency_failure",
         outcome="error", errorCode=exc.code, dependency=exc.dependency,
         status=exc.status_code,
     )
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.code})
+    return JSONResponse(
+        status_code=exc.status_code, content={"detail": exc.code},
+        headers={"Retry-After": str(DEPENDENCY_RETRY_AFTER_SECONDS)},
+    )
+
+
+@app.exception_handler(obs.DependencyError)
+async def dependency_error_handler(request: Request, exc: obs.DependencyError):
+    return _dependency_response(exc)
 
 
 @app.exception_handler(errors.Refusal)
