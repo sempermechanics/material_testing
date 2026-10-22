@@ -128,13 +128,21 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
 
 ## 5. Monitoring (TD-217)
 
-- [ ] Dry run:
+- [x] Dry run:
       `scripts/apply-monitoring.sh --project indicvision-dic-app --notification-channel <id> --staging-service semper-api-staging`.
+      Done 2026-10-22 with a placeholder channel: 24 files render as valid JSON with
+      no unfilled placeholder; it would create 9 log metrics, the `/readyz` uptime
+      check, the service and its 99.5 % SLO, 8 alert policies and 4 dashboards. The
+      project has **none** of these today, and **no notification channel** in either
+      project, so `--apply` first needs a channel created
+      (`gcloud beta monitoring channels create`, email to the on-call address).
 - [ ] The same with `--apply`: log metrics, uptime check, SLO and burn-rate
-      alerts, four dashboards.
-- [ ] `scripts/check_gcp_posture.sh` against both projects, with
+      alerts, four dashboards; then the `run.invoker` grant for the Monitoring
+      service agent that the script prints under "By hand, once".
+- [x] `scripts/check_gcp_posture.sh` against both projects, with
       `--backup-bucket <FIRESTORE_BACKUP_BUCKET>`; record the output in
-      [PRODUCTION_READINESS_GATE.md](PRODUCTION_READINESS_GATE.md).
+      [PRODUCTION_READINESS_GATE.md](PRODUCTION_READINESS_GATE.md). Done 2026-10-22
+      (18 FAIL; recorded there). On Windows the script needs `python3` on `PATH`.
 
 ## 6. After the deploy
 
