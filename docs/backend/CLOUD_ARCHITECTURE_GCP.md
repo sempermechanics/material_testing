@@ -1016,9 +1016,15 @@ Every Firestore call in `backend/app` now goes through a helper in
   `internal_error`. `tests/test_firestore_outage.py` covers both.
 - **`_stream` returns a list.** The deadline covers the whole server stream,
   so the helper reads the stream to the end before the caller writes anything.
-- **Not covered.** A transaction's begin and commit take no timeout in the
-  client's public API (google-cloud-firestore 2.32), so they keep the 60 s
-  default. The reads inside a transaction are covered. Open as TD-210.
+- **Not covered, by decision.** A transaction's begin and commit take no
+  timeout in the client's public API (google-cloud-firestore 2.32:
+  `Transaction._begin` and `_commit` pass `metadata` only), so they keep the
+  60 s default, and a contended transaction may begin and commit up to
+  `_TX_ATTEMPTS` (10) times (`repo/_base.py:47`). The reads inside a
+  transaction are covered. Accepted on 2026-10-22 (product owner, TD-210): a
+  deadline around the whole call can give up while its commit still lands,
+  and a timeout through the client's private API breaks on a client bump.
+  Revisit when the client exposes a timeout on begin and commit.
 
 `tests/test_firestore_timeouts.py` fails on a raw `.get()`, `.stream()`,
 `get_all`, `.commit()` or document write anywhere in `backend/app` outside
