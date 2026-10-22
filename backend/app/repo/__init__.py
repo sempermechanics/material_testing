@@ -17,6 +17,7 @@ from ._base import (  # noqa: F401
     ping,
     get_license,
     max_test_devices,
+    staff_released_from,
     test_account_of,
 )
 from .audit_log import (  # noqa: F401
@@ -106,7 +107,6 @@ from .institution_admin import (  # noqa: F401
 from .devices import (  # noqa: F401
     get_device,
     register_device,
-    staff_released_from,
     forget_device_sessions,
     issue_nonce,
     consume_nonce,

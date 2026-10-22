@@ -110,8 +110,11 @@ How the backend carries them out:
   (`releasedDeviceId`, which a test account skips) and touches no session.
   Audited `test_account_device_released` with `{deviceId, app}`. The released
   phone may not take its place back: registration refuses it for the same
-  account with `device_conflict` (`repo/devices.py`, `staff_released_from`),
-  and the router audits that DENIED with `reason: "staff_released"`. Another
+  account with `device_conflict` (`repo/devices.py`, `register_device`, asking
+  `repo/_base.py`, `staff_released_from`),
+  and the router audits that DENIED with `reason: "staff_released"`. The
+  licence lock (`devlock._test_lock_verdict`) gives it Demo, not the room an
+  unregistered phone gets, so it is not licensed even for a config call. Another
   account may register it (its record is then that account's, without the
   stamp); a CI rotation (SUPERSEDED, no stamp) and real accounts are unchanged.
   The staff list carries each ACTIVE phone (`devices`), and the console's Test
@@ -166,7 +169,8 @@ How the backend carries them out:
   what registration bounds.
 - **A phone not yet registered is licensed while there is room.** For a config
   call only, as an unbound licence already is for a real account's first phone;
-  every signed route still needs a registered device.
+  every signed route still needs a registered device. A phone staff released
+  from the account is not such a phone: it is Demo (TD-314).
 - **A released phone is gone for good from that login.** A QC phone beyond
   `maxDevices` is refused at registration; staff free a place by releasing one
   phone (TD-314). The phone released cannot register for the same account

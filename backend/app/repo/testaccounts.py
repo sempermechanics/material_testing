@@ -15,6 +15,7 @@ from ._base import (
     PURPOSE_CI,
     PURPOSE_QC,
     SCHEMA_VERSION,
+    STAFF_RELEASED,
     _create_doc,
     _get,
     _now,
@@ -24,7 +25,7 @@ from ._base import (
     db,
     test_account_of,
 )
-from .devices import STAFF_RELEASED, _retire_device
+from .devices import _retire_device
 from .users import _link_auth_uid
 
 PURPOSES = (PURPOSE_QC, PURPOSE_CI)

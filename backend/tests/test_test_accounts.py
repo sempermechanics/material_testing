@@ -621,6 +621,35 @@ async def test_release_takes_the_fresh_staff_step_up(client, world, browser_staf
     assert row["uid"] == "staff-1"
 
 
+async def test_a_released_phone_is_not_licensed_by_config_while_a_new_one_is(
+        client, world, monkeypatch):
+    created = (await _create(client, maxDevices=2)).json()
+    uid = created["uid"]
+    _register(uid, "and-phone-1")
+    _register(uid, "and-phone-2")
+    assert (await _release(client, uid, "and-phone-1")).status_code == 200
+    # The account's own token, so `current_user` checks the licence lock
+    # against the phone's id (the dev user skips it); App Check passes.
+    monkeypatch.setattr(settings, "DEV_INSECURE_AUTH", False)
+    monkeypatch.setattr(deps, "verify_id_token", lambda _t: {
+        "sub": uid, "email": QC_EMAIL, "email_verified": True,
+        "firebase": {"sign_in_provider": "password"}})
+    monkeypatch.setattr(deps, "_require_app_check", lambda *a, **k: None)
+
+    async def mode(device):
+        r = await client.get("/v1/config", headers={"Authorization": "Bearer t",
+                                                    "X-Device-Id": device})
+        assert r.status_code == 200, r.text
+        return r.json()["mode"]
+
+    # Room for one more, but not for the phone that gave its place up.
+    assert await mode("and-phone-1") == "demo"
+    assert await mode("and-phone-new") == "licensed"
+    assert await mode("and-phone-2") == "licensed"
+    # Only a Demo answer for that request: the account stays licensed.
+    assert world["store"]._data["users"][uid]["mode"] == "licensed"
+
+
 # ------------------------------------------------------------------ end
 
 

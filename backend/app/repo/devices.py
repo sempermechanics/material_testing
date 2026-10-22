@@ -25,6 +25,7 @@ from ._base import (
     _set_doc,
     _create_doc,
     max_test_devices,
+    staff_released_from,
     test_account_of,
 )
 from .entitlement import (
@@ -114,19 +115,6 @@ def forget_device_sessions(uid: str, device_ids) -> int:
             _commit(batch)
         changed += len(refs)
     return changed
-
-
-#: Stamped on a test-account phone staff released on its own (TD-314,
-#: `repo.testaccounts.release_test_device`): that phone may not register for
-#: the same account again, so it cannot take back the place it gave up.
-STAFF_RELEASED = "staffReleased"
-
-
-def staff_released_from(device: dict | None, uid: str) -> bool:
-    """Whether `device` (a devices document) is a phone staff released from
-    the test account `uid`. Another account's record, a CI rotation
-    (SUPERSEDED, no stamp) or a real account's release is not."""
-    return bool(device) and device.get("uid") == uid and device.get(STAFF_RELEASED) is True
 
 
 def _oldest_active_devices(uid: str, app: str, *, exclude: str, count: int) -> list[str]:
