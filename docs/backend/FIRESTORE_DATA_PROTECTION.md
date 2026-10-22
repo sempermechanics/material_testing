@@ -169,9 +169,12 @@ so it keeps the address out of clear text; it does not stop someone with a list 
 candidate addresses from confirming one. A licence's free-text `note` is
 recorded by `ADMIN_LICENSE_EXTEND` only as changed and its length
 (`backend/app/routers/admin.py:29-40`). Access is server/admin-only under the deny-all client rules.
-Legal/privacy owners must set and document the retention period and configure a
-Firestore TTL field before production launch; backups inherit the same approved
-retention/legal-hold policy.
+Rows are kept **one year** (365 days; the owner's decision of 2026-10-22, TD-237):
+each carries `expireAt` = its time + `AUDIT_RETENTION_DAYS` (`backend/app/config.py`,
+default 365), set as it is added (`add_audit_row`, `backend/app/repo/audit_log.py`),
+and a Firestore TTL policy on `audit_logs.expireAt` deletes it then. Rows from
+before the change get `expireAt` from the TD-246 backfill (below). Backups inherit
+the same retention/legal-hold policy.
 
 ### The audit trail is append-only
 
@@ -180,15 +183,19 @@ What the code holds (TD-237):
 - Only `add_audit_row` writes `audit_logs`, and it only adds a document
   (`backend/app/repo/audit_log.py`). No other module names the collection, and
   the audit repo calls no update, set or delete; `backend/tests/test_audit_append_only.py`
-  fails if either changes.
+  fails if either changes. The row's `expireAt` (now + `AUDIT_RETENTION_DAYS`) is
+  written with it, so retention never needs the row rewritten.
 - A migration that walks `audit_logs` must say why, in a module-level
   `rewrites_append_only` (`backend/scripts/migrations/__init__.py`, `APPEND_ONLY`);
   the loader refuses one that does not. `001_stamp_schema_version` is the one
   that did, before the guard. The one other rewrite written,
   `backend/scripts/stamp_audit_licence_ids.py` (TD-246: adds `licenseId` to
-  rows from before 2026-10-18 so a licence's export reaches them, and nothing
-  else), refuses `--apply` without `--decision` and records it in
-  `_migrations`. It has not been run; running it is the owner's call.
+  rows from before 2026-10-18 so a licence's export reaches them, and
+  `expireAt` = `ts` + `AUDIT_RETENTION_DAYS` to rows written before
+  `add_audit_row` set it, so TTL reaches them; nothing else, and never a field
+  a row already has), refuses `--apply` without `--decision` and records it in
+  `_migrations`. The owner approved running it on 2026-10-22; it has not been
+  run yet.
 - Clients cannot read or write it: `firestore.rules` denies everything, and
   `firestore-rules-tests/rules.test.mjs` tries an update, a merge, an
   overwrite and a delete of an audit row as each caller, an Org Owner's claims
@@ -201,11 +208,14 @@ What the code holds (TD-237):
 What it does not hold: anyone with Firestore IAM on the project can still
 edit or delete a row through the Admin API. The immutable copy is the log
 line, once a sink routes it to a bucket whose retention is locked. The
-retention period is the legal/privacy owners' decision above; with it:
+retention is the one year decided above, the same as `AUDIT_RETENTION_DAYS`.
+In this order, after the backend that writes `expireAt` is deployed and the
+TD-246 backfill has run (dry run, then `--apply --decision "…"`), so every row
+carries `expireAt` before TTL acts on any:
 
 ```bash
 gcloud logging buckets create audit-trail --location=$REGION \
-  --retention-days=<RETENTION_DAYS> --project=$PROJECT
+  --retention-days=365 --project=$PROJECT
 gcloud logging sinks create audit-trail \
   logging.googleapis.com/projects/$PROJECT/locations/$REGION/buckets/audit-trail \
   --log-filter='resource.type="cloud_run_revision" AND jsonPayload.event="audit_row"' \
@@ -213,8 +223,19 @@ gcloud logging sinks create audit-trail \
 # Irreversible: a locked bucket's retention can only be raised, and no one
 # can delete a log entry or the bucket before it expires.
 gcloud logging buckets update audit-trail --location=$REGION --locked --project=$PROJECT
+# Then Firestore deletes each row at its expireAt. A backfilled row already
+# older than a year has an expireAt in the past and goes within about a day.
+gcloud firestore fields ttls update expireAt --collection-group=audit_logs \
+  --enable-ttl --project=$PROJECT
 ```
 
 Check: an audited action (a staff licence edit) appears in the bucket, and
 `gcloud logging buckets update audit-trail --location=$REGION --retention-days=1`
-is refused.
+is refused; `gcloud firestore fields ttls list --collection-group=audit_logs
+--project=$PROJECT` shows `expireAt` in state `ACTIVE` (a few minutes after).
+
+The policy is also declared in `backend/firestore.indexes.json` (`fieldOverrides`,
+`"ttl": true`), as the other TTL policies are, so `scripts/deploy-firestore.sh
+indexes` keeps it instead of stopping on a live policy the file omits. It also
+means an indexes deploy run before the command above creates the policy then;
+run either only once the backfill is done. Never pass `--force`.

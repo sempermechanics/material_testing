@@ -151,7 +151,43 @@ Play cannot recall a build. In order of speed:
 | Backend revision | Traffic back to the previous revision | `gcloud run services update-traffic semper-api --to-revisions=<previous>=100 --region asia-south1`; the image is kept as `rollback-prev` ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A7). Firestore is never rolled back by a deploy |
 | Hotfix | A new build with a higher `versionCode` | The release workflow's run number makes every release higher than the last (Versioning above); roll it out with the same stages, faster soak if the fix is narrow |
 
-None of these levers has been drilled on a running service yet (TD-220).
+Set a lever on the GitHub environment (`gh variable set NAME --env staging`), not
+the repository, so a drill on staging never reaches the next production deploy:
+`deploy-backend.yml` runs under `environment:`, whose variables win over the
+repository's.
+
+**Drill on staging, 2026-10-22** (TD-220), with a debug build at versionCode 100
+pointed at `semper-api-staging`, signed in as a QC test account on an Android 14
+and an Android 12 emulator; each step is a `deploy-backend.yml` run from `main`
+with `gateway_mode=dry-run`:
+
+1. `KILL_SWITCHES="backup share restore"` (run 39752109438). The viewer's Share
+   is greyed and a tap says "Sharing is temporarily unavailable"; Settings hides
+   Cloud backup and Analyses data management (`FeatureLocks.settings`), so
+   neither backup nor restore can be asked for; the app sends no
+   `POST /v1/sessions`. A client that ignores the config (the CI round trip,
+   `StagingRoundTripDeviceTest`) is refused by the backend itself: 503
+   `{"detail":"feature_paused"}` on the signed create.
+2. `KILL_SWITCHES` unset, `MIN_SUPPORTED_VERSION_CODE=200` (run 39755073181).
+   **New analysis** opens "Update to keep analysing" (`UpdateRequiredActivity`)
+   on both phones; **Open my analyses** returns to Home, where analyses still
+   open.
+3. Both unset (run 39755853906): the revision's env is back to `0` and empty,
+   and after **Refresh licence** New analysis opens the import sheet again.
+4. `RECOMMENDED_VERSION_CODE=200` (run 39762144670). After **Refresh licence**,
+   the next Home opens with the Snackbar "A newer version of the app is
+   available." on both phones; analysing, backup and restore are unchanged.
+   It shows once: the key `100<200` is kept (`update_nudge`,
+   `data/policy/AppPolicy.kt:44-51`), so further launches stay quiet until the
+   recommended version or the build changes. Set back to `0` in run
+   39762952329.
+
+A running install sees a change on its next config read: launches within five
+minutes of the last reconcile reuse the cached `/v1/config`
+(`data/cloud/CloudSync.kt:412`, `RECONCILE_MIN_INTERVAL_MS`), and **Refresh
+licence** fetches it at once. Lifting a lever reaches phones the same way, so
+allow that long before calling a rollback done. The Material Testing pair and
+`ENTITLEMENT_OFFLINE_GRACE_DAYS` were not moved (TD-220).
 
 ## CI-based release (workflow_dispatch)
 

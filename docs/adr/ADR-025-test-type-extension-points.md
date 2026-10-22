@@ -1,6 +1,6 @@
 # ADR-025: Test types plug into Semper through extension points, and Material Testing becomes a product flavour
 
-**Status:** Proposed
+**Status:** Accepted (product owner, 2026-10-22); phases 1–5 under TD-298, smallest first
 **Date:** 2026-10-19
 **Deciders:** app owner
 **Relates to:** material_testing's ADR-009 (its own app on this backend), ADR-012
@@ -275,7 +275,7 @@ product arrives or the core is reused outside an app.
   by app.
 - **The local index stays compatible.** Today the fork's `index.json` keeps the
   eight lab fields at the top level of each record. `SessionStore` reads with
-  `ignoreUnknownKeys` (`data/session/SessionStore.kt:41-42`), so the first build
+  `ignoreUnknownKeys` (`data/session/SessionStore.kt:43`), so the first build
   on extensions would drop those fields on its next write. To prevent that,
   `SessionExtension.legacyKeys` names them, and the record reader moves them into
   `extras` before decoding. A test reads a 2026-10 fork `index.json` and writes it
@@ -314,6 +314,11 @@ Phased, smallest first. Every phase can ship on its own and leaves both apps wor
    `MechanicalCsv` behind `CsvExtension`, installed from `SemperApp.onCreate` until
    phase 4. Tests: a legacy `index.json` round trip, `/4`–`/7` metadata restores,
    and v1 and v2 CSVs that stay byte-identical.
+   *In progress:* the `ext/` package (`AppExtensions`, `SessionExtension.legacyKeys`),
+   `SessionRecord.extras` and the legacy-key reader (`data/session/SessionIndexJson.kt`)
+   have landed, with the legacy `index.json` round trip (`SessionIndexExtrasTest`).
+   Still to come: a typed `SessionExtras`, metadata `test` and `loadN`, the draft's
+   `loads.csv`, and `CsvExtension`.
 3. [ ] **`WizardExtension`, `ViewerExtension`, `ShareExtension`, `ReportExtension`
    and `NewAnalysisExtension`.** One PR each, with one shared layout slot each. The
    lab `IntentKeys` become `EXTRAS`. Then re-count the fork's shared-Kotlin diff

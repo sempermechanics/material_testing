@@ -1,6 +1,6 @@
 # ADR-024: Paid entitlements are anchored to the account, never entered in the app
 
-**Status:** Accepted, built on `claude/readiness-followups-jhfhj9` (2026-10-18); not merged or deployed
+**Status:** Accepted (2026-10-18); merged in #448 and #449 (2026-10-19) and deployed 2026-10-22 from `b940cc29` ([CHANGELOG](../ops/CHANGELOG.md))
 **Date:** 2026-10-18
 **Deciders:** product owner
 **Supersedes in part:** [ADR-007](ADR-007-licence-lifecycle.md) (its grant point "a key typed in the app"), TD-259's in-app key screen
@@ -232,8 +232,8 @@ count closes the cheaper bypass, a fresh account on the same phone.
 
 - [x] App, backend and console changes on `claude/readiness-followups-jhfhj9`
       (`6c6d059..2371bec`). Their tests first run in that branch's CI (TD-219).
-- [ ] Deploy backend, gateway (the claim route is a new path) and Hosting, in
-      the order in TD-216.
+- [x] Deploy backend, gateway (the claim route is a new path) and Hosting, in
+      the order in TD-216 (2026-10-22; `/v1/me/claim` among the 14 new gateway paths).
 - [x] Terms wording aligned with consumption-only (6.2, 6.6; 2026-10-19).
 - [ ] Counsel reviews the Terms' fees section against consumption-only (TD-277).
 - [ ] Retire `POST /v1/licenses/activate` and its contract fixture once no

@@ -105,6 +105,8 @@ def test_firestore_indexes_declare_ttl_policies():
         ("challenges", "expireAt"),
         ("deleted_licenses", "purgeAt"),
         ("deleted_seats", "purgeAt"),
+        # TD-237: rows are kept AUDIT_RETENTION_DAYS (one year), then deleted.
+        ("audit_logs", "expireAt"),
     }
     defaults = [
         ("ASCENDING", "COLLECTION"),

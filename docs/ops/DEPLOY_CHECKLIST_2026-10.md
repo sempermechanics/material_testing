@@ -1,21 +1,24 @@
 # Deploy checklist: readiness change (2026-10)
 
 What has to happen, in order, to put the readiness change live: #448, #449, #454
-and #455, merged to `main` on 2026-10-19 (`main` @ `2de605c`). Nothing in it is
-deployed yet. Tick the boxes in a copy, or in the PR that records the deploy.
+and #455, merged to `main` on 2026-10-19 (`main` @ `2de605c`). Deployed 2026-10-22 from
+`b940cc29`, with #457 and test accounts (#460); the boxes below are ticked for that
+deploy, and what it did is in [CHANGELOG.md](CHANGELOG.md). §5 and most of §6 are still open.
 
 Everything deploys **from semperdic-app only**. Never deploy Hosting from
 material_testing: any Hosting deploy replaces the whole site.
 
 ## 0. Prerequisites (once)
 
-- [ ] **Google credentials** for whoever runs steps 1, 4 and 5: Firestore index
+- [x] **Google credentials** for whoever runs steps 1, 4 and 5: Firestore index
       admin and Firebase Hosting admin on `indicvision-dic-app`, plus
       `roles/monitoring.editor` and `roles/logging.configWriter`.
 - [ ] **Revocation (TD-214)**, optional for the first deploy. Grant
       `gcloud projects add-iam-policy-binding indicvision-dic-app-auth --member=serviceAccount:indic-api@indicvision-dic-app.iam.gserviceaccount.com --role=roles/firebaseauth.admin`,
       then set the repo variable `CHECK_REVOKED_ON_STEP_UP=true`. Not before the
       grant: without it the check fails closed and refuses every step-up.
+      (2026-10-22: the grant is in place and the variable is set, for production
+      from its next deploy; staging has it deployed.)
 - [ ] **Offline entitlement (TD-215)**, optional for the first deploy. Follow
       [BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A8 in its order:
       create the P-256 key in Secret Manager; grant the runtime SA
@@ -26,11 +29,11 @@ material_testing: any Hosting deploy replaces the whole site.
       is missing. Without a key the backend behaves as today and issues no token.
 - [ ] **New-device mail (TD-295, TD-309)**, optional, and only once #457 is merged.
       Verify a sender in Resend (for example `Semper security <security@yourdomain.com>`),
-      add `NOTIFY_SECURITY_FROM` to `deploy-backend.yml`'s `env_vars` block (it is not
-      passed today, TD-309), then set the repo variable. Unset, that mail is off and the
+      then set the repo variable `NOTIFY_SECURITY_FROM` (the workflow passes it since
+      `a02ef2f`, `deploy-backend.yml:332`) and redeploy. Unset, that mail is off and the
       access-request mail is unaffected ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md)).
 
-- [ ] **Test accounts ([ADR-027](../adr/ADR-027-test-accounts.md))**, optional, and
+- [x] **Test accounts ([ADR-027](../adr/ADR-027-test-accounts.md))**, optional, and
       only once the branch carrying them is merged. Creating, resetting and ending
       one calls Firebase Auth admin, so it needs the same
       `roles/firebaseauth.admin` grant on `indicvision-dic-app-auth` as the
@@ -43,9 +46,11 @@ material_testing: any Hosting deploy replaces the whole site.
 
 ## 1. Firestore indexes (TD-216, TD-271)
 
-- [ ] `PROJECT=indicvision-dic-app scripts/deploy-firestore.sh indexes`. Never
-      with `--force`: it deletes any TTL policy the file omits.
-- [ ] Wait for READY: the composite `audit_logs (licenseId ASC, ts DESC)`, and
+- [x] `PROJECT=indicvision-dic-app scripts/deploy-firestore.sh indexes`. Never
+      with `--force`: it deletes any TTL policy the file omits. (2026-10-22: it stopped
+      on a 409 before creating anything, TD-316; the missing indexes went in by gcloud
+      and the REST API, as the [CHANGELOG](CHANGELOG.md) entry shows.)
+- [x] Wait for READY: the composite `audit_logs (licenseId ASC, ts DESC)`, and
       the `seats.uid` / `deleted_seats.uid` collection-group overrides
       (`gcloud firestore indexes fields describe uid --collection-group=seats`).
 
@@ -53,18 +58,20 @@ material_testing: any Hosting deploy replaces the whole site.
 
 Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
 
-- [ ] **Staging:** `environment=staging`, `project=indicvision-dic-app`,
+- [x] **Staging:** `environment=staging`, `project=indicvision-dic-app`,
       `region=asia-south1`, `gateway_mode=dry-run`. Read the gateway diff: it
       adds `/v1/me/claim`, `/v1/admin/licenses/search` and the roster and audit
       paths.
 - [ ] **Staging smoke:** `/readyz` answers 200; an anonymous `POST /v1/me/claim`
       answers **401, not 404**; `GET /v1/config` carries `killSwitches`,
-      `minSupportedVersionCode` and, if the key was set, `entitlement`.
-- [ ] **Staging gateway:** run again with `gateway_mode=apply`.
-- [ ] **Production:** `environment=production`, first `gateway_mode=dry-run`,
+      `minSupportedVersionCode` and, if the key was set, `entitlement`. (2026-10-22: the
+      first two held, the claim after the gateway apply; `/v1/config` needs a signed-in
+      caller and was not read.)
+- [x] **Staging gateway:** run again with `gateway_mode=apply`.
+- [x] **Production:** `environment=production`, first `gateway_mode=dry-run`,
       then `apply`. The candidate revision is smoke-tested on `/readyz` before
       traffic moves, and rolls back on failure.
-- [ ] **Licence fan-out task (TD-294, [ADR-026](../adr/ADR-026-licence-fanout-marker.md))**,
+- [x] **Licence fan-out task (TD-294, [ADR-026](../adr/ADR-026-licence-fanout-marker.md))**,
       once #457 is merged. A staff revoke or terms edit schedules a Cloud Task on
       `TASKS_QUEUE`, so check that the environment's `TASKS_QUEUE` and
       `TASKS_TARGET_BASE_URL` are set (provisioning already uses them); unset, no task
@@ -75,7 +82,7 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       diff must not add it. On staging, a revoke of a test licence leaves a
       `license-fanout-<id>` task that runs about 6 minutes later and finds nothing
       pending.
-- [ ] **Test-account expiry job (ADR-027)**, with the test-accounts item in §0. A
+- [x] **Test-account expiry job (ADR-027)**, with the test-accounts item in §0. A
       Cloud Scheduler job per environment calls the backend daily; like the Cloud
       Tasks callbacks it goes straight to Cloud Run with the invoker SA's OIDC token,
       and `POST /v1/tasks/test-account-expiry` is kept off the gateway
@@ -89,27 +96,31 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       the request log shows 200 and the answer `{"expiredTestAccounts": 0, ...}`.
       Without the job, accounts past their date are not erased; their licence has
       still lapsed, and the staff list shows them `expired`.
-- [ ] For the first deploy, leave unset (or 0): `MIN_SUPPORTED_VERSION_CODE`,
+- [x] For the first deploy, leave unset (or 0): `MIN_SUPPORTED_VERSION_CODE`,
       `RECOMMENDED_VERSION_CODE`, their `_MATERIAL_TESTING` pair, and
       `KILL_SWITCHES`.
 
 ## 3. Gateway checks (after `apply`)
 
-- [ ] An anonymous call to each new path answers 401: `/v1/me/claim`,
+- [x] An anonymous call to each new path answers 401: `/v1/me/claim`,
       `/v1/admin/licenses/search`,
       `/v1/institutions/licenses/{id}/seats/import`, `…/export`, `…/summary`,
-      and `…/audit`.
+      and `…/audit`. (2026-10-22: all of them on staging; on production the GETs
+      `licenses/search`, `test-accounts` and `…/summary`.)
 - [ ] `GET …/audit` answers 200 for a licence administrator.
-- [ ] With test accounts: an anonymous `GET /v1/admin/test-accounts` and
+- [x] With test accounts: an anonymous `GET /v1/admin/test-accounts` and
       `POST /v1/admin/test-accounts` answer 401, and
-      `POST /v1/tasks/test-account-expiry` through the gateway answers 404.
+      `POST /v1/tasks/test-account-expiry` through the gateway answers 404. (Staging;
+      production's `GET` answers 401.)
 
 ## 4. Hosting: consoles, account page, aligned Terms
 
-- [ ] From a **clean `main` checkout**:
+- [x] From a **clean `main` checkout**:
       `API_BASE_URL=<INDIC_API_BASE_URL repo variable> ./scripts/deploy-console.sh`.
-      Never a bare `firebase deploy`.
-- [ ] The script runs `scripts/check_live_console.py`; it must pass (no `__`
+      Never a bare `firebase deploy`. From Windows PowerShell, set the variable there
+      (`$env:API_BASE_URL = gh variable get INDIC_API_BASE_URL`) and run the script
+      through Git Bash; PowerShell 5.1 drops quotes nested inside `bash -c "…"`.
+- [x] The script runs `scripts/check_live_console.py`; it must pass (no `__`
       placeholder left live).
 - [ ] By hand: `/account` shows the licence facts and, for a demo account, the
       "Redeem a claim code" card; `/terms` shows 6.6 "No purchases in the App";
@@ -147,17 +158,34 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       upload lands under `Research Storage/_test/{uid}`, then end it from the
       console; the audit trail has `test_account_created` and `test_account_ended`,
       and its Firebase user is gone.
-- [ ] **Audit trail lock (TD-237)**, once #457 is deployed (it writes the `audit_row`
-      lines) and the legal/privacy owners have set the retention period: create the
-      `audit-trail` log bucket at that retention, the sink on
-      `jsonPayload.event="audit_row"`, then lock the bucket (irreversible), by the
+      2026-10-22, all but the end: `qc-emulator@qa.sempermechanics.com` (7 days)
+      on an Android 14 and an Android 12 emulator, both `DEVICE_REGISTER` with
+      `testAccount: true` and no new-device mail; one backup
+      (`SESSION_CREATE` `testAccount: true`, three `UPLOAD_COMPLETE`), which
+      `session_provision.py:102` sends under `_test/` (the Drive folder itself not
+      listed). End it from the console, then check the audit rows and the Auth user.
+- [ ] **Audit retention, backfill and lock (TD-237, TD-246).** Retention is decided:
+      **365 days** (owner, 2026-10-22; `AUDIT_RETENTION_DAYS`, default 365), and the
+      one-time backfill is approved (owner, 2026-10-22). In this order, by the
       commands in [FIRESTORE_DATA_PROTECTION.md](../backend/FIRESTORE_DATA_PROTECTION.md),
-      "The audit trail is append-only". Check: a staff licence edit's row reaches the
-      bucket, and lowering its retention is refused. Then the Firestore TTL the
-      retention asks for. Needs `roles/logging.configWriter` (§0).
-- [ ] **Audit rows before 2026-10-18 (TD-246)**, only if the owner chooses the
-      backfill: `backend/scripts/stamp_audit_licence_ids.py` dry-run, then `--apply
-      --decision "…"`, after the backend that stamps new rows is live.
+      "The audit trail is append-only":
+      1. Deploy the backend that writes `expireAt` on each new audit row (§2), and
+         leave `AUDIT_RETENTION_DAYS` unset.
+      2. The backfill, which stamps `licenseId` and `expireAt` (= `ts` + 365 days)
+         on older rows: `python backend/scripts/stamp_audit_licence_ids.py --project indicvision-dic-app`
+         (dry run; read both counts), then the same with `--apply --decision
+         "TD-246: backfill approved by <owner>, 2026-10-22"`. A rerun reports 0 to
+         stamp.
+      3. The `audit-trail` log bucket at `--retention-days=365`, the sink on
+         `jsonPayload.event="audit_row"`, then lock the bucket (irreversible).
+         Check: a staff licence edit's row reaches the bucket, and lowering its
+         retention is refused. Needs `roles/logging.configWriter` (§0).
+      4. The Firestore TTL:
+         `gcloud firestore fields ttls update expireAt --collection-group=audit_logs --enable-ttl --project=indicvision-dic-app`;
+         `ttls list --collection-group=audit_logs` shows it `ACTIVE`. Rows already
+         older than a year go within about a day. The policy is declared in
+         `backend/firestore.indexes.json`, so an indexes deploy before this step
+         would create it early: run none until step 2 is done.
 - [ ] Move the merged-and-deployed entries from [CONTEXT.md](../../CONTEXT.md)
       "Current state" into [CHANGELOG.md](CHANGELOG.md), in both repos.
 

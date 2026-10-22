@@ -369,9 +369,14 @@ async def test_the_list_shows_test_accounts_only(client, world):
     assert set(rows) == {created["uid"], "t-old", "t-off"}
     row = rows[created["uid"]]
     assert set(row) == {"uid", "email", "purpose", "expiresAt", "maxDevices", "note",
-                        "createdAt", "activeDevices", "status"}
+                        "createdAt", "activeDevices", "devices", "status"}
     assert (row["email"], row["purpose"], row["maxDevices"]) == (QC_EMAIL, "qc", 5)
     assert row["activeDevices"] == 3 and row["status"] == "active"
+    # Each ACTIVE phone, every app, oldest first, for the console's release.
+    assert [(d["deviceId"], d["app"]) for d in row["devices"]] == [
+        ("and-phone-1", "semper"), ("and-phone-2", "semper"), ("and-phone-mt", MT)]
+    assert set(row["devices"][0]) == {"deviceId", "app", "model", "registeredAt"}
+    assert rows["t-old"]["devices"] == [] and rows["t-old"]["activeDevices"] == 0
     assert rows["t-old"]["status"] == "expired"
     assert rows["t-off"]["status"] == "suspended"
     assert r.json()["accounts"][0]["uid"] in {"t-old", "t-off"}  # newest first
@@ -419,6 +424,7 @@ async def test_the_routes_never_touch_a_real_account(client, world):
     before = dict(world["store"]._data["users"]["real-1"])
     for call in (client.post("/v1/admin/test-accounts/real-1/extend", json={"days": 5}),
                  client.post("/v1/admin/test-accounts/real-1/password"),
+                 client.post("/v1/admin/test-accounts/real-1/devices/and-phone-1/release"),
                  client.delete("/v1/admin/test-accounts/real-1"),
                  client.delete("/v1/admin/test-accounts/nobody")):
         r = await call
@@ -446,6 +452,202 @@ async def test_a_new_password_replaces_the_old_and_revokes_tokens(client, world,
     row = [a for a in world["audit"] if a["action"] == "test_account_password_reset"][0]
     assert row["detail"] == {"testAccount": True, "sessionsRevoked": True, "authUsers": 1}
     assert password not in str(world["audit"]) and password not in caplog.text
+
+
+# ------------------------------------------------------------------ release one phone (TD-314)
+
+
+def _release(client, uid, device_id):
+    return client.post(f"/v1/admin/test-accounts/{uid}/devices/{device_id}/release")
+
+
+async def test_releasing_a_phone_of_a_full_qc_account_frees_its_place(client, world):
+    store = world["store"]._data
+    _test_user(world["store"], "t-1", max_devices=2)
+    _register("t-1", "and-phone-1")
+    _register("t-1", "and-phone-2")
+    with pytest.raises(errors.Refusal):
+        _register("t-1", "and-phone-3")
+    store.setdefault("sessions", {})["s1"] = {"uid": "t-1", "testDeviceId": "and-phone-1",
+                                               "testAccount": True, "status": "COMPLETED"}
+    sessions_before = dict(store["sessions"]["s1"])
+
+    r = await _release(client, "t-1", "and-phone-1")
+
+    assert r.status_code == 200, r.text
+    row = r.json()
+    assert row["uid"] == "t-1" and row["activeDevices"] == 1
+    assert [d["deviceId"] for d in row["devices"]] == ["and-phone-2"]
+    released = store["devices"]["and-phone-1"]
+    assert released["status"] == "REVOKED" and released["staffReleased"] is True
+    assert released["revokedAt"] is not None
+    user = store["users"]["t-1"]
+    # The latest phone keeps the binding; no release hold for a test account.
+    assert user["activeDeviceId"] == "and-phone-2"
+    assert not {"releasedDeviceId", "releasedAt"} & set(user)
+    assert store["sessions"]["s1"] == sessions_before
+    rows = [a for a in world["audit"] if a["action"] == "test_account_device_released"]
+    assert [(a["uid"], a["target"], a["detail"]) for a in rows] == [
+        ("dev-user", {"type": "user", "id": "t-1"},
+         {"testAccount": True, "deviceId": "and-phone-1", "app": "semper"})]
+
+    _register("t-1", "and-phone-3")
+    assert store["devices"]["and-phone-3"]["status"] == "ACTIVE"
+
+
+async def test_releasing_the_bound_phone_drops_only_that_apps_binding(client, world):
+    store = world["store"]._data
+    _test_user(world["store"], "t-1")
+    _register("t-1", "and-phone-1")
+    _register("t-1", "and-phone-mt", MT)
+
+    r = await _release(client, "t-1", "and-phone-1")
+
+    assert r.status_code == 200, r.text
+    user = store["users"]["t-1"]
+    assert "activeDeviceId" not in user
+    assert user["activeDeviceIdMaterialTesting"] == "and-phone-mt"
+    assert not {"releasedDeviceId", "releasedAt"} & set(user)
+    assert store["devices"]["and-phone-mt"]["status"] == "ACTIVE"
+
+
+async def test_the_released_phone_cannot_take_its_place_back(client, world, monkeypatch):
+    store = world["store"]
+    tag = _test_user(store, "t-1", max_devices=2)["testAccount"]
+    _register("t-1", "and-phone-1")
+    _register("t-1", "and-phone-2")
+    assert (await _release(client, "t-1", "and-phone-1")).status_code == 200
+
+    # Room for one, but not for the phone that gave its place up.
+    _as(store, monkeypatch, "t-1", testAccount=tag)
+    back = await client.post("/v1/devices/register",
+                             json={"deviceId": "and-phone-1", "publicKeyPem": _ec_pem()})
+    assert (back.status_code, back.json()["detail"]) == (409, "device_conflict")
+    denied = [a for a in world["audit"] if a.get("outcome") == "DENIED"]
+    assert [(a["deviceId"], a["action"], a["detail"]) for a in denied] == [
+        ("and-phone-1", "DEVICE_REGISTER",
+         {"reason": "staff_released", "app": "semper", "testAccount": True})]
+
+    _as(store, monkeypatch, "t-1")
+    new = await client.post("/v1/devices/register",
+                            json={"deviceId": "and-phone-3", "publicKeyPem": _ec_pem()})
+    assert new.status_code == 201, new.text
+    _as(store, monkeypatch, "t-1")
+    again = await client.post("/v1/devices/register",
+                              json={"deviceId": "and-phone-1", "publicKeyPem": _ec_pem()})
+    assert again.status_code == 409
+    devices = store._data["devices"]
+    assert devices["and-phone-3"]["status"] == "ACTIVE"
+    assert devices["and-phone-1"]["status"] == "REVOKED"
+    assert store._data["users"]["t-1"]["activeDeviceId"] == "and-phone-3"
+
+
+async def test_another_account_may_still_register_a_released_phone(client, world):
+    _test_user(world["store"], "t-1")
+    _register("t-1", "and-phone-1")
+    assert (await _release(client, "t-1", "and-phone-1")).status_code == 200
+
+    _real_user(world["store"], uid="real-1")
+    _register("real-1", "and-phone-1")
+    device = world["store"]._data["devices"]["and-phone-1"]
+    assert device["uid"] == "real-1" and device["status"] == "ACTIVE"
+    assert "staffReleased" not in device
+
+
+def test_the_stamp_binds_only_a_test_account_and_a_ci_rotation_has_none(world):
+    _real_user(world["store"], uid="real-1")
+    _register("real-1", "and-phone-1")
+    world["store"]._data["devices"]["and-phone-1"].update(status="REVOKED", staffReleased=True)
+    _register("real-1", "and-phone-1")  # A real account is unchanged.
+
+    _test_user(world["store"], "t-ci", email=CI_EMAIL, max_devices=1)
+    world["store"]._data["users"]["t-ci"]["testAccount"]["purpose"] = "ci"
+    _register("t-ci", "and-ci-1")
+    assert _register("t-ci", "and-ci-2")["rotated"] == ["and-ci-1"]
+    rotated = world["store"]._data["devices"]["and-ci-1"]
+    assert not repo.staff_released_from(rotated, "t-ci")
+    assert _register("t-ci", "and-ci-1")["rotated"] == ["and-ci-2"]
+    assert not repo.staff_released_from(None, "t-ci")
+
+
+async def test_release_refuses_a_phone_that_is_not_an_active_one_of_the_account(client, world):
+    store = world["store"]._data
+    _test_user(world["store"], "t-1")
+    _test_user(world["store"], "t-2", email=f"qc-2@{DOMAIN}")
+    _register("t-1", "and-phone-1")
+    _register("t-1", "and-phone-old")
+    store["devices"]["and-phone-old"]["status"] = "SUPERSEDED"
+    _register("t-2", "and-phone-2")
+    before = {k: dict(v) for k, v in store["devices"].items()}
+    users_before = {k: dict(v) for k, v in store["users"].items()}
+
+    for device in ("and-phone-2", "and-phone-old", "and-phone-none"):
+        r = await _release(client, "t-1", device)
+        assert (r.status_code, r.json()["detail"]) == (404, "device_not_found")
+    r = await _release(client, "nobody", "and-phone-1")
+    assert (r.status_code, r.json()["detail"]) == (404, "user_not_found")
+
+    assert store["devices"] == before and store["users"] == users_before
+    assert not [a for a in world["audit"] if a["action"] == "test_account_device_released"]
+
+
+def test_the_repo_release_rechecks_inside_its_transaction(world):
+    _test_user(world["store"], "t-1")
+    _register("t-1", "and-phone-1")
+    repo.release_test_device("t-1", "and-phone-1")
+    with pytest.raises(errors.Refusal) as refused:
+        repo.release_test_device("t-1", "and-phone-1")
+    assert refused.value.code == errors.DEVICE_NOT_FOUND
+
+
+async def test_release_takes_the_fresh_staff_step_up(client, world, browser_staff):
+    _test_user(world["store"], "t-1")
+    _register("t-1", "and-phone-1")
+    headers = {"Authorization": "Bearer t"}
+    path = "/v1/admin/test-accounts/t-1/devices/and-phone-1/release"
+
+    no_factor = await client.post(path, headers=headers)
+    assert (no_factor.status_code, no_factor.json()["detail"]) == (403, "mfa_required")
+    browser_staff["firebase"]["sign_in_second_factor"] = "totp"
+    browser_staff["auth_time"] = time.time() - settings.ADMIN_WEB_REVOKE_REAUTH_SECONDS - 30
+    stale = await client.post(path, headers=headers)
+    assert (stale.status_code, stale.json()["detail"]) == (403, "reauth_required")
+    assert world["store"]._data["devices"]["and-phone-1"]["status"] == "ACTIVE"
+
+    browser_staff["auth_time"] = time.time()
+    fresh = await client.post(path, headers=headers)
+    assert fresh.status_code == 200, fresh.text
+    row = [a for a in world["audit"] if a["action"] == "test_account_device_released"][0]
+    assert row["uid"] == "staff-1"
+
+
+async def test_a_released_phone_is_not_licensed_by_config_while_a_new_one_is(
+        client, world, monkeypatch):
+    created = (await _create(client, maxDevices=2)).json()
+    uid = created["uid"]
+    _register(uid, "and-phone-1")
+    _register(uid, "and-phone-2")
+    assert (await _release(client, uid, "and-phone-1")).status_code == 200
+    # The account's own token, so `current_user` checks the licence lock
+    # against the phone's id (the dev user skips it); App Check passes.
+    monkeypatch.setattr(settings, "DEV_INSECURE_AUTH", False)
+    monkeypatch.setattr(deps, "verify_id_token", lambda _t: {
+        "sub": uid, "email": QC_EMAIL, "email_verified": True,
+        "firebase": {"sign_in_provider": "password"}})
+    monkeypatch.setattr(deps, "_require_app_check", lambda *a, **k: None)
+
+    async def mode(device):
+        r = await client.get("/v1/config", headers={"Authorization": "Bearer t",
+                                                    "X-Device-Id": device})
+        assert r.status_code == 200, r.text
+        return r.json()["mode"]
+
+    # Room for one more, but not for the phone that gave its place up.
+    assert await mode("and-phone-1") == "demo"
+    assert await mode("and-phone-new") == "licensed"
+    assert await mode("and-phone-2") == "licensed"
+    # Only a Demo answer for that request: the account stays licensed.
+    assert world["store"]._data["users"][uid]["mode"] == "licensed"
 
 
 # ------------------------------------------------------------------ end
@@ -599,6 +801,50 @@ def test_a_test_account_registers_up_to_its_device_cap_per_app(world):
     assert sorted(d for d, v in devices.items() if v["status"] == "ACTIVE") == [
         "and-phone-1", "and-phone-2", "and-phone-3", "and-phone-mt-1"]
     assert world["store"]._data["users"]["t-1"]["activeDeviceId"] == "and-phone-2"
+
+
+def test_a_full_ci_account_retires_its_oldest_phone_for_a_new_one(world):
+    _test_user(world["store"], "t-ci", max_devices=2)
+    world["store"]._data["users"]["t-ci"]["testAccount"]["purpose"] = "ci"
+    first, second = _register("t-ci", "and-ci-1"), _register("t-ci", "and-ci-2")
+    assert first["rotated"] == [] and second["rotated"] == []
+
+    third = _register("t-ci", "and-ci-3")
+    assert third["rotated"] == ["and-ci-1"]
+    devices = world["store"]._data["devices"]
+    assert devices["and-ci-1"]["status"] == "SUPERSEDED"
+    assert sorted(d for d, v in devices.items() if v["status"] == "ACTIVE") == ["and-ci-2", "and-ci-3"]
+    assert world["store"]._data["users"]["t-ci"]["activeDeviceId"] == "and-ci-3"
+    # A phone already on it re-registers without giving one up.
+    assert _register("t-ci", "and-ci-2")["rotated"] == []
+
+
+def test_a_ci_rotation_never_touches_another_app_or_account(world):
+    _test_user(world["store"], "t-ci", max_devices=1)
+    world["store"]._data["users"]["t-ci"]["testAccount"]["purpose"] = "ci"
+    _register("t-ci", "and-ci-mt", MT)
+    _test_user(world["store"], "t-qc", email="qc2@qa.example.com", max_devices=1)
+    _register("t-qc", "and-qc-1")
+    _register("t-ci", "and-ci-1")
+    assert _register("t-ci", "and-ci-2")["rotated"] == ["and-ci-1"]
+    devices = world["store"]._data["devices"]
+    assert devices["and-ci-mt"]["status"] == "ACTIVE" and devices["and-qc-1"]["status"] == "ACTIVE"
+
+
+async def test_the_register_route_audits_a_ci_rotation(client, world, monkeypatch):
+    store = world["store"]
+    tag = {**_test_user(store, "t-ci", email=CI_EMAIL, max_devices=1)["testAccount"], "purpose": "ci"}
+    _as(store, monkeypatch, "t-ci", testAccount=tag)
+    _register("t-ci", "and-ci-old")
+    _as(store, monkeypatch, "t-ci")
+
+    r = await client.post("/v1/devices/register",
+                          json={"deviceId": "and-ci-new", "publicKeyPem": _ec_pem()})
+    assert r.status_code == 201, r.text
+    rotated = [row for row in world["audit"] if row.get("action") == "DEVICE_ROTATED"]
+    assert [(row["uid"], row["deviceId"], row["detail"]) for row in rotated] == [
+        ("t-ci", "and-ci-old", {"app": "semper", "by": "and-ci-new", "testAccount": True})]
+    assert store._data["devices"]["and-ci-old"]["status"] == "SUPERSEDED"
 
 
 def test_a_retired_device_frees_its_place(world):

@@ -399,6 +399,14 @@ class Settings:
     # it the client falls back to a challenge. 0 disables client nonces.
     CLIENT_NONCE_WINDOW_SECONDS = _env_int("CLIENT_NONCE_WINDOW_SECONDS", "120")
 
+    # How long an `audit_logs` row is kept (TD-237; one year, the owner's
+    # decision of 2026-10-22). Each new row carries `expireAt` = now + this,
+    # which the Firestore TTL policy on `audit_logs.expireAt` deletes; the
+    # locked `audit-trail` log bucket keeps its copy for the same period
+    # (docs/backend/FIRESTORE_DATA_PROTECTION.md). Changing it moves only rows
+    # written afterwards.
+    AUDIT_RETENTION_DAYS = _env_int("AUDIT_RETENTION_DAYS", "365")
+
     @property
     def tasks_enabled(self) -> bool:
         return bool(self.TASKS_QUEUE and self.TASKS_TARGET_BASE_URL and self.GCP_PROJECT)

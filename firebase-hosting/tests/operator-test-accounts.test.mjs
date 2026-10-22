@@ -411,6 +411,101 @@ test("the return leg of Extend finishes it with the stashed days", async () => {
   assert.deepEqual(bodyOf(net, "POST", path), { days: 14 });
 });
 
+/* ------------------------------------------------------ release one phone */
+
+const PHONES = {
+  ...QC, activeDevices: 2, devices: [
+    { deviceId: "and-phone-1", app: "semper", model: "Pixel 6", registeredAt: "2026-10-19T10:00:00Z" },
+    { deviceId: "and-phone-<2>", app: "materialtesting", model: "", registeredAt: null },
+  ],
+};
+const RELEASE = `/v1/admin/test-accounts/${QC.uid}/devices/and-phone-1/release`;
+const releaseButton = (deviceId) => $("testAccountRows").querySelector(
+  `button[data-ta-release="${QC.uid}"][data-ta-device="${deviceId}"]`);
+
+test("the list shows each active phone with its own Release", async () => {
+  await showList([PHONES, CI]);
+  assert.deepEqual(accountRows()[0].slice(3, 4), [
+    "2 of 3 Pixel 6 (and-phone-1) · Semper Release and-phone-<2> · Material Testing Release"]);
+  assert.deepEqual(accountRows()[1].slice(3, 4), ["0 of 10"], "no phones, no buttons");
+  assert.ok(releaseButton("and-phone-1"));
+  assert.ok(releaseButton("and-phone-<2>"), "an id is text, never markup");
+});
+
+test("Release confirms, sends, says so and reads the list again", async () => {
+  await showList([PHONES], { [`POST ${RELEASE}`]: () => json(200, { ...QC, activeDevices: 1 }) });
+  confirms.answer(false);
+  releaseButton("and-phone-1").click();
+  await settle();
+  assert.deepEqual(sent(/release/), [], "declined: nothing sent");
+
+  confirms.answer(true);
+  releaseButton("and-phone-1").click();
+  await settle();
+  assert.match(confirms.asked[1], /^Release Pixel 6 \(and-phone-1\) from qc-1@test\.example\?/);
+  assert.match(confirms.asked[1], /cannot register for it again; its analyses stay\./);
+  assert.deepEqual(sent(/test-accounts/), [LIST, `POST ${RELEASE}`, LIST]);
+  assert.deepEqual(status(), [
+    "Phone and-phone-1 released from qc-1@test.example: its place is free, and that phone " +
+    "cannot register for this account again.", "muted"]);
+});
+
+test("a phone that is no longer active, or a cancelled step-up, is said", async () => {
+  await showList([PHONES], { [`POST ${RELEASE}`]: () => json(404, { detail: "device_not_found" }) });
+  confirms.answer(true);
+  releaseButton("and-phone-1").click();
+  await settle();
+  assert.deepEqual(status(), [
+    "That phone is no longer one of this account's active phones. Refresh the list.", "muted err"]);
+
+  reset();
+  await openDesk({ user: readyUser({ providers: ["password"], authAgeSeconds: 600 }),
+    routes: { [LIST]: listed([PHONES]) } });
+  $("loadTestAccounts").click();
+  await settle();
+  confirms.answer(true);
+  prompts.answer(null);
+  releaseButton("and-phone-1").click();
+  await settle();
+  assert.match(prompts.asked[0], /password to release this phone/);
+  assert.deepEqual(status(), ["Cancelled — nothing was sent.", "muted"]);
+  assert.deepEqual(sent(/release/), []);
+});
+
+test("Release on a stale sign-in goes to Google carrying the phone", async () => {
+  await openDesk({ user: readyUser({ authAgeSeconds: 600 }), routes: { [LIST]: listed([PHONES]) } });
+  $("loadTestAccounts").click();
+  await settle();
+  confirms.answer(true);
+  releaseButton("and-phone-1").click();
+  await settle();
+  assert.equal($("status").textContent, "Re-authenticating with Google to release this phone…");
+  assert.deepEqual(JSON.parse(storage.getItem("semper.resume")), {
+    action: "testAccountDeviceRelease", uid: QC.uid, email: QC.email,
+    deviceId: "and-phone-1", app: "semper",
+  });
+  assert.deepEqual(sent(/release/), []);
+});
+
+test("the return leg of Release finishes it, and a stash without a phone is dropped", async () => {
+  confirms.answer(true);
+  await openDesk({
+    resume: { action: "testAccountDeviceRelease", uid: QC.uid, email: QC.email,
+      deviceId: "and-phone-1", app: "semper" },
+    routes: { [`POST ${RELEASE}`]: () => json(200, QC), [LIST]: listed([QC]) },
+  });
+  await settle();
+  assert.equal(confirms.asked[0],
+    "Re-authenticated. Release phone and-phone-1 from qc-1@test.example now?");
+  assert.deepEqual(sent(/release/), [`POST ${RELEASE}`]);
+
+  reset();
+  await openDesk({ resume: { action: "testAccountDeviceRelease", uid: QC.uid, email: QC.email } });
+  await settle();
+  assert.equal(confirms.asked.length, 0);
+  assert.deepEqual(sent(/release/), []);
+});
+
 /* ------------------------------------------------------------------ copy */
 
 test("Copy puts the password on the clipboard, or says to copy it by hand", async () => {

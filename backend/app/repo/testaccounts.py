@@ -6,26 +6,28 @@ A test account is an ordinary account with a `testAccount` tag on
 `test_account_of`. This module is the only writer of the tag. The account's
 licence, devices, sessions and erasure go through the modules that own them.
 """
-from .. import apps, statuses
+from .. import apps, errors, statuses
+from ..errors import Refusal
 from ..licenses import as_utc, normalize_email
 
 from . import _base
 from ._base import (
+    PURPOSE_CI,
+    PURPOSE_QC,
     SCHEMA_VERSION,
-    _active_devices,
+    STAFF_RELEASED,
     _create_doc,
     _get,
     _now,
+    _run_tx,
     _stream,
     _update_doc,
     db,
     test_account_of,
 )
+from .devices import _retire_device
 from .users import _link_auth_uid
 
-#: `testAccount.purpose`: staff QC, or the CI pipeline's own login.
-PURPOSE_QC = "qc"
-PURPOSE_CI = "ci"
 PURPOSES = (PURPOSE_QC, PURPOSE_CI)
 
 #: `status` in the staff listing.
@@ -104,6 +106,55 @@ def licences_of_test_account(user: dict) -> list[str]:
     return out
 
 
+def release_test_device(uid: str, device_id: str) -> None:
+    """Release one ACTIVE phone of the test account `uid` (TD-314), in one
+    transaction: the device REVOKED and stamped `staffReleased`, so
+    `register_device` refuses it for this account from then on, and the
+    app's `activeDeviceId` dropped when it names this phone. Not the release
+    hold (`releasedDeviceId`, `_release_patch`), which a test account does not
+    take, and its sessions are untouched. Raises `Refusal(device_not_found)`
+    when the device is not, or is no longer, an ACTIVE device of `uid`."""
+    user_ref = db().collection("users").document(uid)
+    device_ref = db().collection("devices").document(device_id)
+
+    @_base.firestore.transactional
+    def _release(tx):
+        dev_snap = _get(device_ref, tx)
+        dev = (dev_snap.to_dict() or {}) if dev_snap.exists else {}
+        if dev.get("uid") != uid or dev.get("status") != statuses.DEVICE_ACTIVE:
+            raise Refusal(errors.DEVICE_NOT_FOUND)
+        user_snap = _get(user_ref, tx)
+        field = apps.field("activeDeviceId", dev.get("app") or apps.SEMPER)
+        bound = (user_snap.to_dict() or {}).get(field) if user_snap.exists else None
+        _retire_device(tx, device_ref, statuses.DEVICE_REVOKED, {STAFF_RELEASED: True})
+        patch = {"updatedAt": _base.firestore.SERVER_TIMESTAMP}
+        if bound == device_id:
+            patch[field] = _base.firestore.DELETE_FIELD
+        tx.update(user_ref, patch)
+
+    def _contended():
+        raise Refusal(errors.CLAIM_CONTENDED)
+
+    _run_tx(_release, on_contended=_contended)
+
+
+def active_test_devices(uid: str) -> list[dict]:
+    """The account's ACTIVE phones in every app, as the staff listing shows
+    them: `{deviceId, app, model, registeredAt}`, oldest first (one without
+    `registeredAt` first). The same equality query on `uid` as
+    `_active_devices`; a record from before devices named their app is
+    Semper's."""
+    found = []
+    for snap in _stream(db().collection("devices").where("uid", "==", uid)):
+        dev = snap.to_dict() or {}
+        if dev.get("status") == statuses.DEVICE_ACTIVE:
+            found.append({"deviceId": snap.id, "app": dev.get("app") or apps.SEMPER,
+                          "model": dev.get("model") or "",
+                          "registeredAt": dev.get("registeredAt")})
+    found.sort(key=lambda d: (d["registeredAt"] is not None, str(d["registeredAt"] or ""),
+                              d["deviceId"]))
+    return found
+
 
 def status_of_test_account(user: dict, now=None) -> str:
     """`suspended` when the account is not approved, `expired` once its
@@ -122,6 +173,7 @@ def row_of_test_account(user: dict, now=None) -> dict:
     """One account as the staff listing shows it."""
     tag = test_account_of(user) or {}
     uid = user["uid"]
+    devices = [d for d in active_test_devices(uid) if d["app"] in apps.ALL]
     return {
         "uid": uid,
         "email": user.get("email") or "",
@@ -130,8 +182,10 @@ def row_of_test_account(user: dict, now=None) -> dict:
         "maxDevices": _base.max_test_devices(tag),
         "note": tag.get("note") or "",
         "createdAt": tag.get("createdAt"),
-        # Every app's phones: the console shows how many are in use.
-        "activeDevices": sum(len(_active_devices(uid, app)) for app in apps.ALL),
+        # Every app's phones: the console shows how many are in use, and
+        # each one with its release (TD-314).
+        "activeDevices": len(devices),
+        "devices": devices,
         "status": status_of_test_account(user, now),
     }
 
