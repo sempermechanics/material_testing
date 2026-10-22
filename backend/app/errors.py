@@ -31,6 +31,9 @@ NONCE_INVALID_OR_REPLAYED = "nonce_invalid_or_replayed"
 DEVICE_CONFLICT = "device_conflict"
 DEVICE_IN_USE = "device_in_use"
 DEVICE_NOT_ACTIVE = "device_not_active"
+#: 404 from a staff release of one test-account phone (ADR-027): the device
+#: is not an ACTIVE device of that account.
+DEVICE_NOT_FOUND = "device_not_found"
 #: `X-App-Id` names an app this backend does not bind devices for (ADR-010).
 UNKNOWN_APP = "unknown_app"
 #: 410 from `POST /v1/devices/register`: `X-App-Id` is a retired id
@@ -313,6 +316,7 @@ CLIENT_BRANCHED = frozenset(
 STATUS: dict[str, int] = {
     # Nothing there, or nothing the caller may see.
     USER_NOT_FOUND: 404,
+    DEVICE_NOT_FOUND: 404,
     LICENSE_NOT_FOUND: 404,
     NO_LICENSE: 404,
     SEAT_NOT_FOUND: 404,

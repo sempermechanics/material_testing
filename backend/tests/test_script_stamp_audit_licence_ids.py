@@ -1,9 +1,11 @@
 """TD-246: the one-off backfill that stamps `licenseId` on audit rows written
 before `audit.record` did (2026-10-18), so a licence's export reaches back
-past that date. Running it is the owner's decision; `--apply` refuses
-without one, and records it in the ledger."""
+past that date, and (TD-237) `expireAt` = `ts` + the retention on rows
+written before `add_audit_row` did, so the TTL policy reaches them. Running
+it is the owner's decision; `--apply` refuses without one, and records it in
+the ledger."""
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -15,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import stamp_audit_licence_ids as backfill  # noqa: E402
 
 T = datetime(2026, 10, 1, tzinfo=timezone.utc)
+LATER = datetime(2027, 10, 22, tzinfo=timezone.utc)
 
 
 @pytest.fixture
@@ -29,14 +32,18 @@ def client(monkeypatch):
                "target": {"type": "seat", "id": "L2"}},
         "a4": {"action": "SESSION_DELETE", "ts": T, "target": {"type": "session", "id": "s1"}},
         "a5": {"action": "AUTH_DENIED", "ts": T},
+        # A row the current backend wrote: both fields already there.
         "a6": {"action": "ADMIN_LICENSE_REVOKE", "ts": T, "licenseId": "L3",
-               "target": {"type": "license", "id": "L3"}},
+               "expireAt": LATER, "target": {"type": "license", "id": "L3"}},
+        # No time to count the retention from: licenseId only.
+        "a7": {"action": "ADMIN_LICENSE_EXTEND", "target": {"type": "license", "id": "L4"}},
     }
 
     class _F:
         SERVER_TIMESTAMP = fake_firestore.SERVER_TIMESTAMP
 
     monkeypatch.setattr(backfill, "firestore", _F)
+    monkeypatch.setattr(backfill.settings, "AUDIT_RETENTION_DAYS", 365)
     return store
 
 
@@ -44,33 +51,57 @@ def _before(client):
     return {k: dict(v) for k, v in client._data["audit_logs"].items()}
 
 
-def test_a_dry_run_counts_and_writes_nothing(client):
+def _counts(counts):
+    return {k: counts[k] for k in (
+        "scanned", "stamped", "already", "no_licence",
+        "expire_stamped", "expire_already", "no_ts", "changed")}
+
+
+def test_a_dry_run_counts_both_fields_and_writes_nothing(client):
     before = _before(client)
     counts = backfill.stamp(client, apply=False, decision="", page=2)
     assert client._data["audit_logs"] == before
     assert "_migrations" not in client._data
-    assert (counts["scanned"], counts["stamped"], counts["already"], counts["no_licence"]) == (6, 3, 1, 2)
+    assert _counts(counts) == {
+        "scanned": 7, "stamped": 4, "already": 1, "no_licence": 2,
+        "expire_stamped": 5, "expire_already": 1, "no_ts": 1, "changed": 6,
+    }
 
 
-def test_apply_adds_only_the_licence_id(client):
+def test_apply_adds_only_the_licence_id_and_the_expiry(client):
     before = _before(client)
-    counts = backfill.stamp(client, apply=True, decision="owner, 2026-10-20", page=2)
+    counts = backfill.stamp(client, apply=True, decision="owner, 2026-10-22", page=2)
     rows = client._data["audit_logs"]
-    assert counts["stamped"] == 3
-    assert [rows[k].get("licenseId") for k in ("a1", "a2", "a3")] == ["L1", "L1", "L2"]
-    # Nothing else on any row moves: not the time, the action, the version.
+    assert (counts["stamped"], counts["expire_stamped"]) == (4, 5)
+    assert [rows[k].get("licenseId") for k in ("a1", "a2", "a3", "a7")] == ["L1", "L1", "L2", "L4"]
+    for key in ("a1", "a2", "a3", "a4", "a5"):
+        assert rows[key]["expireAt"] == T + timedelta(days=365)
+    # Nothing else on any row moves: not the time, the action, the version,
+    # nor a field the row already had.
+    added = {"licenseId", "expireAt"}
     for key, row in rows.items():
-        assert {k: v for k, v in row.items() if k != "licenseId"} == {
-            k: v for k, v in before[key].items() if k != "licenseId"}
+        assert {k: v for k, v in row.items() if k not in added} == {
+            k: v for k, v in before[key].items() if k not in added}
+    assert rows["a6"]["expireAt"] == LATER and rows["a6"]["licenseId"] == "L3"
     assert "licenseId" not in rows["a4"] and "licenseId" not in rows["a5"]
+    assert "expireAt" not in rows["a7"]
+
+
+def test_the_expiry_follows_the_retention_setting(client, monkeypatch):
+    monkeypatch.setattr(backfill.settings, "AUDIT_RETENTION_DAYS", 30)
+    backfill.stamp(client, apply=True, decision="owner", page=3)
+    assert client._data["audit_logs"]["a1"]["expireAt"] == T + timedelta(days=30)
+    assert client._data["_migrations"][backfill.LEDGER_ID]["retentionDays"] == 30
 
 
 def test_apply_records_the_decision_in_the_ledger(client):
-    backfill.stamp(client, apply=True, decision="owner, 2026-10-20", page=4)
+    backfill.stamp(client, apply=True, decision="owner, 2026-10-22", page=4)
     ledger = client._data["_migrations"][backfill.LEDGER_ID]
-    assert ledger["decision"] == "owner, 2026-10-20"
+    assert ledger["decision"] == "owner, 2026-10-22"
     assert ledger["collections"] == ["audit_logs"]
-    assert (ledger["scanned"], ledger["changed"]) == (6, 3)
+    assert ledger["retentionDays"] == 365
+    assert (ledger["scanned"], ledger["changed"]) == (7, 6)
+    assert (ledger["licenseIdStamped"], ledger["expireAtStamped"]) == (4, 5)
     assert ledger["completedAt"] is not None
 
 
@@ -78,12 +109,17 @@ def test_apply_refuses_without_a_decision(client):
     with pytest.raises(SystemExit):
         backfill.stamp(client, apply=True, decision="  ")
     assert "licenseId" not in client._data["audit_logs"]["a1"]
+    assert "expireAt" not in client._data["audit_logs"]["a1"]
 
 
-def test_a_rerun_stamps_nothing_more(client):
+def test_a_rerun_changes_nothing(client):
     backfill.stamp(client, apply=True, decision="owner", page=2)
+    after = _before(client)
     again = backfill.stamp(client, apply=True, decision="owner", page=2)
-    assert (again["stamped"], again["already"]) == (0, 4)
+    assert client._data["audit_logs"] == after
+    assert (again["stamped"], again["already"]) == (0, 5)
+    assert (again["expire_stamped"], again["expire_already"], again["no_ts"]) == (0, 6, 1)
+    assert again["changed"] == 0
 
 
 def test_main_parses_and_runs_a_dry_run(client, monkeypatch, capsys):
@@ -91,4 +127,5 @@ def test_main_parses_and_runs_a_dry_run(client, monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["stamp_audit_licence_ids.py", "--project", "p"])
     assert backfill.main() == 0
     out = capsys.readouterr().out
-    assert "would stamp 3" in out and "6 row(s) scanned" in out
+    assert "7 row(s) scanned" in out and "1 have no ts" in out
+    assert "would stamp licenseId on 4, expireAt (ts + 365 d) on 5; 6 row(s) in all" in out

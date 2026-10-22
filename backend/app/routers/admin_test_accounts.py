@@ -1,9 +1,9 @@
 """Staff test accounts for QC and CI (ADR-027), under /v1/admin.
 
 Reading the list takes the ordinary admin token, like every staff read.
-Create, extend, a new password and end take the fresh staff step-up
-(`attested_or_mfa_admin_fresh`), the tier a whole-licence revoke takes: each
-hands over, prolongs or ends a working login. The flows are in
+Create, extend, a new password, releasing one phone and end take the fresh
+staff step-up (`attested_or_mfa_admin_fresh`), the tier a whole-licence
+revoke takes: each hands over, prolongs, moves or ends a working login. The flows are in
 `services/testaccounts.py`.
 """
 from fastapi import APIRouter, Depends, Response
@@ -13,7 +13,7 @@ from ..deps import admin_user, rate_limited
 from ..models import AdminTestAccountCreate, AdminTestAccountExtend
 from ..services import testaccounts as test_accounts
 from ..step_up import attested_or_mfa_admin_fresh
-from ..validation import Uid
+from ..validation import DeviceId, Uid
 
 router = APIRouter(prefix="/v1/admin/test-accounts")
 
@@ -36,7 +36,9 @@ def create_test_account(body: AdminTestAccountCreate, response: Response,
 @router.get("")
 def list_test_accounts(admin=Depends(admin_user)):
     """Every test account: `{accounts: [{uid, email, purpose, expiresAt,
-    maxDevices, note, createdAt, activeDevices, status}]}`, newest first.
+    maxDevices, note, createdAt, activeDevices, devices, status}]}`, newest
+    first; `devices` is `[{deviceId, app, model, registeredAt}]`, its ACTIVE
+    phones.
     `status` is `active`, `expired` (past its date, not yet ended by the
     daily job) or `suspended`."""
     rate_limit.enforce(rate_limit.admin_bucket, admin["uid"])
@@ -59,6 +61,18 @@ def reset_test_account_password(uid: Uid, response: Response,
     revoked."""
     response.headers.update(_NO_STORE)
     return test_accounts.reset_password(uid, ctx.user["uid"])
+
+
+@router.post("/{uid}/devices/{device_id}/release",
+             dependencies=[rate_limited(rate_limit.admin_bucket)])
+def release_test_account_device(uid: Uid, device_id: DeviceId,
+                                ctx=Depends(attested_or_mfa_admin_fresh)):
+    """Release one ACTIVE phone of the account so another can take its place
+    (TD-314); the released phone may not register for this account again.
+    Answers the account's row. 404 `user_not_found` for a uid that is not a
+    test account, `device_not_found` for a device that is not one of its
+    ACTIVE phones."""
+    return test_accounts.release_device(ctx.user["uid"], uid, device_id)
 
 
 @router.delete("/{uid}", status_code=204,

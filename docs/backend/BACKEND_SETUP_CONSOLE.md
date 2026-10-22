@@ -52,7 +52,12 @@ deleted immediately; abandoned ones only disappear if Firestore is told to treat
    these two policies it is never purged. Restore still refuses one past
    `purgeAt`, so a missing policy only keeps data longer than promised.
 
-All three policies are also declared as `fieldOverrides` (`"ttl": true`) in
+The fourth, `audit_logs.expireAt` (one-year audit retention, TD-237), is enabled
+later, after the audit-trail log bucket is locked
+([FIRESTORE_DATA_PROTECTION.md](FIRESTORE_DATA_PROTECTION.md), "The audit trail is
+append-only").
+
+All four policies are also declared as `fieldOverrides` (`"ttl": true`) in
 [`backend/firestore.indexes.json`](../../backend/firestore.indexes.json), so
 `scripts/deploy-firestore.sh indexes` creates any that are missing and leaves
 live ones alone. The Firebase CLI treats a live TTL policy the file omits as

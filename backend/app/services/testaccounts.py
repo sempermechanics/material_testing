@@ -1,6 +1,6 @@
 """The staff test-account flows behind `routers/admin_test_accounts.py` and the
-expiry job (ADR-027): create, extend, new password, end, and ending every
-account past its date.
+expiry job (ADR-027): create, extend, new password, release one phone, end,
+and ending every account past its date.
 
 The password a create or a reset makes is returned to the caller and sent to
 the Firebase Auth project, and goes nowhere else: no log line, audit row or
@@ -10,7 +10,7 @@ import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from .. import audit, errors, google_auth, repo, statuses
+from .. import apps, audit, errors, google_auth, repo, statuses
 from .. import observability as obs
 from ..config import settings
 from ..errors import Refusal
@@ -144,6 +144,24 @@ def reset_password(uid: str, admin_uid: str) -> dict:
         "sessionsRevoked": revoked == len(auth_uids), "authUsers": len(auth_uids),
     })
     return {"password": password}
+
+
+def release_device(actor_uid: str, uid: str, device_id: str) -> dict:
+    """Release one ACTIVE phone of the test account (TD-314), so another can
+    take its place without ending the account. The released phone may not
+    register for this account again (`repo.staff_released_from`); its
+    sessions stay. 404 `user_not_found` for a uid that is not a test account,
+    `device_not_found` for a device that is not one of its ACTIVE phones.
+    Answers the account's row."""
+    user = _require(uid)
+    device = repo.get_device(device_id) or {}
+    if device.get("uid") != uid or device.get("status") != statuses.DEVICE_ACTIVE:
+        raise Refusal(errors.DEVICE_NOT_FOUND)
+    repo.release_test_device(uid, device_id)
+    _audit(actor_uid, "test_account_device_released", uid, {
+        "deviceId": device_id, "app": device.get("app") or apps.SEMPER,
+    })
+    return repo.row_of_test_account(user)
 
 
 def end(uid: str, actor_uid: str, *, action: str = "test_account_ended") -> dict:

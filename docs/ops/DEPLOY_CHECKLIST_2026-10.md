@@ -164,17 +164,28 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       (`SESSION_CREATE` `testAccount: true`, three `UPLOAD_COMPLETE`), which
       `session_provision.py:102` sends under `_test/` (the Drive folder itself not
       listed). End it from the console, then check the audit rows and the Auth user.
-- [ ] **Audit trail lock (TD-237)**, once #457 is deployed (it writes the `audit_row`
-      lines) and the legal/privacy owners have set the retention period: create the
-      `audit-trail` log bucket at that retention, the sink on
-      `jsonPayload.event="audit_row"`, then lock the bucket (irreversible), by the
+- [ ] **Audit retention, backfill and lock (TD-237, TD-246).** Retention is decided:
+      **365 days** (owner, 2026-10-22; `AUDIT_RETENTION_DAYS`, default 365), and the
+      one-time backfill is approved (owner, 2026-10-22). In this order, by the
       commands in [FIRESTORE_DATA_PROTECTION.md](../backend/FIRESTORE_DATA_PROTECTION.md),
-      "The audit trail is append-only". Check: a staff licence edit's row reaches the
-      bucket, and lowering its retention is refused. Then the Firestore TTL the
-      retention asks for. Needs `roles/logging.configWriter` (§0).
-- [ ] **Audit rows before 2026-10-18 (TD-246)**, only if the owner chooses the
-      backfill: `backend/scripts/stamp_audit_licence_ids.py` dry-run, then `--apply
-      --decision "…"`, after the backend that stamps new rows is live.
+      "The audit trail is append-only":
+      1. Deploy the backend that writes `expireAt` on each new audit row (§2), and
+         leave `AUDIT_RETENTION_DAYS` unset.
+      2. The backfill, which stamps `licenseId` and `expireAt` (= `ts` + 365 days)
+         on older rows: `python backend/scripts/stamp_audit_licence_ids.py --project indicvision-dic-app`
+         (dry run; read both counts), then the same with `--apply --decision
+         "TD-246: backfill approved by <owner>, 2026-10-22"`. A rerun reports 0 to
+         stamp.
+      3. The `audit-trail` log bucket at `--retention-days=365`, the sink on
+         `jsonPayload.event="audit_row"`, then lock the bucket (irreversible).
+         Check: a staff licence edit's row reaches the bucket, and lowering its
+         retention is refused. Needs `roles/logging.configWriter` (§0).
+      4. The Firestore TTL:
+         `gcloud firestore fields ttls update expireAt --collection-group=audit_logs --enable-ttl --project=indicvision-dic-app`;
+         `ttls list --collection-group=audit_logs` shows it `ACTIVE`. Rows already
+         older than a year go within about a day. The policy is declared in
+         `backend/firestore.indexes.json`, so an indexes deploy before this step
+         would create it early: run none until step 2 is done.
 - [ ] Move the merged-and-deployed entries from [CONTEXT.md](../../CONTEXT.md)
       "Current state" into [CHANGELOG.md](CHANGELOG.md), in both repos.
 

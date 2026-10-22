@@ -298,6 +298,11 @@ Phased, smallest first. Every phase can ship on its own and leaves both apps wor
    `MechanicalCsv` behind `CsvExtension`, installed from `SemperApp.onCreate` until
    phase 4. Tests: a legacy `index.json` round trip, `/4`–`/7` metadata restores,
    and v1 and v2 CSVs that stay byte-identical.
+   *In progress:* the `ext/` package (`AppExtensions`, `SessionExtension.legacyKeys`),
+   `SessionRecord.extras` and the legacy-key reader (`data/session/SessionIndexJson.kt`)
+   have landed, with the legacy `index.json` round trip (`SessionIndexExtrasTest`).
+   Still to come: a typed `SessionExtras`, metadata `test` and `loadN`, the draft's
+   `loads.csv`, and `CsvExtension`.
 3. [ ] **`WizardExtension`, `ViewerExtension`, `ShareExtension`, `ReportExtension`
    and `NewAnalysisExtension`.** One PR each, with one shared layout slot each. The
    lab `IntentKeys` become `EXTRAS`. Then re-count the fork's shared-Kotlin diff
