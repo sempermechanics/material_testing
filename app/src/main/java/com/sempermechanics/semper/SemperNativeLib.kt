@@ -68,7 +68,7 @@ object SemperNativeLib {
         use6x6Interpolator: Boolean,
         outputBuffer: ByteBuffer,
         callback: ProgressCallback,
-        // 17-slot engine telemetry (see EngineStats.fromArray)
+        // Engine telemetry, EngineStats.ENGINE_SLOT_COUNT slots (see EngineStats.fromArray)
         outMetrics: FloatArray,
     ): Int
 
