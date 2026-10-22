@@ -601,6 +601,50 @@ def test_a_test_account_registers_up_to_its_device_cap_per_app(world):
     assert world["store"]._data["users"]["t-1"]["activeDeviceId"] == "and-phone-2"
 
 
+def test_a_full_ci_account_retires_its_oldest_phone_for_a_new_one(world):
+    _test_user(world["store"], "t-ci", max_devices=2)
+    world["store"]._data["users"]["t-ci"]["testAccount"]["purpose"] = "ci"
+    first, second = _register("t-ci", "and-ci-1"), _register("t-ci", "and-ci-2")
+    assert first["rotated"] == [] and second["rotated"] == []
+
+    third = _register("t-ci", "and-ci-3")
+    assert third["rotated"] == ["and-ci-1"]
+    devices = world["store"]._data["devices"]
+    assert devices["and-ci-1"]["status"] == "SUPERSEDED"
+    assert sorted(d for d, v in devices.items() if v["status"] == "ACTIVE") == ["and-ci-2", "and-ci-3"]
+    assert world["store"]._data["users"]["t-ci"]["activeDeviceId"] == "and-ci-3"
+    # A phone already on it re-registers without giving one up.
+    assert _register("t-ci", "and-ci-2")["rotated"] == []
+
+
+def test_a_ci_rotation_never_touches_another_app_or_account(world):
+    _test_user(world["store"], "t-ci", max_devices=1)
+    world["store"]._data["users"]["t-ci"]["testAccount"]["purpose"] = "ci"
+    _register("t-ci", "and-ci-mt", MT)
+    _test_user(world["store"], "t-qc", email="qc2@qa.example.com", max_devices=1)
+    _register("t-qc", "and-qc-1")
+    _register("t-ci", "and-ci-1")
+    assert _register("t-ci", "and-ci-2")["rotated"] == ["and-ci-1"]
+    devices = world["store"]._data["devices"]
+    assert devices["and-ci-mt"]["status"] == "ACTIVE" and devices["and-qc-1"]["status"] == "ACTIVE"
+
+
+async def test_the_register_route_audits_a_ci_rotation(client, world, monkeypatch):
+    store = world["store"]
+    tag = {**_test_user(store, "t-ci", email=CI_EMAIL, max_devices=1)["testAccount"], "purpose": "ci"}
+    _as(store, monkeypatch, "t-ci", testAccount=tag)
+    _register("t-ci", "and-ci-old")
+    _as(store, monkeypatch, "t-ci")
+
+    r = await client.post("/v1/devices/register",
+                          json={"deviceId": "and-ci-new", "publicKeyPem": _ec_pem()})
+    assert r.status_code == 201, r.text
+    rotated = [row for row in world["audit"] if row.get("action") == "DEVICE_ROTATED"]
+    assert [(row["uid"], row["deviceId"], row["detail"]) for row in rotated] == [
+        ("t-ci", "and-ci-old", {"app": "semper", "by": "and-ci-new", "testAccount": True})]
+    assert store._data["devices"]["and-ci-old"]["status"] == "SUPERSEDED"
+
+
 def test_a_retired_device_frees_its_place(world):
     _test_user(world["store"], "t-1", max_devices=1)
     _register("t-1", "and-phone-1")

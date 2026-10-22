@@ -1518,5 +1518,9 @@ and a licence the backend knows:
    password at its hidden prompt. It sets both secrets with `gh`.
 4. To rotate: **New password**, then `--store` again.
 
-CI does not call the backend with this account yet (TD-313); today it only
-signs in to Firebase.
+Tier 3 also runs one signed-in round trip against staging with this account
+(`StagingRoundTripDeviceTest`) when the repo variable `STAGING_API_BASE_URL` and
+the secrets `STAGING_TEST_EMAIL` / `STAGING_TEST_PASSWORD` are set. Each run is a
+new emulator: a full `ci` account retires its oldest phone (`DEVICE_ROTATED` in
+the audit log) instead of refusing the new one, so `maxDevices` only bounds how
+many runs can overlap.

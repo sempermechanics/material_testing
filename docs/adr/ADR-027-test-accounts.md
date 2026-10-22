@@ -3,10 +3,11 @@
 **Status:** Accepted (the product owner's decisions, 2026-10-19). Backend, console and
 app merged in #460 (2026-10-20) and deployed 2026-10-22 from `b940cc29`, on for
 `TEST_ACCOUNT_DOMAINS=qa.sempermechanics.com`
-([CHANGELOG](../ops/CHANGELOG.md)).
+([CHANGELOG](../ops/CHANGELOG.md)). Amended 2026-10-22 (product owner): a full
+CI account gives up its oldest phone instead of refusing a new one (TD-313).
 **Date:** 2026-10-19
 **Deciders:** product owner, backend owner
-**Register:** TD-313 (CI does not call the backend with the CI account yet)
+**Register:** TD-314 (a QC account's phone cannot be released on its own)
 
 Paths are from `backend/app/` unless they start at the repository root.
 
@@ -89,6 +90,14 @@ How the backend carries them out:
   room (as an unbound lock lets a first phone through), anything else is Demo
   for that request only. The router skips the release hold and the device mail
   for a test account.
+- **CI rotates** (amendment, 2026-10-22). Every CI run is a fresh emulator with
+  a new key, so a `ci` account would fill its `maxDevices` in a few runs and
+  then fail every one. When a `ci` account is full, the same transaction marks
+  its oldest ACTIVE devices for the app SUPERSEDED (by `registeredAt`, a missing
+  one first; `repo/devices.py`, `_oldest_active_devices`) and admits the new one;
+  the router audits each as `DEVICE_ROTATED` with `{app, by, testAccount}`. A
+  `qc` account is still refused `device_conflict`, and no other account or app
+  is touched.
 - **Separation.** A test account's sessions keep their device as
   `testDeviceId` and carry `testAccount: true`, so `count_device_sessions`, which
   matches on `deviceId`, does not count them; they still count toward the
@@ -140,9 +149,14 @@ How the backend carries them out:
 - **A phone not yet registered is licensed while there is room.** For a config
   call only, as an unbound licence already is for a real account's first phone;
   every signed route still needs a registered device.
-- **No per-phone release.** A phone beyond `maxDevices` is refused at
-  registration. Freeing a place is End and create again; a staff release of a
-  test account's phones was not part of the decision.
+- **No per-phone release.** A QC phone beyond `maxDevices` is refused at
+  registration. Freeing a place is End and create again (TD-314); a staff
+  release of a test account's phones was not part of the decision.
+- **A CI phone can be retired under a running job.** Two CI runs at once on a
+  full account can each retire the other's phone; the loser's next signed call
+  answers `device_not_active`. Tier 3 runs one emulator per workflow run, and
+  the round trip registers right before it uploads, so the window is the
+  length of one test.
 - **The listing filters test licences after the page is read.** Firestore
   cannot select "field absent" without dropping every licence that lacks it,
   which is every real one, so a page of the desk can hold fewer rows than asked
@@ -160,8 +174,10 @@ How the backend carries them out:
   list shows `expired`.
 - The CI login becomes a `purpose: "ci"` test account
   (`scripts/create_ci_firebase_account.sh --store`, [OPERATING_MANUAL.md](../OPERATING_MANUAL.md)
-  Appendix E), so it has an account and a licence. CI still does not call a live
-  backend (TD-313).
+  Appendix E), so it has an account and a licence. Tier 3 signs it in against
+  staging (`StagingRoundTripDeviceTest`: config, register, one small backup,
+  delete) when given `STAGING_API_BASE_URL` (repo variable) and the
+  `STAGING_TEST_EMAIL` / `STAGING_TEST_PASSWORD` secrets, and skips otherwise.
 - `contracts/config_response.json` carries `testAccount`; the app's DTO reads it.
 - Routes: [ADMIN_API.md](../backend/ADMIN_API.md); the gateway declares the five
   admin routes and not the task.
@@ -176,5 +192,8 @@ How the backend carries them out:
       `semper-test-account-expiry-staging` (daily 03:17 UTC; a manual run of each succeeded).
 - [ ] On staging: a QC account (`days: 1`) on two phones, its upload under
       `Research Storage/_test/{uid}`, then End
-      ([checklist](../ops/DEPLOY_CHECKLIST_2026-10.md) §6).
-- [ ] TD-313: Tier 3 against staging with the CI test account.
+      ([checklist](../ops/DEPLOY_CHECKLIST_2026-10.md) §6). Done 2026-10-22 but
+      the End (a 7-day account on two emulators, one backup).
+- [x] TD-313: Tier 3 against staging with the CI test account, and CI rotation
+      (`StagingRoundTripDeviceTest` passed on an emulator against staging,
+      2026-10-22; the rotation needs the backend deployed before CI runs it often).

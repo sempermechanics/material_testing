@@ -7,12 +7,13 @@ workflow expects. Companion to [CI.md](CI.md) and [RELEASING.md](RELEASING.md).
 
 This repo's org is on the GitHub **Free** plan. The repository itself reports
 **public** (GitHub REST API, checked 2026-10-18), so its Releases and Actions logs are
-public too; what follows was written for a private repo and may now be loosened
-(TD-228). Environment *shells* exist and workflows can still select them
+public too; what follows was written for a private repo and may now be loosened.
+Environment *shells* exist and workflows can still select them
 (`environment: staging`), but:
 
-- **Required reviewers / deployment protection** on Environments may be limited
-  or unavailable.
+- **Required reviewers** work on a public repository: `production` requires the
+  product owner's approval for every deploy (set 2026-10-22, owner decision;
+  admins may still bypass). No other environment has protection rules.
 - Prefer storing **secrets and variables at the repository level** when
   Environment-scoped secrets are empty or cannot be set. Workflows read
   `secrets.*` / `vars.*` the same way either way.

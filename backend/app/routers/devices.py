@@ -43,18 +43,26 @@ def register_device(body: DeviceReg, request: Request, user=Depends(current_user
     # binding (ADR-010): Material Testing on the phone Semper is registered on
     # reports its own device id, and is not a conflict.
     try:
-        repo.register_device(user["uid"], body, app, step_up_eligible=eligible)
+        registered = repo.register_device(user["uid"], body, app, step_up_eligible=eligible)
     except errors.Refusal as refusal:
         if refusal.code == errors.DEVICE_IN_USE:
             audit.record(user["uid"], body.deviceId, action="DEVICE_IN_USE", outcome="DENIED",
                          detail={"owner": (repo.get_device(body.deviceId) or {}).get("uid")})
         raise
+    _audit_rotated(user["uid"], registered.get("rotated"), app, body.deviceId)
     audit.record(user["uid"], body.deviceId, action="DEVICE_REBIND" if healed else "DEVICE_REGISTER",
                  detail={"app": app, "stepUpEligible": eligible, **({"testAccount": True} if tag else {})})
     if not healed and tag is None:  # A new device tells its holder (TD-295); a heal is not one.
         notify.device_registered(user["uid"], repo.verified_address(user), body.deviceId, app,
                                  model=body.model)
     return {"deviceId": body.deviceId, "healed": healed}
+
+
+def _audit_rotated(uid: str, rotated, app: str, by: str) -> None:
+    """One row per phone a full CI test account gave up for `by` (TD-313)."""
+    for old in rotated or ():
+        audit.record(uid, old, action="DEVICE_ROTATED",
+                     detail={"app": app, "by": by, "testAccount": True})
 
 
 @router.post("/v1/challenge")
