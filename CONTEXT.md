@@ -41,7 +41,7 @@ Use these words. Do not invent synonyms.
 | `.dat` | Binary field: 8 floats/point (`x y u v exx eyy exy znssd`), 32 bytes |
 | session | One saved analysis on disk (and optionally in the cloud) |
 
-Engine pipeline (`engine/docs/ARCHITECTURE.md`): anchor-lattice seeds (phase correlation + ICGN) → Delaunay → RGDIC → ICGN → VSG → `.dat`.
+Engine pipeline (`engine/docs/ARCHITECTURE.md`): anchor-lattice seeds (AKAZE + RANSAC homography + ICGN, engine 0.6.0) → Delaunay → RGDIC → ICGN → VSG → `.dat`.
 
 ## Layout
 
@@ -137,8 +137,11 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   Tensile and Bending; a fork change to a shared screen runs only for a lab test.
   semperdic-app proposes making this a product flavour of its repo ([ADR-025](docs/adr/ADR-025-test-type-extension-points.md), mirrored).
 - **Synced with `semperdic-app`** (forked at `bfe00e5`; `git log --merges
-  --grep=semperdic-app`; rules in its `docs/ops/FORK_SYNC.md`). Last: `14b279d6`, 2026-10-21,
-  on `ccr-603fe346-1bw2fa` (open; not deployed): its #453 (`firebase-bom` 35), #457 (the
+  --grep=semperdic-app`; rules in its `docs/ops/FORK_SYNC.md`). Last: `9d116f24`, 2026-10-22,
+  on `sync/semperdic-9d116f2`: its #461 (a local Firebase test account script) and #462
+  (**engine v0.6.0**, `59ac995`: AKAZE + RANSAC homography seeding, so rotation past 90° and
+  large stretch seed; `-5` read as no seed; TD-299). Before: `14b279d6`, 2026-10-21,
+  on `ccr-603fe346-1bw2fa` (merged as #141; not deployed): its #453 (`firebase-bom` 35), #457 (the
   review fixes and tech-debt rounds), #458 (the incremental reference), #459 (unit-test JVM
   diagnostics, TD-312) and #460 (staff test accounts, [ADR-027](docs/adr/ADR-027-test-accounts.md):
   backend and console, deployed from there); it closed TD-305, TD-311 and TD-207. The lab

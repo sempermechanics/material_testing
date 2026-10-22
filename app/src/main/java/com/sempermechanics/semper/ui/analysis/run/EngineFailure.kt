@@ -10,8 +10,10 @@ import com.sempermechanics.semper.ui.analysis.wizard.BatchAnalysisOutcome
 object EngineFailure {
 
     /**
-     * No seed: no anchor solved, phase correlation did not lock, and the
-     * centre search (Path C) diverged; [RunStop.FeaturesUnmatched] as a stop code.
+     * No seed, as engines before 0.5.0 reported it (no anchor solved, no global
+     * lock, and the centre search (Path C) diverged); [RunStop.FeaturesUnmatched]
+     * as a stop code. Kept for records those engines wrote; 0.5.0 on return
+     * [ENGINE_ERROR_SEED].
      */
     const val ENGINE_ERROR_FEATURES = -1
 
@@ -26,6 +28,13 @@ object EngineFailure {
      * could keep a strain fit (engine 0.3.0 on; older engines returned 0 points).
      */
     const val ENGINE_ERROR_STRAIN_WINDOW = -4
+
+    /**
+     * No seed (engine 0.5.0 on): no anchor solved, the global-motion match
+     * (AKAZE from 0.6.0, phase correlation before) gave no lock, and the
+     * centre search diverged; [RunStop.SeedFailed] as a stop code.
+     */
+    const val ENGINE_ERROR_SEED = -5
 
     private enum class Cause {
         FEATURES,
@@ -46,6 +55,7 @@ object EngineFailure {
         ENGINE_ERROR_ROI -> Cause.ROI
         ENGINE_ERROR_INIT -> Cause.INIT
         ENGINE_ERROR_STRAIN_WINDOW -> Cause.VSG
+        ENGINE_ERROR_SEED -> Cause.FEATURES
         RunStop.LowConvergence.wireCode -> Cause.CONVERGENCE
         // Analyses saved before a cancel kept nothing (2026-10-15) carry this
         // stop code, so Home and the viewer read it back here; it is no
