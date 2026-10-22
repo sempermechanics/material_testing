@@ -25,6 +25,7 @@ from ._base import (
     _set_doc,
     _create_doc,
     max_test_devices,
+    staff_released_from,
     test_account_of,
 )
 from .entitlement import (
@@ -50,17 +51,21 @@ def _release_patch(device_id: str, app: str = apps.SEMPER) -> dict:
     }
 
 
-def _retire_device(batch, device_ref, status: str) -> None:
-    """Retire `device_ref` in `batch`, so its id stops counting against another account.
+def _retire_device(batch, device_ref, status: str, extra: dict | None = None) -> None:
+    """Retire `device_ref` in `batch` (or a transaction), so its id stops
+    counting against another account; `extra` fields go in the same write.
 
     The one way a device leaves service: superseded by a lock clear or a staff
-    release (`_release_devices`), or revoked with its account
-    (`set_user_status`). The caller drops the app's `activeDeviceId`
-    field on `users/{uid}` in the same batch.
+    release (`_release_devices`), revoked with its account
+    (`set_user_status`), or one test-account phone released by staff
+    (`repo.testaccounts.release_test_device`, stamped `staffReleased`). The
+    caller drops the app's `activeDeviceId` field on `users/{uid}` in the
+    same batch.
     """
     batch.update(device_ref, {
         "status": status,
         "revokedAt": _base.firestore.SERVER_TIMESTAMP,
+        **(extra or {}),
     })
 
 
@@ -148,7 +153,10 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
     (`device_conflict`); a full CI account instead retires its oldest ACTIVE
     phones as superseded in the same transaction, since every CI run is a
     fresh emulator with a new key (TD-313). The answer's `rotated` lists them.
-    A real account is unchanged.
+    A phone staff released from the test account on its own
+    (`staff_released_from`) is refused `device_conflict` for that account, so
+    it cannot take back the place it gave up (TD-314); another account may
+    still register it. A real account is unchanged.
 
     `step_up_eligible` is whether the registering token proved a second factor
     (ADR-010, device trust). Stamped on every registration, a heal included,
@@ -200,6 +208,8 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
         held = (existing.to_dict() or {}) if existing.exists else {}
         if held.get("status") == statuses.DEVICE_ACTIVE and held.get("uid") != uid:
             raise Refusal(errors.DEVICE_IN_USE)
+        if tag is not None and staff_released_from(held, uid):
+            raise Refusal(errors.DEVICE_CONFLICT)
         for old in rotated:  # the writes come after every read of the transaction
             tx.update(db().collection("devices").document(old), {
                 "status": statuses.DEVICE_SUPERSEDED,
