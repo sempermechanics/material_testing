@@ -137,7 +137,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   Tensile and Bending; a fork change to a shared screen runs only for a lab test.
   semperdic-app proposes making this a product flavour of its repo ([ADR-025](docs/adr/ADR-025-test-type-extension-points.md), mirrored).
 - **Synced with `semperdic-app`** (forked at `bfe00e5`; `git log --merges
-  --grep=semperdic-app`; rules in its `docs/ops/FORK_SYNC.md`). Last: `9d116f24`, 2026-10-22,
+  --grep=semperdic-app`; rules in its `docs/ops/FORK_SYNC.md`). Since then semperdic-app#470
+  (engine **v0.6.1**, `f072da0`: bending points near the load point kept, the Gradle OpenCV
+  list dropped; TD-299 closed) is here by `cherry-pick -x`. Last: `9d116f24`, 2026-10-22,
   on `sync/semperdic-9d116f2`: its #461 (a local Firebase test account script) and #462
   (**engine v0.6.0**, `59ac995`: AKAZE + RANSAC homography seeding, so rotation past 90° and
   large stretch seed; `-5` read as no seed; TD-299). Before: `14b279d6`, 2026-10-21,
