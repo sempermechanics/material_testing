@@ -176,7 +176,7 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       (`SESSION_CREATE` `testAccount: true`, three `UPLOAD_COMPLETE`), which
       `session_provision.py:102` sends under `_test/` (the Drive folder itself not
       listed). End it from the console, then check the audit rows and the Auth user.
-- [ ] **Audit retention, backfill and lock (TD-237, TD-246).** Retention is decided:
+- [x] **Audit retention, backfill and lock (TD-237, TD-246).** Retention is decided:
       **365 days** (owner, 2026-10-22; `AUDIT_RETENTION_DAYS`, default 365), and the
       one-time backfill is approved (owner, 2026-10-22). In this order, by the
       commands in [FIRESTORE_DATA_PROTECTION.md](../backend/FIRESTORE_DATA_PROTECTION.md),
@@ -193,6 +193,11 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
          `jsonPayload.event="audit_row"`, then lock the bucket (irreversible).
          Check: a staff licence edit's row reaches the bucket, and lowering its
          retention is refused. Needs `roles/logging.configWriter` (§0).
+         **Done 2026-10-23**: bucket `audit-trail` in `asia-south1`, sink on the filter
+         `resource.type="cloud_run_revision" AND jsonPayload.event="audit_row"`; a staff
+         licence edit (08:27:53 UTC) reached it, the bucket is locked, and
+         `--retention-days=1` answered `FAILED_PRECONDITION`. The sink routed nothing in
+         its first minutes: two rows (08:24:46, 08:25:49) are only in `_Default` and Firestore.
       4. The Firestore TTL:
          `gcloud firestore fields ttls update expireAt --collection-group=audit_logs --enable-ttl --project=indicvision-dic-app`;
          `ttls list --collection-group=audit_logs` shows it `ACTIVE`. Rows already

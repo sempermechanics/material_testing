@@ -132,13 +132,13 @@ transfer exclude preferences and session files
 | Account, devices, sessions, files, Drive content | Until erasure | `DELETE /v1/me`; per session `DELETE /v1/sessions/{sid}` |
 | Nonces | Minutes | TTL `challenges.expireAt`, delete on use |
 | Deleted licences and seats | 30 days | TTL `purgeAt` |
-| Audit rows | 365 days once the TTL is enabled; indefinite until then | TTL `audit_logs.expireAt` (TD-237); older rows stamped by the TD-246 backfill |
+| Audit rows | 365 days (TTL enabled 2026-10-23); their log copy 365 days in the locked `audit-trail` bucket | TTL `audit_logs.expireAt`; older rows stamped by the TD-246 backfill |
 | Firestore exports | Bucket lifecycle (35 days recommended, `docs/backend/FIRESTORE_DATA_PROTECTION.md:19-26`; applied state unverified) | GCS lifecycle |
 | Logs, crash reports, email | Vendor settings, unverified | Gate "Confirm Crashlytics / Cloud Logging / Resend retention" |
 
 ## Findings recorded elsewhere
 
-TD-237 (audit retention and lock), TD-271
+TD-271
 (erasure's seat index; erasures before the change), TD-273 (the deprecated search
 query), TD-227 (location), TD-232
 (Data safety submission), TD-317 (policy omits Analytics, App Check and IP-derived location), TD-36 (policy placeholders). `docs/backend/CLOUD_ARCHITECTURE_GCP.md`

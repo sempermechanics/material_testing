@@ -208,7 +208,7 @@ What the code holds (TD-237):
 
 What it does not hold: anyone with Firestore IAM on the project can still
 edit or delete a row through the Admin API. The immutable copy is the log
-line, once a sink routes it to a bucket whose retention is locked. The
+line, once a sink routes it to a bucket whose retention is locked; the `audit-trail` bucket (`asia-south1`, 365 days) and its sink on `jsonPayload.event="audit_row"` were created and the bucket locked on 2026-10-23. The
 retention is the one year decided above, the same as `AUDIT_RETENTION_DAYS`.
 In this order, after the backend that writes `expireAt` is deployed and the
 TD-246 backfill has run (dry run, then `--apply --decision "…"`), so every row
