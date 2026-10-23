@@ -176,7 +176,7 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       (`SESSION_CREATE` `testAccount: true`, three `UPLOAD_COMPLETE`), which
       `session_provision.py:102` sends under `_test/` (the Drive folder itself not
       listed). End it from the console, then check the audit rows and the Auth user.
-- [ ] **Audit retention, backfill and lock (TD-237, TD-246).** Retention is decided:
+- [x] **Audit retention, backfill and lock (TD-237, TD-246).** Retention is decided:
       **365 days** (owner, 2026-10-22; `AUDIT_RETENTION_DAYS`, default 365), and the
       one-time backfill is approved (owner, 2026-10-22). In this order, by the
       commands in [FIRESTORE_DATA_PROTECTION.md](../backend/FIRESTORE_DATA_PROTECTION.md),
@@ -187,11 +187,17 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
          on older rows: `python backend/scripts/stamp_audit_licence_ids.py --project indicvision-dic-app`
          (dry run; read both counts), then the same with `--apply --decision
          "TD-246: backfill approved by <owner>, 2026-10-22"`. A rerun reports 0 to
-         stamp.
+         stamp. **Done 2026-10-23** (dry run, then `--apply`; the rerun: 6145 rows, all with
+         `expireAt`, 0 to stamp).
       3. The `audit-trail` log bucket at `--retention-days=365`, the sink on
          `jsonPayload.event="audit_row"`, then lock the bucket (irreversible).
          Check: a staff licence edit's row reaches the bucket, and lowering its
          retention is refused. Needs `roles/logging.configWriter` (§0).
+         **Done 2026-10-23**: bucket `audit-trail` in `asia-south1`, sink on the filter
+         `resource.type="cloud_run_revision" AND jsonPayload.event="audit_row"`; a staff
+         licence edit (08:27:53 UTC) reached it, the bucket is locked, and
+         `--retention-days=1` answered `FAILED_PRECONDITION`. The sink routed nothing in
+         its first minutes: two rows (08:24:46, 08:25:49) are only in `_Default` and Firestore.
       4. The Firestore TTL:
          `gcloud firestore fields ttls update expireAt --collection-group=audit_logs --enable-ttl --project=indicvision-dic-app`;
          `ttls list --collection-group=audit_logs` shows it `ACTIVE`. Rows already
@@ -204,6 +210,8 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
          fixed in file), so it writes only this policy. After the `gcloud`
          command, run the script once anyway: it should print no "not present"
          line and write nothing, which closes TD-316. Never with `--force`.
+         **Done 2026-10-23** by the script after step 2: no "not present" line, deploy
+         complete, the policy `CREATING` (TD-316 closed). Step 3 is still open.
 - [ ] Move the merged-and-deployed entries from [CONTEXT.md](../../CONTEXT.md)
       "Current state" into [CHANGELOG.md](CHANGELOG.md), in both repos.
 

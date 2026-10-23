@@ -52,8 +52,8 @@ deleted immediately; abandoned ones only disappear if Firestore is told to treat
    these two policies it is never purged. Restore still refuses one past
    `purgeAt`, so a missing policy only keeps data longer than promised.
 
-The fourth, `audit_logs.expireAt` (one-year audit retention, TD-237), is enabled
-later, after the audit-trail log bucket is locked
+The fourth, `audit_logs.expireAt` (one-year audit retention, TD-237), was enabled
+on 2026-10-23, after the TD-246 backfill; the audit-trail log bucket was locked the same day
 ([FIRESTORE_DATA_PROTECTION.md](FIRESTORE_DATA_PROTECTION.md), "The audit trail is
 append-only").
 

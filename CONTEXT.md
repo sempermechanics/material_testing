@@ -133,10 +133,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   from `b940cc29` ([checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md) §4).
 - **[Checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md) still open:** monitoring `--apply` (§5;
   no notification channel exists yet); staff/IT phones re-registering with TOTP, the 24 h log
-  watch, ending the staging QC test account, the erasure check, and #467's backfill, TTL and
-  index deploy (§6; the index deploy waits on open PR #476, TD-316). The posture check's 18 FAILs
+  watch, ending the staging QC test account, and the erasure check (§6; the audit backfill, the
+  `expireAt` TTL and the locked `audit-trail` log bucket went in 2026-10-23). The posture check's 18 FAILs
   ([gate](docs/ops/PRODUCTION_READINESS_GATE.md)) are console or `gcloud` changes. Optional and
-  unset: TD-215 (entitlement key), TD-309, the audit bucket lock.
+  unset: TD-215 (entitlement key), TD-309.
 - **App** `com.sempermechanics.semper` ([ADR-019](docs/adr/ADR-019-sempermechanics-app-id.md)).
   Latest release `v1.2-beta.4` (versionCode 1036, `33dce87d`, 2026-10-17, engine 0.4.2).
   On `main` since: **minSdk 30**, version gate, EMM config, AAB

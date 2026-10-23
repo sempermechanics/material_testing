@@ -194,8 +194,9 @@ What the code holds (TD-237):
   `expireAt` = `ts` + `AUDIT_RETENTION_DAYS` to rows written before
   `add_audit_row` set it, so TTL reaches them; nothing else, and never a field
   a row already has), refuses `--apply` without `--decision` and records it in
-  `_migrations`. The owner approved running it on 2026-10-22; it has not been
-  run yet.
+  `_migrations`. The owner approved running it on 2026-10-22, and the operator
+  ran it on 2026-10-23 (a rerun found all 6145 rows with `expireAt`); the TTL
+  policy below went on the same day, after it.
 - Clients cannot read or write it: `firestore.rules` denies everything, and
   `firestore-rules-tests/rules.test.mjs` tries an update, a merge, an
   overwrite and a delete of an audit row as each caller, an Org Owner's claims
@@ -207,7 +208,7 @@ What the code holds (TD-237):
 
 What it does not hold: anyone with Firestore IAM on the project can still
 edit or delete a row through the Admin API. The immutable copy is the log
-line, once a sink routes it to a bucket whose retention is locked. The
+line, once a sink routes it to a bucket whose retention is locked; the `audit-trail` bucket (`asia-south1`, 365 days) and its sink on `jsonPayload.event="audit_row"` were created and the bucket locked on 2026-10-23. The
 retention is the one year decided above, the same as `AUDIT_RETENTION_DAYS`.
 In this order, after the backend that writes `expireAt` is deployed and the
 TD-246 backfill has run (dry run, then `--apply --decision "…"`), so every row

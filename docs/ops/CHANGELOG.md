@@ -56,6 +56,17 @@ console's per-phone **Release**. No Firestore index deploy, no app release.
   `DEVICE_REGISTER` DENIED `reason=staff_released` (07:49:00 UTC); a third emulator
   (`and-100a171151b8fdb0`) registered once the CI rotation had freed its id. The app shows
   the generic "already linked to another account" message for a released phone.
+- **Audit retention in Firestore** ([checklist](DEPLOY_CHECKLIST_2026-10.md) §6). The
+  operator ran the TD-246 backfill (dry run, then `--apply`; it stamps `licenseId` and
+  `expireAt` on older rows, counts in `_migrations/td246_stamp_audit_licence_ids`; a dry-run
+  rerun after it: 6145 rows, all with `expireAt`, 48 with `licenseId`, 6097 whose target
+  names no licence, 0 without `ts`, 0 to stamp), then
+  `scripts/deploy-firestore.sh indexes` with the pinned `firebase-tools@15.33.0` (#476): no
+  "not present" line, and the only change was the `audit_logs.expireAt` TTL policy, then
+  `CREATING` (later `ACTIVE`). That closes TD-316. Then the `audit-trail` bucket (`asia-south1`, 365 days) and its sink on `jsonPayload.event="audit_row"` were created and the bucket locked on 2026-10-23: a staff licence
+  edit's row reached the bucket, and lowering its retention answered `FAILED_PRECONDITION`.
+  That closes TD-237. A new sink routes nothing for its first minutes: two rows from then
+  (08:24:46 and 08:25:49 UTC) are only in `_Default` and Firestore.
 - **Merged the same days, nothing to deploy:** #472 (Current state condensed; the first
   `check_gcp_posture.sh` run, 18 FAIL, and the §5 monitoring dry run recorded) and #473 (the
   audit-repo path test passes on Windows).
