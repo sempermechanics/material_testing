@@ -11,6 +11,7 @@ import com.sempermechanics.semper.data.net.ApiErrors
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.net.CloudApi
+import com.sempermechanics.semper.data.net.DeviceConflictException
 import com.sempermechanics.semper.data.net.HttpFailure
 import com.sempermechanics.semper.data.net.HttpFailure.Kind
 import com.sempermechanics.semper.data.net.MeResponse
@@ -136,8 +137,13 @@ internal class AccessStatusResolver(
     }
 
     private fun deviceBoundElsewhere(cause: Throwable) = AccessLostException(
-        "This device is already linked to another account, or this account to " +
-            "another device. Sign in with that account, or ask an admin to reset the binding.",
+        if ((cause as? DeviceConflictException)?.released == true) {
+            "Staff released this phone from this account, so it cannot be used with it " +
+                "again. Sign in with another account, or use another phone."
+        } else {
+            "This device is already linked to another account, or this account to " +
+                "another device. Sign in with that account, or ask an admin to reset the binding."
+        },
         cause,
     )
 

@@ -45,7 +45,7 @@ def register_device(body: DeviceReg, request: Request, user=Depends(current_user
     try:
         registered = repo.register_device(user["uid"], body, app, step_up_eligible=eligible)
     except errors.Refusal as refusal:
-        _audit_refused(user["uid"], refusal.code, body.deviceId, app, tag)
+        _audit_refused(user["uid"], refusal.code, body.deviceId, app)
         raise
     _audit_rotated(user["uid"], registered.get("rotated"), app, body.deviceId)
     audit.record(user["uid"], body.deviceId, action="DEVICE_REBIND" if healed else "DEVICE_REGISTER",
@@ -56,15 +56,14 @@ def register_device(body: DeviceReg, request: Request, user=Depends(current_user
     return {"deviceId": body.deviceId, "healed": healed}
 
 
-def _audit_refused(uid: str, code: str, device_id: str, app: str, tag) -> None:
+def _audit_refused(uid: str, code: str, device_id: str, app: str) -> None:
     """The DENIED row for a refused registration: the phone bound to another
     account (`device_in_use`, naming it), or a phone staff released from
     this test account (TD-314), which may not take its place back."""
     if code == errors.DEVICE_IN_USE:
         audit.record(uid, device_id, action="DEVICE_IN_USE", outcome="DENIED",
                      detail={"owner": (repo.get_device(device_id) or {}).get("uid")})
-    elif (code == errors.DEVICE_CONFLICT and tag is not None
-          and repo.staff_released_from(repo.get_device(device_id), uid)):
+    elif code == errors.DEVICE_RELEASED:
         audit.record(uid, device_id, action="DEVICE_REGISTER", outcome="DENIED",
                      detail={"reason": "staff_released", "app": app, "testAccount": True})
 

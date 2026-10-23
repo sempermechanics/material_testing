@@ -39,6 +39,12 @@ object ApiErrors {
     /** This device is already bound to a different account (409). */
     const val DEVICE_IN_USE = "device_in_use"
 
+    /**
+     * Staff released this phone from this test account, and it may not take its
+     * place back (409 from `POST /v1/devices/register`; TD-314).
+     */
+    const val DEVICE_RELEASED = "device_released"
+
     /** No ACTIVE device record for this caller — re-register and retry (409). */
     const val DEVICE_NOT_ACTIVE = "device_not_active"
 

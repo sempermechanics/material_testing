@@ -41,8 +41,13 @@ class TermsVersionMismatchException(val requestId: String? = null) : IOException
  * This account is bound to a *different* device (registration refused).
  * [requestId] is the backend's `X-Request-Id` when it answered — a device
  * rebind is a support conversation, so the log line has to be findable.
+ * [released]: staff released this phone from the account ([ApiErrors.DEVICE_RELEASED]),
+ * which is handled as a conflict everywhere but in what the user is told.
  */
-class DeviceConflictException(val requestId: String? = null) : IOException(ApiErrors.DEVICE_CONFLICT)
+class DeviceConflictException(
+    val requestId: String? = null,
+    val released: Boolean = false,
+) : IOException(if (released) ApiErrors.DEVICE_RELEASED else ApiErrors.DEVICE_CONFLICT)
 
 /** This device is already bound to a different account (409 from `GET /v1/me`). */
 class DeviceInUseException(val requestId: String? = null) : IOException(ApiErrors.DEVICE_IN_USE)

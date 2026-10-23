@@ -154,7 +154,7 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
     phones as superseded in the same transaction, since every CI run is a
     fresh emulator with a new key (TD-313). The answer's `rotated` lists them.
     A phone staff released from the test account on its own
-    (`staff_released_from`) is refused `device_conflict` for that account, so
+    (`staff_released_from`) is refused `device_released` for that account, so
     it cannot take back the place it gave up (TD-314); another account may
     still register it. A real account is unchanged.
 
@@ -209,7 +209,7 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
         if held.get("status") == statuses.DEVICE_ACTIVE and held.get("uid") != uid:
             raise Refusal(errors.DEVICE_IN_USE)
         if tag is not None and staff_released_from(held, uid):
-            raise Refusal(errors.DEVICE_CONFLICT)
+            raise Refusal(errors.DEVICE_RELEASED)
         for old in rotated:  # the writes come after every read of the transaction
             tx.update(db().collection("devices").document(old), {
                 "status": statuses.DEVICE_SUPERSEDED,
