@@ -37,7 +37,19 @@ The item-by-item check against the external readiness framework (2026-10-18) is
       (read-only) prints PASS / FAIL / UNKNOWN for these and for liens, the Prod tag,
       owners, budgets, max-instances, PITR, delete protection, the backup schedule,
       anonymous auth, `CHECK_REVOKED_ON_STEP_UP`, the entitlement key's Secret
-      Manager ref and Data Access audit logs. Not yet run against the real projects.
+      Manager ref and Data Access audit logs. First run 2026-10-22 (`--backup-bucket
+      indicvision-dic-app-firestore-backups`, both services): **18 FAIL, 0 UNKNOWN**.
+      PASS: 2.5 (anonymous off; email and google.com on), 2.6 (budgets on both
+      projects, max-instances 10 on both services), 2.7-pitr (7 days), 2.7-backup
+      (daily schedule, 7 days), 3.4-iam, 3.4-check-revoked on staging. FAIL on both
+      projects: 2.1 (no lien, no Prod tag, one owner, granted to a user not a group),
+      2.4 (the Firebase auto-created Browser key, and on the Auth project the Android
+      key, have no app/site/server restriction), 3.7 (no DATA_READ + DATA_WRITE audit
+      logs for firebase, firebaserules, firebaseappcheck, firestore). FAIL on the app
+      project: 2.7-delete-protection. FAIL on services: 3.1 `APP_CHECK_MODE=off`
+      (both; TD-226), 3.4 `CHECK_REVOKED_ON_STEP_UP=false` on `semper-api` (TD-214,
+      live at the next production deploy), 3.5 no `ENTITLEMENT_SIGNING_KEY` (both;
+      TD-215). Every fix is a console or `gcloud` change by the operator.
 - [ ] Confirm Auth abuse / enumeration protections in Firebase console.
 - [x] Deploy API Gateway with `openapi.yaml` quotas (`__CLOUD_RUN_URL__`
       substituted) — pilot gateway is live; re-confirm quotas in console.
