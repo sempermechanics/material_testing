@@ -1256,7 +1256,12 @@ routes below are what it calls, and stay equally usable from a script.
 Semper staff have `/console/operator`, which now does the whole job: issue an
 individual or institution licence, extend a term, revoke a key, unbind a
 licence or a seat from the device it is on, drive any institution's roster,
-and approve accounts. **Roster** on an institution licence's row opens the same
+and approve accounts. The desk is one page in this order: **Licences** (with
+**Issue a licence** in its heading), then **Accounts awaiting approval** beside
+**Release a Demo account's phone**, **Test accounts**, and **Recently
+deleted** last. A row of links at the top jumps to each and stays in view as
+the page scrolls; the number beside **Approvals** is how many accounts are
+waiting. **Roster** on an institution licence's row opens the same
 tools IT has, on the staff routes: the seat-count tiles, add and remove members,
 **Export roster CSV**, **Import members** from a CSV (up to 500 rows, one result
 line per row), and the licence's **Audit log** by date range with **Export CSV**
@@ -1442,7 +1447,8 @@ expired accounts is a Cloud Scheduler job
 ([DEPLOY_CHECKLIST_2026-10.md](ops/DEPLOY_CHECKLIST_2026-10.md)).
 
 **Creating one** (Semper staff, the fresh step-up a licence revoke asks for):
-the operator console's test-account section, or `POST /v1/admin/test-accounts`
+**Create a test account** on the operator console's **Test accounts** card (the
+form is folded under that heading until opened), or `POST /v1/admin/test-accounts`
 with `{"email", "purpose": "qc" or "ci", "days", "maxDevices", "note"}`
 ([ADMIN_API.md](backend/ADMIN_API.md)).
 
@@ -1492,8 +1498,10 @@ password was shared too widely.
 
 **All its phones are taken.** A phone signing in beyond `maxDevices` is refused
 as "already linked" (a CI account instead gives up its oldest phone). To free a
-place, open the account's row on the console's **Test accounts** card and press
-**Release** beside the phone to give up (fresh step-up), or call
+place, press **Show** on the console's **Test accounts** card: each active phone
+is listed on its own line in the account's **Phones** cell (model and app, its
+device id under them). Press **Release** on the line of the phone to give up
+(fresh step-up), or call
 `POST /v1/admin/test-accounts/{uid}/devices/{deviceId}/release`. The place is
 free at once, with no hold; the account, its other phones and its analyses are
 untouched, audited `test_account_device_released`. The released phone stops

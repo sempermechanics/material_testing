@@ -92,6 +92,7 @@ export async function loadUsers(started) {
     const data = await (started || api(PENDING_USERS));
     if (ticket !== usersLoad) return;
     const rows = data.users || [];
+    showPendingCount(rows.length, data.page && data.page.hasMore);
     $("userRows").innerHTML = rows.length
       ? rows.map((u) => `
           <tr>
@@ -112,6 +113,17 @@ export async function loadUsers(started) {
   } finally {
     if (ticket === usersLoad) $("reloadUsers").disabled = false;
   }
+}
+
+/**
+ * The number beside Approvals in the desk's section index: how many accounts
+ * wait, so a queue below the licence table is seen without scrolling to it.
+ * Hidden when nobody waits; "50+" when the read stopped at its page.
+ */
+function showPendingCount(count, more) {
+  const badge = $("pendingCount");
+  badge.hidden = !count;
+  badge.textContent = count ? `${count}${more ? "+" : ""}` : "";
 }
 
 $("releasePhone").addEventListener("click", async () => {

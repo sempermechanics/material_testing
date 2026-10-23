@@ -44,7 +44,8 @@
   <link rel="modulepreload" href="roster-card.js" />
   <link rel="modulepreload" href="test-accounts.js" />
 </head>
-<body data-auth="pending">
+<!-- class="desk": the operator page's wider working layout (console.css). -->
+<body data-auth="pending" class="desk">
   <header>
     <a class="brand" href="https://sempermechanics.com/"><img src="../semper-mark.webp" alt="" width="28" height="28" />semper</a>
     <h1>Operator</h1>
@@ -75,16 +76,28 @@
     </section>
 
     <div id="app" hidden>
+      <!-- The desk is one long page of independent jobs. This index keeps
+           each a click away, and says when accounts are waiting for
+           approval (people.js fills #pendingCount), the one queue that is
+           somebody else's wait. Plain anchors: no script needed to jump. -->
+      <nav class="desk-nav" aria-label="Desk sections">
+        <a href="#licencesCard">Licences</a>
+        <a href="#approvalsCard">Approvals <span id="pendingCount" class="count" hidden></span></a>
+        <a href="#testAccountsCard">Test accounts</a>
+        <a href="#demoPhoneCard">Demo phones</a>
+        <a href="#deletedCard">Recently deleted</a>
+      </nav>
+
       <!-- ------------------------------------------------------- mint -->
       <!-- Opened from the Licences card: most visits look a licence up, and a
            700-pixel form stood between the desk and its table. -->
-      <section class="card" id="issueCard" hidden>
-        <div class="row">
-          <h2 style="margin:0">Issue a licence</h2>
+      <section class="card form-card" id="issueCard" hidden>
+        <div class="card-head">
+          <h2>Issue a licence</h2>
           <span class="spacer"></span>
           <button id="closeIssue" class="secondary">Close</button>
         </div>
-        <div class="row">
+        <div class="row segmented" role="radiogroup" aria-label="Licence kind">
           <label><input type="radio" name="kind" value="individual" checked /> Individual</label>
           <label><input type="radio" name="kind" value="institution" /> Institution</label>
         </div>
@@ -92,7 +105,7 @@
         <div id="individualFields" class="grid">
           <label>Email lock
             <input id="emailLock" type="email" placeholder="person@lab.org" />
-            <span class="muted">
+            <span class="hint">
               The licence attaches when this address signs in, and binds to the
               first device it signs in on. Nothing to send, nothing to type.
             </span>
@@ -135,7 +148,7 @@
                the only number on an individual licence, got read as "1 licence". -->
           <label>Cloud analyses per person <span class="muted">(usually empty)</span>
             <input id="maxAnalyses" type="number" min="1" placeholder="licensed default" />
-            <span class="muted">
+            <span class="hint">
               Only for a plan sold with a limit. Empty gives the licensed default;
               a limit below the demo allowance is refused.
             </span>
@@ -145,7 +158,7 @@
           </label>
         </div>
 
-        <div class="row">
+        <div class="row form-actions">
           <button id="mint">Issue licence</button>
         </div>
 
@@ -160,15 +173,20 @@
       </section>
 
       <!-- --------------------------------------------------- licences -->
-      <section class="card">
-        <div class="row">
-          <h2 style="margin:0">Licences</h2>
+      <!-- The desk's main table. Its heading row carries the two things done
+           to the whole list (Refresh, Issue); the row under it narrows it. -->
+      <section class="card" id="licencesCard">
+        <div class="card-head">
+          <h2>Licences</h2>
+          <span id="licencePaging" class="muted"></span>
           <span class="spacer"></span>
-          <input id="filter" placeholder="Filter, or search by email, domain or key" size="32" />
-          <label class="muted"><input type="checkbox" id="showRevoked" /> Show revoked</label>
-          <label class="muted"><input type="checkbox" id="showDemo" /> Show Demo keys</label>
           <button id="reload" class="secondary">Refresh</button>
           <button id="openIssue">Issue a licence</button>
+        </div>
+        <div class="row toolbar">
+          <input id="filter" type="search" placeholder="Filter, or search by email, domain or key" aria-label="Filter licences" />
+          <label class="muted"><input type="checkbox" id="showRevoked" /> Show revoked</label>
+          <label class="muted"><input type="checkbox" id="showDemo" /> Show Demo keys</label>
         </div>
         <div class="wrap">
           <table class="licences">
@@ -176,39 +194,17 @@
               <tr>
                 <th>Key</th><th>Kind</th><th>Mode</th><th>Seats</th><th>Term</th>
                 <th>Analyses / person</th>
-                <th>Status</th><th>Locked to</th><th></th>
+                <th>Status</th><th>Locked to</th><th class="actions"><span class="visually-hidden">Actions</span></th>
               </tr>
             </thead>
             <tbody id="licenceRows"></tbody>
           </table>
         </div>
-        <p class="muted"><span id="licencePaging"></span>
-          <button id="loadMore" class="secondary" hidden>Load more</button></p>
+        <div class="row table-foot">
+          <button id="loadMore" class="secondary" hidden>Load more</button>
+        </div>
       </section>
 
-      <!-- ----------------------------------------------------- deleted -->
-      <!-- Loaded on demand: most visits never look here, and it is a query. -->
-      <section class="card" id="deletedCard">
-        <div class="row">
-          <h2 style="margin:0">Recently deleted</h2>
-          <span class="spacer"></span>
-          <button id="loadDeleted" class="secondary">Show</button>
-        </div>
-        <p class="muted">
-          A deleted licence is held for 30 days, then purged for good. Restore
-          puts it and its holders back — except anyone who has taken another
-          licence since.
-        </p>
-        <div class="wrap" id="deletedWrap" hidden>
-          <table>
-            <thead>
-              <tr><th>Key</th><th>Kind</th><th>Locked to</th><th>Was</th>
-                <th>Deleted</th><th>Purged in</th><th></th></tr>
-            </thead>
-            <tbody id="deletedRows"></tbody>
-          </table>
-        </div>
-      </section>
       <!-- -------------------------------------------------------- edit -->
       <!-- One dialog for every change to a licence's terms. It replaced three
            window.prompt()s (Extend, Cap) that could each change one thing, and
@@ -268,7 +264,7 @@
             </label>
           </div>
           <p id="editHint" class="muted"></p>
-          <div class="row">
+          <div class="row form-actions">
             <button id="editSave" type="submit">Save</button>
             <button id="editCancel" type="button" class="secondary">Cancel</button>
           </div>
@@ -307,33 +303,33 @@
             <p class="mono key" id="convertedKey"></p>
           </div>
           <p id="convertHint" class="muted"></p>
-          <div class="row">
+          <div class="row form-actions">
             <button id="convertSave" type="submit">Convert</button>
             <button id="convertCancel" type="button" class="secondary">Cancel</button>
           </div>
         </form>
       </dialog>
       <!-- ------------------------------------------------------ roster -->
-      <section class="card" id="rosterCard" hidden>
-        <div class="row">
-          <h2 style="margin:0">Roster · <span id="rosterName" class="mono"></span></h2>
+      <!-- Opened from a licence row, so it sits straight under the table. -->
+      <section class="card form-card" id="rosterCard" hidden>
+        <div class="card-head">
+          <h2>Roster <span id="rosterName" class="mono"></span></h2>
           <span class="spacer"></span>
+          <button id="rosterExport" class="secondary">Export roster CSV</button>
           <button id="rosterClose" class="secondary">Close</button>
         </div>
         <!-- Seat counts from GET …/summary (../roster-tools.js, shared with
              the institution page): read after every roster load. -->
         <div class="tiles" id="rosterTiles" aria-live="polite"></div>
-        <div class="row">
-          <input id="memberEmail" type="email" placeholder="person@university.edu" size="28" />
+        <div class="row toolbar">
+          <input id="memberEmail" type="email" placeholder="person@university.edu" aria-label="Member's email" />
           <button id="addMember">Add to roster</button>
           <span id="rosterHint" class="muted"></span>
-          <span class="spacer"></span>
-          <button id="rosterExport" class="secondary">Export roster CSV</button>
         </div>
         <div class="wrap">
           <table>
             <thead>
-              <tr><th>Member</th><th>Status</th><th>Seat</th><th>Device</th><th></th></tr>
+              <tr><th>Member</th><th>Status</th><th>Seat</th><th>Device</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr>
             </thead>
             <tbody id="rosterRows"></tbody>
           </table>
@@ -405,9 +401,9 @@
            the same thing: a revoke reaches the seat at once, the holder's
            account a moment later, and the holder's device only when it next
            checks in. -->
-      <section class="card" id="verifyCard" hidden>
-        <div class="row">
-          <h2 style="margin:0">Verified seats · <span id="verifyName" class="mono"></span></h2>
+      <section class="card form-card" id="verifyCard" hidden>
+        <div class="card-head">
+          <h2>Verified seats <span id="verifyName" class="mono"></span></h2>
           <span class="spacer"></span>
           <button id="verifyReload" class="secondary">Re-check</button>
           <button id="verifyClose" class="secondary">Close</button>
@@ -424,43 +420,50 @@
       </section>
 
       <!-- ------------------------------------------------------ people -->
-      <section class="card">
-        <div class="row">
-          <h2 style="margin:0">Accounts awaiting approval</h2>
-          <span class="spacer"></span>
-          <button id="reloadUsers" class="secondary">Refresh</button>
-        </div>
-        <div class="wrap">
-          <table>
-            <thead>
-              <tr><th>Account</th><th>Name</th><th>Device</th><th></th></tr>
-            </thead>
-            <tbody id="userRows"></tbody>
-          </table>
-        </div>
-      </section>
+      <!-- Two small jobs about accounts, side by side where there is room. -->
+      <div class="desk-pair">
+        <section class="card" id="approvalsCard">
+          <div class="card-head">
+            <h2>Accounts awaiting approval</h2>
+            <span class="spacer"></span>
+            <button id="reloadUsers" class="secondary">Refresh</button>
+          </div>
+          <div class="wrap">
+            <table>
+              <thead>
+                <tr><th>Account</th><th>Name</th><th>Device</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr>
+              </thead>
+              <tbody id="userRows"></tbody>
+            </table>
+          </div>
+        </section>
 
-      <section class="card">
-        <h2 style="margin:0">Release a Demo account's phone</h2>
-        <p class="muted">
-          When a Demo account asks to move to a new phone. Its old phone is signed
-          out and held off for 24 hours; the new one can then sign in. For a
-          licensed account use <b>New device</b> on the licence instead.
-        </p>
-        <div class="row">
-          <input id="releaseEmail" type="email" placeholder="person@lab.org" size="32" />
-          <button id="releasePhone">Release phone</button>
-        </div>
-      </section>
+        <section class="card" id="demoPhoneCard">
+          <div class="card-head">
+            <h2>Release a Demo account's phone</h2>
+          </div>
+          <p class="muted">
+            When a Demo account asks to move to a new phone. Its old phone is signed
+            out and held off for 24 hours; the new one can then sign in. For a
+            licensed account use <b>New device</b> on the licence instead.
+          </p>
+          <div class="row toolbar">
+            <input id="releaseEmail" type="email" placeholder="person@lab.org" aria-label="Demo account's email" />
+            <button id="releasePhone">Release phone</button>
+          </div>
+        </section>
+      </div>
 
       <!-- ----------------------------------------------- test accounts -->
       <!-- Sign-ins for QC staff and CI (ADR-027, test-accounts.js): an
            address on a test domain, a generated password shown once,
            pre-approved and licensed, on up to N phones, and an end date.
-           Every change is held to the revoke window's fresh sign-in. -->
+           Every change is held to the revoke window's fresh sign-in.
+           The create form is folded away: the list is what most visits want,
+           and five open fields stood between the heading and it. -->
       <section class="card" id="testAccountsCard">
-        <div class="row">
-          <h2 style="margin:0">Test accounts</h2>
+        <div class="card-head">
+          <h2>Test accounts</h2>
           <span class="spacer"></span>
           <button id="loadTestAccounts" class="secondary">Show</button>
         </div>
@@ -470,34 +473,37 @@
           once, may be signed in on several phones, and is ended — suspended and
           its data erased — when its days run out. Its audit rows are kept.
         </p>
-        <div class="grid">
-          <label>Email
-            <input id="taEmail" type="email" placeholder="qc-pixel6@test.example" autocomplete="off" />
-          </label>
-          <label>Purpose
-            <select id="taPurpose">
-              <option value="qc">QC — staff testing</option>
-              <option value="ci">CI — automated tests</option>
-            </select>
-          </label>
-          <label>Days <span class="muted" id="taDaysHint">(1–90)</span>
-            <input id="taDays" type="number" min="1" max="90" value="30" />
-          </label>
-          <label>Phones at once <span class="muted">(1–10)</span>
-            <input id="taMaxDevices" type="number" min="1" max="10" value="3" />
-          </label>
-          <label class="wide">Note <span class="muted">(who or what it is for)</span>
-            <input id="taNote" maxlength="200" placeholder="QC rack, Pixel 6 and 8" />
-          </label>
-        </div>
-        <div class="row">
-          <button id="taCreate">Create test account</button>
-        </div>
+        <details class="fold" id="taCreateBox">
+          <summary>Create a test account</summary>
+          <div class="grid">
+            <label>Email
+              <input id="taEmail" type="email" placeholder="qc-pixel6@test.example" autocomplete="off" />
+            </label>
+            <label>Purpose
+              <select id="taPurpose">
+                <option value="qc">QC — staff testing</option>
+                <option value="ci">CI — automated tests</option>
+              </select>
+            </label>
+            <label>Days <span class="muted" id="taDaysHint">(1–90)</span>
+              <input id="taDays" type="number" min="1" max="90" value="30" />
+            </label>
+            <label>Phones at once <span class="muted">(1–10)</span>
+              <input id="taMaxDevices" type="number" min="1" max="10" value="3" />
+            </label>
+            <label class="wide">Note <span class="muted">(who or what it is for)</span>
+              <input id="taNote" maxlength="200" placeholder="QC rack, Pixel 6 and 8" />
+            </label>
+          </div>
+          <div class="row form-actions">
+            <button id="taCreate">Create test account</button>
+          </div>
+        </details>
         <div class="wrap" id="testAccountsWrap" hidden>
-          <table>
+          <table class="test-accounts">
             <thead>
               <tr><th>Account</th><th>Purpose</th><th>Ends</th><th>Phones</th>
-                <th>Status</th><th>Note</th><th></th></tr>
+                <th>Status</th><th>Note</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr>
             </thead>
             <tbody id="testAccountRows"></tbody>
           </table>
@@ -515,11 +521,36 @@
           over the way QC or CI secrets are handed over, never by email.
         </div>
         <p class="mono key" id="taPassword"></p>
-        <div class="row">
+        <div class="row form-actions">
           <button id="taCopyPassword" type="button">Copy</button>
           <button id="taPasswordClose" type="button" class="secondary">Close</button>
         </div>
       </dialog>
+
+      <!-- ----------------------------------------------------- deleted -->
+      <!-- Loaded on demand: most visits never look here, and it is a query.
+           Last on the desk for the same reason. -->
+      <section class="card" id="deletedCard">
+        <div class="card-head">
+          <h2>Recently deleted</h2>
+          <span class="spacer"></span>
+          <button id="loadDeleted" class="secondary">Show</button>
+        </div>
+        <p class="muted">
+          A deleted licence is held for 30 days, then purged for good. Restore
+          puts it and its holders back — except anyone who has taken another
+          licence since.
+        </p>
+        <div class="wrap" id="deletedWrap" hidden>
+          <table>
+            <thead>
+              <tr><th>Key</th><th>Kind</th><th>Locked to</th><th>Was</th>
+                <th>Deleted</th><th>Purged in</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr>
+            </thead>
+            <tbody id="deletedRows"></tbody>
+          </table>
+        </div>
+      </section>
     </div>
 
     <p id="signedOut" class="muted">

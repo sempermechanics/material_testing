@@ -477,10 +477,19 @@ media query in `console.css`.
   and text boxes at 16px so iOS does not zoom when one is tapped.
 - **Keyboard:** a visible accent outline on whatever has focus.
 
-On the desk, the licence table comes first and **Issue a licence** opens its
-card from the table's toolbar. Each licence row keeps Edit (and Roster) in
-view; the rest is under **More**, a `<details>` that opens in place, Revoke
-and Delete last.
+On the desk (`<body class="desk">`, up to 1400px wide), a pinned row of
+anchors (`.desk-nav`) jumps to each card, with the number waiting for approval
+beside Approvals (`#pendingCount`, filled by `people.js`). The licence table
+comes first and **Issue a licence** opens its card from the table's heading;
+Roster and Verified seats open straight under the table. Approvals and the
+Demo phone release share a row on desktop; then Test accounts, whose create
+form is a `<details>` folded under it; Recently deleted is last. Each licence
+row keeps Edit (and Roster) in view; the rest is under **More**, a `<details>`
+that opens in place, Revoke and Delete last and set apart. Destructive row
+buttons (`.danger`: Revoke, Delete, Remove, End now, a phone's Release) are
+outlined in the danger colour and stand apart from the others in their cell.
+A test account's Phones cell lists each active phone on its own line (model
+and app, device id under them, its Release at the end of the line).
 
 ## Checking them
 

@@ -158,28 +158,47 @@ export async function loadTestAccounts() {
 function accountRow(a) {
   const uid = esc(a.uid);
   const live = a.status === "active";
+  const phones = a.devices || [];
+  // End now erases the account: drawn as the destructive one, apart from
+  // the two that only change it.
   return `
     <tr>
-      <td>${esc(a.email || a.uid)}</td>
+      <td class="account">${esc(a.email || a.uid)}</td>
       <td>${esc(PURPOSES[a.purpose] || a.purpose || "—")}</td>
-      <td>${esc(testAccountEnds(a))}</td>
-      <td>${esc(a.activeDevices ?? 0)} of ${esc(a.maxDevices ?? "—")}${(a.devices || []).map((d) => phoneLine(uid, d)).join("")}</td>
+      <td class="nowrap">${esc(testAccountEnds(a))}</td>
+      <td class="phones">${esc(a.activeDevices ?? 0)} of ${esc(a.maxDevices ?? "—")}${phones.length
+        ? `<ul class="phone-list">${phones.map((d) => phoneLine(uid, d)).join("")}</ul>` : ""}</td>
       <td><span class="pill ${live ? "ok" : "off"}">${esc(a.status || "—")}</span></td>
       <td class="muted">${esc(a.note || "—")}</td>
       <td class="actions">
         <button class="secondary" data-ta-extend="${uid}">Extend</button>
         <button class="secondary" data-ta-password="${uid}">New password</button>
-        <button class="secondary" data-ta-end="${uid}">End now</button>
+        <button class="danger" data-ta-end="${uid}">End now</button>
       </td>
     </tr>`;
 }
 
-/** One ACTIVE phone of the account (`uid` already escaped), with its Release. */
+/**
+ * One ACTIVE phone of the account (`uid` already escaped), with its Release:
+ * a box of its own, the model and its app on the first line, the device id
+ * under them, and the button at the end. It used to run as one sentence with
+ * the button in the middle of the cell, and two phones read as one paragraph.
+ */
 function phoneLine(uid, d) {
+  const app = `<span class="tag">${esc(APPS[d.app] || d.app || "—")}</span>`;
+  const id = esc(d.deviceId);
+  const name = d.model
+    ? `<span class="phone-model">${esc(d.model)} ${app}</span>
+            <span class="mono">${id}</span>`
+    : `<span class="phone-model"><span class="mono">${id}</span> ${app}</span>`;
   return `
-        <div>${esc(phoneName(d))} · ${esc(APPS[d.app] || d.app || "—")}
-          <button class="secondary" data-ta-release="${uid}" data-ta-device="${esc(d.deviceId)}">Release</button>
-        </div>`;
+        <li>
+          <span class="phone-name">
+            ${name}
+          </span>
+          <button class="danger" data-ta-release="${uid}" data-ta-device="${id}"
+            aria-label="Release ${esc(phoneName(d))}">Release</button>
+        </li>`;
 }
 
 $("testAccountRows").addEventListener("click", (ev) => {
