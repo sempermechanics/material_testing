@@ -194,8 +194,9 @@ What the code holds (TD-237):
   `expireAt` = `ts` + `AUDIT_RETENTION_DAYS` to rows written before
   `add_audit_row` set it, so TTL reaches them; nothing else, and never a field
   a row already has), refuses `--apply` without `--decision` and records it in
-  `_migrations`. The owner approved running it on 2026-10-22; it has not been
-  run yet.
+  `_migrations`. The owner approved running it on 2026-10-22, and the operator
+  ran it on 2026-10-23 (a rerun found all 6145 rows with `expireAt`); the TTL
+  policy below went on the same day, after it.
 - Clients cannot read or write it: `firestore.rules` denies everything, and
   `firestore-rules-tests/rules.test.mjs` tries an update, a merge, an
   overwrite and a delete of an audit row as each caller, an Org Owner's claims
