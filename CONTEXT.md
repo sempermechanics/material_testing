@@ -114,38 +114,45 @@ emulator (`scripts/micro_ab.py`, [TESTING.md](docs/app/TESTING.md)); the phone-r
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-22)
+## Current state (2026-10-23)
 
-- **Deployed** to production and staging from `b940cc29` (2026-10-22, Hosting the same day;
-  [CHANGELOG](docs/ops/CHANGELOG.md)): Cloud Run `semper-api` / `semper-api-staging` behind
-  `semper-gw` / `semper-gw-staging`. Live: licensing ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)),
-  device binding per app ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md)), sessions tagged
-  by app ([ADR-014](docs/adr/ADR-014-session-app-tag.md)), consoles on `app.sempermechanics.com`
+- **Deployed.** Backend and gateways from `d79aa0c7` (2026-10-23; #466–#468): Cloud Run
+  `semper-api` (`semper-api-39900623312-1`, gateway config `v202610230501-112`) and staging
+  `semper-api-staging` (`semper-api-staging-39900999296-1`, `v202610221243-110`)
+  ([CHANGELOG](docs/ops/CHANGELOG.md)). Hosting is from `d79aa0c7` (2026-10-23, the console's
+  per-phone **Release**) with `/privacy` and `/terms` held at `b940cc29`. Live: licensing
+  ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)), device binding per app
+  ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md)), sessions tagged by app
+  ([ADR-014](docs/adr/ADR-014-session-app-tag.md)), consoles on `app.sempermechanics.com`
   ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md)), test accounts for `qa.sempermechanics.com`
-  ([ADR-027](docs/adr/ADR-027-test-accounts.md)). Project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
-- **Backend on `main`, not deployed:** #466 (a Firestore outage answers 503, TD-250), #467
-  (one-year audit retention: `expireAt`, TTL, backfill; TD-237, TD-246) and #468 (staff
-  release one test-account phone, TD-314; a new gateway route). `CHECK_REVOKED_ON_STEP_UP`
-  is set and goes live with that deploy (TD-214).
-- **[Checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md) still open:** monitoring (§5); staff/IT
-  phones re-registering with TOTP, the 24 h log watch, ending the staging QC test account,
-  the erasure check, and #467's backfill and TTL after the deploy (§6; the indexes deploy
-  waits on TD-316). Optional and unset: TD-215 (entitlement key), TD-309, the audit bucket lock.
+  ([ADR-027](docs/adr/ADR-027-test-accounts.md)), `CHECK_REVOKED_ON_STEP_UP` (TD-214, acceptance
+  owed). Project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
+- **Legal pages held:** #474's text (the demo-upload sentences in Privacy §2.3 and Terms
+  §6.1, retention values) waits on counsel (TD-277). A Hosting deploy from `main` publishes
+  it, so until counsel signs off, deploy Hosting from a worktree with those two pages taken
+  from `b940cc29` ([checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md) §4).
+- **[Checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md) still open:** monitoring `--apply` (§5;
+  no notification channel exists yet); staff/IT phones re-registering with TOTP, the 24 h log
+  watch, ending the staging QC test account, the erasure check, and #467's backfill, TTL and
+  index deploy (§6; the index deploy waits on open PR #476, TD-316). The posture check's 18 FAILs
+  ([gate](docs/ops/PRODUCTION_READINESS_GATE.md)) are console or `gcloud` changes. Optional and
+  unset: TD-215 (entitlement key), TD-309, the audit bucket lock.
 - **App** `com.sempermechanics.semper` ([ADR-019](docs/adr/ADR-019-sempermechanics-app-id.md)).
   Latest release `v1.2-beta.4` (versionCode 1036, `33dce87d`, 2026-10-17, engine 0.4.2).
   On `main` since: **minSdk 30**, version gate, EMM config, AAB
   ([ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md)); #453, #457–#462; #464 (Tier 3
   signs in to staging); #469 (`SessionRecord.extras`, ADR-025's first step, TD-298); #470
-  (engine `f072da0`, v0.6.1: AKAZE seeding on OpenCV 4.14 plus the bending fix; TD-299 closed).
+  (engine `f072da0`, v0.6.1); #471 (tamper-evident records, ADR-028; review findings in its
+  comments, the `field_ranges.bin` one first); #475 (AD_ID and the Privacy Sandbox permissions
+  removed, TD-232).
 - **Release blockers:** TD-229 (Play account; TD-226 App Check and TD-230/TD-231 follow it),
-  TD-232 (Data safety), TD-219's device checks, counsel on the Terms (TD-277).
-- **Open PR:** #471 (tamper-evident records, TD-247, ADR-028).
+  TD-232 (Data safety answers ready; two owner decisions, then submit), TD-219's device checks,
+  counsel on the Terms (TD-277).
 - **material_testing** merges this `main` (last `9d116f2`, material_testing#142, 2026-10-22;
   [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); it released `v1.4-beta.2` 2026-10-17.
-- **Owner decisions 2026-10-22** not yet visible above: TD-210 accepted as is (§10.1); a
-  production reviewer is required (TD-228).
 - **CI.** Tiers follow the diff, coverage floors rise with every test PR
-  ([TESTING.md](docs/app/TESTING.md#coverage-floors)), and `main` requires `CI OK`.
+  ([TESTING.md](docs/app/TESTING.md#coverage-floors)), and `main` requires `CI OK`. Tier 3 signs
+  in to live staging, so a staging backend behind `main` fails it.
 - **Owed.** A device smoke of the next release ([RELEASING.md](docs/ops/RELEASING.md) step 5);
   the on-device characterization at the 0.6.1 pin (TD-212); Pixel 6 benchmarks for #435;
   ADR-015's queued-work upgrade check; transfer notifications and AVI import on a device

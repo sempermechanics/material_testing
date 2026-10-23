@@ -12,6 +12,58 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-10-23 — Backend, gateways and the console: #466–#468; main green again
+
+The backend from `main` at `d79aa0c7` went live: staging first, then production with the
+required reviewer's approval (TD-228). That deploy carries #466, #467 and #468; the other
+PRs merged since `b940cc29` change no runtime backend code. Hosting followed with the
+console's per-phone **Release**. No Firestore index deploy, no app release.
+
+- **Staging.** Run 39900999296 (`semper-api-staging-39900999296-1`, 100 %). The gateway job
+  found `semper-gw-staging` already serving this spec (config `v202610221243-110`, applied
+  by CI on `main`) and changed nothing.
+- **Tier 3 on `main`.** It had failed twice after #470, though the same tree passed on the
+  PR: staging still ran `f2a58466`, which predates #464's CI-phone rotation, so
+  `POST /v1/devices/register` answered 409 once the CI test account's phones were full.
+  After the staging deploy, attempt 3 of run 39775004430 passed (register 201, round trip
+  200s) and `CI OK` went green.
+- **Production.** Run 39900623312 (`semper-api-39900623312-1`, 100 %), with
+  `CHECK_REVOKED_ON_STEP_UP=true` live (TD-214; its acceptance check is still owed). The
+  gateway diff against `v202610220502-104` added one path,
+  `POST /v1/admin/test-accounts/{uid}/devices/{device_id}/release` (#468); config
+  `v202610230501-112` now serves `semper-gw` and its outside check passed. An anonymous
+  call to the new path answers 401 `Jwt is missing`; an undefined path answers 404. A
+  second production dispatch of the same commit (run 39900805964) was cancelled.
+- **Live now:** a Firestore outage answers 503 `firestore_unreachable` with `Retry-After`
+  (#466, TD-250); new audit rows carry `expireAt` for one-year retention (#467, TD-237; the
+  TTL policy, the TD-246 backfill and the index deploy are still the operator's,
+  [checklist](DEPLOY_CHECKLIST_2026-10.md) §6); staff can release one phone of a test
+  account (#468, TD-314).
+- **Hosting.** `scripts/deploy-console.sh` from `main` at `d79aa0c7` put the operator desk's
+  **Release** live (`console/operator/test-accounts.js`, 07:43 UTC). That deploy also
+  published #474's Privacy and Terms text, which waits on counsel (TD-277). At 07:51 UTC
+  the operator redeployed from a worktree at `d79aa0c7` with
+  `firebase-hosting/public/{privacy,terms}/index.html` checked out from `b940cc29`; the live
+  pages then matched `b940cc29` byte for byte, `test-accounts.js` still carried
+  `data-ta-release`, and `check_live_console.py` passed.
+- **TD-314 on staging** (QC test account, emulators): staff released
+  `and-36439a0f18da2a33` in the console (audit `test_account_device_released`, 07:45:50 UTC);
+  after **Refresh licence** that phone showed "Still on the demo" with backup and data
+  management locked; its re-registration answered 409 `device_conflict`, audited
+  `DEVICE_REGISTER` DENIED `reason=staff_released` (07:49:00 UTC); a third emulator
+  (`and-100a171151b8fdb0`) registered once the CI rotation had freed its id. The app shows
+  the generic "already linked to another account" message for a released phone.
+- **Merged the same days, nothing to deploy:** #472 (Current state condensed; the first
+  `check_gcp_posture.sh` run, 18 FAIL, and the §5 monitoring dry run recorded) and #473 (the
+  audit-repo path test passes on Windows).
+
+The Current state entry this deploy closes, as it stood:
+
+- **Backend on `main`, not deployed:** #466 (a Firestore outage answers 503, TD-250), #467
+  (one-year audit retention: `expireAt`, TTL, backfill; TD-237, TD-246) and #468 (staff
+  release one test-account phone, TD-314; a new gateway route). `CHECK_REVOKED_ON_STEP_UP`
+  is set and goes live with that deploy (TD-214).
+
 ## 2026-10-22 — Backend, gateways and Hosting: the readiness change, #457 and test accounts
 
 Everything from `main` at `b940cc29` went live, in [checklist](DEPLOY_CHECKLIST_2026-10.md)
