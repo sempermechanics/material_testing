@@ -143,6 +143,18 @@ class SemperApiCallsTest {
     }
 
     @Test
+    fun `a registration 409 is a conflict, released only when the detail says so`() {
+        fun conflict(detail: String) = ApiAnswer(409, """{"detail":"$detail"}""", "r1").registerConflict()
+
+        val released = conflict("device_released")
+        assertTrue(released.released)
+        assertEquals("r1", released.requestId)
+        assertFalse(conflict("device_conflict").released)
+        // An older backend's answer, or a body that is not JSON, stays a plain conflict.
+        assertFalse(ApiAnswer(409, "conflict", null).registerConflict().released)
+    }
+
+    @Test
     fun `only a 403 is not-approved for the approved-only routes`() {
         assertThrows(NotApprovedException::class.java) { ApiAnswer(403, "", null).failApprovedOnly() }
         val e = assertThrows(ApiException::class.java) { ApiAnswer(500, "", null).failApprovedOnly() }

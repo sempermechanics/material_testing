@@ -117,6 +117,14 @@ internal fun ApiAnswer.failSigned(): Nothing {
     }
 }
 
+/**
+ * `POST /v1/devices/register`'s 409: always a conflict, and [DeviceConflictException.released]
+ * when staff released this phone from the account ([ApiErrors.DEVICE_RELEASED]), so the
+ * user is told that rather than "linked to another account".
+ */
+internal fun ApiAnswer.registerConflict() =
+    DeviceConflictException(requestId, released = hasCode(ApiErrors.DEVICE_RELEASED))
+
 /** The 403 mapping of the token-authenticated routes only an approved account reaches. */
 internal fun ApiAnswer.failApprovedOnly(): Nothing =
     if (code == HttpStatus.FORBIDDEN) throw NotApprovedException() else fail()

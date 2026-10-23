@@ -522,7 +522,7 @@ async def test_the_released_phone_cannot_take_its_place_back(client, world, monk
     _as(store, monkeypatch, "t-1", testAccount=tag)
     back = await client.post("/v1/devices/register",
                              json={"deviceId": "and-phone-1", "publicKeyPem": _ec_pem()})
-    assert (back.status_code, back.json()["detail"]) == (409, "device_conflict")
+    assert (back.status_code, back.json()["detail"]) == (409, "device_released")
     denied = [a for a in world["audit"] if a.get("outcome") == "DENIED"]
     assert [(a["deviceId"], a["action"], a["detail"]) for a in denied] == [
         ("and-phone-1", "DEVICE_REGISTER",

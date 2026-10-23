@@ -169,7 +169,7 @@ class SemperApi @VisibleForTesting internal constructor(
         SemperApiClients.api.newCall(request).execute().use { resp ->
             when (resp.code) {
                 HttpStatus.CREATED, HttpStatus.OK -> Unit
-                HttpStatus.CONFLICT -> throw DeviceConflictException(SemperApiHttp.requestIdOf(resp))
+                HttpStatus.CONFLICT -> throw ApiAnswer.of(resp).registerConflict()
                 else -> throw ApiAnswer.of(resp).exception()
             }
         }

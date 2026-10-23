@@ -1505,8 +1505,9 @@ device id under them). Press **Release** on the line of the phone to give up
 `POST /v1/admin/test-accounts/{uid}/devices/{deviceId}/release`. The place is
 free at once, with no hold; the account, its other phones and its analyses are
 untouched, audited `test_account_device_released`. The released phone stops
-working with the account and can never register for it again (it is refused as
-"already linked"); it may still be signed in to a different account. To bring
+working with the account and can never register for it again (the app says "Staff
+released this phone from this account"; builds before that one say "already linked"); it
+may still be signed in to a different account. To bring
 that phone back to the same login, end the account and create a new one.
 
 **Ending it.** `DELETE /v1/admin/test-accounts/{uid}` ends it now: the account

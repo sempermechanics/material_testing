@@ -279,6 +279,27 @@ class AuthRepositoryTest {
     }
 
     @Test
+    fun `a phone staff released is told so, not that it is linked elsewhere`() = runBlocking {
+        serverUp()
+        api.onRegisterDevice = { throw DeviceConflictException(released = true) }
+
+        val lost = repo.refreshStatus().exceptionOrNull()
+
+        assertTrue("got $lost", lost is AuthRepository.AccessLostException)
+        assertTrue(lost!!.message!!.startsWith("Staff released this phone"))
+    }
+
+    @Test
+    fun `a registration conflict keeps the linked-elsewhere message`() = runBlocking {
+        serverUp()
+        api.onRegisterDevice = { throw DeviceConflictException() }
+
+        val lost = repo.refreshStatus().exceptionOrNull()
+
+        assertTrue(lost!!.message!!.startsWith("This device is already linked"))
+    }
+
+    @Test
     fun `failures that say nothing about the account fall back to the cached status`() = runBlocking {
         val notAnAnswer = listOf<() -> Nothing>(
             { throw DeviceNotActiveException() },

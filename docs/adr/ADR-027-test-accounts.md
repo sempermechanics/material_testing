@@ -110,7 +110,8 @@ How the backend carries them out:
   (`releasedDeviceId`, which a test account skips) and touches no session.
   Audited `test_account_device_released` with `{deviceId, app}`. The released
   phone may not take its place back: registration refuses it for the same
-  account with `device_conflict` (`repo/devices.py`, `register_device`, asking
+  account with `device_released`, which the app words as "Staff released this phone
+  from this account" (`repo/devices.py`, `register_device`, asking
   `repo/_base.py`, `staff_released_from`),
   and the router audits that DENIED with `reason: "staff_released"`. The
   licence lock (`devlock._test_lock_verdict`) gives it Demo, not the room an
