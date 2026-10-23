@@ -187,7 +187,8 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
          on older rows: `python backend/scripts/stamp_audit_licence_ids.py --project indicvision-dic-app`
          (dry run; read both counts), then the same with `--apply --decision
          "TD-246: backfill approved by <owner>, 2026-10-22"`. A rerun reports 0 to
-         stamp. **Done 2026-10-23** (dry run, then `--apply`; counts in the ledger).
+         stamp. **Done 2026-10-23** (dry run, then `--apply`; the rerun: 6145 rows, all with
+         `expireAt`, 0 to stamp).
       3. The `audit-trail` log bucket at `--retention-days=365`, the sink on
          `jsonPayload.event="audit_row"`, then lock the bucket (irreversible).
          Check: a staff licence edit's row reaches the bucket, and lowering its

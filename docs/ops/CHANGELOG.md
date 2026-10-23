@@ -58,7 +58,9 @@ console's per-phone **Release**. No Firestore index deploy, no app release.
   the generic "already linked to another account" message for a released phone.
 - **Audit retention in Firestore** ([checklist](DEPLOY_CHECKLIST_2026-10.md) §6). The
   operator ran the TD-246 backfill (dry run, then `--apply`; it stamps `licenseId` and
-  `expireAt` on older rows, counts in `_migrations/td246_stamp_audit_licence_ids`), then
+  `expireAt` on older rows, counts in `_migrations/td246_stamp_audit_licence_ids`; a dry-run
+  rerun after it: 6145 rows, all with `expireAt`, 48 with `licenseId`, 6097 whose target
+  names no licence, 0 without `ts`, 0 to stamp), then
   `scripts/deploy-firestore.sh indexes` with the pinned `firebase-tools@15.33.0` (#476): no
   "not present" line, and the only change was the `audit_logs.expireAt` TTL policy, then
   `CREATING`. That closes TD-316. The `audit-trail` log bucket and its lock are still open.
