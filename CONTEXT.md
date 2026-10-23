@@ -119,8 +119,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Deployed.** Backend and gateways from `d79aa0c7` (2026-10-23; #466–#468): Cloud Run
   `semper-api` (`semper-api-39900623312-1`, gateway config `v202610230501-112`) and staging
   `semper-api-staging` (`semper-api-staging-39900999296-1`, `v202610221243-110`)
-  ([CHANGELOG](docs/ops/CHANGELOG.md)). Hosting is from `d79aa0c7` (2026-10-23, the console's
-  per-phone **Release**) with `/privacy` and `/terms` held at `b940cc29`. Live: licensing
+  ([CHANGELOG](docs/ops/CHANGELOG.md)). Hosting is from `000575b0` (2026-10-23, the operator desk
+  redesign, #478) with `/privacy` and `/terms` held at `b940cc29`. Live: licensing
   ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)), device binding per app
   ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md)), sessions tagged by app
   ([ADR-014](docs/adr/ADR-014-session-app-tag.md)), consoles on `app.sempermechanics.com`
