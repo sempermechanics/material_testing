@@ -85,6 +85,20 @@ test("accounts waiting for approval are listed with their phones, or 'Nobody wai
   assert.deepEqual(userRows(), [["Nobody waiting."]]);
 });
 
+test("the desk's index counts who is waiting, and shows no count when nobody is", async () => {
+  const badge = () => [$("pendingCount").textContent, $("pendingCount").hidden];
+  await openDesk({ users: WAITING });
+  assert.deepEqual(badge(), ["2", false]);
+
+  reset();
+  await openDesk({ routes: { [PENDING]: () => json(200, { users: WAITING, page: { hasMore: true } }) } });
+  assert.deepEqual(badge(), ["2+", false], "a read that stopped at its page says there are more");
+
+  reset();
+  await openDesk({ users: [] });
+  assert.deepEqual(badge(), ["", true]);
+});
+
 test("a pending list that cannot be read says so in the table; Reload asks again", async () => {
   let n = 0;
   await openDesk({ routes: {
