@@ -119,15 +119,18 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Deployed.** Backend and gateways from `d79aa0c7` (2026-10-23; #466–#468): Cloud Run
   `semper-api` (`semper-api-39900623312-1`, gateway config `v202610230501-112`) and staging
   `semper-api-staging` (`semper-api-staging-39900999296-1`, `v202610221243-110`)
-  ([CHANGELOG](docs/ops/CHANGELOG.md)). Hosting is from `b940cc29` (2026-10-22). Live: licensing
+  ([CHANGELOG](docs/ops/CHANGELOG.md)). Hosting is from `d79aa0c7` (2026-10-23, the console's
+  per-phone **Release**) with `/privacy` and `/terms` held at `b940cc29`. Live: licensing
   ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)), device binding per app
   ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md)), sessions tagged by app
   ([ADR-014](docs/adr/ADR-014-session-app-tag.md)), consoles on `app.sempermechanics.com`
   ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md)), test accounts for `qa.sempermechanics.com`
   ([ADR-027](docs/adr/ADR-027-test-accounts.md)), `CHECK_REVOKED_ON_STEP_UP` (TD-214, acceptance
   owed). Project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
-- **Hosting not deployed:** #474's legal text (the demo-upload sentences in Privacy §2.3 and
-  Terms §6.1, retention values) waits on counsel (TD-277) and `scripts/deploy-console.sh`.
+- **Legal pages held:** #474's text (the demo-upload sentences in Privacy §2.3 and Terms
+  §6.1, retention values) waits on counsel (TD-277). A Hosting deploy from `main` publishes
+  it, so until counsel signs off, deploy Hosting from a worktree with those two pages taken
+  from `b940cc29` ([checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md) §4).
 - **[Checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md) still open:** monitoring `--apply` (§5;
   no notification channel exists yet); staff/IT phones re-registering with TOTP, the 24 h log
   watch, ending the staging QC test account, the erasure check, and #467's backfill, TTL and

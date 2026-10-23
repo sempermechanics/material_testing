@@ -120,6 +120,10 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       Never a bare `firebase deploy`. From Windows PowerShell, set the variable there
       (`$env:API_BASE_URL = gh variable get INDIC_API_BASE_URL`) and run the script
       through Git Bash; PowerShell 5.1 drops quotes nested inside `bash -c "…"`.
+      The deploy publishes the **legal pages** too (`/privacy`, `/terms`). While
+      `main` holds legal text counsel has not cleared (TD-277; #474 since 2026-10-22),
+      deploy from a worktree with those two `index.html` files checked out from the
+      last cleared commit (`b940cc29`), then compare the live pages with it.
 - [x] The script runs `scripts/check_live_console.py`; it must pass (no `__`
       placeholder left live).
 - [ ] By hand: `/account` shows the licence facts and, for a demo account, the
