@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import com.sempermechanics.semper.data.integrity.LocalRecordKey
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.field.ImageSize
@@ -90,13 +91,20 @@ internal class ViewerShareController(
     }
 
     /** What a report page reads from this viewer, as plain data an export can keep. */
-    private fun reportSource(): ViewerReportFactory.Source = ViewerReportFactory.Source(
-        args = host.args,
-        imageSize = host.imageSize,
-        plannedFrames = host.plannedFrames,
-        defImagePaths = host.defImagePaths,
-        displayBase = images.cachedBaseImage,
-    )
+    private fun reportSource(): ViewerReportFactory.Source {
+        val integrity = host.viewModel.state.value.integrity
+        return ViewerReportFactory.Source(
+            args = host.args,
+            imageSize = host.imageSize,
+            plannedFrames = host.plannedFrames,
+            defImagePaths = host.defImagePaths,
+            displayBase = images.cachedBaseImage,
+            integrity = integrity,
+            // Only when the viewer's check has not finished; that check read (and
+            // cached) the key first, so this is rarely a Keystore call.
+            localThumbprint = if (integrity == null) LocalRecordKey.thumbprint(activity.applicationContext) else null,
+        )
+    }
 
     /**
      * A filename-safe base for exports, drawn from the specimen/reference name so

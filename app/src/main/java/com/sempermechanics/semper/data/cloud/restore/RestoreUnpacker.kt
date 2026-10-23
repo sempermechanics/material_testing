@@ -112,8 +112,9 @@ internal object RestoreUnpacker {
             // five PNGs per frame flat in the session dir would drown the .dat files.
             role == ArtifactRoles.REPORTS -> File(layout.reportsDir, name)
             role == ArtifactRoles.PROCESSED -> File(layout.processedDir, name)
-            // dat lives flat in the session dir; csv is regenerable and kept
-            // beside the session for export.
+            // dat lives flat in the session dir, the record manifest
+            // (`dat/record_manifest.json`, ADR-028) with it; csv is regenerable
+            // and kept beside the session for export.
             else -> File(layout.dir, name)
         }
         // rawDeformedDir sits inside the session dir, so that dir is the only bound.

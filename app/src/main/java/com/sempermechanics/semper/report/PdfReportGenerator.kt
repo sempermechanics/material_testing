@@ -187,6 +187,7 @@ object PdfReportGenerator {
         layout.drawKeyValue("Session ID:", data.sessionId)
         frameCount?.let { layout.drawKeyValue("Frames:", it.toString()) }
         data.appBuild?.let { layout.drawKeyValue("App Build:", it) }
+        data.recordFingerprint?.let { layout.drawKeyValue("Record Fingerprint:", it) }
         layout.advanceY(40f)
 
         layout.drawSectionHeader("Algorithm Parameters")

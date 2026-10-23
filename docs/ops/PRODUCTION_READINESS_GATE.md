@@ -37,7 +37,19 @@ The item-by-item check against the external readiness framework (2026-10-18) is
       (read-only) prints PASS / FAIL / UNKNOWN for these and for liens, the Prod tag,
       owners, budgets, max-instances, PITR, delete protection, the backup schedule,
       anonymous auth, `CHECK_REVOKED_ON_STEP_UP`, the entitlement key's Secret
-      Manager ref and Data Access audit logs. Not yet run against the real projects.
+      Manager ref and Data Access audit logs. First run 2026-10-22 (`--backup-bucket
+      indicvision-dic-app-firestore-backups`, both services): **18 FAIL, 0 UNKNOWN**.
+      PASS: 2.5 (anonymous off; email and google.com on), 2.6 (budgets on both
+      projects, max-instances 10 on both services), 2.7-pitr (7 days), 2.7-backup
+      (daily schedule, 7 days), 3.4-iam, 3.4-check-revoked on staging. FAIL on both
+      projects: 2.1 (no lien, no Prod tag, one owner, granted to a user not a group),
+      2.4 (the Firebase auto-created Browser key, and on the Auth project the Android
+      key, have no app/site/server restriction), 3.7 (no DATA_READ + DATA_WRITE audit
+      logs for firebase, firebaserules, firebaseappcheck, firestore). FAIL on the app
+      project: 2.7-delete-protection. FAIL on services: 3.1 `APP_CHECK_MODE=off`
+      (both; TD-226), 3.4 `CHECK_REVOKED_ON_STEP_UP=false` on `semper-api` (TD-214,
+      live at the next production deploy), 3.5 no `ENTITLEMENT_SIGNING_KEY` (both;
+      TD-215). Every fix is a console or `gcloud` change by the operator.
 - [ ] Confirm Auth abuse / enumeration protections in Firebase console.
 - [x] Deploy API Gateway with `openapi.yaml` quotas (`__CLOUD_RUN_URL__`
       substituted) — pilot gateway is live; re-confirm quotas in console.
@@ -149,9 +161,29 @@ The item-by-item check against the external readiness framework (2026-10-18) is
       withdrawable option
       ([AUTH_SETUP.md](../backend/AUTH_SETUP.md) §3a).
 - [ ] Record cookie inventory per [COOKIE_CONSENT.md](../legal/COOKIE_CONSENT.md);
-      no banner without non-essential cookies.
+      no banner without non-essential cookies. **Recorded 2026-10-22 from the
+      code and the live site**: no response on app.sempermechanics.com sets a
+      cookie (`curl -sI` on `/login`, `/account`, `/console/*`, `/terms/`,
+      `/privacy/`, the continue pages and `/__/auth/*`), no page writes one, and
+      the only storage is Firebase Auth's IndexedDB / web-storage session and
+      the console's three `semper.*` sessionStorage keys, all strictly
+      necessary; no analytics or tag script, and the CSP would refuse one.
+      Verdict: **no banner**. Open only for a signed-in DevTools capture by the
+      operator to match the table (COOKIE_CONSENT.md, "Re-checking" step 3).
 - [ ] Confirm Crashlytics / Cloud Logging / Resend retention in vendor consoles
       and replace the UNKNOWN entries in the policy's retention table.
+      **UNKNOWN entries replaced 2026-10-22** (`PRIVACY_POLICY.md` §4, rendered
+      to `firebase-hosting/public/privacy/index.html`, not deployed). Cloud
+      Logging is read, not assumed: `gcloud logging buckets list --location=global`
+      on `indicvision-dic-app` and `indicvision-dic-app-auth` → `_Default` 30
+      days, `_Required` 400 days (locked, set by Google); no buckets in
+      `asia-south1`; `gcloud logging sinks list` shows only the two default
+      sinks, so no `audit-trail` bucket exists yet (TD-237). Crashlytics (90
+      days, [Firebase privacy](https://firebase.google.com/support/privacy)) and
+      Resend (30 days, [Resend pricing](https://resend.com/pricing)) are the
+      vendors' published defaults, marked "to be confirmed" in the policy: open
+      until the operator confirms both in the Firebase console and the Resend
+      dashboard.
 
 ### Legal rollout (branch `feat/legal-terms-clickwrap`)
 
@@ -364,6 +396,16 @@ pre-licensing documents)
       stored and cannot be restored on the Demo plan; regenerate with
       `scripts/render_legal_pages.py`; deploy Hosting. **Before the next app
       release**, together with the bracketed operator fields above.
+      **Text done 2026-10-22** (`PRIVACY_POLICY.md` §2.3 "Demo plan" bullet,
+      `TERMS_OF_SERVICE.md` §6.1 last sentence; both rendered, `--check`
+      passes), matching the code: a demo account has no Save-to-cloud toggle
+      and uploads unless device management turned cloud backup off
+      (`data/cloud/CloudSync.kt:327-345`); `POST /v1/sessions` is open to demo
+      (`backend/app/routers/sessions.py:335-353`), and file content and the
+      bundle answer 403 `feature_not_licensed` (`backend/app/routers/files.py:80`,
+      `backend/app/routers/sessions.py:306`). Terms **Version** stays 2026-09-15, so no
+      re-acceptance; whether the addition is material is counsel's call
+      (TD-277). Open for the Hosting deploy, which is the operator's.
 - [ ] Google Play **Data safety** form: demo analysis content (images,
       results) is uploaded to the operator's cloud.
 - [ ] Floating institution pools: not minted at launch; the lease routes ship
@@ -529,7 +571,7 @@ owner id does not resolve.
 |---|---|---|---|---|
 | 1.1 | Crash-free and ANR thresholds defined | EXTERNAL | Thresholds written: crash-free users 99.5 %, user-perceived ANR 0.47 % ([RELEASING.md](RELEASING.md), "Staged rollout on Google Play"). No closed track to measure them on | TD-231 |
 | 1.2 | Pre-launch report clean | EXTERNAL | No Play listing; builds ship as signed APKs from GitHub Releases ([RELEASING.md](RELEASING.md), release checklist step 6) | TD-230 |
-| 1.3 | Measurement records tamper-evident, survive process death and offline | GAP | Offline and process death: analysis is on the phone, the wizard survives a kill ([ADR-005](../adr/ADR-005-wizard-process-death.md)). No tamper evidence: `.dat` is bare floats (`field/DicResult.kt:20-24`), pinned by the bit-exact oracles | TD-247 |
+| 1.3 | Measurement records tamper-evident, survive process death and offline | PASS | Offline and process death: analysis is on the phone, the wizard survives a kill ([ADR-005](../adr/ADR-005-wizard-process-death.md)). Tamper evidence: each run writes a signed `record_manifest.json` beside its `.dat` files (SHA-256 per file, run spec, app and engine pin, device-key ECDSA signature; the `.dat` bytes and oracles unchanged), committed last so a killed run leaves none; the viewer and the PDF cover show Verified (this phone's own key only) / Signed on another device / Changed / Not signed / Not recorded ([ADR-028](../adr/ADR-028-tamper-evident-records.md)). Verify: `RecordManifestTest`, `RecordManifestRunTest`, `RecordManifestBackupTest`; the kill-and-replay `RecordManifestProcessDeathTest` (instrumented) passed on the Semper_API30 AVD (API 30), 2026-10-22, 1 test, 0 failures | — |
 | 1.4 | Offline-first data layer, idempotent sync, conflict policy | PASS | Analyses are local; uploads are unique WorkManager work with `KEEP` (`data/cloud/CloudSync.kt:408`); an in-flight session is reused for the same `localSessionId` (`backend/app/repo/sessions.py:493-517`); file completion is idempotent (`backend/app/repo/sessions.py:596-603`); staged bytes are identical across attempts (CONTEXT.md, Invariants); metadata replace is [ADR-013](../adr/ADR-013-session-metadata-replace.md) | — |
 | 1.5 | Release build hardening, checked by APK inspection in CI | PARTIAL | R8 on release (`app/build.gradle.kts:236`), `DEV_AUTH_BYPASS` false in release (`:235`), Play Integrity is the only App Check provider (`:371`); `scripts/check_release_apk.py` in `.github/workflows/release.yml:186` and Tier 5 (`.github/workflows/ci.yml:768`). Not yet run on a real APK | TD-218, TD-219 |
 | 1.6 | Play app-signing SHA in Firebase | EXTERNAL | Release certificate in `firebase-hosting/public/.well-known/assetlinks.json`; no Play account linked (Licensing rollout, "Play developer account" above) | TD-229 |
@@ -574,7 +616,7 @@ owner id does not resolve.
 | 8.1 | Data map | PARTIAL | [DATA_MAP.md](../legal/DATA_MAP.md), derived from the code. No DPIA; findings recorded | TD-241, TD-271 |
 | 8.2 | DPDP readiness by 13 May 2027; Rule 7 playbook | PARTIAL | [INCIDENT_RESPONSE.md](INCIDENT_RESPONSE.md) "Personal-data breach"; Grievance Officer and operator fields unfilled; no tabletop | TD-241, TD-36 |
 | 8.3 | GDPR for EU customers | N-A | The service is not offered in the EU, EEA or UK (`docs/legal/PRIVACY_POLICY.md:25-29`); revisit before serving them | — |
-| 8.4 | Play Data safety consistent with SDKs | EXTERNAL | Draft [PLAY_DATA_SAFETY.md](../legal/PLAY_DATA_SAFETY.md) from `app/build.gradle.kts:354-418`; not submitted; `AD_ID` unchecked. The app is consumption-only ([ADR-024](../adr/ADR-024-account-anchored-entitlements.md)); the Terms it links say so (6.6) and keep fees for access arranged outside the app, for counsel | TD-232, TD-277 |
+| 8.4 | Play Data safety consistent with SDKs | EXTERNAL | Answers to submit in [PLAY_DATA_SAFETY.md](../legal/PLAY_DATA_SAFETY.md), from `app/build.gradle.kts:378-440` and the release APK's permissions; not submitted, two OWNER DECISIONs (delete-account URL, Analytics sharing settings). `AD_ID` and the `ACCESS_ADSERVICES_*` permissions are removed (`app/src/main/AndroidManifest.xml:16-27`). The app is consumption-only ([ADR-024](../adr/ADR-024-account-anchored-entitlements.md)); the Terms it links say so (6.6) and keep fees for access arranged outside the app, for counsel | TD-232, TD-277, TD-317 |
 | 8.5 | Export and deletion per tenant and per user | PARTIAL | Per user: `GET /v1/me/export`, `DELETE /v1/me` (`backend/app/routers/account.py:192`, `:294`), Auth user deleted after TD-214 (`:350`), which removes the sign-in for both apps (ADR-023 decision note; the app's confirmation says so, `app/src/main/res/values/strings.xml:321`); erasure also deletes the account's `auth_links` rows and blanks the address on every seat it held (`backend/app/repo/account.py:156-244`). Per institution: none. The seat search needs its index deployed first | FI-23, TD-271 |
 
 ### Parts B–E

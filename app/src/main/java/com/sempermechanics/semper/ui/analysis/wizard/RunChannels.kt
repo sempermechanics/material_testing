@@ -9,9 +9,11 @@ import androidx.annotation.WorkerThread
 import androidx.lifecycle.viewModelScope
 import com.sempermechanics.semper.BuildConfig
 import com.sempermechanics.semper.SemperNativeLib
+import com.sempermechanics.semper.data.integrity.RecordManifestWriter
 import com.sempermechanics.semper.data.session.SessionLayout
 import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.data.session.SessionQuota
+import com.sempermechanics.semper.data.session.SessionRecordSettings
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
 import com.sempermechanics.semper.field.RunStop
@@ -323,24 +325,42 @@ internal class RunSession(
      * `SummaryAnimation.globalRanges` would otherwise take for a new run with
      * as many frames, go, and the staged `.dat` files move up. Every run that
      * is not cancelled ends here, whether or not it then saves a record.
+     * The record manifest moves last, so a kill partway leaves none beside a
+     * partial set of frames (ADR-028).
      */
     @WorkerThread
     fun commit() {
         dropResults()
-        staging.listFiles()?.forEach { AtomicFiles.promote(it, File(dir, it.name)) }
+        staging.listFiles()
+            ?.sortedBy { it.name == SessionLayout.MANIFEST }
+            ?.forEach { AtomicFiles.promote(it, File(dir, it.name)) }
         staging.deleteRecursively()
     }
 
     /**
-     * Deletes the session's committed results: its `.dat` files and the
-     * summary's field-range sidecar. [commit] makes way for a run's with it,
-     * and a run that throws after its commit takes its own back out with it
-     * (`undoCommittedBatch`).
+     * [commit], after writing the run's signed record of its staged results
+     * ([RecordManifestWriter], ADR-028) with the [settings] its session row
+     * records. A run that is not cancelled ends here; the write never fails it.
+     */
+    @WorkerThread
+    fun commitRecord(appContext: Context, settings: SessionRecordSettings) {
+        RecordManifestWriter.writeBestEffort(appContext, staging, settings)
+        commit()
+    }
+
+    /**
+     * Deletes the session's committed results: its record manifest first, so
+     * a kill partway never leaves one naming files that are gone, then its
+     * `.dat` files and the summary's field-range sidecar. [commit] makes way
+     * for a run's with it, and a run that throws after its commit takes its
+     * own back out with it (`undoCommittedBatch`).
      */
     @WorkerThread
     fun dropResults() {
+        val layout = SessionLayout(dir)
+        layout.recordManifest.delete()
         dir.listFiles { f -> f.extension == "dat" }?.forEach { it.delete() }
-        SessionLayout(dir).fieldRanges.delete()
+        layout.fieldRanges.delete()
     }
 }
 

@@ -1,6 +1,6 @@
 # Semper — Privacy Policy
 
-**Last updated:** 2026-09-15  
+**Last updated:** 2026-10-22  
 **Product:** Semper DIC Android app, optional cloud sync backend, and web console  
 **Data controller (data fiduciary):** [OPERATOR LEGAL NAME], [REGISTERED ADDRESS], Chennai, Tamil Nadu, India  
 **Privacy contact:** the support mailbox configured as `SUPPORT_EMAIL` for the deployment  
@@ -52,6 +52,13 @@ as our standard for every user.
 - Binary artifacts (images, archives, reports, `.dat` / CSV) stored in a
   company Shared Drive under the Cloud Run service account — **bytes are
   uploaded by the device directly to Drive**, not through Cloud Run.
+- **Demo plan:** on the Demo plan described in the Terms of Service there is
+  no sync choice — each analysis you save, including its images and results,
+  is uploaded to and stored in the operator's cloud (the Firestore and Shared
+  Drive storage above) automatically, unless a device-management policy on
+  your phone has turned cloud backup off, and analyses stored this way cannot
+  be restored or downloaded to a device while your account is on the Demo
+  plan.
 
 ### 2.4 Diagnostics (Firebase Crashlytics and Analytics) — opt-in
 
@@ -165,9 +172,9 @@ by the Government of India.
 | Firebase Auth account | Until you delete the account or an admin removes it |
 | Firestore profile, devices, sessions, file docs | Until account/session erasure via the app/API |
 | Drive artifacts | Deleted with session or account erasure (Shared Drive trash may retain per Workspace policy) |
-| Crashlytics | Per Firebase project retention settings (**UNKNOWN** until verified in console) |
-| Cloud Logging | Per GCP log retention (**UNKNOWN** until verified; default often 30 days) |
-| Resend message content | Per Resend retention (**UNKNOWN** until verified) |
+| Crashlytics | 90 days for crash stack traces, minidump data, and the identifiers attached to them (Crashlytics installation UUIDs, Firebase installation IDs) — Firebase's published default ([Firebase privacy and security](https://firebase.google.com/support/privacy), read 2026-10-22); to be confirmed in the Firebase console |
+| Cloud Logging | 30 days for request and application logs (`_Default` log bucket); 400 days for Google Cloud administrative audit logs (`_Required` bucket, set by Google). Both GCP projects, read with `gcloud logging buckets list` on 2026-10-22 |
+| Resend message content | 30 days — Resend's published retention for every plan except Enterprise ([Resend pricing](https://resend.com/pricing), read 2026-10-22); to be confirmed in the Resend dashboard |
 | Audit logs | Retained after erasure for security/compliance; not included in user export of analysis content |
 
 Scheduled Firestore exports / PITR, where enabled, follow

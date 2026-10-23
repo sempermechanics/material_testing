@@ -102,6 +102,8 @@ Each saved analysis lives under the app's session directory (see
 ```
 <sessionId>/
   *.dat                 # per-frame correlation results
+  field_ranges.bin      # SessionLayout.FIELD_RANGES — the summary's per-frame colour ranges (a cache)
+  record_manifest.json  # SessionLayout.MANIFEST — signed SHA-256 of the above, run spec, app and engine pin (ADR-028)
   raw_deformed/         # SessionPaths.RAW_DEFORMED_SUBDIR — original frames
   …                     # metadata / previews as written by the ViewModel
 ```
@@ -137,7 +139,8 @@ When cloud is configured (`SEMPER_API_BASE_URL`):
 
 A backup's `Session.zip` holds what a restore needs: since `metadata.json`
 schema `/4` the reference as `ref/Reference.png` (`SessionZip.REFERENCE_ENTRY`),
-the frames under `raw/` by their own names, and `dat/`; `Extras.zip` holds the
+the frames under `raw/` by their own names, and `dat/` (the `.dat` frames and,
+since ADR-028, `dat/record_manifest.json`); `Extras.zip` holds the
 regenerable rest. `RestoreUnpacker.destFor` still reads an older backup's
 `raw/Reference.png` as the reference when the archive has no `ref/` entry. The
 layouts by schema, and what an older app makes of a `/4` backup, are in
