@@ -161,9 +161,29 @@ The item-by-item check against the external readiness framework (2026-10-18) is
       withdrawable option
       ([AUTH_SETUP.md](../backend/AUTH_SETUP.md) §3a).
 - [ ] Record cookie inventory per [COOKIE_CONSENT.md](../legal/COOKIE_CONSENT.md);
-      no banner without non-essential cookies.
+      no banner without non-essential cookies. **Recorded 2026-10-22 from the
+      code and the live site**: no response on app.sempermechanics.com sets a
+      cookie (`curl -sI` on `/login`, `/account`, `/console/*`, `/terms/`,
+      `/privacy/`, the continue pages and `/__/auth/*`), no page writes one, and
+      the only storage is Firebase Auth's IndexedDB / web-storage session and
+      the console's three `semper.*` sessionStorage keys, all strictly
+      necessary; no analytics or tag script, and the CSP would refuse one.
+      Verdict: **no banner**. Open only for a signed-in DevTools capture by the
+      operator to match the table (COOKIE_CONSENT.md, "Re-checking" step 3).
 - [ ] Confirm Crashlytics / Cloud Logging / Resend retention in vendor consoles
       and replace the UNKNOWN entries in the policy's retention table.
+      **UNKNOWN entries replaced 2026-10-22** (`PRIVACY_POLICY.md` §4, rendered
+      to `firebase-hosting/public/privacy/index.html`, not deployed). Cloud
+      Logging is read, not assumed: `gcloud logging buckets list --location=global`
+      on `indicvision-dic-app` and `indicvision-dic-app-auth` → `_Default` 30
+      days, `_Required` 400 days (locked, set by Google); no buckets in
+      `asia-south1`; `gcloud logging sinks list` shows only the two default
+      sinks, so no `audit-trail` bucket exists yet (TD-237). Crashlytics (90
+      days, [Firebase privacy](https://firebase.google.com/support/privacy)) and
+      Resend (30 days, [Resend pricing](https://resend.com/pricing)) are the
+      vendors' published defaults, marked "to be confirmed" in the policy: open
+      until the operator confirms both in the Firebase console and the Resend
+      dashboard.
 
 ### Legal rollout (branch `feat/legal-terms-clickwrap`)
 
@@ -376,6 +396,16 @@ pre-licensing documents)
       stored and cannot be restored on the Demo plan; regenerate with
       `scripts/render_legal_pages.py`; deploy Hosting. **Before the next app
       release**, together with the bracketed operator fields above.
+      **Text done 2026-10-22** (`PRIVACY_POLICY.md` §2.3 "Demo plan" bullet,
+      `TERMS_OF_SERVICE.md` §6.1 last sentence; both rendered, `--check`
+      passes), matching the code: a demo account has no Save-to-cloud toggle
+      and uploads unless device management turned cloud backup off
+      (`data/cloud/CloudSync.kt:327-345`); `POST /v1/sessions` is open to demo
+      (`backend/app/routers/sessions.py:335-353`), and file content and the
+      bundle answer 403 `feature_not_licensed` (`backend/app/routers/files.py:80`,
+      `backend/app/routers/sessions.py:306`). Terms **Version** stays 2026-09-15, so no
+      re-acceptance; whether the addition is material is counsel's call
+      (TD-277). Open for the Hosting deploy, which is the operator's.
 - [ ] Google Play **Data safety** form: demo analysis content (images,
       results) is uploaded to the operator's cloud.
 - [ ] Floating institution pools: not minted at launch; the lease routes ship
