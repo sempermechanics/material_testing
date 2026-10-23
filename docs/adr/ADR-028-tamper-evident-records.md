@@ -1,7 +1,7 @@
 # ADR-028: Tamper-evident measurement records
 
-**Status:** Accepted (the product owner's decision to build TD-247, 2026-10-22). Built on
-`feat/td-247-record-manifest`; not merged, released or run on a device yet.
+**Status:** Accepted (the product owner's decision to build TD-247, 2026-10-22). Merged in #471;
+checked on emulators 2026-10-23 (below); not released yet.
 **Date:** 2026-10-22
 **Deciders:** product owner, app owner
 **Register:** TD-247 (closed by this record)
@@ -181,8 +181,16 @@ analysis is the one the engine wrote:
       AVD (API 30), 2026-10-22, on `d4d09231`.
 - [x] Verified only for this phone's own key; any other valid signature reads
       `SignedElsewhere` (review of `d4d09231`).
-- [ ] A device check: a run on a phone reads "Verified"; a `.dat` edited with `adb`
+- [x] A device check: a run on a phone reads "Verified"; a `.dat` edited with `adb`
       reads "Changed since analysis"; a restore on a second phone reads "Signed on
-      another device".
+      another device". Done 2026-10-23 with a debug build of `cd8605df` (engine
+      `f072da0`, versionCode 101) against staging, QC test account: on emulator-5584
+      (API 34) `steel_24` → `steel_26`, `steel_27` wrote `record_manifest.json` (engine
+      `f072da03…`, three hashes equal to `sha256sum` on the device) and read
+      **Verified**; one bit of `frame_0001.dat` flipped through `run-as` read **Changed
+      since analysis** naming `frame_0001.dat`, and the original bytes put back read
+      Verified again; backed up, then restored on emulator-5582 (API 30), it read
+      **Signed on another device** with 5584's key (`OaAUGCUs…`), the restored bytes
+      equal to the manifest's hashes.
 - [ ] Backend: check a `SignedElsewhere` thumbprint against the account's registered
       devices (not decided).
