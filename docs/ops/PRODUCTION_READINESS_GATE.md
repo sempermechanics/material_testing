@@ -47,8 +47,8 @@ The item-by-item check against the external readiness framework (2026-10-18) is
       key, have no app/site/server restriction), 3.7 (no DATA_READ + DATA_WRITE audit
       logs for firebase, firebaserules, firebaseappcheck, firestore). FAIL on the app
       project: 2.7-delete-protection. FAIL on services: 3.1 `APP_CHECK_MODE=off`
-      (both; TD-226), 3.4 `CHECK_REVOKED_ON_STEP_UP=false` on `semper-api` (TD-214,
-      live at the next production deploy), 3.5 no `ENTITLEMENT_SIGNING_KEY` (both;
+      (both; TD-226), 3.4 `CHECK_REVOKED_ON_STEP_UP=false` on `semper-api` (TD-214;
+      `true` since the 2026-10-23 deploy, `semper-api-39900623312-1`), 3.5 no `ENTITLEMENT_SIGNING_KEY` (both;
       TD-215). Every fix is a console or `gcloud` change by the operator.
 - [ ] Confirm Auth abuse / enumeration protections in Firebase console.
 - [x] Deploy API Gateway with `openapi.yaml` quotas (`__CLOUD_RUN_URL__`
