@@ -45,7 +45,10 @@ console's per-phone **Release**. No Firestore index deploy, no app release.
   the operator redeployed from a worktree at `d79aa0c7` with
   `firebase-hosting/public/{privacy,terms}/index.html` checked out from `b940cc29`; the live
   pages then matched `b940cc29` byte for byte, `test-accounts.js` still carried
-  `data-ta-release`, and `check_live_console.py` passed.
+  `data-ta-release`, and `check_live_console.py` passed. At 08:06 UTC the operator
+  deployed the redesigned operator desk (#478) the same way, from `main` at `000575b0`
+  with the two legal pages from `b940cc29`; the live console files and both legal pages
+  matched that tree byte for byte, and `check_live_console.py` passed.
 - **TD-314 on staging** (QC test account, emulators): staff released
   `and-36439a0f18da2a33` in the console (audit `test_account_device_released`, 07:45:50 UTC);
   after **Refresh licence** that phone showed "Still on the demo" with backup and data
