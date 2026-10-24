@@ -175,8 +175,9 @@ jobs:
 
       # What the release build type promises, read back from the APK itself:
       # not debuggable or testOnly, no debug source-set component, no App Check
-      # debug provider, no cleartext, minSdk as app/build.gradle.kts says, a
-      # non-empty R8 mapping (readiness A1.5; MASWE-0067 / MASWE-0089). Warns,
+      # debug provider, no cleartext, minSdk as app/build.gradle.kts says, the
+      # consent defaults (collection off, no AD_ID permission), a non-empty R8
+      # mapping (readiness A1.5; MASWE-0067 / MASWE-0089). Warns,
       # without failing, when no certificate pin was compiled in.
       - name: Inspect release APK hardening
         run: |

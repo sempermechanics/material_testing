@@ -1,0 +1,24 @@
+N: android=http://schemas.android.com/apk/res/android (line=2)
+  E: manifest (line=2)
+    A: package="com.sempermechanics.semper" (Raw: "com.sempermechanics.semper")
+      E: uses-sdk (line=7)
+        A: http://schemas.android.com/apk/res/android:minSdkVersion(0x0101020c)=30
+      E: uses-permission (line=11)
+        A: http://schemas.android.com/apk/res/android:name(0x01010003)="android.permission.INTERNET" (Raw: "android.permission.INTERNET")
+      E: uses-permission (line=12)
+        A: http://schemas.android.com/apk/res/android:name(0x01010003)="com.google.android.gms.permission.AD_ID" (Raw: "com.google.android.gms.permission.AD_ID")
+      E: uses-permission (line=13)
+        A: http://schemas.android.com/apk/res/android:name(0x01010003)="android.permission.ACCESS_ADSERVICES_ATTRIBUTION" (Raw: "android.permission.ACCESS_ADSERVICES_ATTRIBUTION")
+      E: application (line=16)
+        A: http://schemas.android.com/apk/res/android:name(0x01010003)="com.sempermechanics.semper.SemperApp" (Raw: "com.sempermechanics.semper.SemperApp")
+          E: meta-data (line=45)
+            A: http://schemas.android.com/apk/res/android:name(0x01010003)="firebase_crashlytics_collection_enabled" (Raw: "firebase_crashlytics_collection_enabled")
+            A: http://schemas.android.com/apk/res/android:value(0x01010024)=true
+          E: meta-data (line=53)
+            A: http://schemas.android.com/apk/res/android:name(0x01010003)="google_analytics_adid_collection_enabled" (Raw: "google_analytics_adid_collection_enabled")
+            A: http://schemas.android.com/apk/res/android:value(0x01010024)=false
+          E: activity (line=136)
+            A: http://schemas.android.com/apk/res/android:name(0x01010003)="com.sempermechanics.semper.ui.home.HomeActivity" (Raw: "com.sempermechanics.semper.ui.home.HomeActivity")
+              E: meta-data (line=140)
+                A: http://schemas.android.com/apk/res/android:name(0x01010003)="firebase_analytics_collection_enabled" (Raw: "firebase_analytics_collection_enabled")
+                A: http://schemas.android.com/apk/res/android:value(0x01010024)=false

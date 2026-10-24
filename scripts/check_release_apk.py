@@ -25,6 +25,10 @@ Checks (FAIL exits 1; WARN is reported and does not fail):
                     `a -> b` lines (evidence R8 ran)
   cert-pins         WARN when no `sha256/<base64>` pin string is in the dex,
                     i.e. SEMPER_API_CERT_PINS (BuildConfig) was empty at build
+  consent-defaults  <application> meta-data firebase_crashlytics_collection_enabled,
+                    firebase_analytics_collection_enabled and
+                    google_analytics_adid_collection_enabled are present and
+                    false; no AD_ID or ACCESS_ADSERVICES_* uses-permission
 
 aapt2 comes from --aapt2, $AAPT2, PATH, or the newest
 $ANDROID_HOME/build-tools/*/aapt2 (the same lookup the workflows use for
@@ -53,6 +57,13 @@ ANDROID_NS = "http://schemas.android.com/apk/res/android"
 COMPONENT_TAGS = ("activity", "activity-alias", "provider", "receiver", "service")
 DEBUG_APPCHECK = b"DebugAppCheckProviderFactory"
 PIN_RE = re.compile(rb"sha256/[A-Za-z0-9+/]{43}=")
+CONSENT_OFF_META = (
+    "firebase_crashlytics_collection_enabled",
+    "firebase_analytics_collection_enabled",
+    "google_analytics_adid_collection_enabled",
+)
+AD_ID_PERMISSION = "com.google.android.gms.permission.AD_ID"
+ADSERVICES_PREFIX = "android.permission.ACCESS_ADSERVICES_"
 
 
 # --- aapt2 output parsers ----------------------------------------------------
@@ -375,6 +386,30 @@ def evaluate(facts: ApkFacts, *, expected_min_sdk: int | None, debug_names: set[
         results.append(Result("cert-pins", "WARN",
                               "no sha256/ pin in the dex: SEMPER_API_CERT_PINS was empty at build "
                               "(system trust store only)"))
+
+    # Consent defaults (TE5-005): diagnostics stay off until the user opts in
+    # (AppSettings.diagnosticsEnabled), the advertising ID is never collected,
+    # and its permissions stay removed (TD-232). A manifest merge can undo any
+    # of these silently; an absent flag means the SDK's default, which is on.
+    meta = {el.attrs.get("android:name"): el.attrs.get("android:value")
+            for el in app.children if el.name == "meta-data"}
+    bad: list[str] = []
+    for name in CONSENT_OFF_META:
+        if name not in meta:
+            bad.append(f"{name} missing")
+        elif as_bool(meta[name]) is not False:
+            bad.append(f"{name}={meta[name]} (want false)")
+    ad_perms = sorted(
+        name for el in facts.manifest.iter("uses-permission", "uses-permission-sdk-23")
+        if (name := el.attrs.get("android:name", "")) == AD_ID_PERMISSION or name.startswith(ADSERVICES_PREFIX)
+    )
+    bad += [f"uses-permission {name}" for name in ad_perms]
+    if bad:
+        results.append(Result("consent-defaults", "FAIL", "; ".join(bad)))
+    else:
+        results.append(Result("consent-defaults", "PASS",
+                              "Crashlytics / Analytics / ad-ID collection off by default; "
+                              "no AD_ID or AdServices permission"))
     return results
 
 

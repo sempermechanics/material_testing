@@ -146,6 +146,7 @@ def test_a_hardened_release_passes(apk, tmp_path):
     assert {k: r.status for k, r in res.items()} == {
         "debuggable": "PASS", "debug-components": "PASS", "appcheck-debug": "PASS",
         "cleartext": "PASS", "min-sdk": "PASS", "r8-mapping": "PASS", "cert-pins": "PASS",
+        "consent-defaults": "PASS",
     }
 
 
@@ -168,6 +169,26 @@ def test_a_debug_build_fails_every_check_it_should(apk, tmp_path):
     assert res["min-sdk"].status == "FAIL" and "24" in res["min-sdk"].detail
     assert res["r8-mapping"].status == "FAIL"
     assert res["cert-pins"].status == "WARN"
+    # No meta-data at all: the SDKs' own default is collection ON.
+    assert res["consent-defaults"].status == "FAIL"
+    assert "firebase_crashlytics_collection_enabled missing" in res["consent-defaults"].detail
+
+
+def test_consent_defaults_fail_on_collection_on_or_an_ad_id_permission(apk):
+    """TE5-005: a manifest merge (a new Firebase / Play services artifact) can
+    flip a collection default or re-add the advertising-ID permissions; the
+    Play Data safety answers and the consent flow rely on both staying off."""
+    res = _by_check(apk.evaluate(_facts(apk, manifest="manifest_consent_broken.txt"),
+                                 expected_min_sdk=30, debug_names=_DEBUG, mapping=None))
+    detail = res["consent-defaults"].detail
+    assert res["consent-defaults"].status == "FAIL"
+    assert "firebase_crashlytics_collection_enabled=true" in detail
+    # Only <application>'s own meta-data counts; one inside an activity does not.
+    assert "firebase_analytics_collection_enabled missing" in detail
+    assert "google_analytics_adid_collection_enabled" not in detail
+    assert "com.google.android.gms.permission.AD_ID" in detail
+    assert "android.permission.ACCESS_ADSERVICES_ATTRIBUTION" in detail
+    assert "android.permission.INTERNET" not in detail
 
 
 def test_network_security_config_permitting_cleartext_fails(apk):
