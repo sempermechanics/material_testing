@@ -131,6 +131,17 @@ class FontScaleLayoutTest {
     }
 
     @Test
+    fun `a frame's order badge holds its number at font scale 2`() {
+        val ctx = context(2f)
+        prepare = { it.findViewById<TextView>(R.id.tvFrameBadge).text = "50" }
+        val root = laidOut(ctx, R.layout.item_frame_order, merge = true, widthDp = TILE_DP)
+        val badge = root.findViewById<TextView>(R.id.tvFrameBadge)
+        val line = badge.paint.fontMetricsInt.let { it.descent - it.ascent }
+        assertTrue("tvFrameBadge is ${badge.width}px, needs ${badge.textWidth()}px", badge.width >= badge.textWidth())
+        assertTrue("tvFrameBadge is ${badge.height}px high, its line ${line}px", badge.height >= line)
+    }
+
+    @Test
     fun `the Google sign-in button grows with its label`() {
         val ctx = context(2f)
         val root = LayoutInflater.from(ctx).inflate(R.layout.activity_auth, null)
@@ -159,5 +170,6 @@ class FontScaleLayoutTest {
     private companion object {
         const val PHONE_DP = 360
         const val GOOGLE_MIN_DP = 52
+        const val TILE_DP = 72
     }
 }
