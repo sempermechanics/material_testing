@@ -80,6 +80,12 @@ Check the R8 mapping reached Crashlytics (the release build uploads it); the wor
    ([CI.md](CI.md), Backend deploy).
 5. **Smoke the release build on a device** — clean install, sign in,
    run one analysis, confirm the session syncs and each share target works.
+   Then run the solver on the shipping ABI, which no CI job does (Tier 3 runs it
+   on x86_64 only, Tier 5 only builds arm64): on one arm64 phone or arm64 AVD,
+   with `ANDROID_SERIAL` set to it,
+   `./gradlew :app:connectedDebugAndroidTest -PabiFilters=arm64-v8a "-Pandroid.testInstrumentationRunnerArguments.class=com.sempermechanics.semper.pipeline.EnginePipelineSmokeTest"`.
+   Record the device, Android version, engine pin and result in the release's
+   [CHANGELOG.md](CHANGELOG.md) entry; a failure blocks the release.
 6. **Distribute publicly (manual)** — this workflow builds a signed APK and a
    GitHub Release in this repository, a pre-release on the `beta` channel. The
    repository is public, so that Release is downloadable by anyone, and it is
