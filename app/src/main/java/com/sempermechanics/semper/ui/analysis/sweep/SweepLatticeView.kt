@@ -209,6 +209,10 @@ class SweepLatticeView @JvmOverloads constructor(
     /** The plot area of the last draw. */
     internal val plotFrame: RectF get() = frame
 
+    /** Every how many y rows the last draw labelled. */
+    internal var yTickStride = 1
+        private set
+
     /** Node where the current press started, for gesture resolution. */
     private var pressedNode: Node? = null
 
@@ -294,10 +298,15 @@ class SweepLatticeView @JvmOverloads constructor(
         } else {
             listOf(vsgLo, vsgHi).distinct().map { yFor(it) to it }
         }
-        rows.forEach { (y, vsg) ->
+        // Every row keeps its grid line; at a large font scale only every
+        // other one is labelled, so the labels never overlap (readiness AE1V-010).
+        yTickStride = if (compact) SweepLatticeGutters.tickStride(f.height() / Y_TICKS, textPaint.textSize) else 1
+        rows.forEachIndexed { i, (y, vsg) ->
             canvas.drawLine(f.left, y, f.right, y, gridPaint)
-            val baseline = y + textPaint.textSize * TICK_BASELINE
-            canvas.drawText(vsg.toString(), f.left - dp(TICK_GAP_DP), baseline, textPaint)
+            if (i % yTickStride == 0) {
+                val baseline = y + textPaint.textSize * TICK_BASELINE
+                canvas.drawText(vsg.toString(), f.left - dp(TICK_GAP_DP), baseline, textPaint)
+            }
         }
     }
 

@@ -145,6 +145,25 @@ class FontScaleLayoutTest {
     }
 
     @Test
+    fun `the sweep lattice's plot title and buttons show in full at font scale 2`() {
+        val ctx = context(2f)
+        prepare = { root ->
+            root.findViewById<View>(R.id.strainPlotSection).visibility = View.VISIBLE
+            root.findViewById<TextView>(R.id.tvStrainPlotTitle).text = ctx.getString(R.string.line_cut_title_axis_fmt, "X")
+        }
+        val root = laidOut(ctx, R.layout.activity_vsg_lattice, merge = false, widthDp = PHONE_DP)
+        for (id in intArrayOf(R.id.tvStrainPlotTitle, R.id.btnSaveGraph, R.id.btnView)) {
+            val view = root.findViewById<TextView>(id)
+            val name = ctx.resources.getResourceEntryName(id)
+            val lines = view.layout.lineCount
+            assertTrue("$name '${view.text}' needs $lines lines of ${view.maxLines}", lines <= view.maxLines)
+            assertEquals("$name ellipsized", 0, view.layout.getEllipsisCount(lines - 1))
+            val textHeight = view.layout.height + view.totalPaddingTop + view.totalPaddingBottom
+            assertTrue("$name is ${view.height}px high, its text ${textHeight}px", view.height >= textHeight)
+        }
+    }
+
+    @Test
     fun `the ROI studio's toggles show their whole labels at font scale 2`() {
         val ctx = context(2f)
         prepare = {}

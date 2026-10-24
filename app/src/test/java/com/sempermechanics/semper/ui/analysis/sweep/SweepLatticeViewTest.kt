@@ -249,8 +249,35 @@ class SweepLatticeViewTest {
         assertTrue("x labels end at $xLabelBottom past ${H_DP * density}", xLabelBottom <= H_DP * density)
     }
 
+    /**
+     * In the lattice screen's 136dp view at font scale 2.0 the five y ticks were
+     * drawn on top of each other (after-screenshot of AE1V-010); every labelled
+     * row now has a text height of room, and at font scale 1.0 all five stay.
+     */
+    @Test
+    fun `y tick labels never overlap in the screen's lattice height`() {
+        for ((scale, expectedStride) in listOf(1f to 1, 2f to 2)) {
+            val config = android.content.res.Configuration(context.resources.configuration).apply { fontScale = scale }
+            view = SweepLatticeView(context.createConfigurationContext(config)).apply {
+                compact = true
+                setNodes(listOf(node(subset = 21, vsg = 15, frame = 0), node(subset = 41, vsg = 141, frame = 1)))
+            }
+            layoutAndDraw(W_DP, SCREEN_H_DP)
+
+            // A label row is about 1.2 text sizes tall (ascent to descent).
+            val textHeight = view.labelPaint.textSize * 1.2f
+            val spacing = view.plotFrame.height() / SweepLatticeGutters.Y_TICKS
+            val stride = view.yTickStride
+            assertTrue("fs $scale: labels every $stride of $spacing px rows, text $textHeight", spacing * stride >= textHeight)
+            assertEquals("fs $scale stride", expectedStride, stride)
+        }
+    }
+
     private companion object {
         const val W_DP = 320
         const val H_DP = 200
+
+        /** activity_vsg_lattice.xml's latticeView height. */
+        const val SCREEN_H_DP = 136
     }
 }

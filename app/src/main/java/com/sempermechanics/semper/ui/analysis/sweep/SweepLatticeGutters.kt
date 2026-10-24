@@ -44,6 +44,20 @@ internal class SweepLatticeGutters(private val density: Float) {
         /** Text heights under the frame: one row of x labels with its descent. */
         const val X_LABEL_ROWS = 1.3f
 
+        /** A tick label's height, ascent to descent, in text sizes. */
+        const val TICK_ROW_TEXT_SIZES = 1.2f
+
+        /** Label strides that divide [Y_TICKS], so the bottom and top rows stay labelled. */
+        private val TICK_STRIDES = intArrayOf(1, 2, 4)
+
+        /**
+         * Every how many y rows, [spacing] apart, a label of [textSize] fits
+         * without touching the next: 1 at font scale 1.0, every other row when
+         * a large font scale leaves less than a label's height between rows.
+         */
+        fun tickStride(spacing: Float, textSize: Float): Int =
+            TICK_STRIDES.firstOrNull { spacing * it >= textSize * TICK_ROW_TEXT_SIZES } ?: Y_TICKS
+
         /**
          * The y tick labels, bottom to top: in [compact] [Y_TICKS] even steps of the
          * framed range [winMin]..[winMax], else the lowest and highest VSG swept.
