@@ -32,6 +32,23 @@ test("a refused New device says so", async () => {
   assert.deepEqual(status(), ["Could not unbind: license_revoked", "muted err"]);
 });
 
+test("after a licence's row is redrawn, focus is back on that row", async () => {
+  await openDesk({ routes: { [`PATCH /v1/admin/licenses/${IND.id}`]: () => json(200, { ...IND, note: "moved" }) } });
+  const device = rowButton("device", IND.id);
+  device.focus();
+  device.closest("details").open = true;
+  confirms.answer(true);
+  await click(device);
+  // The menu closed when its item was chosen, and the row is a new element.
+  assert.equal(document.activeElement.localName, "summary");
+  assert.equal(document.activeElement.closest("tr").cells[0].textContent, "SEMP-IND1");
+  const edit = rowButton("edit", IND.id);
+  edit.focus();
+  $("filter").dispatch("input");
+  assert.equal(document.activeElement.dataset.edit, IND.id, "a redraw keeps the focused button");
+  assert.notEqual(document.activeElement, edit);
+});
+
 const HISTORY = `GET /v1/admin/licenses/${IND.id}/device-history?limit=30`;
 
 test("a device history line names what was left, signed out and bound, per app", async () => {

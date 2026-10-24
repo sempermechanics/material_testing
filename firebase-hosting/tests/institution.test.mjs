@@ -282,6 +282,24 @@ test("each row's buttons name the member they act on", async () => {
     "Withdraw the invitation to dee@uni.edu");
 });
 
+test("after a change redraws the roster, focus is back on that member's row", async () => {
+  await act("hold", "u1", () => json(200, {}));
+  // The reload answers with the same roster; u1's buttons are new elements.
+  assert.equal(document.activeElement.dataset.uid, "u1");
+  assert.equal(document.activeElement.localName, "button");
+  reset();
+  await act("remove", "u1", () => json(200, {}), true);
+  assert.equal(document.activeElement.dataset.uid, "u1", "a member still listed keeps the focus");
+  reset();
+  await open({ routes: { [`PATCH ${SEATS}/u1`]: () => json(200, {}) } });
+  net.routes[`GET ${SEATS}`] = () => json(200, { ...assigned, seats: assigned.seats.slice(1) });
+  confirms.answer(true);
+  button("remove", "u1").click();
+  net.routes[`DELETE ${SEATS}/u1`] = () => json(200, {});
+  await settle();
+  assert.equal(document.activeElement, $("addEmail"), "a member gone hands focus to the Add box");
+});
+
 test("a refused seat change is explained", async () => {
   const cases = [
     ["seat_revoked", "That member was removed. Add their address again to restore them."],

@@ -198,7 +198,13 @@ institution page), the desk's Release phone, and the account page's
 give-a-seat-back and move-a-device. Each roster and release confirmation names
 the address it acts on, and each roster row's buttons carry it in their
 accessible name ("Remove ana@uni.edu"). The box of an ask card is named by its
-`label` ("Password", "Licence key", "Days"), or its title. Device history is a `tellInPage`
+`label` ("Password", "Licence key", "Days"), or its title. Every card is a
+`role="alertdialog"` named by its heading and described by its message;
+Escape answers it as Cancel (a tell card: Close), and focus goes back to the
+control that opened it (`restoreFocus`; a closed More menu's summary for an
+item in it). When a change redraws the roster or the licence table, focus is
+put back on the same row (`refocus`), or the roster's Add box when the row is
+gone. Device history is a `tellInPage`
 card with one Close button; the card keeps single line breaks, one move a
 line. In the tests, `confirms` answers the yes / no cards and `alerts` records
 each tell card, and the fake `window.confirm` / `window.alert` fail the test

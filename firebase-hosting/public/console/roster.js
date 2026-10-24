@@ -127,6 +127,7 @@ export function wireRoster({ rows, email, add, base, report, reload, retry = rel
       await api(`${root}/seats/${encodeURIComponent(uid)}`,
         { method: spec.method, ...(spec.body ? { body: JSON.stringify(spec.body) } : {}) });
       await reload();
+      refocus((b) => b.dataset.uid === uid);
     } catch (e) {
       report(explain(e, ACT_ERRORS, (text) => `Could not complete that: ${text}`), true);
     }
@@ -146,9 +147,21 @@ Nobody has claimed it yet.`,
     try {
       await api(`${root}/invites/${encodeURIComponent(inviteId)}`, { method: "DELETE" });
       await reload();
+      refocus(() => false);
     } catch (e) {
       report(explain(e, {}, (text) => `Could not withdraw: ${text}`), true);
     }
+  }
+
+  /**
+   * After a change the rows are rebuilt and the button that had focus is
+   * gone: put focus on the same member's row again (`mine` picks its
+   * button), or on the Add box when they left the roster, so a keyboard user
+   * carries on where they were rather than from the top of the page.
+   */
+  function refocus(mine) {
+    const again = Array.from(rows.querySelectorAll("button")).find(mine);
+    (again || email).focus();
   }
 
   async function addMember() {

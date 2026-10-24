@@ -206,6 +206,7 @@ async function loadMoreLicences() {
 // backend leaves both out of the list; a row revoked since it loaded is left
 // out here.
 export function renderLicences() {
+  const focus = focusedAction();
   const q = $("filter").value.trim().toLowerCase();
   const showRevoked = $("showRevoked").checked;
   const showDemo = $("showDemo").checked;
@@ -227,6 +228,40 @@ export function renderLicences() {
     ? `Newest ${desk.licences.length} shown${note}; more exist.`
     : `${desk.licences.length} licence(s)${note}.`;
   $("loadMore").hidden = !desk.licencePage.hasMore;
+  refocus(focus);
+}
+
+/**
+ * Which row button has focus, as { key, id } (its data key and licence id;
+ * key "" for a row's More menu), or null. The table is rebuilt on every
+ * change, which drops focus to the top of the page; `refocus` puts it back.
+ */
+function focusedAction() {
+  const at = document.activeElement;
+  const row = at && at.closest && at.closest("tr");
+  if (!row || row.parentNode !== $("licenceRows")) return null;
+  const button = at.localName === "button" ? at : row.querySelector("button");
+  const key = button && Object.keys(button.dataset).find((k) => k !== "retry");
+  if (!key) return null;
+  return { key: at.localName === "summary" ? "" : key, id: button.dataset[key] };
+}
+
+/**
+ * Focus the same button on the licence's new row; when it sits in the More
+ * menu (hidden once the menu closes), or the action is gone, the row's menu,
+ * else its first button. Nothing when the row has gone.
+ */
+function refocus(focus) {
+  if (!focus) return;
+  const buttons = Array.from($("licenceRows").querySelectorAll("button"));
+  const same = focus.key && buttons.find((b) => b.dataset[focus.key] === focus.id);
+  if (same && !same.closest("details")) {
+    same.focus();
+    return;
+  }
+  const mine = same || buttons.find((b) => Object.values(b.dataset).includes(focus.id));
+  if (!mine) return;
+  (mine.closest("tr").querySelector("summary") || mine).focus();
 }
 
 /** What an empty table says, with what to try next. */
