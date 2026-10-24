@@ -6,10 +6,23 @@ target-version = "py312"
 
 [lint]
 # Ruff's default set (E4/E7/E9/F) — which the code already passes — plus BLE
-# (flake8-blind-except), the one rule the `# noqa: BLE001` markers reference.
+# (flake8-blind-except), the one rule the `# noqa: BLE001` markers reference,
+# and S (flake8-bandit), the SAST pass CI otherwise lacks (readiness TE5-010).
 # Scoped deliberately: E501 or I/UP/B would flag pre-existing style unrelated
 # to making those markers meaningful.
-select = ["E4", "E7", "E9", "F", "BLE"]
+select = ["E4", "E7", "E9", "F", "BLE", "S"]
 # Every deliberate broad except carries `# noqa: BLE001` (20 as of 2026-09-23,
 # after TD-53 folded ten transaction-contention blocks into `_run_tx`), so
-# enabling BLE does not fail them.
+# enabling BLE does not fail them. Every bandit false positive carries
+# `# noqa: Sxxx - <reason>` on its line; there is no baseline.
+
+[lint.per-file-ignores]
+# pytest's own assertion mechanism; S101 still applies to app/ and scripts/.
+"tests/**" = ["S101"]
+# The repository-root ops scripts, linted from here by the backend gate
+# (`ruff check ... ../scripts/`), are not yet triaged for S: 19 findings, a
+# TECH_DEBT row (readiness TE5-010). Their other rules still apply.
+"../scripts/**" = ["S"]
+# Another workstream owns this file in the 2026-10-24 readiness run: its one
+# `bash` subprocess (S603, S607) moves to a line noqa there (handoff).
+"tests/test_script_ops_gcp.py" = ["S603", "S607"]

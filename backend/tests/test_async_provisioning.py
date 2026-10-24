@@ -586,7 +586,7 @@ async def test_task_route_is_unreachable_with_a_user_token(store, client, monkey
     monkeypatch.setattr(settings, "TASKS_INVOKER_SA", "tasks-invoker@test.iam.gserviceaccount.com")
 
     def verify(token, _request, _audience):
-        if token == "firebase-user-token":
+        if token == "firebase-user-token":  # noqa: S105 - a fake token
             raise ValueError("Could not verify token signature.")
         return {"email": "someone@gmail.com", "email_verified": True}
 

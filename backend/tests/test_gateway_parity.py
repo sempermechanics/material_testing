@@ -151,7 +151,7 @@ def _spec_text() -> str:
 
 
 def test_gateway_spec_has_no_duplicate_keys():
-    yaml.load(_spec_text(), Loader=_StrictLoader)
+    yaml.load(_spec_text(), Loader=_StrictLoader)  # noqa: S506 - _StrictLoader is a yaml.SafeLoader subclass
 
 
 def test_gateway_responses_carry_only_swagger_keys():

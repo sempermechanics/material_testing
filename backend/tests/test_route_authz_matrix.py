@@ -53,7 +53,7 @@ TASK = "cloud-task"
 # A verified ID token and nothing more: no profile is read or created. Only the
 # erasure check, which must ask about an erased account without re-creating it
 # (TD-206), and which answers about the caller's own device alone.
-TOKEN_ONLY = "token-only"
+TOKEN_ONLY = "token-only"  # noqa: S105 - an auth tier name
 # Institution IT self-service: membership in adminEmails plus dashboard MFA
 # (institution_admin_stepup). Membership is checked before MFA so a foreign
 # licence still 404s. Deliberately distinct from ADMIN/DEVICE_ADMIN.

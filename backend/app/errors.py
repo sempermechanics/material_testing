@@ -19,7 +19,7 @@ from __future__ import annotations
 
 # --- authentication / authorisation ----------------------------------------
 MISSING_BEARER = "missing_bearer"
-INVALID_TOKEN = "invalid_token"
+INVALID_TOKEN = "invalid_token"  # noqa: S105 - an error code, not a credential
 NOT_APPROVED = "not_approved"
 NOT_ADMIN = "not_admin"
 TERMS_VERSION_MISMATCH = "terms_version_mismatch"
@@ -46,7 +46,7 @@ UNKNOWN_APP = "unknown_app"
 APP_RETIRED = "app_retired"
 
 # --- Cloud Tasks callback --------------------------------------------------
-INVALID_TASK_TOKEN = "invalid_task_token"
+INVALID_TASK_TOKEN = "invalid_task_token"  # noqa: S105 - an error code, not a credential
 NOT_TASK_INVOKER = "not_task_invoker"
 
 # --- sessions, files, quotas -----------------------------------------------

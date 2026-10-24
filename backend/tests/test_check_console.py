@@ -140,13 +140,13 @@ def test_a_clean_tree_passes(checker, tree):
 
 
 def test_the_cli_exits_0_on_a_clean_tree_and_1_with_the_failures_listed(tree):
-    ok = subprocess.run([sys.executable, str(_SCRIPT), "--root", str(tree)],
+    ok = subprocess.run([sys.executable, str(_SCRIPT), "--root", str(tree)],  # noqa: S603 - argv is sys.executable and this repo's own script, no shell
                         capture_output=True, text=True, encoding="utf-8")
     assert ok.returncode == 0, ok.stderr
     assert "Console checks passed." in ok.stdout
 
     _edit(_console(tree, "operator", "page.js"), '$("go")', '$("gone")')
-    bad = subprocess.run([sys.executable, str(_SCRIPT), "--root", str(tree)],
+    bad = subprocess.run([sys.executable, str(_SCRIPT), "--root", str(tree)],  # noqa: S603 - argv is sys.executable and this repo's own script, no shell
                          capture_output=True, text=True, encoding="utf-8")
     assert bad.returncode == 1
     assert "Console checks failed" in bad.stderr
