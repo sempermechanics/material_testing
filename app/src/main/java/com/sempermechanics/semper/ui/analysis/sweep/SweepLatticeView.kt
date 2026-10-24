@@ -143,6 +143,7 @@ class SweepLatticeView @JvmOverloads constructor(
         strokeWidth = dp(NODE_STROKE_DP)
     }
     private val textPaint = PlotStyle.labelTextPaint(context)
+    private val gutters = SweepLatticeGutters(resources.displayMetrics.density)
     private val path = Path()
 
     private var nodes: List<Node> = emptyList()
@@ -174,7 +175,7 @@ class SweepLatticeView @JvmOverloads constructor(
         placed.clear()
         if (nodes.isEmpty() || columns.isEmpty()) return
 
-        val gutters = SweepLatticeGutters(resources.displayMetrics.density, compact)
+        gutters.compact = compact
         if (!gutters.frame(frame, textPaint, yTickLabels, width, height)) return
         val left = frame.left
         val right = frame.right

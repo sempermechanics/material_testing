@@ -10,7 +10,10 @@ import android.graphics.RectF
  * bottom one a row of x labels, and in [compact] mode the top one the y title.
  * At font scale 1.0 the gutters are the view's old fixed ones.
  */
-internal class SweepLatticeGutters(private val density: Float, private val compact: Boolean) {
+internal class SweepLatticeGutters(private val density: Float) {
+
+    /** The view's compact mode, set before each [frame]. */
+    var compact: Boolean = false
 
     /** Sets [out] to the plot area of a [w] x [h] view; false when none is left. */
     fun frame(out: RectF, paint: Paint, yLabels: List<String>, w: Int, h: Int): Boolean {
