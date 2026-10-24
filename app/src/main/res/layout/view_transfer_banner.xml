@@ -131,7 +131,7 @@
         android:gravity="center"
         android:paddingTop="4dp"
         android:textColor="@color/text_secondary"
-        android:textSize="11sp"
+        android:textSize="@dimen/text_caption"
         android:visibility="gone"
         tools:text="2 / 3"
         tools:visibility="visible" />

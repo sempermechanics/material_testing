@@ -30,7 +30,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
             android:textColor="@color/text_secondary"
-            android:textSize="11sp"
+            android:textSize="@dimen/text_caption"
             tools:text="Terms version 2026-09-15" />
 
         <TextView

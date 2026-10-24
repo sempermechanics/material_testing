@@ -25,7 +25,7 @@
         android:background="@drawable/bg_frame_order_badge"
         android:gravity="center"
         android:textColor="@color/text_on_primary"
-        android:textSize="11sp"
+        android:textSize="@dimen/text_caption"
         android:textStyle="bold"
         tools:text="1" />
 </FrameLayout>
