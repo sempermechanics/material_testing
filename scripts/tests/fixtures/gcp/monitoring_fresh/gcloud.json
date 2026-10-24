@@ -16,6 +16,14 @@
   },
   {
     "match": [
+      "api-gateway",
+      "gateways",
+      "describe"
+    ],
+    "stdout": "semper-gw-abc.an.gateway.dev\n"
+  },
+  {
+    "match": [
       "auth",
       "print-access-token"
     ],

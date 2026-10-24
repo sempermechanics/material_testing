@@ -328,7 +328,7 @@ def test_monitoring_policies_are_well_formed(tmp_path):
         for cond in policy["conditions"]:
             threshold = cond["conditionThreshold"]["thresholdValue"]
             assert isinstance(threshold, (int, float)), path.name
-    assert len(names) == 8, "display names identify policies on update, so they must be unique"
+    assert len(names) == len(_POLICIES), "display names identify policies on update, so they must be unique"
     activation = json.loads((out / "policies" / "activation-anomaly.json").read_text(encoding="utf-8"))
     assert activation["conditions"][0]["conditionThreshold"]["thresholdValue"] == 7
     auth = json.loads((out / "policies" / "auth-denied-spike.json").read_text(encoding="utf-8"))
@@ -354,7 +354,9 @@ def test_monitoring_apply_creates_then_updates(tmp_path):
     assert "curl POST https://monitoring.googleapis.com/v3/projects/demo-app-prod/uptimeCheckConfigs" in text
     assert "services?serviceId=semper-api" in text
     assert "serviceLevelObjectives?serviceLevelObjectiveId=availability-995" in text
-    assert text.count("policies create") == 8
+    assert text.count("policies create") == len(_POLICIES)
+    assert text.count("curl POST https://monitoring.googleapis.com/v3/projects/demo-app-prod/uptimeCheckConfigs") \
+        == len(_UPTIME)
     assert text.count("monitoring dashboards create") == len(_DASHBOARDS)
     assert "monitoring dashboards update" not in text
     uptime = json.loads((tmp_path / "a" / "policies" / "uptime-readyz.json").read_text(encoding="utf-8"))
@@ -370,7 +372,7 @@ def test_monitoring_apply_creates_then_updates(tmp_path):
     assert again.returncode == 0, again.stdout + again.stderr
     text = "\n".join(calls)
     assert "metrics create" not in text and text.count("logging metrics update") == len(_METRICS)
-    assert "policies create" not in text and text.count("policies update") == 8
+    assert "policies create" not in text and text.count("policies update") == len(_POLICIES)
     assert "curl PATCH" in text and "curl POST" not in text
     assert "dashboards create" not in text and text.count("monitoring dashboards update") == len(_DASHBOARDS)
     # Each existing dashboard was updated by its own name with the etag it was
@@ -385,9 +387,93 @@ def test_monitoring_apply_creates_then_updates(tmp_path):
         assert board["mosaicLayout"]["tiles"], board["displayName"]
 
 
+def _policy_texts() -> dict[str, str]:
+    return {p.stem: p.read_text(encoding="utf-8") for p in sorted((_MON / "policies").glob("*.json"))}
+
+
+@pytest.mark.parametrize(("metric", "label_filter"), [
+    ("semper_revocation_check_failed", None),
+    ("semper_auth_denied", 'metric.label.stage=\\"app_check\\"'),
+    ("semper_devlock_drop", 'metric.label.stage=\\"mismatch\\"'),
+    ("semper_activation", 'metric.label.outcome=\\"refused\\"'),
+    ("semper_checkout", 'metric.label.outcome=\\"refused\\"'),
+])
+def test_halt_and_runbook_signals_have_an_alert(metric, label_filter):
+    """TE6-002: RELEASING's halt criteria and INCIDENT_RESPONSE name these
+    signals; each had a dashboard and no alert policy."""
+    hits = [name for name, text in _policy_texts().items()
+            for f in _filters(json.loads(text))
+            if f'logging.googleapis.com/user/{metric}\\"' in json.dumps(f["filter"])
+            and (label_filter is None or label_filter in json.dumps(f["filter"]))]
+    assert hits, f"no policy alerts on {metric} {label_filter or ''}"
+
+
+def test_checkout_refusal_alert_leaves_out_a_full_pool():
+    """`no_floating_seat` is a full pool, not an error (RELEASING halt criteria)."""
+    text = _policy_texts()["licensing-refusals"]
+    assert 'metric.label.errorCode!=\\"no_floating_seat\\"' in text
+
+
+def test_every_policy_runbook_anchor_exists():
+    """Each policy's documentation names a README section; it must exist."""
+    readme = (_MON / "README.md").read_text(encoding="utf-8")
+    headings = set(re.findall(r"^### ([a-z0-9-]+)$", readme, re.MULTILINE))
+    for name, text in _policy_texts().items():
+        anchors = re.findall(r"ops/monitoring/README\.md#([a-z0-9-]+)", text)
+        assert anchors, f"{name}: no runbook link"
+        assert set(anchors) <= headings, f"{name}: {set(anchors) - headings} not a README heading"
+
+
+def test_gateway_is_probed_from_outside(tmp_path):
+    """TE6-003: uptime and SLO watched the private run.app service only; the
+    path users take is API Gateway. /healthz (no JWT, security: []) goes
+    through to the backend with the gateway's SA; /v1/config without a token
+    is ESPv2's 401, and a 404 there is a route the config dropped."""
+    out = _dry_render(tmp_path, "--gateway-host", "semper-gw-x.an.gateway.dev")
+    healthz = json.loads((out / "uptime" / "gateway-healthz.json").read_text(encoding="utf-8"))
+    config = json.loads((out / "uptime" / "gateway-config.json").read_text(encoding="utf-8"))
+    for check, path in ((healthz, "/healthz"), (config, "/v1/config")):
+        assert check["monitoredResource"]["labels"]["host"] == "semper-gw-x.an.gateway.dev"
+        assert check["httpCheck"]["path"] == path and check["httpCheck"]["useSsl"] is True
+        # The gateway is public: no OIDC token, unlike the run.app check.
+        assert "serviceAgentAuthentication" not in check["httpCheck"]
+    assert healthz["httpCheck"]["acceptedResponseStatusCodes"] == [{"statusClass": "STATUS_CLASS_2XX"}]
+    assert config["httpCheck"]["acceptedResponseStatusCodes"] == [{"statusValue": 401}]
+    policy = json.loads((out / "policies" / "uptime-gateway.json").read_text(encoding="utf-8"))
+    filters = [c["conditionThreshold"]["filter"] for c in policy["conditions"]]
+    assert len(filters) == 2 and all("uptime_check/check_passed" in f for f in filters)
+    assert policy["severity"] == "CRITICAL"
+
+
+def test_monitoring_apply_looks_up_the_gateway_host(tmp_path):
+    proc, calls = _run(tmp_path, _APPLY, "monitoring_fresh", "--project", "demo-app-prod",
+                       "--notification-channel", "123", "--apply", "--out", str(tmp_path / "a"))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert any(c.startswith("gcloud api-gateway gateways describe semper-gw --location asia-northeast1")
+               for c in calls), calls
+    check = json.loads((tmp_path / "a" / "uptime" / "gateway-config.json").read_text(encoding="utf-8"))
+    assert check["monitoredResource"]["labels"]["host"] == "semper-gw-abc.an.gateway.dev"
+
+
+def test_monitoring_new_thresholds_come_from_flags(tmp_path):
+    out = _dry_render(tmp_path, "--devlock-mismatches-per-licence-per-hour", "9",
+                      "--licensing-refusals-per-hour", "33")
+    devlock = json.loads((out / "policies" / "devlock-mismatch.json").read_text(encoding="utf-8"))
+    assert devlock["conditions"][0]["conditionThreshold"]["thresholdValue"] == 9
+    assert devlock["conditions"][0]["conditionThreshold"]["aggregations"][0]["groupByFields"] == \
+        ["metric.label.licenseId"]
+    refusals = json.loads((out / "policies" / "licensing-refusals.json").read_text(encoding="utf-8"))
+    assert [c["conditionThreshold"]["thresholdValue"] for c in refusals["conditions"]] == [33, 33]
+    proc, _ = _run(tmp_path, _APPLY, "monitoring_fresh", "--project", "demo-app-prod", "--notification-channel", "1",
+                   "--licensing-refusals-per-hour", "many")
+    assert proc.returncode == 2
+
+
 # --- dashboards -------------------------------------------------------------
 
 _METRICS = sorted(p.stem for p in (_MON / "metrics").glob("*.yaml"))
+_POLICIES = sorted((_MON / "policies").glob("*.json"))
+_UPTIME = sorted((_MON / "uptime").glob("*.json"))
 _DASHBOARDS = sorted((_MON / "dashboards").glob("*.json"))
 _USER_METRIC = re.compile(r'logging\.googleapis\.com/user/([A-Za-z0-9_]+)')
 

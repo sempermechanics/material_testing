@@ -152,8 +152,9 @@ drill passed with an import RTO of 111 s
 
 ## Runbook: App Check enforcement rollback
 
-Symptom: the `auth-denied-spike` alert with `stage="app_check"`, or users of a
-genuine build refused with `app_check_required`.
+Symptom: the `app-check-refused` alert (any `AUTH_DENIED` with
+`stage="app_check"` in 10 min; `auth-denied-spike` fires only above its total
+threshold), or users of a genuine build refused with `app_check_required`.
 
 1. Set the repo variable `APP_CHECK_MODE` to `monitor` (or `off`) and redeploy
    (`.github/workflows/deploy-backend.yml:324`). For speed, `gcloud run services

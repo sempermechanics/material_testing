@@ -140,9 +140,12 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       project has **none** of these today, and **no notification channel** in either
       project, so `--apply` first needs a channel created
       (`gcloud beta monitoring channels create`, email to the on-call address).
-- [ ] The same with `--apply`: log metrics, uptime check, SLO and burn-rate
-      alerts, four dashboards; then the `run.invoker` grant for the Monitoring
-      service agent that the script prints under "By hand, once".
+- [ ] The same with `--apply`: log metrics, the three uptime checks (`/readyz`,
+      and since TE6-003 the gateway's `/healthz` and `/v1/config`), SLO, the alert
+      policies (13 since TE6-002 / TE6-003: App Check refusals, revocation-check
+      failures, device-lock mismatches, licensing refusals and the gateway path
+      were added), four dashboards; then the `run.invoker` grant for the
+      Monitoring service agent that the script prints under "By hand, once".
 - [x] `scripts/check_gcp_posture.sh` against both projects, with
       `--backup-bucket <FIRESTORE_BACKUP_BUCKET>`; record the output in
       [PRODUCTION_READINESS_GATE.md](PRODUCTION_READINESS_GATE.md). Done 2026-10-22
