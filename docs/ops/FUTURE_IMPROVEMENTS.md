@@ -253,7 +253,7 @@ seat revoke (`DELETE …/seats/{uid}`, `roster.py:368`) plus refresh-token revoc
 **Framework** 5.2; Part C "Console essentials" (role management).
 
 **Now.** Two roles, each all-or-nothing. Semper staff are `role: admin` or listed
-in `ADMIN_EMAILS` (`backend/app/deps.py:333-344`). Institution IT is any verified
+in `ADMIN_EMAILS` (`backend/app/deps.py:339-350`). Institution IT is any verified
 address in the licence's `adminEmails` (`backend/app/routers/institutions.py:53`),
 and every such address may read, add, hold, remove, import and export
 (`backend/app/routers/roster.py:104-382`, mounted for IT at
@@ -312,7 +312,7 @@ online; ≤ grace period offline')."
 **Now.** The release gate is per app but not per institution:
 `MIN_SUPPORTED_VERSION_CODE` / `RECOMMENDED_VERSION_CODE` for Semper and the
 `_MATERIAL_TESTING` pair for Material Testing (`settings.release_gate(app)`,
-`backend/app/config.py:286-300`) go into every `/v1/config` answer for that app
+`backend/app/config.py:307-321`) go into every `/v1/config` answer for that app
 (`backend/app/routers/account.py:145-172`), and the app gates
 itself (`VersionGate.decide`,
 `app/src/main/java/com/sempermechanics/semper/data/policy/VersionGate.kt:33`).

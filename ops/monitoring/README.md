@@ -68,7 +68,7 @@ writes: `activation`, `checkout` and `devlock_drop` come with the licensing
 observability change, `audit_write_failed` with the audit change, and
 `semper_auth_denied` with the change that makes `audit.record()` log an
 `audit_denied` line (with `action` and `stage`) for every DENIED row as well as
-writing it to Firestore (`backend/app/audit.py:64-69`), and
+writing it to Firestore (`backend/app/audit.py:84-89`), and
 `semper_auth_admin_rate_limited` with the change that logs `auth_admin_rate_limited`
 from `backend/app/google_auth.py`. Until the backend that writes a line is deployed,
 its alert stays quiet and its chart flat, which is not the same as healthy.

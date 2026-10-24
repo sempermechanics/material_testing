@@ -71,7 +71,7 @@ it cannot license a device the backend never licensed.
 1. **Stop issuing with the key.** Clear the lever variable
    `ENTITLEMENT_SIGNING_SECRET` (on the `production` environment and the
    repository: [RELEASING.md](RELEASING.md), Lever variable scope) and redeploy (`deploy-backend.yml` mounts the key
-   only when it is set, `.github/workflows/deploy-backend.yml:258-278`). `/v1/config`
+   only when it is set, `.github/workflows/deploy-backend.yml:266-286`). `/v1/config`
    then carries no `entitlement`, and every app that receives that answer forgets
    its token (`EntitlementPolicy.intake` answers CLEAR, `EntitlementPolicy.kt:151-156`)
    and runs on the cached config as before tokens.
@@ -150,7 +150,7 @@ drill passed with an import RTO of 111 s
 3. **Stop writers** while copying back: set `KILL_SWITCHES="backup restore upload"`
    and redeploy, so phones queue instead of writing. The backend refuses new
    backups, their completion, restores and downloads with 503 `feature_paused`
-   for every build (`backend/app/deps.py:295-330`); deletes
+   for every build (`backend/app/deps.py:301-336`); deletes
    (`DELETE /v1/sessions/{sid}`), metadata updates and sign-ins still write.
 4. Record the RTO, recovery point and verification in the gate.
 
@@ -163,7 +163,7 @@ threshold), or users of a genuine build refused with `app_check_required`.
 1. Set the lever variable `APP_CHECK_MODE` to `monitor` (or `off`) on the
    `production` environment (`gh variable set APP_CHECK_MODE --env production`;
    [RELEASING.md](RELEASING.md), Lever variable scope) and redeploy
-   (`.github/workflows/deploy-backend.yml:324`). For speed, `gcloud run services
+   (`.github/workflows/deploy-backend.yml:348`). For speed, `gcloud run services
    update semper-api --update-env-vars APP_CHECK_MODE=monitor --region asia-south1
    --project indicvision-dic-app` first; the variable must change too, or the next
    deploy re-applies `enforce`. If traffic is pinned by a revision rollback, that

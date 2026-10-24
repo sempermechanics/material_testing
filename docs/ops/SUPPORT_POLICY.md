@@ -37,7 +37,7 @@ days (`ops/monitoring/slo/availability.json`); an internal objective, not an SLA
 - **Supported:** the current release and the two releases before it.
 - **Enforced** through `MIN_SUPPORTED_VERSION_CODE` on the backend for Semper, and
   `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` for Material Testing, whose builds are
-  numbered separately (`settings.release_gate(app)`, `backend/app/config.py:286-300`;
+  numbered separately (`settings.release_gate(app)`, `backend/app/config.py:307-321`;
   each app receives only its own pair on `/v1/config`): a build below it keeps the session list, the viewer
   and exports, and cannot start a new analysis, upload or restore
   (`app/src/main/java/com/sempermechanics/semper/data/policy/FeatureGates.kt:34-40`).

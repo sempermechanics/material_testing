@@ -31,7 +31,7 @@ material_testing: any Hosting deploy replaces the whole site.
 - [ ] **New-device mail (TD-295, TD-309)**, optional, and only once #457 is merged.
       Verify a sender in Resend (for example `Semper security <security@yourdomain.com>`),
       then set the repo variable `NOTIFY_SECURITY_FROM` (the workflow passes it since
-      `a02ef2f`, `deploy-backend.yml:332`) and redeploy. Unset, that mail is off and the
+      `a02ef2f`, `deploy-backend.yml:340`) and redeploy. Unset, that mail is off and the
       access-request mail is unaffected ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md)).
 
 - [x] **Test accounts ([ADR-027](../adr/ADR-027-test-accounts.md))**, optional, and
