@@ -235,7 +235,7 @@ def test_check_fails_when_a_page_is_missing(legal, tree, monkeypatch, capsys):
 
 
 def test_this_checkout_is_in_sync_as_ci_checks():
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603 - argv is sys.executable and this repo's own script, no shell
         [sys.executable, str(_SCRIPT), "--check"],
         capture_output=True, text=True, encoding="utf-8", cwd=_REPO,
     )

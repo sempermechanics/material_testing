@@ -82,7 +82,7 @@ def _roster(store, lid="lic-1", uids=("u3", "u1", "u5", "u2", "u4")):
 def test_institution_seat_is_the_roster_row_or_none(store):
     _roster(store)
     store._data["licenses/lic-1/seats"]["u1"].update(
-        status="disabled", leaseExpiresAt="later", secret="x")
+        status="disabled", leaseExpiresAt="later", secret="x")  # noqa: S106 - a field that must be dropped
     seat = repo.institution_seat("lic-1", "u1")
     assert seat["uid"] == "u1" and seat["email"] == "u1@uni.edu"
     assert seat["deviceIdLock"] == "dev-u1"

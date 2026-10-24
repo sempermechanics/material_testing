@@ -81,7 +81,9 @@ IMPORT_OUTCOMES = ("seated", "invited", "exists", "duplicate", "invalid", "refus
 class RosterImport(BaseModel):
     """A bulk roster import: the CSV file's text (see `roster_io.parse_import`)."""
     model_config = ConfigDict(extra="forbid")
-    csv: str = Field(min_length=1, max_length=roster_io.MAX_IMPORT_CHARS)
+    # No max_length: an oversized file is `roster_import_too_large` from
+    # `parse_import`, a code the console words, not a validator sentence.
+    csv: str = Field(min_length=1)
 
 
 def _attachment(name: str, license_id: str) -> str:
@@ -188,9 +190,8 @@ def roster_router(tier: Tier) -> APIRouter:
         try:
             rows = roster_io.parse_import(body.csv)
         except roster_io.RosterRefused as e:
-            raise HTTPException(
-                413 if e.code == errors.ROSTER_IMPORT_TOO_MANY_ROWS else 400, e.code,
-            ) from e
+            too_big = e.code in (errors.ROSTER_IMPORT_TOO_MANY_ROWS, errors.ROSTER_IMPORT_TOO_LARGE)
+            raise HTTPException(413 if too_big else 400, e.detail) from e
         on_roster = roster_io.roster_addresses(
             repo.list_institution_seats(license_id), repo.list_institution_invites(license_id),
         )

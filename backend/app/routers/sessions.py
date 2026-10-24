@@ -136,7 +136,9 @@ def delete_session(sid: SessionId, ctx=Depends(verified_device)):
     return {"deleted": sid, "filesRemoved": removed}
 
 
-@router.get("/v1/sessions/{sid}/uploads", dependencies=[rate_limited(rate_limit.listing_bucket)])
+@router.get("/v1/sessions/{sid}/uploads", dependencies=[
+    rate_limited(rate_limit.listing_bucket), unless_paused("upload", "backup"),
+])
 def session_uploads(
     sid: SessionId,
     page_size: int = 1000,
@@ -217,7 +219,9 @@ _METADATA_MAX_BYTES = 256 * 1024
 _METADATA_SCHEMA_PREFIX = "indic.session.metadata/"
 
 
-@router.put("/v1/sessions/{sid}/metadata", dependencies=[rate_limited(rate_limit.session_bucket)])
+@router.put("/v1/sessions/{sid}/metadata", dependencies=[
+    rate_limited(rate_limit.session_bucket), unless_paused("upload", "backup"),
+])
 def replace_session_metadata(sid: SessionId, payload: dict = Body(...), ctx=Depends(verified_device)):
     """Replace a backed-up analysis's metadata.json with the app's current one.
 
