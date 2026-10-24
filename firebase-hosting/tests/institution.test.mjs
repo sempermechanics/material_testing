@@ -366,6 +366,7 @@ test("a refused seat change is explained", async () => {
     ["seat_revoked", "That member was removed. Add their address again to restore them."],
     ["license_revoked", "This licence has been revoked, so its seats cannot be changed.", 403],
     ["seat_busy", "That seat changed while you were acting on it. Try again."],
+    ["seat_not_found", "That member is no longer on this licence. Reload to see the roster.", 404],
     ["strange", "Could not complete that: strange"],
   ];
   for (const [code, text, httpStatus = 409] of cases) {

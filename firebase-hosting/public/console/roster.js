@@ -125,6 +125,7 @@ const ACT_ERRORS = {
   seat_revoked: "That member was removed. Add their address again to restore them.",
   license_revoked: "This licence has been revoked, so its seats cannot be changed.",
   seat_busy: "That seat changed while you were acting on it. Try again.",
+  seat_not_found: "That member is no longer on this licence. Reload to see the roster.",
 };
 
 /**
