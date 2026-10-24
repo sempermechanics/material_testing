@@ -25,6 +25,7 @@ secret-scan ──────────────────────�
 engine-pin ──────────────────────────────┤
 legal-pages ─────────────────────────────┤
 console-pages ───────────────────────────┤
+console-a11y ────────────────────────────┤
 changes ──┬──> tier1-app-fast ───────────┤
           ├──> tier3-emulator-e2e (*) ───┤
           ├──> tier4-backend ────────────┤
@@ -44,7 +45,8 @@ changes ──┬──> tier1-app-fast ───────────┤
 | `secret-scan` | gitleaks (see below) | No — always runs | ~1–2 min |
 | `engine-pin` | `scripts/check_engine_pin.py`: the `engine` gitlink points at a `v*` tag of the engine repository and, when it changed, descends from the previous pin (`HEAD^1`); the PR label `engine-downgrade` allows a backwards or sideways move (read at run time: re-run the job after adding it) (TE2-006) | No — always runs | seconds |
 | `legal-pages` | `scripts/render_legal_pages.py --check`: the published pages still match `docs/legal/`; `scripts/check_doc_paths.py`: every path a doc names exists; `scripts/check_framework_coverage.py`: every readiness-framework item (`docs/ops/READINESS_FRAMEWORK_2026-10.md`) has a row in the gate's cross-check, every open row an owner that exists in TECH_DEBT or FUTURE_IMPROVEMENTS, and every status count written in that section matches its table (TE6-012); `scripts/check_kotlin_file_size.py`: no main Kotlin file over ADR-015's 500-line budget, fused hot loops not counted, the exceptions and their ceilings in `scripts/kotlin_file_size_allowlist.txt` (TD-292); `scripts/check_activity_scope_work.py`: no network call or WorkManager enqueue launched on a screen's `lifecycleScope` (ADR-016 rule 1), the triaged exceptions in `scripts/activity_scope_allowlist.txt` (TD-291); `scripts/check_swallowed_cancellation.py`: no broad catch or `runCatching` around a suspend call in `app/src/main` that swallows `CancellationException` (ADR-018), the triaged exceptions in `scripts/swallowed_cancellation_allowlist.txt` (TD-171); then the stdlib `unittest` suites in `scripts/tests` that test these source checks | No — always runs | seconds |
-| `console-pages` | `scripts/check_console.py`: the consoles' wiring, CSP, deploy placeholders and gateway paths — their only gate, since they have no compiler — plus `node --test`: the DOM-free `console/util.js`, `auth.js` (sign-in, second factor, step-up, `api`, revoke gate), `router.js`, and the operator, account and institution pages, against a fake Firebase SDK loaded through a `module.register` hook and a DOM parsed from the real pages (`firebase-hosting/tests/harness.mjs`), with line coverage of the console's JS gated at 96 % by `scripts/console_coverage.mjs` (merged by file from the raw V8 coverage; every `.js` under `public/` but `vendor/`). | No — always runs | seconds |
+| `console-pages` | `scripts/check_console.py`: the consoles' wiring, CSP, deploy placeholders and gateway paths — their only gate, since they have no compiler — plus `node --test`: the DOM-free `console/util.js`, `auth.js` (sign-in, second factor, step-up, `api`, revoke gate), `router.js`, and the operator, account and institution pages, against a fake Firebase SDK loaded through a `module.register` hook and a DOM parsed from the real pages (`firebase-hosting/tests/harness.mjs`), with line coverage of the console's JS gated at 96 % by `scripts/console_coverage.mjs` (merged by file from the raw V8 coverage; every `.js` under `public/` but `vendor/`). Its check 13 fails when a code a console route names in `backend/app/routers/` has no words on the page that calls it (readiness AE2-006). | No — always runs | seconds |
+| `console-a11y` | The console pages in Chromium (`firebase-hosting/tests/a11y`, `npm run test:a11y`: `@playwright/test` and `@axe-core/playwright`, pinned in `firebase-hosting/package-lock.json`) against a stub API and the fake Firebase SDK, no network: zero serious or critical axe violations (WCAG 2.1 A/AA) on six page states at 360, 768 and 1280 px, no sideways page scroll, a confirmation card named, Escape closing it and focus returned (readiness AE2-001). The Playwright report uploads as `console-a11y-report` on a failure | No — always runs | not timed yet (its first CI run is the readiness PR) |
 | `changes` | Resolves path filters + PR/main/Dependabot mode into tier flags | — | seconds |
 | `tier1-app-fast` | spotless, detekt, lint, JVM unit tests, `compileReleaseKotlin`, the androidTest and `:benchmark` sources compile, Kover coverage log + `koverVerify` floor. Failing tests are printed by `scripts/ci_test_report.py`, and a test JVM that exits with no failing test by `scripts/ci_test_crash_report.py` (its crash file, heap dump, GC log, last classes and output, TD-312); JUnit XML, the Kover XML/HTML and `app/build/test-crash/` upload as `app-unit-tests-and-coverage` | `app` (PR); always on `main` push | ~5–8 / ~10 min |
 | `tier3-emulator-e2e` | x86_64 emulator: the whole androidTest suite except `com.sempermechanics.semper.benchmark` (those need the `benchmark` job) — `EnginePipelineSmokeTest` through the JNI, `AnalysisWizardSmokeTest`, the device tests, and `FirebaseAuthIntegrationTest` signing the CI test account in to the app's Firebase project (secrets `FIREBASE_TEST_EMAIL` / `FIREBASE_TEST_PASSWORD`; it skips without them) | `emulator`: engine / JNI / native-CI actions, labels, weekly | ~20–40 / ~60–90 min |
@@ -144,7 +146,7 @@ was deleted; the setting stays so the next one holds. Under the default
 A push to `main` filters against `github.event.before` (the previous `main`
 head), so a merge commit is judged by its whole PR. One with no base (a zero
 `before`) runs the full matrix. Empty path outputs otherwise fail **closed** to
-gates-only (`secret-scan` + `engine-pin` + `legal-pages` + `console-pages` + `ci-ok`), not a
+gates-only (`secret-scan` + `engine-pin` + `legal-pages` + `console-pages` + `console-a11y` + `ci-ok`), not a
 full matrix.
 
 ### Dependabot cheap path
@@ -179,8 +181,8 @@ That push uses `GITHUB_TOKEN`, which starts no CI run, so re-run the PR's checks
 afterwards (the status stays on the old commit until you do). See
 [RELEASING.md](RELEASING.md) § Bumping backend dependencies.
 
-`secret-scan`, `engine-pin`, `legal-pages` and `console-pages` are absent from the tables on
-purpose: they carry no path filter and run on every event.
+`secret-scan`, `engine-pin`, `legal-pages`, `console-pages` and `console-a11y` are absent from
+the tables on purpose: they carry no path filter and run on every event.
 
 Skipped jobs count as success for `ci-ok`.
 
@@ -225,6 +227,7 @@ python scripts/check_swallowed_cancellation.py                             # leg
 python -m unittest discover -s scripts/tests -p "test_*.py"               # legal-pages
 python scripts/check_console.py                                             # console-pages
 node --test "firebase-hosting/tests/*.test.mjs"                             # console-pages
+cd firebase-hosting && npm ci && npx playwright install chromium && npm run test:a11y  # console-a11y
 gitleaks detect --config .gitleaks.toml                                     # secret-scan (human)
 ```
 

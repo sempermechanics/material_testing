@@ -54,6 +54,14 @@ has it. A field removed or renamed on either side fails one of the two suites;
 change the client first, since installed builds keep reading the old name. The
 `app` and `backend` CI filters both include `contracts/**`.
 
+The backend's whole request surface is pinned too, in
+`backend/contracts/app-openapi.json` ([ADR-029](../adr/ADR-029-api-contract-snapshot.md)):
+`backend/tests/test_openapi_snapshot.py` fails, printing the diff, when the app's
+OpenAPI document changes. After a deliberate change, rewrite it with
+`UPDATE_OPENAPI_SNAPSHOT=1 python -m pytest tests/test_openapi_snapshot.py` (from
+`backend/`) and review the diff in the PR. No route declares a response model, so
+responses are pinned only by the fixtures above.
+
 ## Shared fixtures
 
 Reach for these before writing a local helper; each replaced several
@@ -402,6 +410,7 @@ python scripts/check_kotlin_file_size.py                   # ADR-015's 500-line 
 python scripts/check_activity_scope_work.py                # ADR-016 rule 1 on screens' lifecycleScope (TD-291)
 python scripts/check_swallowed_cancellation.py            # ADR-018: cancellation rethrown around suspend calls (TD-171)
 python -m unittest discover -s scripts/tests -p "test_*.py"
+python scripts/check_engine_pin.py                         # its own always-on job, engine-pin (TE2-006)
 ```
 
 `check_kotlin_file_size.py` does not count the fused hot-loop functions

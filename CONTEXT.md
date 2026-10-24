@@ -154,9 +154,15 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   counsel on the Terms (TD-277).
 - **material_testing** merges this `main` (last `968637cb`, material_testing#144, 2026-10-22;
   [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); it released `v1.4-beta.2` 2026-10-17.
+- **Readiness run 2026-10-24** (`claude/readiness-20261024-merge`, not merged or deployed):
+  backend fixes waiting on a deploy (the lock's pyjwt/urllib3/certifi bump, kill switches on
+  `GET …/uploads` and `PUT …/metadata`, an audit-history outage as 503, the `/readyz` budget,
+  `--no-access-log`, the roster import codes, the quota wording); the deploy is the Admin's.
 - **CI.** Tiers follow the diff, coverage floors rise with every test PR
   ([TESTING.md](docs/app/TESTING.md#coverage-floors)), and `main` requires `CI OK`. Tier 3 signs
-  in to live staging, so a staging backend behind `main` fails it.
+  in to live staging, so a staging backend behind `main` fails it. Always-on gates now include
+  `engine-pin` and `console-a11y` (axe + Playwright); `engine-host-sanitized` follows Tier 3.
+  The backend's OpenAPI snapshot is rewritten with `UPDATE_OPENAPI_SNAPSHOT=1` ([ADR-029](docs/adr/ADR-029-api-contract-snapshot.md)).
 - **Owed.** A device smoke of the next release ([RELEASING.md](docs/ops/RELEASING.md) step 5);
   the on-device characterization at the 0.6.1 pin (TD-212); Pixel 6 benchmarks for #435;
   ADR-015's queued-work upgrade check; transfer notifications and AVI import on a device
