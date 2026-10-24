@@ -451,6 +451,15 @@ table.test-accounts td.account { min-width: 16rem; overflow-wrap: break-word; }
   table.test-accounts td.account, table.licences td:nth-child(8) { white-space: nowrap; }
 }
 
+/* Tablet: a row's buttons wrap inside their cell (New device over Pause and
+   Remove) rather than run the Actions column past the card's edge, where
+   Remove was out of sight until the table was scrolled (AE2V-001). */
+@media (min-width: 601px) and (max-width: 900px) {
+  td.actions { white-space: normal; }
+  td.actions > button, td.actions > details.more { margin: .15rem 0 .15rem .4rem; }
+  td.actions .secondary + .danger { margin-left: .4rem; }
+}
+
 /* Phone. The header keeps to two rows: the brand, the page, who is signed in
    (cut short if long) and Sign out; then the dashboard switch, full width.
    The brand is its mark alone here: with the word beside it, a page named

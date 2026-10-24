@@ -75,3 +75,20 @@ test("an in-page confirmation card passes axe and takes focus (institution, Remo
   await context.close();
 });
 
+// AE2V-001: at tablet width the roster's Actions cell ran past its scrolling
+// wrapper, so Pause (then "Hold") and Remove were out of sight until the table
+// was scrolled. Measured on a row with all three buttons and a held lease.
+test("every roster action is in view at 768 px, without scrolling the table", async ({ browser }) => {
+  const { context, page } = await open(browser, PAGES[4], WIDTHS.tablet);
+  const outside = await page.evaluate(() => {
+    const wrap = document.querySelector("#rosterCard .wrap").getBoundingClientRect();
+    // A seat on a phone: the row with the most buttons (New device, Pause, Remove).
+    const row = document.querySelector('#rows button[data-act="clear"]').closest("tr");
+    return [...row.querySelectorAll("td.actions button")]
+      .map((b) => [b.textContent.trim(), b.getBoundingClientRect()])
+      .filter(([, r]) => r.left < wrap.left || r.right > wrap.right + 0.5)
+      .map(([name, r]) => `${name} at ${Math.round(r.left)}–${Math.round(r.right)}, wrapper ${Math.round(wrap.left)}–${Math.round(wrap.right)}`);
+  });
+  expect(outside).toEqual([]);
+  await context.close();
+});

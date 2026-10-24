@@ -67,12 +67,16 @@ const DEMO = {
   duration: "perpetual", createdByUid: "system", emailLock: "d@x.org",
 };
 
-/** 120 seats (some paused, some removed, some on a phone) and two invites: Show more is drawn. */
+/**
+ * 120 seats (some paused, some removed, every other one on a phone that holds
+ * its lease) and two invites: Show more is drawn, and a row has the longest
+ * cells the roster shows (a lease's date and time, a device id, three buttons).
+ */
 const SEATS = Array.from({ length: 120 }, (_, i) => ({
   uid: `u${i}`,
   email: `member${String(i).padStart(3, "0")}@uni.edu`,
   status: i % 17 === 3 ? "disabled" : i % 23 === 5 ? "revoked" : "active",
-  ...(i % 2 ? { deviceIdLock: `device-${i}-abcdef0123` } : {}),
+  ...(i % 2 ? { deviceIdLock: `device-${i}-abcdef0123`, leaseExpiresAt: day(5) } : {}),
 }));
 const ROSTER = {
   license: UNI, seats: SEATS, invites: [{ id: "i1", email: "new@uni.edu" }, { id: "i2", email: "later@uni.edu" }],

@@ -601,7 +601,8 @@ claim card), the institution roster (120 seats, so Show more is drawn) and the
 operator desk in Chromium at 360, 768 and 1280 px, and asserts that axe-core
 finds no serious or critical WCAG 2.1 A/AA violation, that no page scrolls
 sideways and that nothing throws. It also opens a confirmation card (role,
-name, focus in and back out on Escape). `tests/a11y/stub-site.mjs` serves `public/` on 127.0.0.1,
+name, focus in and back out on Escape) and checks that every roster action is
+in view at 768 px. `tests/a11y/stub-site.mjs` serves `public/` on 127.0.0.1,
 answers the gstatic SDK imports with the same fakes, answers the API (the
 `__API_BASE_URL__` placeholder stays, so calls are page-relative) from fixtures
 and refuses every other host. The only npm dependencies in the repository are
