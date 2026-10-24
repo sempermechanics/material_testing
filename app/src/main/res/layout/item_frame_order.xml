@@ -11,6 +11,7 @@
         android:id="@+id/imgFrameThumb"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:forceDarkAllowed="false"
         android:background="@color/surface_muted"
         android:contentDescription="@string/deformed_frames"
         android:scaleType="centerCrop" />

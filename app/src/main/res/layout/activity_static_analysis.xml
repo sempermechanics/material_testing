@@ -117,6 +117,7 @@
                                 android:id="@+id/imgRefThumb"
                                 android:layout_width="46dp"
                                 android:layout_height="46dp"
+                                android:forceDarkAllowed="false"
                                 android:background="@color/viewer_canvas"
                                 android:contentDescription="@string/reference_image_preview"
                                 android:scaleType="centerCrop" />

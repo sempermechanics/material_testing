@@ -71,6 +71,7 @@
                 android:id="@+id/roiThumb"
                 android:layout_width="72dp"
                 android:layout_height="48dp"
+                android:forceDarkAllowed="false"
                 android:contentDescription="@string/region_of_interest" />
 
             <LinearLayout
@@ -616,6 +617,7 @@
                         android:id="@+id/imgSweepFrame"
                         android:layout_width="72dp"
                         android:layout_height="48dp"
+                        android:forceDarkAllowed="false"
                         android:background="@color/surface_outline"
                         android:contentDescription="@string/sweep_frame_enlarge"
                         android:foreground="?attr/selectableItemBackground"

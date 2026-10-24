@@ -88,6 +88,7 @@
             android:id="@+id/imgSweepFramePreview"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:forceDarkAllowed="false"
             android:contentDescription="@string/sweep_frame"
             android:scaleType="fitCenter" />
 
