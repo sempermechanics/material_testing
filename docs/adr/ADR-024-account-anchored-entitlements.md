@@ -54,8 +54,11 @@ reachable from the environment this record was written in).
    still hides or pauses, because it says nothing about the licence.
 4. **Anything that touches the cloud is checked by the backend on every
    request** (below). The app's own gates are presentation.
-5. **Share runs only on the device**, so it relies on the signed token. A
-   modified APK can unlock it; that risk is accepted (TD-274).
+5. **Share runs only on the device**, so no server check guards it: it follows
+   the cached `/v1/config`, which a signed token can only narrow, never widen
+   ([ADR-023](ADR-023-signed-offline-entitlement.md) decision 7); with no token
+   (none is issued until TD-215) the cache alone decides. A modified APK can
+   unlock it; that risk is accepted (TD-274).
 6. **The demo cap stays "stored at once"** (deleting an analysis frees its
    place), by the product owner's choice, and is now counted per device as well
    as per account (TD-275). A phone staff or IT take off an account stops
@@ -143,13 +146,13 @@ licence or seat device lock and drops to Demo on a mismatch or revocation
 | Share (PNG, GIF, PDF, CSV, ZIP) | — | **No route.** The app checks the licence and the token (`LicenseEntitlements.shareLicensed`, `data/account/LicenseEntitlements.kt:85-86`; `ShareCenter.access`, `ui/viewer/share/ShareCenter.kt:208-209`) |
 
 **Kill switches are enforced, not only published.** `deps.unless_paused`
-(`backend/app/deps.py:295-330`) runs after the ID token and approval and before
+(`backend/app/deps.py:301-336`) runs after the ID token and approval and before
 the route's own parameters, so a paused request reads no record and, on a signed
 route, leaves its nonce unspent. The refusal is 503 `feature_paused` with
 `Retry-After: 300` (`:293`), logged `event="feature_paused"` with the switch and
 route template; `feature_paused` is in `CLIENT_BRANCHED`
 (`backend/app/errors.py:284-287`). `share` has no route and stays published only
-(`backend/app/config.py:305-317`). The app holds the work: an upload is
+(`backend/app/config.py:322-335`). The app holds the work: an upload is
 `UploadErrors.Kind.PAUSED` → retry (`data/cloud/UploadErrors.kt:60`;
 `data/cloud/UploadWorkOutcomes.kt:33`), a restore or download is
 `DownloadFailure.Paused` and says "paused", not "failed"

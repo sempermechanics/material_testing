@@ -1,0 +1,67 @@
+{
+  "displayName": "semper: licence activation or checkout refusals above __LICENSING_REFUSALS_PER_HOUR__ an hour",
+  "documentation": {
+    "content": "More than __LICENSING_REFUSALS_PER_HOUR__ refused licence activations, or refused seat checkouts other than a full pool (no_floating_seat), in an hour from one app build (appId, appVersion labels). Key guessing, or a release that breaks licensing; the errorCode label says which. Runbook: ops/monitoring/README.md#licensing-refusals",
+    "mimeType": "text/markdown"
+  },
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "activation refusals per build per hour > __LICENSING_REFUSALS_PER_HOUR__",
+      "conditionThreshold": {
+        "filter": "metric.type=\"logging.googleapis.com/user/semper_activation\" AND resource.type=\"cloud_run_revision\" AND metric.label.outcome=\"refused\"",
+        "aggregations": [
+          {
+            "alignmentPeriod": "3600s",
+            "perSeriesAligner": "ALIGN_DELTA",
+            "crossSeriesReducer": "REDUCE_SUM",
+            "groupByFields": [
+              "metric.label.appId",
+              "metric.label.appVersion"
+            ]
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": "__LICENSING_REFUSALS_PER_HOUR__",
+        "duration": "0s",
+        "trigger": {
+          "count": 1
+        }
+      }
+    },
+    {
+      "displayName": "checkout refusals (not no_floating_seat) per build per hour > __LICENSING_REFUSALS_PER_HOUR__",
+      "conditionThreshold": {
+        "filter": "metric.type=\"logging.googleapis.com/user/semper_checkout\" AND resource.type=\"cloud_run_revision\" AND metric.label.outcome=\"refused\" AND metric.label.errorCode!=\"no_floating_seat\"",
+        "aggregations": [
+          {
+            "alignmentPeriod": "3600s",
+            "perSeriesAligner": "ALIGN_DELTA",
+            "crossSeriesReducer": "REDUCE_SUM",
+            "groupByFields": [
+              "metric.label.appId",
+              "metric.label.appVersion"
+            ]
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": "__LICENSING_REFUSALS_PER_HOUR__",
+        "duration": "0s",
+        "trigger": {
+          "count": 1
+        }
+      }
+    }
+  ],
+  "alertStrategy": {
+    "autoClose": "86400s"
+  },
+  "severity": "WARNING",
+  "notificationChannels": [
+    "__NOTIFICATION_CHANNEL__"
+  ],
+  "userLabels": {
+    "app": "semper",
+    "managed_by": "ops-monitoring"
+  }
+}

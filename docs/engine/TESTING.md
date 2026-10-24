@@ -18,10 +18,14 @@ cmake --build build/engine-tests -j
 
 ## Where engine tests run in CI
 
-They do **not** run in this repository's `ci.yml`. Host builds, the DICe
-reference comparisons, AddressSanitizer/UndefinedBehaviorSanitizer and
-ThreadSanitizer suites all run in the engine repo's own CI, gating the tags
-this repo pins to.
+Host builds, the DICe reference comparisons, AddressSanitizer/UndefinedBehaviorSanitizer
+and ThreadSanitizer suites all run in the engine repo's own CI, gating the tags
+this repo pins to. This repo's `ci.yml` checks the pin is one of those tags
+(`engine-pin`, `scripts/check_engine_pin.py`: a `v*` tag, never backwards) and
+reruns the host suite under ASan+UBSan at the pinned commit
+(`engine-host-sanitized`, the engine CI's asan-ubsan configuration with system
+OpenCV) whenever Tier 3 runs. TSan, the C SDK smoke and the JNI adapter under a
+sanitizer run nowhere here.
 
 This repo's CI verifies that the pinned submodule still *links and behaves*:
 the arm64-v8a release build (R8, signed) in tier 5, and the x86_64 emulator run
@@ -30,6 +34,26 @@ Bumping the submodule pointer (the JNI adapter, `engine/adapters/android/`,
 is in it) — or changing `SemperNativeLib.kt` — triggers both, on the PR and again on the push to
 `main`. Tier 1 is the JVM suite only; it builds no native code. See
 [../ops/CI.md](../ops/CI.md).
+
+## Bumping the engine pin
+
+The bump PR does all of this:
+
+1. Pin a `v*` tag of the engine repo that descends from the current pin. CI's
+   `engine-pin` job fails otherwise; a deliberate downgrade carries the PR label
+   `engine-downgrade`.
+2. Find the engine CI run on the tag's commit (`gh run list -R
+   sempermechanics/semper-dic-engine --commit <sha>`); it must be green.
+3. Add the pin's rows to [VALIDATION.md](VALIDATION.md): the DICe rows from that
+   run, and the DIC Challenge and real-data rows, run by hand or marked
+   **Not recorded**.
+4. Let Tier 3 (`EnginePipelineSmokeTest`, x86_64), Tier 5 (arm64 release build)
+   and `engine-host-sanitized` pass on the PR; a gitlink change triggers all three.
+5. If numbers move, declare it against [ENGINE_APP_CONTRACT.md](ENGINE_APP_CONTRACT.md)
+   (below).
+6. Before the next release, run `EnginePipelineSmokeTest` on one arm64 device or
+   arm64 AVD ([RELEASING.md](../ops/RELEASING.md) step 5): no CI job runs the
+   solver on arm64.
 
 ## Changing engine behavior
 

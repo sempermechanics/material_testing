@@ -435,7 +435,8 @@ in `scripts/tests/fixtures/cancellation/`.
 ## What not to test here
 
 - Algorithm accuracy → the engine's own suite, which lives in the `engine/`
-  submodule and runs in the engine repo's CI, not here
+  submodule and runs in the engine repo's CI (this repo's `engine-host-sanitized`
+  job reruns its host suite under ASan+UBSan at the pin)
   ([docs/engine/TESTING.md](../engine/TESTING.md))
 - Backend API → backend pytest (`backend/tests/`)
 - Real Firebase Auth → `auth/FirebaseAuthIntegrationTest`: email/password

@@ -31,6 +31,14 @@ Check the R8 mapping reached Crashlytics (the release build uploads it); the wor
 - Beta builds are tagged `v<versionName>-beta.<n>` (e.g. `v1.0-beta.1`);
   stable releases are tagged `v<versionName>`.
 - `versionCode` increases for every release (the run number is monotonic).
+  It is monotonic only while `release.yml` keeps its identity: renaming or
+  re-creating the workflow restarts `run_number` at 1, so that change must
+  raise `RELEASE_CODE_BASE` past the last release's versionCode (1036 for
+  `v1.2-beta.4`).
+- The `version` input must read `v<major>.<minor>[.<patch>][-beta.<n>]`, and a
+  tag of that name that already exists must point at the commit being built
+  (`verify-tag`, [`scripts/check_release_tag.py`](../../scripts/check_release_tag.py));
+  a new tag is created at that commit by `publish` (`target_commitish`).
 - `main`'s CI also builds a `release-apk` signed with the release key, at
   **versionCode 1**, so it can never install over a release. Until 2026-10-01 it
   used CI's run number (671 by then, against the release workflow's 35), so a
@@ -47,7 +55,11 @@ Check the R8 mapping reached Crashlytics (the release build uploads it); the wor
    release from a **full-matrix** run. A push to `main` runs the emulator and
    release tiers only when its diff touches them, so dispatch **Actions → CI →
    Run workflow** on `main` with `full_ci` ticked (or use that commit's weekly
-   run, if it is the head).
+   run, if it is the head). The Release workflow enforces it: its `verify-ci`
+   job (`scripts/check_release_ci.py`) fails unless the latest check run of every
+   CI job on the commit passed, not skipped (secret scan, legal and console
+   pages, engine pin, tiers 1, 3, 4 and 5, Firestore rules, the sanitized
+   engine host tests, `CI OK`).
 3. **Tag and push** the commit you intend to release:
 
    ```bash
@@ -68,6 +80,12 @@ Check the R8 mapping reached Crashlytics (the release build uploads it); the wor
    ([CI.md](CI.md), Backend deploy).
 5. **Smoke the release build on a device** — clean install, sign in,
    run one analysis, confirm the session syncs and each share target works.
+   Then run the solver on the shipping ABI, which no CI job does (Tier 3 runs it
+   on x86_64 only, Tier 5 only builds arm64): on one arm64 phone or arm64 AVD,
+   with `ANDROID_SERIAL` set to it,
+   `./gradlew :app:connectedDebugAndroidTest -PabiFilters=arm64-v8a "-Pandroid.testInstrumentationRunnerArguments.class=com.sempermechanics.semper.pipeline.EnginePipelineSmokeTest"`.
+   Record the device, Android version, engine pin and result in the release's
+   [CHANGELOG.md](CHANGELOG.md) entry; a failure blocks the release.
 6. **Distribute publicly (manual)** — this workflow builds a signed APK and a
    GitHub Release in this repository, a pre-release on the `beta` channel. The
    repository is public, so that Release is downloadable by anyone, and it is
@@ -109,21 +127,29 @@ staged percentage never rises by itself.
 | 4 | 100 % | — |
 
 **Halt criteria.** Halt the rollout (Play Console → Release → Halt) when any of
-these holds for the new version. The numbers are starting values, to be tuned
-after the first rollouts:
+these holds for the new version. "The new version" is always the pair
+(appId, appVersion): Material Testing numbers its builds from its own counter, so
+a bare `appVersion` can match both apps. The numbers are starting values, to be
+tuned after the first rollouts:
 
 - **Crash-free users** below **99.5 %** (Crashlytics, the release's version) once at
   least 200 users run it, or a new crash cluster in licensing, upload or restore.
 - **User-perceived ANR rate** above **0.47 %**, Play's bad-behaviour threshold
   (Android vitals).
 - **Activation errors:** the share of `semper_activation` lines with
-  `outcome="refused"` on the new `appVersion` more than 5 points above the previous
-  version's 7-day share, with at least 20 attempts (`ops/monitoring/metrics/semper_activation.yaml`).
+  `outcome="refused"` on the new (appId, appVersion) more than 5 points above the
+  previous version's 7-day share, with at least 20 attempts (`ops/monitoring/metrics/semper_activation.yaml`).
   The same for `semper_checkout`, leaving out `no_floating_seat`, which is a full pool.
-- **Device-lock drops:** `semper_devlock_drop` with `stage="mismatch"` rising on the
-  new version.
-- **Refusals:** the `auth-denied-spike` alert, or any `AUTH_DENIED` with
-  `stage="app_check"` from the new version.
+  Both shares are charted per build on the `semper-licensing` dashboard.
+- **Device-lock drops:** `semper_devlock_drop` with `stage="mismatch"` on the new
+  (appId, appVersion): at least **10** in 24 h, and that 24 h count divided by the
+  stage's percentage more than **2** times the previous version's 7-day daily mean
+  divided by the rest (at 5 %: new ÷ 5 against previous ÷ 95). The
+  `devlock-mismatch` alert catches one licence looping sooner.
+- **Refusals:** the `auth-denied-spike` alert, or any `semper_app_check_failed`
+  line (`app_check_missing` or `app_check_invalid`) from the new (appId, appVersion).
+  The `AUTH_DENIED` metric carries only `stage`, so it cannot say which build was
+  refused; the `app-check-refused` alert fires on it for any build.
 - **Backend:** the `http-5xx-ratio` or `slo-burn-fast` alert while the rollout is
   under way.
 
@@ -132,21 +158,64 @@ That is why the levers below, not Play, are the rollback.
 
 ## Rollback levers
 
-Play cannot recall a build. In order of speed:
+Play cannot recall a build. In order of speed.
+
+**Which builds obey which lever.** The client half of the levers (the version
+gate `VersionGate`, `KillSwitch`, `FeatureLocks`, and `X-App-Version` on every
+call) arrived on 2026-10-18 (4979354a, 55282bb8, wired in 5a14cce2), none of them in `v1.2-beta.4`
+(versionCode 1036, 33dce87d), the latest release. Every build released so far
+ignores `MIN_SUPPORTED_VERSION_CODE` / `RECOMMENDED_VERSION_CODE` and the
+`share` switch. For that installed fleet the only levers are the ones the
+backend enforces itself: `KILL_SWITCHES` on the guarded routes (503
+`feature_paused`), `APP_CHECK_MODE`, and the backend revision. The version gate
+starts to work for builds released after `v1.2-beta.4`. Whether the backend
+should also refuse device-signed upload and restore below the minimum, by
+`X-App-Version`, is an owner decision (TE6-006, not taken).
 
 | Lever | Effect | How |
 |---|---|---|
-| `KILL_SWITCHES` | Switches off `backup`, `share`, `restore` or `upload` without a release. The backend refuses the guarded routes itself (503 `feature_paused`, `Retry-After: 300`; `backend/app/deps.py:295-330`), so it holds for every build, old ones included, which retry the 503; current builds also show the feature as paused. `share` has no route, so only builds that read `/v1/config` obey it | Repo variable, space-separated, then `deploy-backend.yml` ([ENVIRONMENTS.md](ENVIRONMENTS.md)); watch `event="feature_paused"` in the logs to see what it holds back |
-| `MIN_SUPPORTED_VERSION_CODE` | Semper builds below it keep their analyses, viewer and exports, and cannot start an analysis, upload or restore until updated. `RECOMMENDED_VERSION_CODE` only nudges. Material Testing has its own pair, `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` / `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING`, because its versionCodes come from its own release counter (`settings.release_gate(app)`, `backend/app/config.py:293-300`) | Repo variable, redeploy. Raise the recommended one a release ahead. A local debug build at versionCode 1 is never gated |
-| `ENTITLEMENT_OFFLINE_GRACE_DAYS` | How long newly issued entitlement tokens hold offline; the fail-open / fail-closed lever for licensing. Tokens already issued keep theirs | Repo variable, redeploy ([ADR-023](../adr/ADR-023-signed-offline-entitlement.md)) |
+| `KILL_SWITCHES` | Switches off `backup`, `share`, `restore` or `upload` without a release. The backend refuses the guarded routes itself (503 `feature_paused`, `Retry-After: 300`; `backend/app/deps.py:301-336`), so it holds for every build, old ones included, which retry the 503; current builds also show the feature as paused. `share` has no route, so only builds that read `/v1/config` obey it | Lever variable (scope below), space-separated, then `deploy-backend.yml` ([ENVIRONMENTS.md](ENVIRONMENTS.md)); watch `event="feature_paused"` in the logs to see what it holds back |
+| `MIN_SUPPORTED_VERSION_CODE` | **Builds after `v1.2-beta.4` only** (above). Semper builds below it keep their analyses, viewer and exports, and cannot start an analysis, upload or restore until updated. `RECOMMENDED_VERSION_CODE` only nudges. Material Testing has its own pair, `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` / `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING`, because its versionCodes come from its own release counter (`settings.release_gate(app)`, `backend/app/config.py:314-321`) | Lever variable (scope below), redeploy. Raise the recommended one a release ahead. A local debug build at versionCode 1 is never gated |
+| `ENTITLEMENT_OFFLINE_GRACE_DAYS` | How long newly issued entitlement tokens hold offline; the fail-open / fail-closed lever for licensing. Tokens already issued keep theirs | Lever variable (scope below), redeploy ([ADR-023](../adr/ADR-023-signed-offline-entitlement.md)) |
 | `APP_CHECK_MODE` | `enforce` back to `monitor` or `off` | [INCIDENT_RESPONSE.md](INCIDENT_RESPONSE.md) |
-| Backend revision | Traffic back to the previous revision | `gcloud run services update-traffic semper-api --to-revisions=<previous>=100 --region asia-south1`; the image is kept as `rollback-prev` ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A7). Firestore is never rolled back by a deploy |
+| Backend revision | Traffic back to the previous revision | `gcloud run services update-traffic semper-api --to-revisions=<previous>=100 --region asia-south1 --project indicvision-dic-app`, then read **After a revision rollback** below; the image is kept as `rollback-prev` ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A7). Firestore is never rolled back by a deploy |
 | Hotfix | A new build with a higher `versionCode` | The release workflow's run number makes every release higher than the last (Versioning above); roll it out with the same stages, faster soak if the fix is narrow |
 
-Set a lever on the GitHub environment (`gh variable set NAME --env staging`), not
-the repository, so a drill on staging never reaches the next production deploy:
-`deploy-backend.yml` runs under `environment:`, whose variables win over the
-repository's.
+**Lever variable scope.** Set a lever on the GitHub environment of the service
+it is for: `gh variable set NAME --env production` (or `--env staging` for a
+drill), not on the repository. `deploy-backend.yml` runs under `environment:`,
+whose variables win over the repository's, so a drill on staging never reaches
+production, and a repository value is ignored wherever the environment sets the
+same name. Delete the environment value when the lever is released
+(`gh variable delete NAME --env production`). On 2026-10-24 (`gh variable list`)
+neither environment set any lever, and `APP_CHECK_MODE` was a repository variable,
+which an environment value overrides. [INCIDENT_RESPONSE.md](INCIDENT_RESPONSE.md)
+uses the same words.
+
+**After a revision rollback.** `update-traffic --to-revisions=<previous>=100`
+pins traffic to that revision by name, and every lever above then has a trap:
+
+1. **Revert first.** Do not dispatch `deploy-backend.yml` for a lever until the
+   bad commit is reverted on `main` (PR, `CI OK`): the workflow builds the commit
+   it is dispatched on and promotes it `--to-latest`, which re-ships the code you
+   rolled back.
+2. **An env change that cannot wait for the revert** goes on the serving image
+   with no traffic, then traffic moves to it by name:
+
+   ```bash
+   GC="--region asia-south1 --project indicvision-dic-app"
+   IMAGE=$(gcloud run revisions describe <previous> $GC --format='value(spec.containers[0].image)')
+   gcloud run services update semper-api $GC --image "$IMAGE" --update-env-vars K=V --no-traffic
+   gcloud run services update-traffic semper-api $GC --to-revisions=<new>=100
+   ```
+
+   `--image` matters: a new revision is built from the service template, which a
+   traffic move leaves on the bad revision (its image and its env), so compare the
+   two revisions' env too. Without `--no-traffic` and the move, a plain
+   `services update` on a pinned service makes a revision that serves 0 %.
+3. **Set the lever variable as well** (scope above), or the next deploy undoes the
+   change. Once `main` is fixed, a normal deploy returns the service to
+   `--to-latest`.
 
 **Drill on staging, 2026-10-22** (TD-220), with a debug build at versionCode 100
 pointed at `semper-api-staging`, signed in as a QC test account on an Android 14
@@ -184,8 +253,8 @@ allow that long before calling a rollback done. The Material Testing pair and
 ## CI-based release (workflow_dispatch)
 
 The [`release.yml`](../../.github/workflows/release.yml) workflow runs
-`verify-legal` / `verify-android` / `verify-backend` in parallel, then
-`build-release` → `publish`. Dispatch from **`main` only**.
+`verify-legal` / `verify-android` / `verify-backend` / `verify-tag` / `verify-ci` in parallel,
+then `build-release` → `publish`. Dispatch from **`main` only**.
 
 ### Verify jobs — the gate
 
@@ -203,9 +272,23 @@ JVM unit tests, and backend pytest overlap instead of stacking:
 - `verify-backend` — the shared `backend-gate` action (hashed lock, `pip-audit`,
   ruff over `app/ tests/ scripts/ ../scripts/`, pytest at the 93 % floor), the
   same one CI and Deploy run.
+- `verify-ci` — what the three above do not re-run: reads the commit's check
+  runs (`gh api …/commits/<sha>/check-runs`, `checks: read`) and
+  [`scripts/check_release_ci.py`](../../scripts/check_release_ci.py) requires the
+  latest run of each CI job to have **passed**: the secret scan, legal pages,
+  console pages, the engine pin, tiers 1, 3, 4 and 5, Firestore rules, the
+  sanitized engine host tests and `CI OK`. A path-filtered push run skips tiers 3
+  and 5 (and the engine host tests with them), so it is not enough: run CI with `full_ci` first
+  (checklist step 2).
 
-`build-release` declares `needs: [verify-legal, verify-android, verify-backend]`,
-so none of the signing steps run if any of the above fails.
+- `verify-tag` — the `version` input's format, and that its tag, if it exists,
+  points at the commit being built (`scripts/check_release_tag.py`; full
+  history for the tags). `publish` then creates a missing tag at that commit
+  (`target_commitish: github.sha`), not at whatever `main` is by then.
+
+`build-release` declares `needs: [verify-legal, verify-android, verify-backend,
+verify-tag, verify-ci]`, so none of the signing steps run if any of the above
+fails.
 
 ### `build-release` — sign and check
 
@@ -231,13 +314,43 @@ so none of the signing steps run if any of the above fails.
    from the newest build-tools, plus a scan of every `classes*.dex`). It fails
    the release when the APK is debuggable or `testOnly`, ships a component or
    class from the debug source set (`app/src/debug`, e.g.
-   `DebugViewerSeedActivity`), contains `DebugAppCheckProviderFactory` or a
+   `DebugViewerSeedActivity`; found by name in the dex or, renamed, on the left
+   of R8's mapping), contains `DebugAppCheckProviderFactory` (dex or mapping) or a
    firebase-appcheck-debug version file, allows cleartext (manifest or network
    security config), has a `minSdkVersion` other than `minSdk` in
-   `app/build.gradle.kts`, or R8's `mapping.txt` is missing or empty. It
+   `app/build.gradle.kts`, loses a consent default (`<application>` meta-data
+   `firebase_crashlytics_collection_enabled`, `firebase_analytics_collection_enabled`
+   and `google_analytics_adid_collection_enabled` must be present and `false`;
+   no `AD_ID` or `ACCESS_ADSERVICES_*` permission, TD-232), or R8's
+   `mapping.txt` is missing, empty, or renames no `com.sempermechanics.semper`
+   class (an identity mapping, as `-dontobfuscate` writes; `--mapping` is
+   required). It
    **warns** when no `sha256/…` pin is compiled in, i.e. the
-   `SEMPER_API_CERT_PINS` secret was empty. CI tier 5 runs the same check on
-   its own release build. Locally:
+   `SEMPER_API_CERT_PINS` secret was empty. It also **warns** when no
+   entitlement key (`kid:<P-256 SPKI>`) is compiled in, i.e.
+   `SEMPER_ENTITLEMENT_PUBKEYS` was empty: the build then ignores signed tokens
+   and trusts its cached licence with no offline bound (ADR-023, TD-215). The
+   workflow turns that warning into a failure (`--require-entitlement-pins`)
+   as soon as the `SEMPER_ENTITLEMENT_PUBKEYS` variable is set, or when
+   `SEMPER_REQUIRE_ENTITLEMENT_PINS` is `true`. **Once TD-215 lands** (the
+   signing key is live and the pubkeys variable set), also set
+   `SEMPER_REQUIRE_ENTITLEMENT_PINS=true` on the `release` environment, so a
+   cleared pubkeys variable cannot ship a key-less build quietly. Both are unset
+   today, so no release fails on it. **Signing-key continuity** (`signing-key`):
+   the signer's certificate must be the release certificate, SHA-256
+   `FF:72:A8:B0:8F:02:A0:5D:65:B5:3D:91:25:0B:EF:7E:3B:0F:F7:53:8A:F2:B0:16:8E:E5:2D:5F:36:B1:5C:9A`,
+   which signed every Semper release so far (release runs 31565590316 to
+   39064532280; `v1.2-beta.4`, versionCode 1036). A build signed with any other
+   key (a different `KEYSTORE_BASE64`) would not install over them
+   (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`), and the only way past that is an
+   uninstall, which deletes analyses not in the cloud. `assetlinks.json` lists a
+   second Semper certificate, so step 7 alone does not catch it. The value is the
+   workflow's default for this repository; the variable
+   `SEMPER_RELEASE_CERT_SHA256` overrides it, which is how a deliberate rotation
+   (with an APK Signature Scheme v3 lineage, or Play App Signing's upload key)
+   is made. A fork gets no default and only a warning until it sets the variable.
+   CI tier 5 runs the same check on its own release build, without the
+   entitlement flag or a signer. Locally:
    `python3 scripts/check_release_apk.py app-release.apk --mapping mapping.txt`.
 6. **Verifies the bundle's signature** (`jarsigner -verify` on the `.aab`).
 7. **Verifies `assetlinks.json` lists the release certificate.** It extracts the
@@ -286,13 +399,17 @@ Creates the **GitHub Release** with the APK and the AAB attached, gated on the
 | Variable | Description |
 |----------|-------------|
 | `SEMPER_API_BASE_URL` | HTTPS base URL of the API Gateway (preferred) or Cloud Run service |
-| `SEMPER_ENTITLEMENT_PUBKEYS` | Public key(s) the app verifies signed entitlements with, passed to Gradle as env. Public material, so a variable, not a secret |
+| `SEMPER_ENTITLEMENT_PUBKEYS` | Public key(s) the app verifies signed entitlements with, passed to Gradle as env. Public material, so a variable, not a secret. Set, it also makes the APK inspection require an entitlement key in the build (step 5) |
+| `SEMPER_REQUIRE_ENTITLEMENT_PINS` | Optional, `true` once TD-215 is live: the APK inspection fails a release with no entitlement key compiled in, whatever `SEMPER_ENTITLEMENT_PUBKEYS` holds |
+| `SEMPER_RELEASE_CERT_SHA256` | Optional here (the workflow defaults to the release certificate of every release so far, step 5); set only to rotate the signing key deliberately. A fork must set it to its own release certificate |
 
 ### Backend staging / production
 
 Use [`deploy-backend.yml`](../../.github/workflows/deploy-backend.yml): choose
 `staging` or `production`, supply GCP project/region. Updates deploy with
-`no_traffic`, tag a candidate, smoke `/readyz` with an ID token, then promote.
+`no_traffic`, tag a candidate, smoke `/readyz` and `/v1/config` (the app's own
+401) with an ID token, then promote, then check the live service the same way
+and roll traffic back to the previous revision if that fails.
 First-time Cloud Run creates omit `no_traffic` (Cloud Run rejects it on create).
 See [CI.md](CI.md) § Backend deploy and [ENVIRONMENTS.md](ENVIRONMENTS.md).
 
@@ -354,8 +471,10 @@ cd backend && pytest tests/ -q --cov=app --cov-fail-under=93     # tier 4
 ./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64     # tier 3
 ```
 
-Engine host and sanitizer suites are not part of this repo's gate — they run in
-`sempermechanics/semper-dic-engine` against the commit this repo pins.
+Engine host and sanitizer suites run in `sempermechanics/semper-dic-engine`; this
+repo's gate checks the pin is a tag (`engine-pin`) and reruns the host suite under
+ASan+UBSan at the pin (`engine-host-sanitized`, in the full-matrix CI of step 2).
+TSan and the C SDK smoke run only in the engine repo.
 
 ## After the release
 

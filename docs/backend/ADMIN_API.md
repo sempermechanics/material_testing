@@ -12,7 +12,7 @@ and every path must also be declared in `backend/gateway/openapi.yaml` (the gate
 
 **Limits of automation today.** Every institution route takes the browser step-up
 below, which needs an interactive sign-in with a second factor no older than
-`ADMIN_WEB_REAUTH_SECONDS` (default 900 s, `backend/app/config.py:175`). There are no
+`ADMIN_WEB_REAUTH_SECONDS` (default 900 s, `backend/app/config.py:193`). There are no
 machine tokens (FI-20) and no SCIM (FI-18). A script can run inside one such
 window, using the ID token of a signed-in session.
 
@@ -38,7 +38,7 @@ window, using the ID token of a signed-in session.
 |---|---|---|---|
 | `user` | any approved account | ID token | 401 `invalid_token`, 403 `not_approved` |
 | `institution-stepup` | an address in this licence's `adminEmails`, verified | ID token + TOTP second factor on a sign-in younger than `ADMIN_WEB_REAUTH_SECONDS` (`backend/app/routers/institutions.py:58-74`) | 403 `email_not_verified`; 404 `license_not_found` for a licence that does not name the caller, exactly as for one that does not exist; then 403 `mfa_required` / `reauth_required` |
-| `admin` | Semper staff (`role: admin`, or a token proving an address in `ADMIN_EMAILS`) | ID token (`backend/app/deps.py:333-347`) | 403 `not_admin` |
+| `admin` | Semper staff (`role: admin`, or a token proving an address in `ADMIN_EMAILS`) | ID token (`backend/app/deps.py:339-353`) | 403 `not_admin` |
 | `admin-stepup` | staff | a signed request from the staff phone, registered from a sign-in that completed the second factor (`stepUpEligible`; [ADR-010](../adr/ADR-010-device-binding-per-app.md) amendment), or the browser step-up as above | as above; a phone registered without the second factor is 403 `mfa_required` |
 | `admin-stepup-fresh` | staff | as `admin-stepup`, with a sign-in younger than `ADMIN_WEB_REVOKE_REAUTH_SECONDS` (default 120 s) | `reauth_required` |
 
@@ -53,7 +53,7 @@ The consoles say "The server is busy checking sign-ins — wait a few seconds an
 **A paused feature.** While an operator has a kill switch on (`KILL_SWITCHES`,
 [ENVIRONMENTS.md](../ops/ENVIRONMENTS.md)), the routes it guards answer **503
 `feature_paused`** with `Retry-After: 300`, before any work and after the token
-check (`deps.unless_paused`, `backend/app/deps.py:292-330`): `upload` or `backup`
+check (`deps.unless_paused`, `backend/app/deps.py:292-336`): `upload` or `backup`
 refuse `POST /v1/sessions` and `POST /v1/files/{id}/complete`; `restore` refuses
 `GET /v1/files/{id}/content` and `GET /v1/sessions/{sid}/bundle`, the bundle being
 the one a script can call. Nothing is wrong with the request; send it again after

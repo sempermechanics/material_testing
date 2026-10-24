@@ -2723,7 +2723,7 @@ re-resolves the account (`get_or_create_user` → `ensure_entitlement`) and, wit
 
 **Kill switches are enforced.** `KILL_SWITCHES` is published on `/v1/config`
 *and* refused server-side by `deps.unless_paused`
-(`backend/app/deps.py:295-330`): after the token check, before the route's own
+(`backend/app/deps.py:301-336`): after the token check, before the route's own
 parameters, so a paused request reads nothing and leaves a signed request's
 nonce unspent. The answer is `503 feature_paused` with `Retry-After: 300`, logged
 `event="feature_paused"` with `switch` and `routeTemplate`. An upload keeps
