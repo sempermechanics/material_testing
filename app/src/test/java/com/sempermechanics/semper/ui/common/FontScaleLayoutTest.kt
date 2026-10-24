@@ -180,6 +180,8 @@ class FontScaleLayoutTest {
             val toggle = root.findViewById<TextView>(id)
             val name = ctx.resources.getResourceEntryName(id)
             assertTrue("$name is ${toggle.width}px, needs ${toggle.textWidth()}px", toggle.width >= toggle.textWidth())
+            // On screen, not scrolled off the edge (the after-screenshot read "Eras").
+            assertTrue("$name ends at ${toggle.rightIn(root)} past ${root.width}", toggle.rightIn(root) <= root.width)
         }
     }
 
