@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import stat
+import subprocess
 import sys
 import zipfile
 from pathlib import Path
@@ -272,6 +273,28 @@ def test_main_fails_a_debug_apk_with_annotations(apk, tmp_path, capsys, monkeypa
     assert "::error title=Release APK debuggable::" in captured.out
     assert "::warning title=Release APK cert-pins::" in captured.out
     assert "check(s) failed" in captured.err
+
+
+def test_aapt2_output_is_read_as_utf8_whatever_the_locale(tmp_path):
+    """aapt2 prints UTF-8 (a label or string in any language). Read with the
+    platform codec, Windows' cp1252 raised UnicodeDecodeError on byte 0x81 and
+    the next parser then met None (readiness baseline 2026-10-24). PYTHONUTF8=0
+    and the C locale give the child a non-UTF-8 codec on any OS."""
+    fake = tmp_path / "fake_aapt2.py"
+    fake.write_text("import sys\nsys.stdout.buffer.write(b'label=\\xd1\\x81\\xe2\\x9c\\x93')\n", encoding="utf-8")
+    probe = tmp_path / "probe.py"
+    probe.write_text(
+        "import sys\n"
+        f"sys.path.insert(0, {str(_SCRIPT.parent)!r})\n"
+        "import check_release_apk as m\n"
+        f"print(ascii(m._run([sys.executable, {str(fake)!r}])))\n",
+        encoding="utf-8",
+    )
+    env = dict(os.environ, PYTHONUTF8="0", PYTHONCOERCECLOCALE="0", LC_ALL="C", LANG="C")
+    env.pop("PYTHONIOENCODING", None)
+    proc = subprocess.run([sys.executable, str(probe)], capture_output=True, text=True, env=env, check=False)
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip() == ascii("label=с✓")
 
 
 def test_main_refuses_a_missing_apk(apk, tmp_path):

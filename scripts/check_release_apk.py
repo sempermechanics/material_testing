@@ -404,7 +404,9 @@ def find_aapt2(explicit: str | None) -> str:
 
 
 def _run(cmd: list[str]) -> str:
-    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    # aapt2 writes UTF-8 whatever the locale; the platform codec (cp1252 on
+    # Windows) failed on it and left stdout None for the parsers.
+    proc = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace", check=False)
     if proc.returncode != 0:
         raise RuntimeError(f"{' '.join(cmd)} exited {proc.returncode}: {proc.stderr.strip()[:500]}")
     return proc.stdout
