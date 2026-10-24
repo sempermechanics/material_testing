@@ -418,8 +418,11 @@ def delete_files(token: str, file_ids: list[str], *, max_workers: int = 8) -> in
     return len(unique)
 
 
-def ping(timeout_s: float = 5.0) -> None:
-    """Cheap Drive reachability probe for readiness (Shared Drive about)."""
+def ping(timeout_s: float = 3.0) -> None:
+    """Cheap Drive reachability probe for readiness (Shared Drive about).
+
+    `timeout_s` is `/readyz`'s per-probe deadline (`health.PROBE_TIMEOUT_S`).
+    """
     from .observability import DependencyError
 
     try:
