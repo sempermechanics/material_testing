@@ -33,9 +33,12 @@ class UserTermsTest {
 
     @Test
     fun `the handset is a phone`() {
+        // A record's signature names the signing device key, an identifier, as
+        // its warning goes on to say ("a device key that is not this phone's").
+        val deviceKey = { name: String, _: String -> name == "record_integrity_signed_elsewhere" }
         assertEquals(
             emptyList<String>(),
-            offenders("""\b(this|another|requested|the) device\b|\bto device\b|profile and device"""),
+            offenders("""\b(this|another|requested|the) device\b|\bto device\b|profile and device""", deviceKey),
         )
     }
 
