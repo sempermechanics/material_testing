@@ -18,10 +18,14 @@ cmake --build build/engine-tests -j
 
 ## Where engine tests run in CI
 
-They do **not** run in this repository's `ci.yml`. Host builds, the DICe
-reference comparisons, AddressSanitizer/UndefinedBehaviorSanitizer and
-ThreadSanitizer suites all run in the engine repo's own CI, gating the tags
-this repo pins to.
+Host builds, the DICe reference comparisons, AddressSanitizer/UndefinedBehaviorSanitizer
+and ThreadSanitizer suites all run in the engine repo's own CI, gating the tags
+this repo pins to. This repo's `ci.yml` checks the pin is one of those tags
+(`engine-pin`, `scripts/check_engine_pin.py`: a `v*` tag, never backwards) and
+reruns the host suite under ASan+UBSan at the pinned commit
+(`engine-host-sanitized`, the engine CI's asan-ubsan configuration with system
+OpenCV) whenever Tier 3 runs. TSan, the C SDK smoke and the JNI adapter under a
+sanitizer run nowhere here.
 
 This repo's CI verifies that the pinned submodule still *links and behaves*:
 the arm64-v8a release build (R8, signed) in tier 5, and the x86_64 emulator run

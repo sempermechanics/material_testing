@@ -43,8 +43,10 @@ backend/      FastAPI on Cloud Run — routers in backend/app/routers/, Firestor
 firebase-hosting/  Auth continue URLs, asset links, generated legal pages
 ```
 
-Bump the engine by changing the `engine` gitlink. Its host / sanitizer / DICe suites run
-in the engine repo; this CI only proves the pin **links** (emulator x86_64, release arm64).
+Bump the engine by changing the `engine` gitlink, to a `v*` tag and never backwards
+(`engine-pin`). Its host / sanitizer / DICe suites run in the engine repo; this CI proves
+the pin **links** (emulator x86_64, release arm64) and reruns the host suite under
+ASan+UBSan at the pin (`engine-host-sanitized`).
 
 ## Runtime
 

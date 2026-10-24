@@ -27,6 +27,8 @@ REQUIRED = (
     "Secret scan (full history)",
     "Legal pages match their source",
     "Console pages",
+    "Engine pin is a tagged release",
+    "Engine host tests (ASan+UBSan)",
     "Tier 1 — App fast",
     "Tier 3 — Emulator E2E",
     "Tier 4 — Backend",

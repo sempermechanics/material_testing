@@ -228,6 +228,7 @@ jobs:
       emulator: ${{ steps.flags.outputs.emulator }}
       release_build: ${{ steps.flags.outputs.release_build }}
       benchmark_ci: ${{ steps.flags.outputs.benchmark_ci }}
+      engine_host: ${{ steps.flags.outputs.engine_host }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -268,8 +269,8 @@ jobs:
               - 'settings.gradle.kts'
             # Engine sources live in sempermechanics/semper-dic-engine, the JNI
             # adapter too (engine/adapters/android/). App CI only sees pin bumps
-            # (gitlink) / .gitmodules — host/sanitizer suites run in the engine
-            # repo's own workflow. Here a bump or a JNI change has to build for
+            # (gitlink) / .gitmodules — the engine repo's own workflow tests its
+            # commits; engine-host-sanitized reruns ASan+UBSan at the pin. Here a bump or a JNI change has to build for
             # both ABIs and run EnginePipelineSmokeTest on the emulator before it
             # merges, not after.
             native_jni:
@@ -452,6 +453,12 @@ jobs:
             fi
           fi
 
+          # The engine's host suite under ASan+UBSan (engine-host-sanitized)
+          # runs whenever Tier 3 does, and on a ci.yml change so the job proves
+          # itself on the PR that edits it.
+          engine_host=$emulator
+          if [ "$FILTER_CI_WORKFLOW" = "true" ]; then engine_host=true; fi
+
           {
             echo "app=$app"
             echo "backend=$backend"
@@ -459,8 +466,62 @@ jobs:
             echo "emulator=$emulator"
             echo "release_build=$release_build"
             echo "benchmark_ci=$benchmark"
+            echo "engine_host=$engine_host"
           } >> "$GITHUB_OUTPUT"
-          echo "Resolved: event=$EVENT_NAME full=$full app=$app backend=$backend rules=$rules emulator=$emulator release_build=$release_build benchmark_ci=$benchmark"
+          echo "Resolved: event=$EVENT_NAME full=$full app=$app backend=$backend rules=$rules emulator=$emulator release_build=$release_build benchmark_ci=$benchmark engine_host=$engine_host"
+
+  # ===================================================================
+  # Engine host suite, sanitized — TE2-004. The engine repo's CI runs it on
+  # its own commits; this runs the same suite at the commit this app pins,
+  # with the engine CI's asan-ubsan configuration (tests/ CMake tree, system
+  # libopencv-dev, Release, ASan+UBSan). No Gradle, no NDK, no Android OpenCV.
+  # TSan and the C SDK smoke stay in the engine repo; the JNI adapter
+  # (engine/adapters/android/jni) is built only by the NDK and is not here.
+  # ===================================================================
+  engine-host-sanitized:
+    name: Engine host tests (ASan+UBSan)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    needs: changes
+    if: needs.changes.outputs.engine_host == 'true'
+    defaults:
+      run:
+        working-directory: engine
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 500M
+      CCACHE_COMPILERCHECK: content
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      # libopencv-dev or the full-field pipeline is silently left out of the
+      # build (the engine CI's note); DIC_REQUIRE_OPENCV makes that a failure.
+      - name: Install OpenCV + ccache
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends libopencv-dev ccache
+      - name: Cache ccache objects
+        uses: actions/cache@v6
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-engine-san-${{ hashFiles('engine/**/*.cpp', 'engine/**/*.h', 'engine/**/*.hpp', 'engine/tests/CMakeLists.txt') }}
+          restore-keys: ccache-engine-san-
+      - name: Configure
+        run: >
+          cmake -S tests -B build/tests
+          -DCMAKE_BUILD_TYPE=Release
+          -DDIC_REQUIRE_OPENCV=ON
+          -DDIC_SANITIZER=address,undefined
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+      - name: Build
+        run: cmake --build build/tests -j"$(nproc)"
+      - name: Run dic_tests
+        run: ./build/tests/dic_tests
+      - name: ccache statistics
+        if: always()
+        run: ccache --show-stats
 
   # ===================================================================
   # Tier 1 — Kotlin compile + JVM unit tests + quality gates (no NDK)
@@ -1065,6 +1126,7 @@ jobs:
       - firestore-rules
       - tier5-signed-release
       - tier-benchmark
+      - engine-host-sanitized
     steps:
       - name: Check all tiers
         run: |
@@ -1079,11 +1141,11 @@ jobs:
             "${{ needs.tier4-backend.result }}" \
             "${{ needs.firestore-rules.result }}" \
             "${{ needs.tier5-signed-release.result }}" \
-            "${{ needs.tier-benchmark.result }}"; do
+            "${{ needs.tier-benchmark.result }}"             "${{ needs.engine-host-sanitized.result }}"; do
             case "$result" in
               success|skipped) ;;
               *) echo "FAILED: $result"; exit 1 ;;
             esac
           done
           echo "All tiers passed or were skipped."
-          echo "Note: engine host/sanitizer/C-SDK CI runs in sempermechanics/semper-dic-engine."
+          echo "Note: engine TSan and C-SDK CI run in sempermechanics/semper-dic-engine."

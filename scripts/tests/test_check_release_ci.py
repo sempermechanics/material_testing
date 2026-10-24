@@ -101,6 +101,19 @@ class WorkflowTest(unittest.TestCase):
         for name in ci.REQUIRED:
             self.assertIn(name, names)
 
+    def test_every_job_ci_ok_needs_is_required(self):
+        # `changes` only routes the tiers; the benchmark runs on a label or a
+        # dispatch input, never on a full_ci run alone.
+        ci_yml = (_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        needs_block = re.search(r"\n  ci-ok:\n(?:    [^\n]*\n)*?    needs:\n((?:      - [^\n]+\n)+)", ci_yml).group(1)
+        for need in re.findall(r"- (\S+)", needs_block):
+            if need in ("changes", "tier-benchmark"):
+                continue
+            job = re.search(rf"\n  {re.escape(need)}:\n((?:    [^\n]*\n|\n)*)", ci_yml)
+            self.assertIsNotNone(job, need)
+            name = re.search(r"^    name: (.+)$", job.group(1), re.MULTILINE).group(1)
+            self.assertIn(name, ci.REQUIRED, need)
+
     def test_release_signs_only_after_the_ci_check(self):
         release = (_ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
         job = release[release.index("\n  verify-ci:"):]

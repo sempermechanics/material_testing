@@ -148,5 +148,44 @@ class WorkflowTest(unittest.TestCase):
         self.assertIn("${{ needs.engine-pin.result }}", ci_ok)
 
 
+def _job(ci: str, name: str) -> str:
+    job = ci[ci.index(f"\n  {name}:"):]
+    return job[:re.search(r"\n  [a-z0-9-]+:\n", job[1:]).start() + 1]
+
+
+class EngineHostJobTest(unittest.TestCase):
+    """TE2-004: this repo's CI runs the engine's host suite under ASan+UBSan at
+    the pinned commit, with system OpenCV (no Android OpenCV build)."""
+
+    def setUp(self) -> None:
+        self.ci = (_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    def test_the_job_builds_and_runs_the_sanitized_host_suite(self):
+        job = _job(self.ci, "engine-host-sanitized")
+        self.assertIn("needs: changes", job)
+        self.assertIn("if: needs.changes.outputs.engine_host == 'true'", job)
+        self.assertIn("submodules: recursive", job)
+        self.assertIn("libopencv-dev", job)
+        self.assertIn("working-directory: engine", job)
+        for flag in ("-S tests", "-DDIC_REQUIRE_OPENCV=ON", "-DDIC_SANITIZER=address,undefined",
+                     "-DCMAKE_BUILD_TYPE=Release"):
+            self.assertIn(flag, job)
+        self.assertIn("./build/tests/dic_tests", job)
+        self.assertNotIn("gradlew", job)
+        self.assertNotIn("continue-on-error", job)
+
+    def test_engine_host_follows_the_emulator_tier_and_ci_yml(self):
+        changes = _job(self.ci, "changes")
+        self.assertIn("engine_host: ${{ steps.flags.outputs.engine_host }}", changes)
+        self.assertIn('echo "engine_host=$engine_host"', changes)
+        self.assertIn("engine_host=$emulator", changes)
+        self.assertRegex(changes, r'FILTER_CI_WORKFLOW" = "true" \]; then engine_host=true')
+
+    def test_ci_ok_needs_it(self):
+        ci_ok = self.ci[self.ci.index("\n  ci-ok:"):]
+        self.assertIn("      - engine-host-sanitized\n", ci_ok)
+        self.assertIn("${{ needs.engine-host-sanitized.result }}", ci_ok)
+
+
 if __name__ == "__main__":
     unittest.main()

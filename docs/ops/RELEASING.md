@@ -58,7 +58,8 @@ Check the R8 mapping reached Crashlytics (the release build uploads it); the wor
    run, if it is the head). The Release workflow enforces it: its `verify-ci`
    job (`scripts/check_release_ci.py`) fails unless the latest check run of every
    CI job on the commit passed, not skipped (secret scan, legal and console
-   pages, tiers 1, 3, 4 and 5, Firestore rules, `CI OK`).
+   pages, engine pin, tiers 1, 3, 4 and 5, Firestore rules, the sanitized
+   engine host tests, `CI OK`).
 3. **Tag and push** the commit you intend to release:
 
    ```bash
@@ -218,8 +219,9 @@ JVM unit tests, and backend pytest overlap instead of stacking:
   runs (`gh api …/commits/<sha>/check-runs`, `checks: read`) and
   [`scripts/check_release_ci.py`](../../scripts/check_release_ci.py) requires the
   latest run of each CI job to have **passed**: the secret scan, legal pages,
-  console pages, tiers 1, 3, 4 and 5, Firestore rules and `CI OK`. A path-filtered
-  push run skips tiers 3 and 5, so it is not enough: run CI with `full_ci` first
+  console pages, the engine pin, tiers 1, 3, 4 and 5, Firestore rules, the
+  sanitized engine host tests and `CI OK`. A path-filtered push run skips tiers 3
+  and 5 (and the engine host tests with them), so it is not enough: run CI with `full_ci` first
   (checklist step 2).
 
 - `verify-tag` — the `version` input's format, and that its tag, if it exists,
@@ -412,8 +414,10 @@ cd backend && pytest tests/ -q --cov=app --cov-fail-under=93     # tier 4
 ./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64     # tier 3
 ```
 
-Engine host and sanitizer suites are not part of this repo's gate — they run in
-`sempermechanics/semper-dic-engine` against the commit this repo pins.
+Engine host and sanitizer suites run in `sempermechanics/semper-dic-engine`; this
+repo's gate checks the pin is a tag (`engine-pin`) and reruns the host suite under
+ASan+UBSan at the pin (`engine-host-sanitized`, in the full-matrix CI of step 2).
+TSan and the C SDK smoke run only in the engine repo.
 
 ## After the release
 
