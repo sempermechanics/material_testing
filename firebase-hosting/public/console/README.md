@@ -595,6 +595,20 @@ of its module (`?load=N`); a `resume` makes that load the return leg of a
 Google re-authentication. A new SDK function in `auth.js` needs a matching
 export in `tests/fakes/firebase-auth.mjs`.
 
+**In a browser** (CI job "Console accessibility"): `tests/a11y/` opens the
+sign-in page, the front door, the account page (licensed, and on Demo with the
+claim card), the institution roster (120 seats, so Show more is drawn) and the
+operator desk in Chromium at 360, 768 and 1280 px, and asserts that axe-core
+finds no serious or critical WCAG 2.1 A/AA violation, that no page scrolls
+sideways and that nothing throws. It also opens a confirmation card (role,
+name, focus in and back out on Escape). `tests/a11y/stub-site.mjs` serves `public/` on 127.0.0.1,
+answers the gstatic SDK imports with the same fakes, answers the API (the
+`__API_BASE_URL__` placeholder stays, so calls are page-relative) from fixtures
+and refuses every other host. The only npm dependencies in the repository are
+here, pinned: `@playwright/test` and `@axe-core/playwright`
+(`firebase-hosting/package-lock.json`). Locally, from `firebase-hosting/`:
+`npm ci`, `npx playwright install chromium`, `npm run test:a11y`.
+
 What the fakes cannot prove is that Firebase itself still behaves the way
 they model it — the redirect round trip, the handler on the page's own host,
 real TOTP codes, the `redirectUser` quirk described below. That stays on the

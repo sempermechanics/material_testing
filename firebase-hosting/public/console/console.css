@@ -254,7 +254,10 @@ details.more .menu .secondary + .danger { margin-top: .5rem; }
 }
 #status.err:not(:empty) { border-color: currentColor; }
 .ok { color: var(--ok); }
-.wrap { overflow-x: auto; }
+/* The scroller is the containing block of what is positioned inside it: a
+   heading's visually hidden label ("Actions") placed against the page instead
+   stuck out past the right edge and let the whole desk scroll sideways. */
+.wrap { overflow-x: auto; position: relative; }
 
 /* Forms. The mint form is the only dense one, so the grid is defined once
    here rather than per page: two columns where there is room, one where a
@@ -495,6 +498,9 @@ table.test-accounts td.account { min-width: 16rem; overflow-wrap: break-word; }
   .wrap td.actions { flex-wrap: wrap; align-items: flex-start; white-space: normal; padding-top: .5rem; gap: .5rem; }
   .wrap td.actions .secondary + .danger { margin-left: 0; }
   .wrap td[colspan] { display: block; }
+  /* The term ("until May 12, 2027 (UTC) +14d") and the analyses count wrap
+     beside their label; kept on one line they ran past a 360 px card. */
+  table.licences td:nth-child(5), table.licences td:nth-child(6) { white-space: normal; }
   /* The count, then the phones under it at the card's full width. */
   .wrap td.phones { flex-wrap: wrap; }
   .phone-list { flex-basis: 100%; min-width: 0; }

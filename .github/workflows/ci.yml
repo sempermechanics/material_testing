@@ -171,6 +171,39 @@ jobs:
       - name: Console line coverage (merged by file)
         run: node scripts/console_coverage.mjs "${{ runner.temp }}/console-coverage" --lines=96
 
+  console-a11y:
+    name: Console accessibility
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # The console pages in a real browser (Chromium), against a stub API and
+    # the fake Firebase SDK: axe-core finds no serious or critical WCAG 2.1
+    # A/AA violation on any page at 360, 768 and 1280 px, and no page scrolls
+    # sideways (firebase-hosting/tests/a11y). Nothing here reaches a real
+    # backend or Google; the stub refuses every other host. The versions are
+    # pinned in firebase-hosting/package-lock.json.
+    defaults:
+      run:
+        working-directory: firebase-hosting
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: firebase-hosting/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:a11y
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: console-a11y-report
+          path: |
+            firebase-hosting/playwright-report/
+            firebase-hosting/test-results/
+          retention-days: 7
+
   # ===================================================================
   # Path filters — same rules on PR and push. Prove only what the diff
   # can break. Full matrix: the weekly schedule, the `full-ci` label or
@@ -1021,6 +1054,7 @@ jobs:
       - secret-scan
       - legal-pages
       - console-pages
+      - console-a11y
       - changes
       - tier1-app-fast
       - tier3-emulator-e2e
@@ -1035,6 +1069,7 @@ jobs:
             "${{ needs.secret-scan.result }}" \
             "${{ needs.legal-pages.result }}" \
             "${{ needs.console-pages.result }}" \
+            "${{ needs.console-a11y.result }}" \
             "${{ needs.changes.result }}" \
             "${{ needs.tier1-app-fast.result }}" \
             "${{ needs.tier3-emulator-e2e.result }}" \

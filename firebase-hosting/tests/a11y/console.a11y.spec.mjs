@@ -1,0 +1,77 @@
+// The consoles in a real browser (Chromium), against a stub API and the
+// fake Firebase SDK (stub-site.mjs): axe-core finds no serious or critical
+// WCAG 2.1 A/AA violation on any page, at phone, tablet and desktop widths,
+// and no page scrolls sideways. AE2-001 (readiness 2026-10-24).
+//
+// Run from firebase-hosting/: npm ci && npx playwright install chromium &&
+// npm run test:a11y
+import { test, expect } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
+import { serveSite, stubContext, PERSONAS } from "./stub-site.mjs";
+
+let site;
+test.beforeAll(async () => { site = await serveSite(); });
+test.afterAll(async () => { await site.close(); });
+
+const WIDTHS = { phone: 360, tablet: 768, desktop: 1280 };
+
+/** Each console page in a state worth reading, and what says it has settled. */
+const PAGES = [
+  { name: "sign-in, signed out", path: "/console/", persona: "out", ready: 'body[data-auth="out"]' },
+  { name: "front door, a choice of dashboards", path: "/console/", persona: "staff", ready: "#choices:not([hidden]) a" },
+  { name: "account, licensed", path: "/console/account/", persona: "holder", ready: "#rows tr td" },
+  { name: "account, Demo with the claim card", path: "/console/account/", persona: "demo", ready: "#claimCard:not([hidden])" },
+  { name: "institution roster", path: "/console/institution/?license=L1", persona: "it", ready: "#rows button[data-act]" },
+  { name: "operator desk", path: "/console/operator/", persona: "staff", ready: "#licenceRows button[data-edit]" },
+];
+
+/** Open `path` as `persona` at `width`, and wait until `ready` is on the page. */
+async function open(browser, { path, persona, ready }, width) {
+  const context = await browser.newContext({ viewport: { width, height: 900 } });
+  await stubContext(context, PERSONAS[persona]);
+  const page = await context.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  await page.goto(site.origin + path);
+  await page.locator(ready).first().waitFor({ state: "attached", timeout: 10_000 });
+  // Status lines and late reads (tiles, approvals) settle.
+  await page.waitForLoadState("networkidle");
+  return { context, page, errors };
+}
+
+/** The serious and critical violations axe finds, one line each. */
+async function violations(page) {
+  const result = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+    .analyze();
+  return result.violations
+    .filter((v) => v.impact === "serious" || v.impact === "critical")
+    .flatMap((v) => v.nodes.map((n) => `${v.impact} ${v.id}: ${n.target.join(" ")} — ${v.help}`));
+}
+
+for (const target of PAGES) {
+  for (const [label, width] of Object.entries(WIDTHS)) {
+    test(`${target.name} at ${width} px (${label}): no serious or critical axe violation, no sideways scroll`, async ({ browser }) => {
+      const { context, page, errors } = await open(browser, target, width);
+      expect(await violations(page)).toEqual([]);
+      const scroll = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
+      expect(scroll[0], "the page does not scroll sideways").toBeLessThanOrEqual(scroll[1]);
+      expect(errors, "no uncaught page error").toEqual([]);
+      await context.close();
+    });
+  }
+}
+
+test("an in-page confirmation card passes axe and takes focus (institution, Remove)", async ({ browser }) => {
+  const { context, page } = await open(browser, PAGES[4], WIDTHS.desktop);
+  await page.locator('#rows button[data-act="remove"]').first().click();
+  const card = page.getByRole("alertdialog", { name: /^Remove member000@uni\.edu$/ });
+  await expect(card).toBeVisible();
+  await expect(card.getByRole("button", { name: "Remove" })).toBeFocused();
+  expect(await violations(page)).toEqual([]);
+  await page.keyboard.press("Escape");
+  await expect(card).toHaveCount(0);
+  await expect(page.locator('#rows button[data-act="remove"]').first()).toBeFocused();
+  await context.close();
+});
+
