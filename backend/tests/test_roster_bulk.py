@@ -5,6 +5,7 @@ Mostly over HTTP at institution IT's tier, where the scoping matters: IT for
 their own licence only, staff for any, everyone else refused. The staff tier
 runs on the dev bypass (`deps._DEV_USER` is an admin).
 """
+import copy
 import json
 import logging
 import time
@@ -15,7 +16,7 @@ from google.api_core import exceptions as google_exceptions
 
 import fake_firestore
 import repo_view as repo
-from app import audit, deps, errors, roster_io
+from app import audit, deps, errors, licenses, roster_io
 from app.config import settings
 from app.routers import roster
 from refusals import attempt_add
@@ -302,6 +303,29 @@ async def test_it_reaches_its_own_licence_only(it, client, method, path, body):
     assert f"licenses/{it.b}/seats" not in it._data
     own = await client.request(method, f"{it.base}{path}", json=body, headers=it.bearer)
     assert own.status_code == 200, own.text
+
+
+@pytest.mark.asyncio
+async def test_it_cannot_add_to_or_withdraw_from_another_institutions_roster(it, client):
+    """The two roster writes the sweep above leaves out (readiness TE3-004):
+    adding a member and withdrawing an invite on licence B both 404 for A's IT,
+    and nothing under B is written or removed."""
+    invite = licenses.invite_id("new@uni-b.edu")
+    it._data.setdefault("licenseInvites", {})[invite] = {
+        "licenseId": it.b, "email": "new@uni-b.edu"}
+    before = copy.deepcopy(it._data)
+
+    add = await client.post(f"/v1/institutions/licenses/{it.b}/seats",
+                            json={"email": "x@uni-b.edu"}, headers=it.bearer)
+    assert add.status_code == 404, add.text
+    assert add.json()["detail"] == "license_not_found"
+    drop = await client.delete(f"/v1/institutions/licenses/{it.b}/invites/{invite}",
+                               headers=it.bearer)
+    assert drop.status_code == 404, drop.text
+    assert drop.json()["detail"] == "license_not_found"
+
+    assert it._data == before
+    assert it.audited == []
 
 
 @pytest.mark.asyncio
