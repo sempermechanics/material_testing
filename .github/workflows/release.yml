@@ -86,6 +86,27 @@ jobs:
 
       - uses: ./.github/actions/backend-gate
 
+  # The version input names the tag the release is published under, and the
+  # build is github.sha (main's head at dispatch). Refuse a malformed version,
+  # and a tag that already exists on another commit; a new tag is created at
+  # github.sha by publish (target_commitish) (TE6-008).
+  verify-tag:
+    name: Verify the version tag names this commit
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # the tags
+
+      - name: Version format and tag commit
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: python3 scripts/check_release_tag.py --version "$VERSION" --sha "$GITHUB_SHA"
+
   # The three jobs above re-run part of CI; the rest of it (secret scan,
   # console pages, the emulator tier, the Firestore rules, the signed-release
   # tier) was a checklist line in RELEASING.md. This requires every CI job's
@@ -116,7 +137,7 @@ jobs:
   build-release:
     name: Build signed release
     if: github.ref == 'refs/heads/main'
-    needs: [verify-legal, verify-android, verify-backend, verify-ci]
+    needs: [verify-legal, verify-android, verify-backend, verify-tag, verify-ci]
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     environment: release
@@ -168,6 +189,11 @@ jobs:
           # Releases sit above every CI run number ever used as a versionCode
           # (main's CI reached 671 before it switched to a fixed 1), so a phone
           # holding an old CI APK takes the next release as an update.
+          # run_number counts this workflow's runs and is monotonic only while
+          # the workflow keeps its identity: renaming or re-creating release.yml
+          # restarts it at 1, and the next versionCode would then be lower than
+          # an installed one. Raise RELEASE_CODE_BASE past the last release's
+          # versionCode in the same change (TE6-008).
           RELEASE_CODE_BASE: 1000
         run: |
           if [ -z "${SEMPER_API_BASE_URL}" ]; then
@@ -351,6 +377,10 @@ jobs:
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ github.event.inputs.version }}
+          # A tag that does not exist yet is created at the built commit, not
+          # at the default branch's tip when this step runs (verify-tag
+          # refused one already on another commit).
+          target_commitish: ${{ github.sha }}
           name: ${{ github.event.inputs.version }}
           body: ${{ github.event.inputs.changelog }}
           prerelease: ${{ github.event.inputs.channel == 'beta' }}

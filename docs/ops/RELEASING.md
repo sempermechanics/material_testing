@@ -31,6 +31,14 @@ Check the R8 mapping reached Crashlytics (the release build uploads it); the wor
 - Beta builds are tagged `v<versionName>-beta.<n>` (e.g. `v1.0-beta.1`);
   stable releases are tagged `v<versionName>`.
 - `versionCode` increases for every release (the run number is monotonic).
+  It is monotonic only while `release.yml` keeps its identity: renaming or
+  re-creating the workflow restarts `run_number` at 1, so that change must
+  raise `RELEASE_CODE_BASE` past the last release's versionCode (1036 for
+  `v1.2-beta.4`).
+- The `version` input must read `v<major>.<minor>[.<patch>][-beta.<n>]`, and a
+  tag of that name that already exists must point at the commit being built
+  (`verify-tag`, [`scripts/check_release_tag.py`](../../scripts/check_release_tag.py));
+  a new tag is created at that commit by `publish` (`target_commitish`).
 - `main`'s CI also builds a `release-apk` signed with the release key, at
   **versionCode 1**, so it can never install over a release. Until 2026-10-01 it
   used CI's run number (671 by then, against the release workflow's 35), so a
@@ -187,7 +195,7 @@ allow that long before calling a rollback done. The Material Testing pair and
 ## CI-based release (workflow_dispatch)
 
 The [`release.yml`](../../.github/workflows/release.yml) workflow runs
-`verify-legal` / `verify-android` / `verify-backend` / `verify-ci` in parallel,
+`verify-legal` / `verify-android` / `verify-backend` / `verify-tag` / `verify-ci` in parallel,
 then `build-release` → `publish`. Dispatch from **`main` only**.
 
 ### Verify jobs — the gate
@@ -214,8 +222,14 @@ JVM unit tests, and backend pytest overlap instead of stacking:
   push run skips tiers 3 and 5, so it is not enough: run CI with `full_ci` first
   (checklist step 2).
 
+- `verify-tag` — the `version` input's format, and that its tag, if it exists,
+  points at the commit being built (`scripts/check_release_tag.py`; full
+  history for the tags). `publish` then creates a missing tag at that commit
+  (`target_commitish: github.sha`), not at whatever `main` is by then.
+
 `build-release` declares `needs: [verify-legal, verify-android, verify-backend,
-verify-ci]`, so none of the signing steps run if any of the above fails.
+verify-tag, verify-ci]`, so none of the signing steps run if any of the above
+fails.
 
 ### `build-release` — sign and check
 
