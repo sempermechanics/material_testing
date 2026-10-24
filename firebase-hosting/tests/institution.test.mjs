@@ -247,7 +247,7 @@ test("Hold, Resume and New device send their change and reload the roster", asyn
     ["clear", "u1", { clearDeviceLock: true }],
   ]) {
     reset();
-    await act(actName, uid);
+    await act(actName, uid, undefined, actName === "clear" ? true : null);
     const patch = net.requests.find((r) => r.method === "PATCH");
     assert.equal(patch.url.endsWith(`${SEATS}/${uid}`), true);
     assert.deepEqual(JSON.parse(patch.body), body, actName);
@@ -256,13 +256,30 @@ test("Hold, Resume and New device send their change and reload the roster", asyn
   }
 });
 
-test("Remove asks first; declining sends nothing", async () => {
+test("Remove asks first, naming the member; declining sends nothing", async () => {
   await act("remove", "u1", undefined, false);
   assert.deepEqual(sent(/DELETE/), []);
-  assert.match(confirms.asked[0], /^Remove this member\?/);
+  assert.match(confirms.asked[0], /^Remove ana@uni\.edu from this licence\?/);
+  assert.equal(confirms.cards[0].querySelector("h2").textContent, "Remove ana@uni.edu");
   reset();
   await act("remove", "u1", undefined, true);
   assert.deepEqual(sent(/DELETE/), [`DELETE ${SEATS}/u1`]);
+});
+
+test("New device asks first, naming the member; declining sends nothing", async () => {
+  await act("clear", "u1", undefined, false);
+  assert.deepEqual(sent(/PATCH/), []);
+  assert.match(confirms.asked[0], /^Unbind ana@uni\.edu from the phone it is on\?/);
+});
+
+test("each row's buttons name the member they act on", async () => {
+  await open();
+  assert.equal(button("remove", "u1").getAttribute("aria-label"), "Remove ana@uni.edu");
+  assert.equal(button("hold", "u1").getAttribute("aria-label"), "Hold ana@uni.edu");
+  assert.equal(button("clear", "u1").getAttribute("aria-label"), "New device for ana@uni.edu");
+  assert.equal(button("unhold", "u2").getAttribute("aria-label"), "Resume ben@uni.edu");
+  assert.equal($("rows").querySelector('button[data-invite="i1"]').getAttribute("aria-label"),
+    "Withdraw the invitation to dee@uni.edu");
 });
 
 test("a refused seat change is explained", async () => {
@@ -286,6 +303,7 @@ test("Withdraw asks first, deletes the invitation and reloads; a failure says so
   withdraw();
   await settle();
   assert.deepEqual(sent(/invites/), []);
+  assert.match(confirms.asked[0], /^Withdraw the invitation to dee@uni\.edu\?/);
   withdraw();
   await settle();
   assert.deepEqual(sent(/invites|seats/), [`GET ${SEATS}`, "DELETE /v1/institutions/licenses/L1/invites/i1", `GET ${SEATS}`]);

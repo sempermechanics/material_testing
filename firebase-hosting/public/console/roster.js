@@ -30,7 +30,11 @@ export async function fetchRoster(base) {
   return { license: first.license || {}, seats, invites: first.invites || [] };
 }
 
-/** One member's row, with what can be done to them. */
+/**
+ * One member's row, with what can be done to them. Each button carries the
+ * member's address, so its confirmation and its name for a screen reader say
+ * who it acts on: on a long roster every row's button reads "Remove".
+ */
 export function seatRow(seat) {
   // A removed member holds nothing to hold, resume or unlock. Resume used to
   // be offered here and reactivated the seat without taking a slot back;
@@ -41,16 +45,18 @@ export function seatRow(seat) {
       <td class="actions muted">add again to restore</td>
     </tr>`;
   }
+  const who = esc(seat.email || seat.uid);
+  const on = `data-uid="${esc(seat.uid)}" data-email="${who}"`;
   return `
     <tr>${seatCells(seat)}
       <td class="actions">
         ${seat.deviceIdLock || seat.deviceIdLockMaterialTesting
-          ? `<button class="secondary" data-act="clear" data-uid="${esc(seat.uid)}">New device</button>`
+          ? `<button class="secondary" data-act="clear" ${on} aria-label="New device for ${who}">New device</button>`
           : ""}
         ${seat.status === "active"
-          ? `<button class="secondary" data-act="hold" data-uid="${esc(seat.uid)}">Hold</button>`
-          : `<button class="secondary" data-act="unhold" data-uid="${esc(seat.uid)}">Resume</button>`}
-        <button class="danger" data-act="remove" data-uid="${esc(seat.uid)}">Remove</button>
+          ? `<button class="secondary" data-act="hold" ${on} aria-label="Hold ${who}">Hold</button>`
+          : `<button class="secondary" data-act="unhold" ${on} aria-label="Resume ${who}">Resume</button>`}
+        <button class="danger" data-act="remove" ${on} aria-label="Remove ${who}">Remove</button>
       </td>
     </tr>`;
 }
@@ -60,7 +66,8 @@ export function inviteRow(invite) {
   return `
     <tr>${inviteCells(invite)}
       <td class="actions">
-        <button class="danger" data-invite="${esc(invite.id)}">Withdraw</button>
+        <button class="danger" data-invite="${esc(invite.id)}" data-email="${esc(invite.email)}"
+                aria-label="Withdraw the invitation to ${esc(invite.email)}">Withdraw</button>
       </td>
     </tr>`;
 }
@@ -70,6 +77,28 @@ const ACTIONS = {
   hold: { method: "PATCH", body: { enabled: false }, verb: "Holding" },
   unhold: { method: "PATCH", body: { enabled: true }, verb: "Resuming" },
   remove: { method: "DELETE", verb: "Removing" },
+};
+
+/** The confirmation an action asks for first, naming the member, or none. */
+const ASK = {
+  clear: (who) => ({
+    title: `New device for ${who}`,
+    message: `Unbind ${who} from the phone it is on?
+
+` +
+      "The next phone they sign in on takes the seat. Their seat and their " +
+      "saved analyses are untouched.",
+    confirm: "Unbind",
+  }),
+  remove: (who) => ({
+    title: `Remove ${who}`,
+    message: `Remove ${who} from this licence?
+
+` +
+      "They drop to the demo the next time their phone checks in. Their " +
+      "saved analyses stay untouched.",
+    confirm: "Remove",
+  }),
 };
 
 const ACT_ERRORS = {
@@ -88,17 +117,11 @@ const ACT_ERRORS = {
 export function wireRoster({ rows, email, add, base, report, reload, retry = reload }) {
   // Each action takes the roster's path before it asks, so an answer given after
   // another roster was opened (or this one closed) still goes to the one asked on.
-  async function act(action, uid) {
+  async function act(action, uid, who) {
     const spec = ACTIONS[action];
     const root = base();
     if (!root) return;
-    if (action === "remove" && !(await confirmInPage({
-      title: "Remove member",
-      message: "Remove this member? Their saved analyses stay untouched.",
-      confirm: "Remove",
-    }))) {
-      return;
-    }
+    if (ASK[action] && !(await confirmInPage(ASK[action](who || uid)))) return;
     report(`${spec.verb}…`);
     try {
       await api(`${root}/seats/${encodeURIComponent(uid)}`,
@@ -109,12 +132,14 @@ export function wireRoster({ rows, email, add, base, report, reload, retry = rel
     }
   }
 
-  async function withdraw(inviteId) {
+  async function withdraw(inviteId, who) {
     const root = base();
     if (!root) return;
     if (!(await confirmInPage({
       title: "Withdraw invitation",
-      message: "Withdraw this invitation? Nobody has claimed it yet.",
+      message: `Withdraw the invitation to ${who || "this address"}?
+
+Nobody has claimed it yet.`,
       confirm: "Withdraw",
     }))) return;
     report("Withdrawing…");
@@ -159,8 +184,8 @@ export function wireRoster({ rows, email, add, base, report, reload, retry = rel
   rows.addEventListener("click", (ev) => {
     const btn = ev.target.closest("button");
     if (!btn) return;
-    if (btn.dataset.act) act(btn.dataset.act, btn.dataset.uid);
-    else if (btn.dataset.invite) withdraw(btn.dataset.invite);
+    if (btn.dataset.act) act(btn.dataset.act, btn.dataset.uid, btn.dataset.email);
+    else if (btn.dataset.invite) withdraw(btn.dataset.invite, btn.dataset.email);
     else if ("retry" in btn.dataset) retry();
   });
   add.addEventListener("click", addMember);

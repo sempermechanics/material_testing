@@ -149,10 +149,20 @@ test("a click in the pending table off any Approve button sends nothing", async 
 
 const RELEASE = "POST /v1/admin/device-releases";
 
-async function release(email) {
+async function release(email, confirm = true) {
   $("releaseEmail").value = email;
+  if (email.trim()) confirms.answer(confirm);
   await click($("releasePhone"));
 }
+
+test("Release phone asks first, naming the account; declining sends nothing", async () => {
+  await openDesk();
+  await release("pat@lab.org", false);
+  assert.match(confirms.asked[0], /^Release the phone of pat@lab\.org\?/);
+  assert.deepEqual(sent(/device-releases/), []);
+  assert.equal($("releaseEmail").value, "pat@lab.org");
+  assert.equal($("releasePhone").disabled, false);
+});
 
 test("releasing a phone needs an address; nothing is sent without one", async () => {
   await openDesk();

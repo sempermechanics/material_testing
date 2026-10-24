@@ -129,6 +129,16 @@ function showPendingCount(count, more) {
 $("releasePhone").addEventListener("click", async () => {
   const email = $("releaseEmail").value.trim();
   if (!email) return setStatus("Enter the account's email.", true);
+  // Signs the account's phone out and holds it off for a day, on a typed
+  // address: say whose before doing it.
+  if (!(await confirmInPage({
+    title: "Release phone",
+    message: `Release the phone of ${email}?
+
+` +
+      "It is signed out and cannot sign in again for 24 hours; the new phone can then sign in.",
+    confirm: "Release",
+  }))) return;
   const btn = $("releasePhone");
   btn.disabled = true;
   try {
