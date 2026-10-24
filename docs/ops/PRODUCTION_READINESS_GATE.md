@@ -509,6 +509,31 @@ no isolation and no retries):
 | `consume_nonce` raised when it lost the transaction race | Replay attempts returned 500 instead of 401 | Fail closed: contention → deny |
 | `complete_file` raised when it lost the race | A client retry could 500 instead of resolving idempotently | Re-read and answer `already` / `""` |
 
+## Admin actions (external)
+
+The one list of what only the Admin (the owner, with console and `gcloud` access, or
+counsel) can do; the deploy checklist and CONTEXT point here instead of keeping their
+own copies. Each row's detail is in its TECH_DEBT row. Tick a row here when its
+done-when holds, and close or update the TD row in the same PR. Consolidated 2026-10-24
+from the readiness review.
+
+| # | Action | TD | Blocks | How | Done when |
+|---|---|---|---|---|---|
+| A1 | [ ] Monitoring live | TD-217 | production launch | Create a notification channel (Console → Monitoring → Alerting → Edit notification channels); `scripts/apply-monitoring.sh --project indicvision-dic-app --notification-channel <id> --apply`; then the `run.invoker` grant it prints under "By hand, once" ([DEPLOY_CHECKLIST_2026-10.md](DEPLOY_CHECKLIST_2026-10.md) §5) | 13 policies, 3 uptime checks and 4 dashboards exist, and a test notification reached the channel |
+| A2 | [ ] GCP posture fixed | TD-221, TD-222, TD-223, TD-224, TD-225, TD-227 | production launch | Re-run `scripts/check_gcp_posture.sh` (read-only; flags as in the launch blockers above), then fix each FAIL by console or `gcloud`: lien and `Prod` tag, a second owner through a Google group, Firestore delete protection, Android-package / referrer restrictions on the Firebase API keys, DATA_READ + DATA_WRITE audit logs for firebase, firebaserules, firebaseappcheck and firestore; record the Firestore location and enumeration protection | A posture run with no FAIL but 3.1 (A8) and 3.5 (A4), recorded in this gate |
+| A3 | [ ] Revocation acceptance | TD-214 | — (live since 2026-10-23) | Disable a test user in Firebase Auth; within the hour a console step-up answers 401 `invalid_token`, and an `AUTH_DENIED` row with `stage="revoked"` is written | Result recorded in TD-214 and the row closed |
+| A4 | [ ] Entitlement signing key, then its pins | TD-215 | offline licence enforcement | [BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A8 in order (P-256 key in Secret Manager, runtime-SA grant, `ENTITLEMENT_SIGNING_SECRET`, deploy); then the release variables `SEMPER_ENTITLEMENT_PUBKEYS` and `SEMPER_REQUIRE_ENTITLEMENT_PINS=true` ([ENVIRONMENTS.md](ENVIRONMENTS.md)) | `/v1/config` carries `entitlement`, and a release's `entitlement-pins` check passes |
+| A5 | [ ] Certificate pins decided | TD-218, TD-318 | — | Choose a pin set (leaf or intermediate SPKI and a backup, following the gateway chain) and set `SEMPER_API_CERT_PINS`, or accept system trust in Risk acceptance below | TD-318 fixed or risk-accepted |
+| A6 | [ ] Remaining lever drills | TD-220 | — | On staging: the `_MATERIAL_TESTING` pair with a Material Testing build; `ENTITLEMENT_OFFLINE_GRACE_DAYS`; `deploy-backend.yml` with `rollback_drill=true`; a revision rollback plus an env change by [RELEASING.md](RELEASING.md) "After a revision rollback"; confirm which lever variables are environment-scoped (Settings → Environments) | Each recorded with its run id in RELEASING's drill list |
+| A7 | [ ] Deploy follow-through | — | — | [DEPLOY_CHECKLIST_2026-10.md](DEPLOY_CHECKLIST_2026-10.md) §6: staff and IT phones re-register with TOTP, the 24 h log watch, the erasure check, ending the staging QC test account | §6 ticked |
+| A8 | [ ] Play, then App Check enforce | TD-229, TD-230, TD-231, TD-232, TD-226 | first Play release | Play developer account and listing; the Play app-signing SHA-256 on the Firebase Android app; the Data safety form ([PLAY_DATA_SAFETY.md](../legal/PLAY_DATA_SAFETY.md)); the pre-launch report; a closed-track rollout rehearsal by [RELEASING.md](RELEASING.md) stages; then `APP_CHECK_MODE` `monitor` → `enforce` once no build without a token is installed | Those rows closed |
+| A9 | [ ] Crashlytics alerts | TD-252 | — | Firebase console → Crashlytics → velocity alerts, routed to the on-call; send a test | A test alert reached the on-call |
+| A10 | [ ] Counsel | TD-277, TD-241, TD-36 | publishing the legal pages | Sign-off on the Terms; the breach playbook and a tabletop ([INCIDENT_RESPONSE.md](INCIDENT_RESPONSE.md)); the operator's legal fields in `docs/legal/` | Those rows closed |
+| A11 | [ ] Support targets | TD-258 | B2B contracts | Set response targets and maintenance windows in [SUPPORT_POLICY.md](SUPPORT_POLICY.md) | TD-258 closed |
+| A12 | [ ] Penetration test | TD-240 | production launch | A third-party test on [PENTEST_SCOPE.md](PENTEST_SCOPE.md) | Report filed, findings owned |
+| A13 | [ ] Device smoke of the next release | TD-219 | that release | [RELEASING.md](RELEASING.md) step 5 (the smoke, and `EnginePipelineSmokeTest` on one arm64 device or arm64 AVD) and TD-219's device checks (installs on Android 11, refused on Android 10), recorded in [CHANGELOG.md](CHANGELOG.md) | Recorded for the release |
+| A14 | [ ] Owner decisions | TD-319 | — | Whether the backend refuses device-signed upload and restore below `MIN_SUPPORTED_VERSION_CODE` by `X-App-Version` ([RELEASING.md](RELEASING.md), Rollback levers); whether Schemathesis or Hypothesis may be added (TD-319) | Each decided and recorded |
+
 ## External UNKNOWN register (do not invent PASS)
 
 | Control | Evidence |

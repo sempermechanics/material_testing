@@ -240,7 +240,7 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
 
 ## Still external (not deploy steps)
 
-Counsel's sign-off on the Terms (TD-277); Play Console: signing SHA, Data safety,
-pre-launch report (TD-229 to TD-232); App Check enforce (TD-226); liens, budgets
-and API-key restrictions (TD-221 to TD-225); the penetration test (TD-240). All
-are rows in [TECH_DEBT.md](TECH_DEBT.md).
+Every Admin action, deploy-related or not, is one table:
+[PRODUCTION_READINESS_GATE.md](PRODUCTION_READINESS_GATE.md#admin-actions-external)
+(A1–A14, each with its TD row, the command or console path, and when it is done).
+§5 and §6 here are its rows A1 and A7.

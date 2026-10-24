@@ -139,7 +139,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   `expireAt` TTL and the locked `audit-trail` log bucket went in 2026-10-23). The posture check's FAILs (18 on
   2026-10-22; 17 once 3.4's `CHECK_REVOKED_ON_STEP_UP` went live 2026-10-23, not re-run;
   [gate](docs/ops/PRODUCTION_READINESS_GATE.md)) are console or `gcloud` changes. Optional and
-  unset: TD-215 (entitlement key), TD-309.
+  unset: TD-215 (entitlement key), TD-309. Every Admin action is one table:
+  [gate § Admin actions](docs/ops/PRODUCTION_READINESS_GATE.md#admin-actions-external).
 - **App** `com.sempermechanics.semper` ([ADR-019](docs/adr/ADR-019-sempermechanics-app-id.md)).
   Latest release `v1.2-beta.4` (versionCode 1036, `33dce87d`, 2026-10-17, engine 0.4.2).
   On `main` since: **minSdk 30**, version gate, EMM config, AAB
