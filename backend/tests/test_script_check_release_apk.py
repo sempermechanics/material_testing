@@ -213,6 +213,70 @@ def test_missing_mapping_and_unreadable_min_sdk_fail(apk, tmp_path):
     assert res["r8-mapping"].status == "FAIL"
 
 
+_APP = "com.sempermechanics.semper"
+_OBFUSCATED = (
+    "# compiler: R8\n"
+    "com.sempermechanics.semper.SemperApp -> com.sempermechanics.semper.SemperApp:\n"
+    "com.sempermechanics.semper.data.Store -> a.b:\n"
+    "    void f() -> a\n"
+    "com.sempermechanics.semper.debug.DebugViewerSeedActivity -> R8$$REMOVED$$CLASS$$12:\n"
+)
+
+
+def _mapping(tmp_path, text):
+    path = tmp_path / "mapping.txt"
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def test_r8_mapping_that_renames_no_app_class_fails(apk, tmp_path):
+    """TE1-002: `-dontobfuscate` still writes `a -> a` lines; any ' -> ' line
+    passed. Evidence of obfuscation is an app class under a new name."""
+    identity = ("com.sempermechanics.semper.SemperApp -> com.sempermechanics.semper.SemperApp:\n"
+                "com.sempermechanics.semper.data.Store -> com.sempermechanics.semper.data.Store:\n"
+                "okhttp3.OkHttpClient -> a.a:\n")
+    res = _by_check(apk.evaluate(_facts(apk), expected_min_sdk=30, debug_names=_DEBUG,
+                                 mapping=_mapping(tmp_path, identity), app_package=_APP))
+    assert res["r8-mapping"].status == "FAIL"
+    assert "no com.sempermechanics.semper class renamed" in res["r8-mapping"].detail
+    res = _by_check(apk.evaluate(_facts(apk), expected_min_sdk=30, debug_names=_DEBUG,
+                                 mapping=_mapping(tmp_path, _OBFUSCATED), app_package=_APP))
+    assert res["r8-mapping"].status == "PASS", res["r8-mapping"].detail
+    assert "1 of 2 com.sempermechanics.semper class(es) renamed" in res["r8-mapping"].detail
+
+
+def test_debug_classes_are_found_under_their_obfuscated_names(apk, tmp_path):
+    """TE1-002: R8 renames a class that is not kept, so a dex search by the
+    original name misses it; the mapping's left-hand side does not. A class R8
+    removed (R8$$REMOVED$$) is not shipped."""
+    text = _OBFUSCATED + (
+        "com.sempermechanics.semper.debug.DebugTool -> b.c:\n"
+        "com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory -> d.e:\n"
+    )
+    res = _by_check(apk.evaluate(
+        _facts(apk), expected_min_sdk=30, mapping=_mapping(tmp_path, text), app_package=_APP,
+        debug_names=_DEBUG | {"com.sempermechanics.semper.debug.DebugTool"}))
+    assert res["debug-components"].status == "FAIL"
+    assert res["debug-components"].detail == "mapping: com.sempermechanics.semper.debug.DebugTool -> b.c"
+    assert res["appcheck-debug"].status == "FAIL"
+    assert "mapping: com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory -> d.e" \
+        in res["appcheck-debug"].detail
+    # The removed seed activity alone is no finding.
+    res = _by_check(apk.evaluate(_facts(apk), expected_min_sdk=30, debug_names=_DEBUG,
+                                 mapping=_mapping(tmp_path, _OBFUSCATED), app_package=_APP))
+    assert res["debug-components"].status == "PASS"
+    assert res["appcheck-debug"].status == "PASS"
+
+
+def test_main_requires_a_mapping(apk, tmp_path, capsys):
+    """TE1-002: without --mapping r8-mapping was a SKIP, so a release could
+    pass with no evidence R8 ran. Both workflows pass it."""
+    with pytest.raises(SystemExit) as exc:
+        apk.main([str(tmp_path / "app.apk"), "--aapt2", "aapt2"])
+    assert exc.value.code == 2
+    assert "--mapping" in capsys.readouterr().err
+
+
 def test_no_dex_is_a_failure_not_a_pass(apk):
     res = _by_check(apk.evaluate(_facts(apk, dex={}), expected_min_sdk=30, debug_names=_DEBUG, mapping=None))
     assert res["appcheck-debug"].status == "FAIL"
@@ -265,8 +329,7 @@ def _gradle(tmp_path: Path, min_sdk: int) -> Path:
 @pytest.mark.skipif(os.name == "nt", reason="fake aapt2 is a shebang script")
 def test_main_passes_a_release_apk(apk, tmp_path, capsys, monkeypatch):
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
-    mapping = tmp_path / "mapping.txt"
-    mapping.write_text("com.x.A -> a.a:\n", encoding="utf-8")
+    mapping = _mapping(tmp_path, _OBFUSCATED)
     code = apk.main([
         str(_zip(tmp_path, b"dex\n035\x00" + _PIN.encode())),
         "--aapt2", str(_fake_aapt2(tmp_path, "manifest_release.txt", "badging_release.txt")),
@@ -288,6 +351,7 @@ def test_main_fails_a_debug_apk_with_annotations(apk, tmp_path, capsys, monkeypa
         "--aapt2", str(_fake_aapt2(tmp_path, "manifest_debug.txt", "badging_debug.txt")),
         "--gradle", str(_gradle(tmp_path, 30)),
         "--debug-src", str(_REPO / "app" / "src" / "debug"),
+        "--mapping", str(_mapping(tmp_path, "")),
     ])
     captured = capsys.readouterr()
     assert code == 1
@@ -319,7 +383,8 @@ def test_aapt2_output_is_read_as_utf8_whatever_the_locale(tmp_path):
 
 
 def test_main_refuses_a_missing_apk(apk, tmp_path):
-    assert apk.main([str(tmp_path / "nope.apk"), "--aapt2", "/bin/true"]) == 2
+    assert apk.main([str(tmp_path / "nope.apk"), "--aapt2", "/bin/true",
+                     "--mapping", str(tmp_path / "mapping.txt")]) == 2
 
 
 def test_find_aapt2_prefers_the_newest_build_tools(apk, tmp_path, monkeypatch):

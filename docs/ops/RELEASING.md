@@ -231,14 +231,17 @@ so none of the signing steps run if any of the above fails.
    from the newest build-tools, plus a scan of every `classes*.dex`). It fails
    the release when the APK is debuggable or `testOnly`, ships a component or
    class from the debug source set (`app/src/debug`, e.g.
-   `DebugViewerSeedActivity`), contains `DebugAppCheckProviderFactory` or a
+   `DebugViewerSeedActivity`; found by name in the dex or, renamed, on the left
+   of R8's mapping), contains `DebugAppCheckProviderFactory` (dex or mapping) or a
    firebase-appcheck-debug version file, allows cleartext (manifest or network
    security config), has a `minSdkVersion` other than `minSdk` in
    `app/build.gradle.kts`, loses a consent default (`<application>` meta-data
    `firebase_crashlytics_collection_enabled`, `firebase_analytics_collection_enabled`
    and `google_analytics_adid_collection_enabled` must be present and `false`;
    no `AD_ID` or `ACCESS_ADSERVICES_*` permission, TD-232), or R8's
-   `mapping.txt` is missing or empty. It
+   `mapping.txt` is missing, empty, or renames no `com.sempermechanics.semper`
+   class (an identity mapping, as `-dontobfuscate` writes; `--mapping` is
+   required). It
    **warns** when no `sha256/…` pin is compiled in, i.e. the
    `SEMPER_API_CERT_PINS` secret was empty. CI tier 5 runs the same check on
    its own release build. Locally:

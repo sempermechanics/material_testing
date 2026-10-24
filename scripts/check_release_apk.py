@@ -14,15 +14,19 @@ Checks (FAIL exits 1; WARN is reported and does not fail):
                     `aapt2 dump badging`); android:testOnly is not true
   debug-components  no activity / alias / provider / receiver / service from the
                     debug source set (app/src/debug: its manifest and its
-                    classes) is in the manifest or in any classes*.dex
-  appcheck-debug    no `DebugAppCheckProviderFactory` in any classes*.dex, and no
-                    firebase-appcheck-debug version file in META-INF
+                    classes) is in the manifest, in any classes*.dex, or kept
+                    (under any name) in the R8 mapping
+  appcheck-debug    no `DebugAppCheckProviderFactory` in any classes*.dex or
+                    kept in the R8 mapping, and no firebase-appcheck-debug
+                    version file in META-INF
   cleartext         android:usesCleartextTraffic is not true, and the network
                     security config (when one is set and resolvable) does not
                     permit cleartext in base-config or a domain-config
   min-sdk           the APK's minSdkVersion equals `minSdk` in app/build.gradle.kts
-  r8-mapping        with --mapping: the file exists, is non-empty and holds
-                    `a -> b` lines (evidence R8 ran)
+  r8-mapping        --mapping (required): the file exists, holds class lines,
+                    and at least one class of the app's namespace maps to a
+                    new name (evidence R8 obfuscated; -dontobfuscate writes
+                    `a -> a`)
   cert-pins         WARN when no `sha256/<base64>` pin string is in the dex,
                     i.e. SEMPER_API_CERT_PINS (BuildConfig) was empty at build
   consent-defaults  <application> meta-data firebase_crashlytics_collection_enabled,
@@ -35,7 +39,7 @@ $ANDROID_HOME/build-tools/*/aapt2 (the same lookup the workflows use for
 apksigner). Standard library only.
 
 Usage:
-  python3 scripts/check_release_apk.py APP.apk [--mapping mapping.txt]
+  python3 scripts/check_release_apk.py APP.apk --mapping mapping.txt
       [--gradle app/build.gradle.kts] [--debug-src app/src/debug] [--aapt2 PATH]
 """
 
@@ -56,6 +60,7 @@ REPO = Path(__file__).resolve().parents[1]
 ANDROID_NS = "http://schemas.android.com/apk/res/android"
 COMPONENT_TAGS = ("activity", "activity-alias", "provider", "receiver", "service")
 DEBUG_APPCHECK = b"DebugAppCheckProviderFactory"
+R8_REMOVED = "R8$$REMOVED$$"
 PIN_RE = re.compile(rb"sha256/[A-Za-z0-9+/]{43}=")
 CONSENT_OFF_META = (
     "firebase_crashlytics_collection_enabled",
@@ -272,10 +277,36 @@ class ApkFacts:
     nsc_note: str = ""
 
 
+def parse_mapping(lines) -> dict[str, str]:
+    """Class lines of an R8 `mapping.txt`: original name -> name in the dex.
+    Member lines are indented; `#` lines are comments."""
+    out: dict[str, str] = {}
+    for line in lines:
+        if line.startswith((" ", "\t", "#")) or " -> " not in line:
+            continue
+        line = line.rstrip("\r\n")
+        if line.endswith(":"):
+            orig, new = line[:-1].split(" -> ", 1)
+            out[orig.strip()] = new.strip()
+    return out
+
+
+def kept_in(class_map: dict[str, str], name: str) -> bool:
+    """[name] is in the mapping and R8 kept it (under any name)."""
+    new = class_map.get(name)
+    return new is not None and not new.startswith(R8_REMOVED)
+
+
 def evaluate(facts: ApkFacts, *, expected_min_sdk: int | None, debug_names: set[str],
-             mapping: Path | None) -> list[Result]:
+             mapping: Path | None, app_package: str | None = None) -> list[Result]:
     results: list[Result] = []
     app = facts.manifest.find("application") or Element("application", 0)
+    # R8 renames every class that is not kept, so the dex alone cannot show a
+    # debug class under its original name; the mapping can (TE1-002).
+    class_map: dict[str, str] = {}
+    if mapping is not None and mapping.is_file():
+        with mapping.open(encoding="utf-8", errors="replace") as fh:
+            class_map = parse_mapping(fh)
 
     # debuggable / testOnly
     dbg_manifest = as_bool(app.attrs.get("android:debuggable")) is True
@@ -303,10 +334,14 @@ def evaluate(facts: ApkFacts, *, expected_min_sdk: int | None, debug_names: set[
         n for n in debug_names
         if any(dex_descriptor(n) in data for data in facts.dex.values())
     )
-    if in_manifest or in_dex:
+    in_mapping = sorted(f"{n} -> {class_map[n]}" for n in debug_names
+                        if n not in in_dex and kept_in(class_map, n))
+    if in_manifest or in_dex or in_mapping:
         parts = [f"manifest: {', '.join(in_manifest)}"] if in_manifest else []
         if in_dex:
             parts.append(f"dex: {', '.join(in_dex)}")
+        if in_mapping:
+            parts.append(f"mapping: {', '.join(in_mapping)}")
         results.append(Result("debug-components", "FAIL", "; ".join(parts)))
     elif not debug_names:
         results.append(Result("debug-components", "WARN", "no debug source set names found to check against"))
@@ -318,11 +353,14 @@ def evaluate(facts: ApkFacts, *, expected_min_sdk: int | None, debug_names: set[
     hits = sorted(name for name, data in facts.dex.items() if DEBUG_APPCHECK in data)
     meta = sorted(e for e in facts.entries
                   if e.startswith("META-INF/") and "firebase-appcheck-debug" in e)
-    if hits or meta:
+    mapped = sorted(f"{n} -> {class_map[n]}" for n in class_map
+                    if n.rsplit(".", 1)[-1] == DEBUG_APPCHECK.decode() and kept_in(class_map, n))
+    if hits or meta or mapped:
         results.append(Result("appcheck-debug", "FAIL",
                               "; ".join(filter(None, [
                                   f"DebugAppCheckProviderFactory in {', '.join(hits)}" if hits else "",
                                   f"{', '.join(meta)}" if meta else "",
+                                  f"mapping: {', '.join(mapped)}" if mapped else "",
                               ]))))
     elif not facts.dex:
         results.append(Result("appcheck-debug", "FAIL", "no classes*.dex in the APK"))
@@ -370,13 +408,23 @@ def evaluate(facts: ApkFacts, *, expected_min_sdk: int | None, debug_names: set[
         results.append(Result("r8-mapping", "SKIP", "no --mapping given"))
     elif not mapping.is_file() or mapping.stat().st_size == 0:
         results.append(Result("r8-mapping", "FAIL", f"{mapping} missing or empty: did R8 run?"))
+    elif not class_map:
+        results.append(Result("r8-mapping", "FAIL", f"{mapping} holds no class mappings"))
     else:
-        with mapping.open(encoding="utf-8", errors="replace") as fh:
-            classes = sum(1 for line in fh if " -> " in line and not line.startswith((" ", "#")))
-        if classes == 0:
-            results.append(Result("r8-mapping", "FAIL", f"{mapping} holds no class mappings"))
+        # -dontobfuscate still writes `a -> a` lines: the evidence is an app
+        # class (any class, without a package to look for) under a new name.
+        mine = {o: n for o, n in class_map.items()
+                if (app_package is None or o.startswith(app_package + ".")) and not n.startswith(R8_REMOVED)}
+        renamed = sum(1 for o, n in mine.items() if o != n)
+        scope = f"{app_package} " if app_package else ""
+        if renamed == 0:
+            results.append(Result("r8-mapping", "FAIL",
+                                  f"{len(class_map)} class mappings but no {scope}class renamed: "
+                                  "not obfuscated (-dontobfuscate or a blanket -keep?)"))
         else:
-            results.append(Result("r8-mapping", "PASS", f"{classes} class mappings"))
+            results.append(Result("r8-mapping", "PASS",
+                                  f"{renamed} of {len(mine)} {scope}class(es) renamed; "
+                                  f"{len(class_map)} class mappings"))
 
     # cert pins
     pins = sorted({m.group(0).decode() for data in facts.dex.values() for m in PIN_RE.finditer(data)})
@@ -472,7 +520,8 @@ def gather(apk: Path, aapt2: str) -> ApkFacts:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("apk", type=Path)
-    ap.add_argument("--mapping", type=Path, help="R8 mapping.txt (required to exist and be non-empty when given)")
+    ap.add_argument("--mapping", type=Path, required=True,
+                    help="R8 mapping.txt: must exist, and rename at least one class of the app's namespace")
     ap.add_argument("--gradle", type=Path, default=REPO / "app" / "build.gradle.kts")
     ap.add_argument("--debug-src", type=Path, default=REPO / "app" / "src" / "debug")
     ap.add_argument("--aapt2", help="path to aapt2 (default: $AAPT2, PATH, newest build-tools)")
@@ -488,6 +537,7 @@ def main(argv: list[str] | None = None) -> int:
         expected_min_sdk=gradle_min_sdk(gradle_text),
         debug_names=debug_classes(args.debug_src, gradle_namespace(gradle_text)),
         mapping=args.mapping,
+        app_package=gradle_namespace(gradle_text),
     )
     print(f"Release APK inspection: {args.apk}")
     print(render(results))
