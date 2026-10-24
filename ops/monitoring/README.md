@@ -80,7 +80,9 @@ its alert stays quiet and its chart flat, which is not the same as healthy.
 costs a Firestore read and a Drive call). Read the 503 detail in the access log
 (`firestore_unreachable`, `drive_unhealthy`, …): a dependency outage is not fixed by
 rolling back app code. If it started with a deploy, move traffic back to the previous
-revision (`gcloud run services update-traffic semper-api --to-revisions=<prev>=100`).
+revision (`gcloud run services update-traffic semper-api --to-revisions=<prev>=100
+--region asia-south1 --project indicvision-dic-app`), then follow "After a revision
+rollback" in [RELEASING.md](../../docs/ops/RELEASING.md) before any lever or redeploy.
 
 ### uptime-gateway
 The path the app takes, API Gateway `semper-gw`, failed from two or more regions

@@ -68,8 +68,9 @@ it cannot license a device the backend never licensed.
 
 **Compromise (SEV1).**
 
-1. **Stop issuing with the key.** Clear the repo variable
-   `ENTITLEMENT_SIGNING_SECRET` and redeploy (`deploy-backend.yml` mounts the key
+1. **Stop issuing with the key.** Clear the lever variable
+   `ENTITLEMENT_SIGNING_SECRET` (on the `production` environment and the
+   repository: [RELEASING.md](RELEASING.md), Lever variable scope) and redeploy (`deploy-backend.yml` mounts the key
    only when it is set, `.github/workflows/deploy-backend.yml:258-278`). `/v1/config`
    then carries no `entitlement`, and every app that receives that answer forgets
    its token (`EntitlementPolicy.intake` answers CLEAR, `EntitlementPolicy.kt:151-156`)
@@ -125,6 +126,9 @@ activation-anomaly alert.
 2. If it began with a deploy: `gcloud run services update-traffic semper-api
    --to-revisions=<previous>=100 --region asia-south1 --project indicvision-dic-app`
    (the deploy also tags the previous image `rollback-prev`, [BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A7).
+   Traffic is now pinned to that revision: before any lever or redeploy, read
+   **After a revision rollback** in [RELEASING.md](RELEASING.md) (revert on `main`
+   first; an env change goes on the serving image with `--no-traffic`).
 3. Effect on users: analysis is offline and keeps working. A device holding a
    valid token keeps its entitlement until `graceUntil`; a device without one runs
    on its cached config. **An outage shorter than the grace period does not change
@@ -156,9 +160,13 @@ Symptom: the `app-check-refused` alert (any `AUTH_DENIED` with
 `stage="app_check"` in 10 min; `auth-denied-spike` fires only above its total
 threshold), or users of a genuine build refused with `app_check_required`.
 
-1. Set the repo variable `APP_CHECK_MODE` to `monitor` (or `off`) and redeploy
+1. Set the lever variable `APP_CHECK_MODE` to `monitor` (or `off`) on the
+   `production` environment (`gh variable set APP_CHECK_MODE --env production`;
+   [RELEASING.md](RELEASING.md), Lever variable scope) and redeploy
    (`.github/workflows/deploy-backend.yml:324`). For speed, `gcloud run services
-   update semper-api --update-env-vars APP_CHECK_MODE=monitor --region asia-south1`
-   first; the variable must change too, or the next deploy re-applies `enforce`.
+   update semper-api --update-env-vars APP_CHECK_MODE=monitor --region asia-south1
+   --project indicvision-dic-app` first; the variable must change too, or the next
+   deploy re-applies `enforce`. If traffic is pinned by a revision rollback, that
+   update serves 0 %: follow **After a revision rollback** in RELEASING.md.
 2. Find the build that lacks a token (`appId`, `appVersion` on `app_check_missing`
    lines), and do not return to `enforce` while it is installed (TD-226).

@@ -168,17 +168,48 @@ should also refuse device-signed upload and restore below the minimum, by
 
 | Lever | Effect | How |
 |---|---|---|
-| `KILL_SWITCHES` | Switches off `backup`, `share`, `restore` or `upload` without a release. The backend refuses the guarded routes itself (503 `feature_paused`, `Retry-After: 300`; `backend/app/deps.py:295-330`), so it holds for every build, old ones included, which retry the 503; current builds also show the feature as paused. `share` has no route, so only builds that read `/v1/config` obey it | Repo variable, space-separated, then `deploy-backend.yml` ([ENVIRONMENTS.md](ENVIRONMENTS.md)); watch `event="feature_paused"` in the logs to see what it holds back |
-| `MIN_SUPPORTED_VERSION_CODE` | **Builds after `v1.2-beta.4` only** (above). Semper builds below it keep their analyses, viewer and exports, and cannot start an analysis, upload or restore until updated. `RECOMMENDED_VERSION_CODE` only nudges. Material Testing has its own pair, `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` / `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING`, because its versionCodes come from its own release counter (`settings.release_gate(app)`, `backend/app/config.py:293-300`) | Repo variable, redeploy. Raise the recommended one a release ahead. A local debug build at versionCode 1 is never gated |
-| `ENTITLEMENT_OFFLINE_GRACE_DAYS` | How long newly issued entitlement tokens hold offline; the fail-open / fail-closed lever for licensing. Tokens already issued keep theirs | Repo variable, redeploy ([ADR-023](../adr/ADR-023-signed-offline-entitlement.md)) |
+| `KILL_SWITCHES` | Switches off `backup`, `share`, `restore` or `upload` without a release. The backend refuses the guarded routes itself (503 `feature_paused`, `Retry-After: 300`; `backend/app/deps.py:295-330`), so it holds for every build, old ones included, which retry the 503; current builds also show the feature as paused. `share` has no route, so only builds that read `/v1/config` obey it | Lever variable (scope below), space-separated, then `deploy-backend.yml` ([ENVIRONMENTS.md](ENVIRONMENTS.md)); watch `event="feature_paused"` in the logs to see what it holds back |
+| `MIN_SUPPORTED_VERSION_CODE` | **Builds after `v1.2-beta.4` only** (above). Semper builds below it keep their analyses, viewer and exports, and cannot start an analysis, upload or restore until updated. `RECOMMENDED_VERSION_CODE` only nudges. Material Testing has its own pair, `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` / `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING`, because its versionCodes come from its own release counter (`settings.release_gate(app)`, `backend/app/config.py:293-300`) | Lever variable (scope below), redeploy. Raise the recommended one a release ahead. A local debug build at versionCode 1 is never gated |
+| `ENTITLEMENT_OFFLINE_GRACE_DAYS` | How long newly issued entitlement tokens hold offline; the fail-open / fail-closed lever for licensing. Tokens already issued keep theirs | Lever variable (scope below), redeploy ([ADR-023](../adr/ADR-023-signed-offline-entitlement.md)) |
 | `APP_CHECK_MODE` | `enforce` back to `monitor` or `off` | [INCIDENT_RESPONSE.md](INCIDENT_RESPONSE.md) |
-| Backend revision | Traffic back to the previous revision | `gcloud run services update-traffic semper-api --to-revisions=<previous>=100 --region asia-south1`; the image is kept as `rollback-prev` ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A7). Firestore is never rolled back by a deploy |
+| Backend revision | Traffic back to the previous revision | `gcloud run services update-traffic semper-api --to-revisions=<previous>=100 --region asia-south1 --project indicvision-dic-app`, then read **After a revision rollback** below; the image is kept as `rollback-prev` ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A7). Firestore is never rolled back by a deploy |
 | Hotfix | A new build with a higher `versionCode` | The release workflow's run number makes every release higher than the last (Versioning above); roll it out with the same stages, faster soak if the fix is narrow |
 
-Set a lever on the GitHub environment (`gh variable set NAME --env staging`), not
-the repository, so a drill on staging never reaches the next production deploy:
-`deploy-backend.yml` runs under `environment:`, whose variables win over the
-repository's.
+**Lever variable scope.** Set a lever on the GitHub environment of the service
+it is for: `gh variable set NAME --env production` (or `--env staging` for a
+drill), not on the repository. `deploy-backend.yml` runs under `environment:`,
+whose variables win over the repository's, so a drill on staging never reaches
+production, and a repository value is ignored wherever the environment sets the
+same name. Delete the environment value when the lever is released
+(`gh variable delete NAME --env production`). On 2026-10-24 (`gh variable list`)
+neither environment set any lever, and `APP_CHECK_MODE` was a repository variable,
+which an environment value overrides. [INCIDENT_RESPONSE.md](INCIDENT_RESPONSE.md)
+uses the same words.
+
+**After a revision rollback.** `update-traffic --to-revisions=<previous>=100`
+pins traffic to that revision by name, and every lever above then has a trap:
+
+1. **Revert first.** Do not dispatch `deploy-backend.yml` for a lever until the
+   bad commit is reverted on `main` (PR, `CI OK`): the workflow builds the commit
+   it is dispatched on and promotes it `--to-latest`, which re-ships the code you
+   rolled back.
+2. **An env change that cannot wait for the revert** goes on the serving image
+   with no traffic, then traffic moves to it by name:
+
+   ```bash
+   GC="--region asia-south1 --project indicvision-dic-app"
+   IMAGE=$(gcloud run revisions describe <previous> $GC --format='value(spec.containers[0].image)')
+   gcloud run services update semper-api $GC --image "$IMAGE" --update-env-vars K=V --no-traffic
+   gcloud run services update-traffic semper-api $GC --to-revisions=<new>=100
+   ```
+
+   `--image` matters: a new revision is built from the service template, which a
+   traffic move leaves on the bad revision (its image and its env), so compare the
+   two revisions' env too. Without `--no-traffic` and the move, a plain
+   `services update` on a pinned service makes a revision that serves 0 %.
+3. **Set the lever variable as well** (scope above), or the next deploy undoes the
+   change. Once `main` is fixed, a normal deploy returns the service to
+   `--to-latest`.
 
 **Drill on staging, 2026-10-22** (TD-220), with a debug build at versionCode 100
 pointed at `semper-api-staging`, signed in as a QC test account on an Android 14
