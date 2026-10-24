@@ -78,16 +78,18 @@
             android:forceDarkAllowed="false"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingHorizontal="8dp"
-            android:paddingVertical="10dp">
+            android:paddingHorizontal="4dp"
+            android:paddingVertical="6dp">
 
+            <!-- 48dp buttons with the 40dp puck inset (bg_chrome_ghost_touch): the bar's
+                 padding and gaps are 4dp less on each side, so it looks as it did. -->
             <ImageButton
                 android:id="@+id/btnViewerBack"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="@drawable/bg_chrome_ghost"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="@drawable/bg_chrome_ghost_touch"
                 android:contentDescription="@string/viewer_back_desc"
-                android:padding="8dp"
+                android:padding="12dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_nav_prev"
                 app:tint="@color/viewer_chrome_text" />
@@ -96,7 +98,7 @@
                 android:id="@+id/tvFinding"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginHorizontal="8dp"
+                android:layout_marginHorizontal="4dp"
                 android:layout_weight="1"
                 android:ellipsize="end"
                 android:maxLines="1"
@@ -111,35 +113,35 @@
 
             <ImageButton
                 android:id="@+id/btnViewerSettingsInfo"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:layout_marginEnd="12dp"
-                android:background="@drawable/bg_chrome_ghost"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginEnd="4dp"
+                android:background="@drawable/bg_chrome_ghost_touch"
                 android:contentDescription="@string/viewer_details_desc"
-                android:padding="10dp"
+                android:padding="14dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_info_min"
                 app:tint="@color/viewer_chrome_text" />
 
             <ImageButton
                 android:id="@+id/btnViewerHome"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:layout_marginEnd="16dp"
-                android:background="@drawable/bg_chrome_ghost"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/bg_chrome_ghost_touch"
                 android:contentDescription="@string/viewer_home_desc"
-                android:padding="8dp"
+                android:padding="12dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_home"
                 app:tint="@color/viewer_chrome_text" />
 
             <ImageButton
                 android:id="@+id/btnViewerShare"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="@drawable/bg_chrome_ghost"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="@drawable/bg_chrome_ghost_touch"
                 android:contentDescription="@string/action_share"
-                android:padding="10dp"
+                android:padding="14dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_share"
                 app:tint="@color/viewer_chrome_text" />
@@ -255,11 +257,11 @@
 
                 <ImageButton
                     android:id="@+id/btnSummaryCancel"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/summary_cancel_desc"
-                    android:padding="11dp"
+                    android:padding="15dp"
                     android:scaleType="fitCenter"
                     android:src="@drawable/ic_close"
                     android:visibility="gone"

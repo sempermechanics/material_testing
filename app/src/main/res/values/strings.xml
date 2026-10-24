@@ -449,6 +449,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="settings_max_frames">Max frames</string>
     <string name="settings_max_frames_info">A ceiling, not a target: it can only reduce a run, never add frames. It caps imported frames and frames sampled from a video. More frames = longer analysis and more memory.</string>
     <string name="info">Info</string>
+    <!-- An "i" button's TalkBack name: the setting its dialog explains (Dialogs.bindInfo). -->
+    <string name="info_about">About %1$s</string>
     <string name="action_sign_out">Sign out</string>
     <string name="about_title">About</string>
     <string name="about_message_fmt">Semper v%1$s (%2$d)\n\nPrivacy Policy and Terms of Service are available from the links below.</string>

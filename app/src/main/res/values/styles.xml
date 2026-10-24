@@ -148,11 +148,11 @@
     <!-- Floating glass field pills over the immersive heatmap (wireframe: rounded-full).
          Shape and colour are the immersive treatment — stadium, no stroke, translucent
          fill that inverts to solid when checked. Metrics are deliberately the LARGER
-         touch sizes the viewer settled on (40dp / 14sp), not the original compact
-         30dp / 11sp: the shape language changes, the tap target does not. -->
+         touch sizes the viewer settled on (48dp / 14sp, the minimum touch target),
+         not the original compact 30dp / 11sp. -->
     <style name="Widget.Semper.SegmentedButton.ViewerImmersive" parent="Widget.MaterialComponents.Button.OutlinedButton">
         <item name="android:textAllCaps">false</item>
-        <item name="android:minHeight">40dp</item>
+        <item name="android:minHeight">48dp</item>
         <item name="android:minWidth">0dp</item>
         <item name="android:insetTop">0dp</item>
         <item name="android:insetBottom">0dp</item>
@@ -191,7 +191,7 @@
     <style name="Widget.Semper.Button.ViewerPeekHome" parent="Widget.MaterialComponents.Button.UnelevatedButton">
         <item name="android:textAllCaps">false</item>
         <item name="android:textColor">@color/viewer_peek_text</item>
-        <item name="android:minHeight">44dp</item>
+        <item name="android:minHeight">48dp</item>
         <item name="backgroundTint">@color/viewer_glass_fill</item>
         <item name="strokeColor">@color/viewer_glass_stroke</item>
         <item name="strokeWidth">0.5dp</item>
@@ -246,7 +246,8 @@
         <item name="chipIconTint">@color/sky_primary</item>
         <item name="chipIconSize">16dp</item>
         <item name="chipMinHeight">32dp</item>
-        <item name="ensureMinTouchTargetSize">false</item>
+        <!-- A 32dp chip, padded out to a 48dp touch target. -->
+        <item name="ensureMinTouchTargetSize">true</item>
         <item name="rippleColor">@color/ripple_sky</item>
     </style>
 

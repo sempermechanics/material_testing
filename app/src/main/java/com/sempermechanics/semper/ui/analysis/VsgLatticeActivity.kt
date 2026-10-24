@@ -127,6 +127,7 @@ class VsgLatticeActivity : AppCompatActivity() {
 
         binding.toolbar.apply {
             setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
+            setNavigationContentDescription(R.string.back)
             setNavigationOnClickListener { finish() }
         }
 

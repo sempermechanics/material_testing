@@ -225,6 +225,7 @@ class StaticAnalysisActivity :
         binding.toolbar.apply {
             title = getString(R.string.new_analysis_title)
             setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
+            setNavigationContentDescription(R.string.back)
             setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
         }
         val maxFrames = AppSettings.maxFrames(this, AppRemoteConfig.maxFrames(this))

@@ -397,11 +397,12 @@
 
                             <ImageButton
                                 android:id="@+id/btnAutoFreeInfo"
-                                android:layout_width="18dp"
-                                android:layout_height="18dp"
-                                android:layout_marginStart="6dp"
+                                android:layout_width="48dp"
+                                android:layout_height="48dp"
+                                android:layout_marginStart="0dp"
                                 android:background="?attr/selectableItemBackgroundBorderless"
                                 android:contentDescription="@string/info"
+                                android:padding="15dp"
                                 android:scaleType="fitCenter"
                                 android:src="@drawable/ic_info_min"
                                 app:tint="@color/text_secondary" />
@@ -496,6 +497,7 @@
                     <com.google.android.material.switchmaterial.SwitchMaterial
                         android:id="@+id/switchDiagnostics"
                         android:layout_width="wrap_content"
+                        android:contentDescription="@string/settings_diagnostics"
                         android:layout_height="wrap_content" />
                 </LinearLayout>
 
@@ -532,6 +534,7 @@
                     <com.google.android.material.switchmaterial.SwitchMaterial
                         android:id="@+id/switchImprovementConsent"
                         android:layout_width="wrap_content"
+                        android:contentDescription="@string/settings_improve_title"
                         android:layout_height="wrap_content" />
                 </LinearLayout>
 
@@ -605,11 +608,12 @@
 
                         <ImageButton
                             android:id="@+id/btnMaxFramesInfo"
-                            android:layout_width="18dp"
-                            android:layout_height="18dp"
-                            android:layout_marginStart="6dp"
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
+                            android:layout_marginStart="0dp"
                             android:background="?attr/selectableItemBackgroundBorderless"
                             android:contentDescription="@string/info"
+                            android:padding="15dp"
                             android:scaleType="fitCenter"
                             android:src="@drawable/ic_info_min"
                             app:tint="@color/text_secondary" />

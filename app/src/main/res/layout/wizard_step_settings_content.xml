@@ -40,12 +40,12 @@
 
             <ImageButton
                 android:id="@+id/btnSweepInfo"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:layout_marginStart="@dimen/space_4"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/info"
-                android:padding="11dp"
+                android:padding="15dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_info_min"
                 app:tint="@color/viewer_chrome_muted" />
@@ -133,11 +133,11 @@
 
                 <ImageButton
                     android:id="@+id/btnPasteParams"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/action_paste_params"
-                    android:padding="9dp"
+                    android:padding="13dp"
                     android:scaleType="fitCenter"
                     android:src="@drawable/ic_content_paste"
                     android:visibility="gone"
@@ -146,11 +146,11 @@
 
                 <ImageButton
                     android:id="@+id/btnAdvancedReset"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/action_reset"
-                    android:padding="9dp"
+                    android:padding="13dp"
                     android:scaleType="fitCenter"
                     android:src="@drawable/ic_reset"
                     app:tint="@color/viewer_chrome_text" />
@@ -173,11 +173,12 @@
 
                 <ImageButton
                     android:id="@+id/btnSubsetInfo"
-                    android:layout_width="18dp"
-                    android:layout_height="18dp"
-                    android:layout_marginStart="6dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="0dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/info"
+                    android:padding="15dp"
                     android:scaleType="fitCenter"
                     android:src="@drawable/ic_info_min"
                     app:tint="@color/viewer_chrome_muted" />
@@ -234,6 +235,7 @@
                 android:id="@+id/sliderSubsetSize"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:contentDescription="@string/subset_size"
                 android:stepSize="2"
                 android:value="41"
                 android:valueFrom="15"
@@ -266,11 +268,12 @@
 
                 <ImageButton
                     android:id="@+id/btnStepInfo"
-                    android:layout_width="18dp"
-                    android:layout_height="18dp"
-                    android:layout_marginStart="6dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="0dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/info"
+                    android:padding="15dp"
                     android:scaleType="fitCenter"
                     android:src="@drawable/ic_info_min"
                     app:tint="@color/viewer_chrome_muted" />
@@ -310,6 +313,7 @@
                 android:id="@+id/sliderStepSize"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:contentDescription="@string/step_size_density"
                 android:stepSize="1"
                 android:value="5"
                 android:valueFrom="1"
@@ -343,11 +347,12 @@
 
                 <ImageButton
                     android:id="@+id/btnStrainInfo"
-                    android:layout_width="18dp"
-                    android:layout_height="18dp"
-                    android:layout_marginStart="6dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="0dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/info"
+                    android:padding="15dp"
                     android:scaleType="fitCenter"
                     android:src="@drawable/ic_info_min"
                     app:tint="@color/viewer_chrome_muted" />
@@ -397,6 +402,7 @@
                 android:id="@+id/sliderStrainWindow"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:contentDescription="@string/strain_window"
                 android:stepSize="2"
                 android:value="5"
                 android:valueFrom="3"
@@ -437,11 +443,12 @@
 
                     <ImageButton
                         android:id="@+id/btnOverlapInfo"
-                        android:layout_width="18dp"
-                        android:layout_height="18dp"
-                        android:layout_marginStart="6dp"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="0dp"
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:contentDescription="@string/info"
+                        android:padding="15dp"
                         android:scaleType="fitCenter"
                         android:src="@drawable/ic_info_min"
                         app:tint="@color/viewer_chrome_muted" />
@@ -616,11 +623,12 @@
                     <!-- Which frame to pick (sweep_frame_hint). -->
                     <ImageButton
                         android:id="@+id/btnSweepFrameInfo"
-                        android:layout_width="18dp"
-                        android:layout_height="18dp"
-                        android:layout_marginStart="6dp"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="0dp"
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:contentDescription="@string/info"
+                        android:padding="15dp"
                         android:scaleType="fitCenter"
                         android:src="@drawable/ic_info_min"
                         app:tint="@color/viewer_chrome_muted" />
@@ -668,11 +676,11 @@
                      it matches (activity_result_viewer.xml, activity_vsg_lattice.xml). -->
                 <ImageButton
                     android:id="@+id/btnLatticeSamples"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:background="@drawable/bg_chrome_ghost"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="@drawable/bg_chrome_ghost_touch"
                     android:contentDescription="@string/lattice_samples_settings"
-                    android:padding="8dp"
+                    android:padding="12dp"
                     android:scaleType="fitCenter"
                     android:src="@drawable/ic_settings_gear"
                     app:tint="@color/viewer_chrome_text" />
@@ -691,11 +699,12 @@
 
                 <ImageButton
                     android:id="@+id/btnSamplesInfo"
-                    android:layout_width="18dp"
-                    android:layout_height="18dp"
-                    android:layout_marginEnd="4dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginEnd="0dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/info"
+                    android:padding="15dp"
                     android:scaleType="fitCenter"
                     android:src="@drawable/ic_info_min"
                     app:tint="@color/viewer_chrome_muted" />
@@ -798,12 +807,12 @@
 
             <ImageButton
                 android:id="@+id/btnEngineFailFaq"
-                android:layout_width="28dp"
-                android:layout_height="28dp"
-                android:layout_marginStart="4dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="0dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/warn_faq_desc"
-                android:padding="4dp"
+                android:padding="14dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_info_min"
                 android:visibility="gone"
