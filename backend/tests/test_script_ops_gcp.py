@@ -63,7 +63,7 @@ def _run(tmp_path: Path, script: Path, scenario: str | Path, *args: str, state: 
         "STUB_STATE": str(tmp_path / state),
         "HOME": str(tmp_path),
     }
-    proc = subprocess.run(["bash", str(script), *args], capture_output=True, text=True, env=env, timeout=120)
+    proc = subprocess.run(["bash", str(script), *args], capture_output=True, text=True, env=env, timeout=120)  # noqa: S603,S607 - fixed bash and this repo's own script, no shell
     calls = log.read_text(encoding="utf-8").splitlines()
     return proc, calls
 

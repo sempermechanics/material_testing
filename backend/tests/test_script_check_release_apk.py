@@ -480,7 +480,7 @@ def test_aapt2_output_is_read_as_utf8_whatever_the_locale(tmp_path):
     )
     env = dict(os.environ, PYTHONUTF8="0", PYTHONCOERCECLOCALE="0", LC_ALL="C", LANG="C")
     env.pop("PYTHONIOENCODING", None)
-    proc = subprocess.run([sys.executable, str(probe)], capture_output=True, text=True, env=env, check=False)
+    proc = subprocess.run([sys.executable, str(probe)], capture_output=True, text=True, env=env, check=False)  # noqa: S603 - argv is sys.executable and a probe this test wrote, no shell
     assert proc.returncode == 0, proc.stderr
     assert proc.stdout.strip() == ascii("label=с✓")
 

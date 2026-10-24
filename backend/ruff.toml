@@ -23,6 +23,3 @@ select = ["E4", "E7", "E9", "F", "BLE", "S"]
 # (`ruff check ... ../scripts/`), are not yet triaged for S: 19 findings, a
 # TECH_DEBT row (readiness TE5-010). Their other rules still apply.
 "../scripts/**" = ["S"]
-# Another workstream owns this file in the 2026-10-24 readiness run: its one
-# `bash` subprocess (S603, S607) moves to a line noqa there (handoff).
-"tests/test_script_ops_gcp.py" = ["S603", "S607"]
