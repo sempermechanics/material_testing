@@ -13,6 +13,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -37,9 +38,12 @@ def _stub_path(tmp_path: Path) -> Path:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
     stub = _FIX / "stub_gcloud.py"
+    # The interpreter running the tests, not `env python3`: a test below
+    # shadows python3 on PATH.
+    body = stub.read_text(encoding="utf-8").split("\n", 1)[1]
     for name in ("gcloud", "curl"):
         target = bin_dir / name
-        target.write_text(stub.read_text(encoding="utf-8"), encoding="utf-8")
+        target.write_text(f"#!{sys.executable}\n{body}", encoding="utf-8")
         target.chmod(0o755)
     return bin_dir
 
@@ -247,6 +251,35 @@ def test_posture_wrapper_refuses_a_write(tmp_path):
     assert proc.returncode == 3
     assert "refusing non-read-only gcloud call" in proc.stderr
     assert calls == [] and "ran" not in proc.stdout
+
+
+def test_posture_runs_where_python3_is_only_the_store_alias(tmp_path):
+    """TE6-017: under Git Bash on Windows `python3` is the Microsoft Store
+    alias (prints "Python was not found", exits 49) and the interpreter is
+    `python`; native argv conversion there is no place for multi-line `-c`
+    programs. Both are emulated: python3 fails, and python refuses any
+    argument holding a newline."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "python3").write_text("#!/bin/sh\necho 'Python was not found; run without arguments to install"
+                                     " from the Microsoft Store' >&2\nexit 49\n", encoding="utf-8")
+    (bin_dir / "python").write_text(
+        "#!/bin/sh\nnl='\n'\nfor a in \"$@\"; do\n  case \"$a\" in *\"$nl\"*)\n"
+        "    echo 'multi-line argument refused' >&2; exit 97 ;;\n  esac\ndone\n"
+        f"exec {sys.executable} \"$@\"\n", encoding="utf-8")
+    for name in ("python3", "python"):
+        (bin_dir / name).chmod(0o755)
+    stamp = (datetime.now(timezone.utc) - timedelta(hours=5)).strftime("%Y%m%dT%H%M%SZ")
+    scenario = _variant(tmp_path, {"schedules.json": []}, [{
+        "match": ["storage", "ls", "gs://demo-backups/firestore/demo-app-prod/"],
+        "stdout": f"gs://demo-backups/firestore/demo-app-prod/{stamp}/\n",
+    }])
+    proc, _ = _run(tmp_path, _POSTURE, scenario, *_ARGS, "--backup-bucket", "demo-backups")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    lines = _lines(proc.stdout)
+    assert {s for s, _ in lines.values()} == {"PASS"}, proc.stdout
+    assert "5 h old" in lines[("2.7-backup", "demo-app-prod")][1]
+    assert "refused" not in proc.stderr and "not found" not in proc.stderr
 
 
 def test_posture_requires_its_arguments(tmp_path):
