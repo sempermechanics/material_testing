@@ -22,6 +22,7 @@ Secrets, vars, and GitHub Environments are mapped in
 
 ```
 secret-scan ─────────────────────────────┐
+engine-pin ──────────────────────────────┤
 legal-pages ─────────────────────────────┤
 console-pages ───────────────────────────┤
 changes ──┬──> tier1-app-fast ───────────┤
@@ -39,6 +40,7 @@ changes ──┬──> tier1-app-fast ───────────┤
 | Job | Proves | Path-filtered? | Typical (warm / cold) |
 |-----|--------|---|-----------------------|
 | `secret-scan` | gitleaks (see below) | No — always runs | ~1–2 min |
+| `engine-pin` | `scripts/check_engine_pin.py`: the `engine` gitlink points at a `v*` tag of the engine repository and, when it changed, descends from the previous pin (`HEAD^1`); the PR label `engine-downgrade` allows a backwards or sideways move (read at run time: re-run the job after adding it) (TE2-006) | No — always runs | seconds |
 | `legal-pages` | `scripts/render_legal_pages.py --check`: the published pages still match `docs/legal/`; `scripts/check_doc_paths.py`: every path a doc names exists; `scripts/check_framework_coverage.py`: every readiness-framework item (`docs/ops/READINESS_FRAMEWORK_2026-10.md`) has a row in the gate's cross-check and every open row an owner that exists in TECH_DEBT or FUTURE_IMPROVEMENTS; `scripts/check_kotlin_file_size.py`: no main Kotlin file over ADR-015's 500-line budget, fused hot loops not counted, the exceptions and their ceilings in `scripts/kotlin_file_size_allowlist.txt` (TD-292); `scripts/check_activity_scope_work.py`: no network call or WorkManager enqueue launched on a screen's `lifecycleScope` (ADR-016 rule 1), the triaged exceptions in `scripts/activity_scope_allowlist.txt` (TD-291); `scripts/check_swallowed_cancellation.py`: no broad catch or `runCatching` around a suspend call in `app/src/main` that swallows `CancellationException` (ADR-018), the triaged exceptions in `scripts/swallowed_cancellation_allowlist.txt` (TD-171); then the stdlib `unittest` suites in `scripts/tests` that test these source checks | No — always runs | seconds |
 | `console-pages` | `scripts/check_console.py`: the consoles' wiring, CSP, deploy placeholders and gateway paths — their only gate, since they have no compiler — plus `node --test`: the DOM-free `console/util.js`, `auth.js` (sign-in, second factor, step-up, `api`, revoke gate), `router.js`, and the operator, account and institution pages, against a fake Firebase SDK loaded through a `module.register` hook and a DOM parsed from the real pages (`firebase-hosting/tests/harness.mjs`), with line coverage of the console's JS gated at 96 % by `scripts/console_coverage.mjs` (merged by file from the raw V8 coverage; every `.js` under `public/` but `vendor/`). | No — always runs | seconds |
 | `changes` | Resolves path filters + PR/main/Dependabot mode into tier flags | — | seconds |
@@ -139,7 +141,7 @@ was deleted; the setting stays so the next one holds. Under the default
 A push to `main` filters against `github.event.before` (the previous `main`
 head), so a merge commit is judged by its whole PR. One with no base (a zero
 `before`) runs the full matrix. Empty path outputs otherwise fail **closed** to
-gates-only (`secret-scan` + `legal-pages` + `console-pages` + `ci-ok`), not a
+gates-only (`secret-scan` + `engine-pin` + `legal-pages` + `console-pages` + `ci-ok`), not a
 full matrix.
 
 ### Dependabot cheap path
@@ -174,7 +176,7 @@ That push uses `GITHUB_TOKEN`, which starts no CI run, so re-run the PR's checks
 afterwards (the status stays on the old commit until you do). See
 [RELEASING.md](RELEASING.md) § Bumping backend dependencies.
 
-`secret-scan`, `legal-pages` and `console-pages` are absent from the tables on
+`secret-scan`, `engine-pin`, `legal-pages` and `console-pages` are absent from the tables on
 purpose: they carry no path filter and run on every event.
 
 Skipped jobs count as success for `ci-ok`.
@@ -210,6 +212,7 @@ cd firestore-rules-tests && npm ci && \
   npx firebase emulators:exec --only firestore --project demo-rules --config firebase.json "node --test"  # rules (Java 21)
 
 # The two always-on gates
+python scripts/check_engine_pin.py                                          # engine-pin
 python scripts/render_legal_pages.py --check                                # legal-pages
 python scripts/check_doc_paths.py                                           # legal-pages
 python scripts/check_framework_coverage.py                                  # legal-pages
