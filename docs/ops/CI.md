@@ -230,7 +230,9 @@ The engine's own suites are not reproducible from this repo — run them in
 
 A separate `workflow_dispatch` workflow ([release.yml](../../.github/workflows/release.yml))
 builds a signed release APK and publishes it as a GitHub Release. Jobs only run
-when the workflow is dispatched from **`main`**. See [RELEASING.md](RELEASING.md).
+when the workflow is dispatched from **`main`**, and nothing is signed until
+`verify-ci` (`scripts/check_release_ci.py`) has found every job of a full-matrix
+CI run on that commit passed. See [RELEASING.md](RELEASING.md).
 
 Release builds **require** `SEMPER_API_BASE_URL` (repo or `release` environment
 variable — see [ENVIRONMENTS.md](ENVIRONMENTS.md)) and pass

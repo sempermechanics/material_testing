@@ -47,7 +47,10 @@ Check the R8 mapping reached Crashlytics (the release build uploads it); the wor
    release from a **full-matrix** run. A push to `main` runs the emulator and
    release tiers only when its diff touches them, so dispatch **Actions → CI →
    Run workflow** on `main` with `full_ci` ticked (or use that commit's weekly
-   run, if it is the head).
+   run, if it is the head). The Release workflow enforces it: its `verify-ci`
+   job (`scripts/check_release_ci.py`) fails unless the latest check run of every
+   CI job on the commit passed, not skipped (secret scan, legal and console
+   pages, tiers 1, 3, 4 and 5, Firestore rules, `CI OK`).
 3. **Tag and push** the commit you intend to release:
 
    ```bash
@@ -184,8 +187,8 @@ allow that long before calling a rollback done. The Material Testing pair and
 ## CI-based release (workflow_dispatch)
 
 The [`release.yml`](../../.github/workflows/release.yml) workflow runs
-`verify-legal` / `verify-android` / `verify-backend` in parallel, then
-`build-release` → `publish`. Dispatch from **`main` only**.
+`verify-legal` / `verify-android` / `verify-backend` / `verify-ci` in parallel,
+then `build-release` → `publish`. Dispatch from **`main` only**.
 
 ### Verify jobs — the gate
 
@@ -203,9 +206,16 @@ JVM unit tests, and backend pytest overlap instead of stacking:
 - `verify-backend` — the shared `backend-gate` action (hashed lock, `pip-audit`,
   ruff over `app/ tests/ scripts/ ../scripts/`, pytest at the 93 % floor), the
   same one CI and Deploy run.
+- `verify-ci` — what the three above do not re-run: reads the commit's check
+  runs (`gh api …/commits/<sha>/check-runs`, `checks: read`) and
+  [`scripts/check_release_ci.py`](../../scripts/check_release_ci.py) requires the
+  latest run of each CI job to have **passed**: the secret scan, legal pages,
+  console pages, tiers 1, 3, 4 and 5, Firestore rules and `CI OK`. A path-filtered
+  push run skips tiers 3 and 5, so it is not enough: run CI with `full_ci` first
+  (checklist step 2).
 
-`build-release` declares `needs: [verify-legal, verify-android, verify-backend]`,
-so none of the signing steps run if any of the above fails.
+`build-release` declares `needs: [verify-legal, verify-android, verify-backend,
+verify-ci]`, so none of the signing steps run if any of the above fails.
 
 ### `build-release` — sign and check
 
