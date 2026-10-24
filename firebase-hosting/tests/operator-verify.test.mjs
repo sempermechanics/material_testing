@@ -102,7 +102,7 @@ test("a licence with no roster, or a check that fails, says so in the panel", as
     [() => json(409, { detail: "kind_not_institution" }),
       "This is an individual licence: one holder, no roster, so there are no two counts to compare."],
     [() => json(503, { detail: "unavailable" }), "Could not check the seats: unavailable"],
-    [offline, "Could not check the seats: Failed to fetch"],
+    [offline, "Could not check the seats: The server could not be reached — check your connection and try again."],
   ]) {
     reset();
     await openDesk({ routes: { [RECONCILE]: reply } });

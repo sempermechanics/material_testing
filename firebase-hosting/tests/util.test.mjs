@@ -285,12 +285,12 @@ test("a failed re-authentication says the action was not sent", () => {
     "SEMP-2YCY was not revoked: the authenticator code was not entered. Revoke it again to retry.");
   assert.match(
     unfinishedStepUpText({ action: "delete", id: "x", reauthFailed: "auth/network-request-failed" }, "K"),
-    /re-authentication failed \(auth\/network-request-failed\)/);
+    /was not deleted: the sign-in service did not answer — check your connection\. /);
 });
 
-test("a failed re-authentication is said in words, an unknown reason as it came", () => {
+test("a failed re-authentication is said in words, an unknown reason as a reference", () => {
   assert.equal(reauthFailureText("cancelled"), "the authenticator code was not entered");
-  assert.equal(reauthFailureText("auth/x"), "re-authentication failed (auth/x)");
+  assert.equal(reauthFailureText("auth/x"), "re-authentication did not finish (ref: auth/x)");
 });
 
 /* ------------------------------------------------------- test accounts */

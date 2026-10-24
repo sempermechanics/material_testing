@@ -505,7 +505,7 @@ test("the other move refusals read as sentences, and an unknown one keeps its co
   assert.equal($("status").textContent, "Set up two-factor authentication first — moving a licence needs it.");
   reset();
   await unbind(json(409, { detail: "strange_thing" }));
-  assert.equal($("status").textContent, "Could not move your licence: strange_thing");
+  assert.equal($("status").textContent, "Could not move your licence: the server refused it (ref: strange_thing)");
 });
 
 /* ------------------------------------------------------------ download */

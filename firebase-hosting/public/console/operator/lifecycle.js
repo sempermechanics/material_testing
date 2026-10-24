@@ -173,7 +173,7 @@ async function loadDeleted() {
       ? rows.map(deletedRow).join("")
       : '<tr><td colspan="7" class="muted">Nothing deleted in the last 30 days.</td></tr>';
   } catch (e) {
-    $("deletedRows").innerHTML = retryRow(7, `Could not load: ${e.message}`);
+    $("deletedRows").innerHTML = retryRow(7, `Could not load: ${explain(e)}`);
   } finally {
     $("loadDeleted").disabled = false;
   }

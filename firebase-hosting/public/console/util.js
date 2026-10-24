@@ -262,7 +262,33 @@ export function unfinishedStepUpText(resume, label) {
 
 /** Why a step-up's return leg did not finish (`resume.reauthFailed`), in words. */
 export function reauthFailureText(reason) {
-  return REAUTH_FAILURES[reason] || `re-authentication failed (${reason})`;
+  return REAUTH_FAILURES[reason] || FIREBASE_ERRORS[reason] ||
+    `re-authentication did not finish (ref: ${reason})`;
+}
+
+// The Firebase Auth codes a console sign-in, step-up or enrolment can meet,
+// in words. Anything else is "an unexpected sign-in error (ref: <code>)".
+const FIREBASE_ERRORS = {
+  "auth/network-request-failed": "the sign-in service did not answer — check your connection",
+  "auth/too-many-requests": "too many attempts — wait a few minutes",
+  "auth/user-disabled": "this account has been disabled",
+  "auth/invalid-credential": "that password was not accepted",
+  "auth/wrong-password": "that password was not accepted",
+  "auth/user-mismatch": "that was a different account from the one signed in",
+  "auth/invalid-verification-code": "the authenticator code was not accepted",
+  "auth/totp-challenge-timeout": "the authenticator code came too late",
+  "auth/unauthorized-domain": "this address is not set up for sign-in",
+  "auth/web-storage-unsupported": "this browser blocks the storage sign-in needs",
+  "auth/internal-error": "the sign-in service had a problem — try again",
+};
+
+/**
+ * A Firebase (or sign-in) failure in words, for "Sign-in failed: …": its
+ * code's sentence, else the code as a reference. Never the bare code alone.
+ */
+export function authErrorText(e) {
+  const code = (e && e.code) || errorDetail(e && e.message).code;
+  return FIREBASE_ERRORS[code] || `an unexpected sign-in error (ref: ${code})`;
 }
 
 /* ------------------------------------------------------- test accounts */

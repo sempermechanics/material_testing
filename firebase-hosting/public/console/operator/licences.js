@@ -8,6 +8,7 @@ import {
   esc, day, licenceStatePill, licenceListPath, licenceSearchBody, searchableLicenceText, upsertLicence,
   placeholderRows, retryRow,
 } from "../util.js";
+import { explain } from "../messages.js";
 import { $, desk, demoCapNote } from "./state.js";
 
 // Whoever shows something derived from one licence, told when it is re-read.
@@ -96,7 +97,7 @@ export async function loadLicences(started) {
     if (ticket !== licenceLoad) return;
     const message = e.code === "not_admin"
       ? "That account is not a Semper operator."
-      : `Could not load licences: ${e.message}`;
+      : `Could not load licences: ${explain(e)}`;
     setStatus(message, true);
     $("licenceRows").innerHTML = retryRow(COLUMNS, message);
   } finally {
@@ -113,7 +114,9 @@ export async function refreshLicence(id) {
   try {
     showLicence(await api(`/v1/admin/licenses/${encodeURIComponent(id)}`));
   } catch (e) {
-    setStatus(`Changed, but the row could not be re-read: ${e.message}. Refresh to see it.`, true);
+    const why = explain(e);
+    setStatus(`Changed, but the row could not be re-read: ${why}${/[.!?]$/.test(why) ? "" : "."} ` +
+      "Refresh to see it.", true);
   }
 }
 
@@ -172,7 +175,7 @@ export async function searchLicences() {
     desk.searchHits = hits;
     renderLicences();
   } catch (e) {
-    setStatus(`Could not search: ${e.message}`, true);
+    setStatus(`Could not search: ${explain(e)}`, true);
   }
 }
 
@@ -192,7 +195,7 @@ async function loadMoreLicences() {
     desk.licencePage = data.page || {};
     renderLicences();
   } catch (e) {
-    setStatus(`Could not load more licences: ${e.message}`, true);
+    setStatus(`Could not load more licences: ${explain(e)}`, true);
   } finally {
     $("loadMore").disabled = false;
   }

@@ -9,7 +9,7 @@ import { requireSignIn } from "../auth.js";
 import { api, apiBlob, saveBlob } from "../api.js";
 import { confirmInPage } from "../dialogs.js";
 import { setStatus, markFirstData, whileWaiting } from "../status.js";
-import { esc, when, day, errorDetail, holdsLicence, placeholderRows, retryRow } from "../util.js";
+import { esc, when, day, holdsLicence, placeholderRows, retryRow } from "../util.js";
 import { explain as refusalText, ACCOUNT } from "../messages.js";
 import { mountSwitcher } from "../switcher.js";
 import { licencesAdministered } from "../roles.js";
@@ -71,7 +71,7 @@ async function loadAccount() {
     markFirstData();
     mountSwitcher("account", { me, licenses: administered });
   } catch (e) {
-    accountError = `Could not read your account: ${e.message}`;
+    accountError = `Could not read your account: ${refusalText(e)}`;
     setStatus(accountError, true);
     // The placeholders would otherwise read as still loading.
     $("pills").innerHTML = "";
@@ -309,7 +309,7 @@ async function loadSessions({ reset }) {
     setStatus(accountError, Boolean(accountError));
   } catch (e) {
     if (ticket !== sessionsLoad) return;
-    const message = `Could not list your analyses: ${e.message}`;
+    const message = `Could not list your analyses: ${refusalText(e)}`;
     setStatus(message, true);
     if (!sessions.length) $("rows").innerHTML = retryRow(6, message);
   } finally {
@@ -414,7 +414,7 @@ function downloadError(e) {
     rate_limited: "Too many downloads just now — wait a moment and try again.",
     drive_download_failed:
       "Storage did not answer. The analysis is intact; try again shortly.",
-  }, (text) => `Could not download: ${errorDetail(text).code}`);
+  }, (text) => `Could not download: ${text}`);
 }
 
 /**

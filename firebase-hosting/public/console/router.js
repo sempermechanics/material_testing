@@ -13,6 +13,7 @@ import { requireSignIn } from "./auth.js";
 import { api } from "./api.js";
 import { setStatus, whileWaiting } from "./status.js";
 import { esc } from "./util.js";
+import { explain } from "./messages.js";
 import { licencesAdministered } from "./roles.js";
 
 const $ = (id) => document.getElementById(id);
@@ -51,7 +52,7 @@ requireSignIn(async () => {
     // /v1/me failing is the one thing this page cannot work around: with
     // no answer about the caller there is nothing to route on. Offer all
     // three rather than guessing at one.
-    setStatus(`Could not tell where to send you: ${e.message}`, true);
+    setStatus(`Could not tell where to send you: ${explain(e)}`, true);
     offer(["operator", "institution", "account"], {
       title: "Choose a dashboard",
       help: "Each one will say plainly if it is not yours.",
@@ -66,8 +67,8 @@ function route(me, administered) {
 
   if (!administered.certain) {
     setStatus(
-      `Could not check whether you administer an institution licence ` +
-      `(${administered.why}).`,
+      "Could not check whether you administer an institution licence: " +
+      administered.why,
       true,
     );
     offer([...targets, "institution", "account"], {

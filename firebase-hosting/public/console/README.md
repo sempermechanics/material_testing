@@ -48,7 +48,13 @@ Shared beside them:
   to 5,000 events each. From / To are local days, sent as instants
   (`localDayRange`), because the rows are shown in local time.
 - `messages.js` — `explain(error, sentences, fallback)`: a page's own sentence
-  for a refusal code, else a common one, else the raw text; and `ACCOUNT`, the
+  for a refusal code, else a common one (`COMMON`), else the page's fallback
+  ("Could not delete: …") around why it failed: `REASONS` (platform refusals
+  such as `firestore_unreachable`, shared route ones such as `user_not_found`,
+  and `network` for a fetch with no answer), `GATEWAY` by status for a
+  non-JSON `http_<status>`, or "the server refused it (ref: <code>)" for a
+  code nobody wrote words for. A code is never the whole message. Firebase
+  codes go through `util.js` `authErrorText` the same way. And `ACCOUNT`, the
   account page's words, the claim card's refusal sentences among them. Its
   keys are camelCase: a snake_case key reads as a backend code to
   `check_console.py`, so the page maps codes onto them where it matches.

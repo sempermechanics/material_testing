@@ -30,7 +30,7 @@ test("a refused New device says so", async () => {
   confirms.answer(true);
   await click(rowButton("device", IND.id));
   assert.match(confirms.asked[0], /^Unbind SEMP-IND1 from the device it is on\?\n\nThe next device they sign in on takes it\./);
-  assert.deepEqual(status(), ["Could not unbind: license_revoked", "muted err"]);
+  assert.deepEqual(status(), ["Could not unbind: the server refused it (ref: license_revoked)", "muted err"]);
 });
 
 test("after a licence's row is redrawn, focus is back on that row", async () => {
@@ -154,7 +154,7 @@ test("a refused approval says why and leaves the button to press again", async (
   } });
   const approve = $("userRows").querySelector('button[data-approve="u2"]');
   await click(approve);
-  assert.deepEqual(status(), ["Could not approve: user_not_found", "muted err"]);
+  assert.deepEqual(status(), ["Could not approve: No Semper account has that address.", "muted err"]);
   assert.equal(approve.disabled, false);
   assert.deepEqual(sent(/users/), [PENDING, "POST /v1/admin/users/u2/approve"], "not re-read after a refusal");
 });
@@ -221,8 +221,8 @@ test("a refused release is explained, and the address stays for another try", as
     [() => json(409, { detail: "license_device_clear_required" }),
       "Could not release: That account is licensed: use New device on its licence."],
     [() => json(429, { detail: "rate_limited" }), "Could not release: Too many requests just now — wait a moment and try again."],
-    [() => json(404, { detail: "user_not_found" }), "Could not release: user_not_found"],
-    [offline, "Could not release: Failed to fetch"],
+    [() => json(404, { detail: "user_not_found" }), "Could not release: No Semper account has that address."],
+    [offline, "Could not release: The server could not be reached — check your connection and try again."],
   ]) {
     reset();
     await openDesk({ routes: { [RELEASE]: reply } });

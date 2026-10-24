@@ -44,7 +44,7 @@ export async function loadTiles(tiles, root, current = () => true) {
     const summary = await api(`${root}/summary`);
     if (current()) tiles.innerHTML = tilesHtml(summary);
   } catch (e) {
-    if (current()) tiles.innerHTML = `<p class="err">${esc(explain(e, {}, (text) => `Could not count seats: ${text}`))}</p>`;
+    if (current()) tiles.innerHTML = `<p class="err">Could not count seats: ${esc(explain(e))}</p>`;
   }
 }
 
@@ -84,7 +84,7 @@ export function rowResult({ outcome, error }) {
     case "exists": return "already on the roster";
     case "duplicate": return `repeats ${error || "an earlier row"}`;
     case "invalid": return "not an email address";
-    case "refused": return ROW_ERRORS[error] || `not added: ${error}`;
+    case "refused": return ROW_ERRORS[error] || `not added — the server refused it (ref: ${error})`;
     case "unprocessed": return "not reached — import the file again to finish";
     default: return outcome;
   }

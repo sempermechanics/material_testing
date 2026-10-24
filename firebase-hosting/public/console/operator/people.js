@@ -64,7 +64,7 @@ export async function showDeviceHistory(id) {
         : `No device moves recorded for ${labelOf(id)} yet.`,
     });
   } catch (e) {
-    setStatus(`Could not load device history: ${e.message}`, true);
+    setStatus(`Could not load device history: ${explain(e)}`, true);
   }
 }
 
@@ -109,7 +109,7 @@ export async function loadUsers(started) {
       : '<tr><td colspan="4" class="muted">Nobody waiting.</td></tr>';
   } catch (e) {
     if (ticket !== usersLoad) return;
-    $("userRows").innerHTML = retryRow(4, `Could not load: ${e.message}`);
+    $("userRows").innerHTML = retryRow(4, `Could not load: ${explain(e)}`);
   } finally {
     if (ticket === usersLoad) $("reloadUsers").disabled = false;
   }

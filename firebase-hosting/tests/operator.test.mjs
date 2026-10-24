@@ -405,7 +405,7 @@ test("a refused revoke reports the backend's code", async () => {
   prompts.answer("SEMP-IND1");
   rowButton("revoke", IND.id).click();
   await settle();
-  assert.deepEqual(status(), ["Could not revoke: license_revoked", "muted err"]);
+  assert.deepEqual(status(), ["Could not revoke: the server refused it (ref: license_revoked)", "muted err"]);
   assert.deepEqual(labels(), ["SEMP-IND1", "SEMP-UNI1"]);
 });
 

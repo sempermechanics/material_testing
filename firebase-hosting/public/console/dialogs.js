@@ -7,6 +7,7 @@
  * `confirm` / `alert`, because some browsers show none of them at all (the
  * Claude desktop app's browser pane answers "prompt() is not supported").
  */
+import { authErrorText } from "./util.js";
 
 /** The person closed a card instead of answering it. */
 export const ERR_CANCELLED = "console_cancelled";
@@ -302,9 +303,10 @@ export function enrolInPage(enrolment, account, qrSvg) {
         done(resolve);
       } catch (e) {
         card.querySelector(".confirm").disabled = false;
-        feedback.textContent =
-          `That code was not accepted (${e.code || e.message}). ` +
-          "Check the phone's clock is set automatically, then try the next code.";
+        feedback.textContent = e.code === "auth/invalid-verification-code"
+          ? "That code was not accepted. Check the phone's clock is set automatically, " +
+            "then try the next code."
+          : `That did not work: ${authErrorText(e)}. Try the next code.`;
       }
     };
     card.querySelector(".confirm").addEventListener("click", confirm);

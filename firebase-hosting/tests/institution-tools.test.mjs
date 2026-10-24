@@ -94,6 +94,11 @@ test("counts that fail to load say so, and the roster stays", async () => {
   assert.equal(tableRows("rows").length, 2);
 });
 
+test("a gateway refusal of the counts reads as words, not http_503 (AE2V-002)", async () => {
+  await open({ routes: { [`GET ${L1}/summary`]: () => new Response("<html>unavailable</html>", { status: 503 }) } });
+  assert.equal(text($("tiles")), "Could not count seats: The server did not answer — try again in a moment.");
+});
+
 test("counts for a licence no longer shown are dropped, and so is its failure", async () => {
   for (const late of [json(200, { counts }), json(500, { detail: "late" })]) {
     reset();
@@ -262,7 +267,7 @@ test("every import outcome reads as a sentence", () => {
   assert.equal(said("refused", "license_seats_exhausted"), "no seats left on this licence");
   assert.equal(said("refused", "member_already_licensed"),
     "already has a Semper licence of their own — Semper support can move them");
-  assert.equal(said("refused", "strange"), "not added: strange");
+  assert.equal(said("refused", "strange"), "not added — the server refused it (ref: strange)");
   assert.equal(said("unprocessed", "roster_row_unprocessed"), "not reached — import the file again to finish");
   assert.equal(said("novel"), "novel");
   assert.equal(importSummary({ refused: 2, unprocessed: 3 }), "2 not added, 3 not reached.");

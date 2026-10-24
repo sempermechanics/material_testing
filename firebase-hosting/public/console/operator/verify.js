@@ -1,5 +1,6 @@
 import { api } from "../api.js";
 import { esc, when, placeholderRows, retryRow } from "../util.js";
+import { explain } from "../messages.js";
 import { $, desk, labelOf } from "./state.js";
 import { renderLicences, onLicenceRead } from "./licences.js";
 
@@ -71,7 +72,7 @@ async function loadVerified(id) {
     const msg = individual
       ? "This is an individual licence: one holder, no roster, so there " +
         "are no two counts to compare."
-      : `Could not check the seats: ${e.message}`;
+      : `Could not check the seats: ${explain(e)}`;
     $("verifySummary").innerHTML = `<span class="err">${esc(msg)}</span>`;
     $("verifyRows").innerHTML = individual ? "" : retryRow(4, "The seats were not checked.");
   } finally {

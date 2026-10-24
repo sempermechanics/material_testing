@@ -330,7 +330,7 @@ test("Withdraw asks first, deletes the invitation and reloads; a failure says so
   confirms.answer(true);
   $("rows").querySelector('button[data-invite="i1"]').click();
   await settle();
-  assert.deepEqual(status(), ["Could not withdraw: invite_not_found", "muted err"]);
+  assert.deepEqual(status(), ["Could not withdraw: That invitation is no longer open: it was withdrawn or claimed. Reload to see the roster.", "muted err"]);
 });
 
 /* ---------------------------------------------------------- add member */
