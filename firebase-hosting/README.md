@@ -51,19 +51,18 @@ Then deploy Hosting (below) so the live pages match what shipped.
 
 ## Digital Asset Links source of truth
 
-`firebase.json` sets `"appAssociation": "AUTO"`. That means **Firebase Hosting
-generates and serves** `/.well-known/assetlinks.json` from the Android apps
-registered on this Firebase project (package name + SHA-256 fingerprints in the
-Firebase / Play console). The live URL above is what Android verifies against.
-
 The checked-in [`public/.well-known/assetlinks.json`](public/.well-known/assetlinks.json)
-is a **local reference / template** of the fingerprints we expect — useful when
-adding a release key or debugging — not the deploy-time source of truth while
-`AUTO` is set. Keep the console fingerprints in sync with that file.
+**is what Hosting serves** at `/.well-known/assetlinks.json` on both hosts, and
+the URL Android verifies against. `firebase.json` also sets
+`"appAssociation": "AUTO"`, but a deployed file at that path is what both hosts
+answer with: the 2026-10-07 deploy of this file changed what each served
+([CHANGELOG](../docs/ops/CHANGELOG.md), "Material Testing's debug key in
+`assetlinks.json`"). So an edit here goes live with the next Hosting deploy, and
+`release.yml` checks this file for the release certificate before publishing.
 
 ## Release fingerprint (already shipped)
 
-The checked-in template lists **both** the debug signing key and the release
+The checked-in file lists **both** the debug signing key and the release
 signing certificate SHA-256 (no placeholder). Keep Firebase Console / Play App
 Signing fingerprints in sync with that file, and redeploy Hosting after any
 rotation. Get a keystore's SHA-256 with:
@@ -77,13 +76,21 @@ workflow greps this file for the APK's certificate before publishing.
 
 ## Deploy
 
-Requires the Firebase CLI (`npm i -g firebase-tools`) and access to the
-`indicvision-dic-app-auth` project.
+Never a bare `firebase deploy`: it ships `config.js` with `__API_BASE_URL__` /
+`__API_ORIGIN__` unfilled and every console API call fails (2026-10-07), and any
+Hosting deploy replaces the whole site, an `assetlinks.json`-only change too. From
+a **clean `main`** checkout, with the Firebase CLI and access to
+`indicvision-dic-app-auth`:
 
 ```bash
-cd firebase-hosting
-firebase deploy --only hosting
+API_BASE_URL=<INDIC_API_BASE_URL repo variable> ./scripts/deploy-console.sh
 ```
+
+The script fills the placeholders, deploys, restores the templates, and runs
+`scripts/check_live_console.py`, which fails if the live site still holds a `__`
+placeholder. While `main` holds legal text counsel has not cleared, deploy as
+[DEPLOY_CHECKLIST_2026-10.md](../docs/ops/DEPLOY_CHECKLIST_2026-10.md) §4 says
+(`/privacy` and `/terms` from the last cleared commit).
 
 ## Verify the App Link
 
