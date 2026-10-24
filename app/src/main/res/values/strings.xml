@@ -742,6 +742,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- The collapsible section holding the overlap, the interpolation and the reference. -->
     <string name="param_advanced">Advanced</string>
     <string name="run_compute_eta_fmt">Compute · %1$s</string>
+    <!-- What TalkBack reads for Compute with a time: "Compute, about 1 minute". -->
+    <string name="run_compute_eta_spoken_fmt">Compute, %1$s</string>
     <string name="run_estimate_seconds_fmt">about %1$d s</string>
     <string name="run_estimate_minutes_fmt">about %1$d min</string>
     <!-- The same times without "about", for the sweep's short run button, and spoken in full. -->

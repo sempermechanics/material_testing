@@ -127,6 +127,9 @@ class FontScaleLayoutTest {
         val room = compute.width - compute.totalPaddingLeft - compute.totalPaddingRight
         val lines = compute.layout.lineCount
         assertTrue("Compute label '${compute.text}' needs $lines lines of ${compute.maxLines}", lines <= compute.maxLines)
+        val midWord = (0 until lines - 1).map { compute.layout.getLineEnd(it) }
+            .filter { end -> !compute.text[end - 1].isWhitespace() }
+        assertEquals("Compute label breaks mid-word at $midWord", emptyList<Int>(), midWord)
         val widest = (0 until lines).maxOf { compute.layout.getLineWidth(it) }
         assertTrue("Compute label line is ${widest}px in ${room}px", widest <= room)
         val textHeight = compute.layout.height + compute.totalPaddingTop + compute.totalPaddingBottom
