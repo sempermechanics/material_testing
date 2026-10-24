@@ -99,6 +99,40 @@ class FontScaleLayoutTest {
             assertTrue("$name is ${field.width}px, needs ${field.textWidth()}px", field.width >= field.textWidth())
             assertTrue("$name ends at ${field.rightIn(root)} past ${root.width}", field.rightIn(root) <= root.width)
         }
+        for (id in intArrayOf(R.id.tvSubsetLabel, R.id.tvStrainLabel)) {
+            val label = root.findViewById<TextView>(id)
+            val name = ctx.resources.getResourceEntryName(id)
+            assertTrue("$name starts ${label.top}px above its row", label.top >= 0)
+            val text = label.text
+            val midWord = (0 until label.layout.lineCount - 1).map { label.layout.getLineEnd(it) }
+                .filter { end -> !text[end - 1].isWhitespace() }
+            assertEquals("$name breaks mid-word at $midWord", emptyList<Int>(), midWord)
+        }
+    }
+
+    @Test
+    fun `the wizard's Compute button shows its whole label at font scale 2`() {
+        val ctx = context(2f)
+        prepare = { root ->
+            // The parameters page's bar: Back and Compute.
+            root.findViewById<View>(R.id.btnBack).visibility = View.VISIBLE
+            root.findViewById<View>(R.id.btnNext).visibility = View.GONE
+            root.findViewById<TextView>(R.id.btnCalculateFullField).apply {
+                visibility = View.VISIBLE
+                text = ctx.getString(R.string.run_compute_eta_fmt, ctx.getString(R.string.run_estimate_minutes_fmt, 12))
+            }
+        }
+        val root = laidOut(ctx, R.layout.activity_static_analysis, merge = false, widthDp = PHONE_DP)
+        val compute = root.findViewById<TextView>(R.id.btnCalculateFullField)
+        val room = compute.width - compute.totalPaddingLeft - compute.totalPaddingRight
+        val lines = compute.layout.lineCount
+        assertTrue("Compute label '${compute.text}' needs $lines lines of ${compute.maxLines}", lines <= compute.maxLines)
+        val widest = (0 until lines).maxOf { compute.layout.getLineWidth(it) }
+        assertTrue("Compute label line is ${widest}px in ${room}px", widest <= room)
+        val textHeight = compute.layout.height + compute.totalPaddingTop + compute.totalPaddingBottom
+        assertTrue("Compute is ${compute.height}px high, its text ${textHeight}px", compute.height >= textHeight)
+        val back = root.findViewById<View>(R.id.btnBack)
+        assertEquals("Back and Compute heights", compute.height, back.height)
     }
 
     @Test

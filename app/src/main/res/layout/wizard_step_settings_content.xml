@@ -169,16 +169,17 @@
                     android:id="@+id/tvSubsetLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:minHeight="48dp"
                     android:text="@string/subset_size"
                     android:textColor="@color/viewer_chrome_text"
                     android:textStyle="bold"
                     app:layout_constrainedWidth="true"
-                    app:layout_constraintBottom_toBottomOf="@id/btnSubsetInfo"
                     app:layout_constraintEnd_toStartOf="@id/btnSubsetInfo"
                     app:layout_constraintHorizontal_bias="0"
                     app:layout_constraintHorizontal_chainStyle="packed"
                     app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toTopOf="@id/btnSubsetInfo" />
+                    app:layout_constraintTop_toTopOf="parent" />
 
                 <ImageButton
                     android:id="@+id/btnSubsetInfo"
@@ -191,7 +192,8 @@
                     android:src="@drawable/ic_info_min"
                     app:layout_constraintEnd_toStartOf="@id/etSubsetValue"
                     app:layout_constraintStart_toEndOf="@id/tvSubsetLabel"
-                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintBottom_toBottomOf="@id/tvSubsetLabel"
+                    app:layout_constraintTop_toTopOf="@id/tvSubsetLabel"
                     app:tint="@color/viewer_chrome_muted" />
 
                 <EditText
@@ -205,16 +207,16 @@
                     android:imeOptions="actionDone"
                     android:importantForAutofill="no"
                     android:inputType="number"
-                    android:maxEms="4"
+                    android:maxEms="3"
                     android:maxLength="3"
                     android:minEms="2"
                     android:paddingTop="0dp"
                     android:paddingBottom="0dp"
                     android:textColor="@color/sky_primary"
                     android:textStyle="bold"
-                    app:layout_constraintBottom_toBottomOf="@id/btnSubsetInfo"
+                    app:layout_constraintBottom_toBottomOf="@id/tvSubsetLabel"
                     app:layout_constraintEnd_toStartOf="@id/tvSubsetUnit"
-                    app:layout_constraintTop_toTopOf="@id/btnSubsetInfo"
+                    app:layout_constraintTop_toTopOf="@id/tvSubsetLabel"
                     tools:text="41" />
 
                 <TextView
@@ -240,7 +242,7 @@
                     app:chipMinHeight="24dp"
                     app:ensureMinTouchTargetSize="false"
                     app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/btnSubsetInfo"
+                    app:layout_constraintTop_toBottomOf="@id/tvSubsetLabel"
                     tools:text="Speckle 4.3 px"
                     tools:visibility="visible" />
             </androidx.constraintlayout.widget.ConstraintLayout>
@@ -359,16 +361,17 @@
                     android:id="@+id/tvStrainLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:minHeight="48dp"
                     android:text="@string/strain_window"
                     android:textColor="@color/viewer_chrome_text"
                     android:textStyle="bold"
                     app:layout_constrainedWidth="true"
-                    app:layout_constraintBottom_toBottomOf="@id/btnStrainInfo"
                     app:layout_constraintEnd_toStartOf="@id/btnStrainInfo"
                     app:layout_constraintHorizontal_bias="0"
                     app:layout_constraintHorizontal_chainStyle="packed"
                     app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toTopOf="@id/btnStrainInfo" />
+                    app:layout_constraintTop_toTopOf="parent" />
 
                 <ImageButton
                     android:id="@+id/btnStrainInfo"
@@ -381,7 +384,8 @@
                     android:src="@drawable/ic_info_min"
                     app:layout_constraintEnd_toStartOf="@id/etStrainValue"
                     app:layout_constraintStart_toEndOf="@id/tvStrainLabel"
-                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintBottom_toBottomOf="@id/tvStrainLabel"
+                    app:layout_constraintTop_toTopOf="@id/tvStrainLabel"
                     app:tint="@color/viewer_chrome_muted" />
 
                 <EditText
@@ -395,16 +399,16 @@
                     android:imeOptions="actionDone"
                     android:importantForAutofill="no"
                     android:inputType="number"
-                    android:maxEms="4"
+                    android:maxEms="3"
                     android:maxLength="3"
                     android:minEms="2"
                     android:paddingTop="0dp"
                     android:paddingBottom="0dp"
                     android:textColor="@color/sky_primary"
                     android:textStyle="bold"
-                    app:layout_constraintBottom_toBottomOf="@id/btnStrainInfo"
+                    app:layout_constraintBottom_toBottomOf="@id/tvStrainLabel"
                     app:layout_constraintEnd_toStartOf="@id/tvStrainUnit"
-                    app:layout_constraintTop_toTopOf="@id/btnStrainInfo"
+                    app:layout_constraintTop_toTopOf="@id/tvStrainLabel"
                     tools:text="5" />
 
                 <TextView
@@ -425,7 +429,7 @@
                     android:layout_height="wrap_content"
                     android:textAppearance="@style/TextAppearance.Semper.Caption"
                     app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/btnStrainInfo"
+                    app:layout_constraintTop_toBottomOf="@id/tvStrainLabel"
                     tools:text="21 px VSG" />
             </androidx.constraintlayout.widget.ConstraintLayout>
 
