@@ -54,7 +54,7 @@ export function seatRow(seat) {
           ? `<button class="secondary" data-act="clear" ${on} aria-label="New device for ${who}">New device</button>`
           : ""}
         ${seat.status === "active"
-          ? `<button class="secondary" data-act="hold" ${on} aria-label="Hold ${who}">Hold</button>`
+          ? `<button class="secondary" data-act="hold" ${on} aria-label="Pause ${who}">Pause</button>`
           : `<button class="secondary" data-act="unhold" ${on} aria-label="Resume ${who}">Resume</button>`}
         <button class="danger" data-act="remove" ${on} aria-label="Remove ${who}">Remove</button>
       </td>
@@ -74,7 +74,7 @@ export function inviteRow(invite) {
 
 const ACTIONS = {
   clear: { method: "PATCH", body: { clearDeviceLock: true }, verb: "Unlocking" },
-  hold: { method: "PATCH", body: { enabled: false }, verb: "Holding" },
+  hold: { method: "PATCH", body: { enabled: false }, verb: "Pausing" },
   unhold: { method: "PATCH", body: { enabled: true }, verb: "Resuming" },
   remove: { method: "DELETE", verb: "Removing" },
 };
@@ -95,7 +95,7 @@ const ASK = {
     message: `Remove ${who} from this licence?
 
 ` +
-      "They drop to the demo the next time their phone checks in. Their " +
+      "They drop to Demo the next time their phone checks in. Their " +
       "saved analyses stay untouched.",
     confirm: "Remove",
   }),
@@ -105,7 +105,7 @@ const ASK = {
 export const PAGE_ROWS = 100;
 
 /** A seat's status as the Status cell words it, for the filter and the sort. */
-const STATUS_WORDS = { active: "active", disabled: "on hold", revoked: "removed" };
+const STATUS_WORDS = { active: "active", disabled: "paused", revoked: "removed" };
 
 /** One roster line, seat or invite, with what the filter and sort read. */
 function entry(kind, item) {
@@ -222,7 +222,7 @@ Nobody has claimed it yet.`,
         member_already_licensed: `${address} already has a Semper licence of their own. ` +
           "Ask Semper support to move them onto this one.",
         license_seats_exhausted: "This licence has no seats left.",
-        license_seat_disabled: "That seat is on hold — resume it instead.",
+        license_seat_disabled: "That seat is paused — resume it instead.",
       }, (text) => `Could not add ${address}: ${text}`), true);
     }
   }

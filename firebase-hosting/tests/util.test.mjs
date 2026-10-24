@@ -83,7 +83,7 @@ test("a live lease shows its end", () => {
 test("seat cells: four columns, status labels, escaped member", () => {
   const html = seatCells({ uid: "u<2>", status: "disabled", deviceIdLock: "abcdefghijklmnop" }, NOW);
   assert.equal(html.match(/<td/g).length, 4);
-  assert.match(html, /on hold/);
+  assert.match(html, /paused/);
   assert.match(html, /u&lt;2&gt;/);
   assert.match(html, /abcdefghij…/);
   assert.match(seatCells({ uid: "u", status: "revoked" }, NOW), /removed/);

@@ -104,7 +104,7 @@ test("a live licence shows its kind, key, end date, and may be moved", async () 
 test("a Demo key shows only 'demo', and there is nothing to move", async () => {
   await open({ license: { mode: "demo", held: false, kind: "individual", prefix: "SEMP-DEMO" } });
   assert.deepEqual(pills(), [["demo", "pill off"]]);
-  assert.match($("explain").textContent, /^You are on the demo\. Analyses are capped/);
+  assert.match($("explain").textContent, /^You are on Demo\. Analyses are capped/);
   assert.equal($("unbind").hidden, true);
   assert.equal($("release").hidden, true);
 });
@@ -121,7 +121,7 @@ test("a licence past its grace reads expired, and the account is on the demo", a
   } });
   assert.deepEqual(pills(), [["demo", "pill off"], ["individual", "pill"], [`expired ${day(expiresAt)}`, "pill off"]]);
   // Plain text, not a RegExp: day() ends "(UTC)".
-  const ended = `Your licence ended on ${day(expiresAt)} and its grace period is over`;
+  const ended = `Your licence ended on ${day(expiresAt)} and its after-expiry grace is over`;
   assert.ok($("explain").textContent.startsWith(ended), $("explain").textContent);
   assert.equal($("unbind").hidden, false, "a held licence can still be moved");
 });
@@ -139,7 +139,7 @@ test("a shared seat held shows until when, and can be given back", async () => {
   const leaseExpiresAt = iso(10 * 60e3);
   await open({ license: { mode: "licensed", held: true, seating: "floating", leaseExpiresAt } });
   assert.deepEqual(pills().at(-1), [`seat held until ${when(leaseExpiresAt)}`, "pill ok"]);
-  assert.match($("explain").textContent, /^You hold one of your institution's shared seats/);
+  assert.match($("explain").textContent, /^You have one of your institution's shared seats/);
   assert.equal($("release").hidden, false);
 });
 
@@ -189,8 +189,8 @@ const facts = () => {
   const values = $("facts").querySelectorAll("dd").map((el) => el.textContent);
   return terms.map((term, i) => [term, values[i]]);
 };
-const OFFLINE = "On a phone, licensed features keep working offline until the offline grace period " +
-  "ends; then the app falls back to the demo limits until it reconnects. Analyses you already have " +
+const OFFLINE = "On a phone, licensed features keep working offline until the offline allowance " +
+  "runs out; then the app falls back to Demo limits until it reconnects. Analyses you already have " +
   "stay available either way.";
 
 test("an institution licence is set out field by field: mode, licence, seats, end, grace, lease", async () => {
@@ -206,7 +206,7 @@ test("an institution licence is set out field by field: mode, licence, seats, en
     ["Licence", "Institution · SEMP-UNI1"],
     ["Seats", "Shared across the institution"],
     ["Ends", day(expiresAt)],
-    ["Grace period ends", day(graceEndsAt)],
+    ["After-expiry grace ends", day(graceEndsAt)],
     ["Shared seat", `Held until ${when(leaseExpiresAt)}`],
   ]);
   assert.equal($("offline").hidden, false);
@@ -230,7 +230,7 @@ test("an individual licence with no end has no seat lines; an institution seat n
 
 test("without a licence the facts say so and the offline line is not shown", async () => {
   await open({ license: { mode: "demo", held: false, kind: "individual", prefix: "SEMP-DEMO" } });
-  assert.deepEqual(facts(), [["Mode", "Demo"], ["Licence", "None — this account is on the demo"]]);
+  assert.deepEqual(facts(), [["Mode", "Demo"], ["Licence", "None — this account is on Demo"]]);
   assert.equal($("offline").hidden, true);
 });
 
@@ -277,8 +277,8 @@ test("over the demo cap on an inactive licence: everything kept, not a count to 
     sessions: { sessions: [], quota: { used: 120, max: 25 } },
   });
   assert.equal($("quota").textContent,
-    "120 analyses stored, all kept. While your licence is inactive the demo limit " +
-    "of 25 applies, so new analyses sync again once it is active.");
+    "120 analyses stored, all kept. While your licence is inactive the Demo limit " +
+    "of 25 applies, so new analyses are backed up again once it is active.");
 });
 
 test("over the cap on a plain Demo account is still 'N of M'", async () => {
@@ -465,7 +465,7 @@ test("moving the licence asks first and says when it can be moved again", async 
   await unbind(json(200, { nextChangeAllowedAt: next }));
   assert.deepEqual(sent(/unbind/), ["POST /v1/licenses/unbind"]);
   assert.equal($("status").textContent,
-    "Done. Sign in on the new device, open Semper once so the licence attaches, and then " +
+    "Done. Sign in on the new phone, open Semper once so the licence attaches, and then " +
     `restore your analyses. You can do this again after ${when(next)}.`);
 });
 
@@ -482,7 +482,7 @@ test("Material Testing moves on its own, named in the query", async () => {
   await settle();
   assert.deepEqual(sent(/unbind/), ["POST /v1/licenses/unbind?app=materialtesting"]);
   assert.equal($("status").textContent,
-    "Done. Sign in on the new device, open Material Testing once so the licence attaches, " +
+    "Done. Sign in on the new phone, open Material Testing once so the licence attaches, " +
     "and then restore your analyses.");
 });
 
@@ -549,7 +549,7 @@ test("a refused download is explained, whatever follows the code", async () => {
   button.click();
   await settle();
   assert.deepEqual(status(), [
-    "Downloading needs a licence. Demo analyses stay on the device that made them.", "muted err",
+    "Downloading needs a licence. Demo analyses stay on the phone that made them.", "muted err",
   ]);
   assert.equal(button.disabled, false);
 });

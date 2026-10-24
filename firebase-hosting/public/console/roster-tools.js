@@ -18,7 +18,7 @@ import { esc, MAX_IMPORT_ROWS, importRowCount } from "./util.js";
 const TILES = [
   ["assigned", "assigned", false],
   ["activeLast7Days", "active in the last 7 days", false],
-  ["onHold", "on hold", false],
+  ["onHold", "paused", false],
   ["invited", "invited", false],
   ["revocationPending", "removed, device not told yet", true],
   ["expiringWithin30Days", "seats ending within 30 days", true],
@@ -71,7 +71,7 @@ const ROW_ERRORS = {
   license_seats_exhausted: "no seats left on this licence",
   member_already_licensed: "already has a Semper licence of their own — Semper support can move them",
   invite_exists: "already promised a place on a different licence",
-  license_seat_disabled: "their seat is on hold — resume it instead",
+  license_seat_disabled: "their seat is paused — resume it instead",
   license_revoked: "this licence has been revoked",
   claim_contended: "busy just now — import the file again",
 };

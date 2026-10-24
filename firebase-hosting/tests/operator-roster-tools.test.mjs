@@ -82,7 +82,7 @@ function typeImport(value, id = "rosterImportText") {
 test("the roster card shows the seat counts from the staff route", async () => {
   await openCard();
   assert.deepEqual(tiles(), [
-    ["4 assigned", false], ["2 active in the last 7 days", false], ["1 on hold", false],
+    ["4 assigned", false], ["2 active in the last 7 days", false], ["1 paused", false],
     ["2 invited", false], ["1 removed, device not told yet", true], ["3 seats ending within 30 days", true],
   ]);
   assert.deepEqual(sent(/summary/), [`GET ${STAFF}/summary`]);

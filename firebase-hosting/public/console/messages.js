@@ -96,13 +96,13 @@ export const ACCOUNT = {
     licence: "Licence",
     seating: "Seats",
     ends: "Ends",
-    graceEnds: "Grace period ends",
+    graceEnds: "After-expiry grace ends",
     lease: "Shared seat",
   },
   modes: { licensed: "Licensed", demo: "Demo" },
   kinds: { individual: "Individual", institution: "Institution" },
   seating: { assigned: "One seat each", floating: "Shared across the institution" },
-  noLicence: "None — this account is on the demo",
+  noLicence: "None — this account is on Demo",
   noEnd: "No end date",
   leaseHeld: (until) => `Held until ${until}`,
   leaseNone: "Not held right now",
@@ -110,7 +110,7 @@ export const ACCOUNT = {
   // the server, but does not need to on every launch.
   offline:
     "On a phone, licensed features keep working offline until the offline " +
-    "grace period ends; then the app falls back to the demo limits until it " +
+    "allowance runs out; then the app falls back to Demo limits until it " +
     "reconnects. Analyses you already have stay available either way.",
   // Deleting needs the phone's device signature, so it is done in the app.
   // One account signs in to both apps, so the sign-in goes for both.
@@ -150,7 +150,7 @@ export const ACCOUNT = {
         "Reload the page to see it.",
       seatsExhausted: "Every seat on that institution licence is taken. Ask your institution's " +
         "IT to free or add one.",
-      seatDisabled: "Your institution has put your seat on hold. Ask your institution's IT to " +
+      seatDisabled: "Your institution has paused your seat. Ask your institution's IT to " +
         "resume it.",
       deviceInUse: "Your phone is registered to another Semper account. Sign in with that " +
         "account, or email support@sempermechanics.com to release the phone.",

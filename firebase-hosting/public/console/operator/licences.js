@@ -305,7 +305,7 @@ function verifiedNote(id) {
   if (!report) return "";
   const outstanding = report.counts.revokedStillRunning;
   return outstanding
-    ? ` · <span class="err">${outstanding} revoke${outstanding === 1 ? "" : "s"}` +
+    ? ` · <span class="err">${outstanding} removal${outstanding === 1 ? "" : "s"}` +
       ` not landed</span>`
     : ` · <span class="ok">${report.entitled} verified</span>`;
 }

@@ -16,23 +16,23 @@ import { renderLicences, onLicenceRead } from "./licences.js";
  */
 const SEAT_PROSE = {
   "": "On the roster and holding the licence.",
-  on_hold: "On hold. Occupies a seat; entitles nobody until it is resumed.",
+  on_hold: "Paused. Occupies a seat; entitles nobody until it is resumed.",
   no_account: "There is no account behind this seat. Occupies a seat; entitles nobody.",
   moved_on: "The account is on a different licence now. Occupies a seat here; entitles nobody.",
   demoted: "The account points here but is on Demo. Occupies a seat; entitles nobody.",
   still_licensed:
-    "The revoke did not land — this account is still licensed. " +
-    "Revoke the seat again to repair it.",
+    "The removal did not land — this account is still licensed. " +
+    "Remove the seat again to repair it.",
   no_checkin_since_revoke:
-    "Revoked, but this account has not been back since. The device may " +
+    "Removed, but this account has not been back since. The device may " +
     "still be running on the licence it cached.",
-  checked_in: "Revoked, and the account has been back since to hear it.",
+  checked_in: "Removed, and the account has been back since to hear it.",
 };
 
 // moved_on and no_account are reasons for both a live and a revoked seat.
 const REVOKED_PROSE = {
-  moved_on: "Revoked, and the account is on a different licence now.",
-  no_account: "Revoked, and there is no account behind the seat.",
+  moved_on: "Removed, and the account is on a different licence now.",
+  no_account: "Removed, and there is no account behind the seat.",
 };
 
 const SEAT_PILL = {
@@ -91,11 +91,11 @@ function verifiedSummary(report) {
   if (c.revokedStillRunning) {
     parts.push(
       `<span class="err"><strong>${c.revokedStillRunning}</strong> ` +
-      `revoke${c.revokedStillRunning === 1 ? " has" : "s have"} not ` +
+      `removal${c.revokedStillRunning === 1 ? " has" : "s have"} not ` +
       `landed yet</span> — see below for which, and why.`,
     );
   } else {
-    parts.push('<span class="ok">Every revoke has landed.</span>');
+    parts.push('<span class="ok">Every removal has landed.</span>');
   }
   // `neverClaimed` is what a backend before this change calls the same count.
   const idle = c.notEntitled ?? c.neverClaimed;

@@ -29,7 +29,7 @@ const DESTINATIONS = {
     href: "institution/",
     title: "Institution seats",
     blurb: "Add and remove members, see who is using a seat right now, " +
-           "put someone on hold, and let a member move to a new device. " +
+           "pause a seat, and let a member move to a new phone. " +
            "Needs two-factor authentication.",
   },
   account: {

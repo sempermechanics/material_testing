@@ -169,9 +169,9 @@ function endPill(lapsed) {
 
 function explain(licensed, floating, holdsSeat, held, lapsed) {
   if (!licensed && held && lapsed) {
-    return `Your licence ended on ${day(licence.expiresAt)} and its grace period ` +
-           "is over, so this account is on the demo. Your saved work is " +
-           "untouched. Ask your Semper contact or your IT department to renew it.";
+    return `Your licence ended on ${day(licence.expiresAt)} and its after-expiry ` +
+           "grace is over, so this account is on Demo. Your saved work is " +
+           "untouched. Ask your Semper contact or your institution's IT to renew it.";
   }
   // Only a seat you still hold on a live licence is waiting on a colleague.
   // A seat on hold or removed reads as demo too, and was told to wait for a
@@ -182,8 +182,8 @@ function explain(licensed, floating, holdsSeat, held, lapsed) {
            "on this account as soon as a colleague finishes.";
   }
   if (!licensed) {
-    return "You are on the demo. Analyses are capped and cloud backup is off. " +
-           "Ask your Semper contact or your IT department for a licence. Most " +
+    return "You are on Demo. Analyses are capped and cloud backup is off. " +
+           "Ask your Semper contact or your institution's IT for a licence. Most " +
            "attach to this address by themselves; if you were given a claim " +
            "code, redeem it below.";
   }
@@ -193,7 +193,7 @@ function explain(licensed, floating, holdsSeat, held, lapsed) {
   }
   if (floating) {
     return holdsSeat
-      ? "You hold one of your institution's shared seats. It renews itself " +
+      ? "You have one of your institution's shared seats. It renews itself " +
         "while you are working, and returns to the pool when you stop."
       : "Your institution's seats are shared.";
   }
@@ -205,7 +205,7 @@ $("release").addEventListener("click", async () => {
     title: "Give up your seat",
     message: "Give up your seat? Your saved work stays exactly as it is, and you " +
       "take another seat the next time you use Semper — if one is free.",
-    confirm: "Give up seat",
+    confirm: "Give up my seat",
   }))) return;
   setStatus("Returning your seat…");
   try {
@@ -235,9 +235,9 @@ $("unbindMt").addEventListener("click", () => unbind("materialtesting", "Materia
 async function unbind(app, name) {
   if (!(await confirmInPage({
     title: `Move ${name}`,
-    message: `Move ${name} to a different device?\n\n` +
+    message: `Move ${name} to another phone?\n\n` +
       `Nothing is deleted and nothing is cancelled. ${name} stops being ` +
-      "licensed on your current device, and attaches to the next device you " +
+      "licensed on your current phone, and attaches to the next phone you " +
       "sign in on. Your analyses come with you once it has.",
     confirm: "Move",
   }))) return;
@@ -246,7 +246,7 @@ async function unbind(app, name) {
     const path = app ? `/v1/licenses/unbind?app=${encodeURIComponent(app)}` : "/v1/licenses/unbind";
     const out = await api(path, { method: "POST" });
     setStatus(
-      `Done. Sign in on the new device, open ${name} once so the licence ` +
+      `Done. Sign in on the new phone, open ${name} once so the licence ` +
       "attaches, and then restore your analyses." +
       (out.nextChangeAllowedAt
         ? ` You can do this again after ${when(out.nextChangeAllowedAt)}.`
@@ -335,7 +335,7 @@ function renderQuota() {
     ? `${used} analyses stored.`
     : used > quota.max && inactive
       ? `${used} analyses stored, all kept. While your licence is inactive ` +
-        `the demo limit of ${quota.max} applies, so new analyses sync again ` +
+        `the Demo limit of ${quota.max} applies, so new analyses are backed up again ` +
         "once it is active."
       : `${used} of ${quota.max} analyses stored.`;
 }
@@ -408,7 +408,7 @@ function downloadError(e) {
     mfa_required:
       "Set up two-factor authentication first — downloads from a browser need it.",
     feature_not_licensed:
-      "Downloading needs a licence. Demo analyses stay on the device that made them.",
+      "Downloading needs a licence. Demo analyses stay on the phone that made them.",
     file_not_uploaded: "Nothing has finished uploading in that analysis yet.",
     session_not_found: "That analysis is no longer stored.",
     rate_limited: "Too many downloads just now — wait a moment and try again.",

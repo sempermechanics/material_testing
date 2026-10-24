@@ -774,7 +774,7 @@ test("the roster is read and changed through the staff routes, whoever IT lists"
   // The same actions IT has: the desk used to offer only New device and Remove.
   assert.deepEqual(
     $("rosterRows").querySelectorAll("button").map((b) => b.textContent.trim()),
-    ["New device", "Hold", "Remove", "Withdraw"],
+    ["New device", "Pause", "Remove", "Withdraw"],
   );
   confirms.answer(true);
   $("rosterRows").querySelector('button[data-act="remove"]').click();

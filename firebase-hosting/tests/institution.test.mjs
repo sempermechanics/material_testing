@@ -165,8 +165,8 @@ test("no cap reads unlimited, and no invites adds nothing", async () => {
 test("each member row offers only what applies to that seat", async () => {
   await open();
   assert.deepEqual(rows(), [
-    ["ana@uni.edu", "active", "—", "device-abc…", "New device Hold Remove"],
-    ["ben@uni.edu", "on hold", "—", "not yet", "Resume Remove"],
+    ["ana@uni.edu", "active", "—", "device-abc…", "New device Pause Remove"],
+    ["ben@uni.edu", "paused", "—", "not yet", "Resume Remove"],
     ["cy@uni.edu", "removed", "—", "not yet", "add again to restore"],
     ["dee@uni.edu", "invited", "—", "joins at first sign-in", "Withdraw"],
     ["eve@uni.edu", "invited", "—", "joins at first sign-in", "Withdraw"],
@@ -204,7 +204,7 @@ test("the filter narrows the roster by address, status or device", async () => {
     $("rowFilter").value = text;
     $("rowFilter").dispatch("input");
   };
-  filter("on hold");
+  filter("paused");
   assert.deepEqual(cellsOf(0), ["ben@uni.edu"]);
   filter("DEE@");
   assert.deepEqual(cellsOf(0), ["dee@uni.edu"]);
@@ -232,7 +232,7 @@ test("Member and Status sort the roster, and say which way", async () => {
   sortHead("status").click();
   assert.equal(ariaSort("status"), "ascending");
   assert.equal(ariaSort("member"), "none");
-  assert.deepEqual(cellsOf(1), ["active", "invited", "on hold", "removed"]);
+  assert.deepEqual(cellsOf(1), ["active", "invited", "paused", "removed"]);
 });
 
 test("the seat manager stays hidden until the licence list names this address", async () => {
@@ -336,7 +336,7 @@ test("New device asks first, naming the member; declining sends nothing", async 
 test("each row's buttons name the member they act on", async () => {
   await open();
   assert.equal(button("remove", "u1").getAttribute("aria-label"), "Remove ana@uni.edu");
-  assert.equal(button("hold", "u1").getAttribute("aria-label"), "Hold ana@uni.edu");
+  assert.equal(button("hold", "u1").getAttribute("aria-label"), "Pause ana@uni.edu");
   assert.equal(button("clear", "u1").getAttribute("aria-label"), "New device for ana@uni.edu");
   assert.equal(button("unhold", "u2").getAttribute("aria-label"), "Resume ben@uni.edu");
   assert.equal($("rows").querySelector('button[data-invite="i1"]').getAttribute("aria-label"),

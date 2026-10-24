@@ -90,7 +90,7 @@ export function leaseHeld(iso, now = Date.now()) {
 
 const SEAT_STATUS = {
   active: '<span class="pill ok">active</span>',
-  disabled: '<span class="pill warn">on hold</span>',
+  disabled: '<span class="pill warn">paused</span>',
   revoked: '<span class="pill off">removed</span>',
 };
 
