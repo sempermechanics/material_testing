@@ -15,11 +15,19 @@ export function esc(value) {
   );
 }
 
-/** A short, readable rendering of an ISO instant, or an em dash for null. */
+/**
+ * A short, readable rendering of an ISO instant in the browser's time zone,
+ * with that zone named ("Oct 18, 2026, 05:30 PM GMT+5:30"), or an em dash for
+ * null. Every instant the consoles show goes through here, so one page never
+ * mixes formats or zones; a calendar day stored in UTC is `day`.
+ */
 export function when(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString();
+  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString(undefined, {
+    year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+    timeZoneName: "short",
+  });
 }
 
 /**
@@ -28,16 +36,17 @@ export function when(iso) {
  * Licence ends are stored as the last second of the chosen day in UTC
  * (`YYYY-MM-DDT23:59:59Z`), so they are read back in UTC. `when` renders the
  * local time instead, and east of UTC that moved the day picked: an expiry set
- * for 30 June showed as 1 July, 05:29.
+ * for 30 June showed as 1 July, 05:29. It says "(UTC)", so beside a `when`
+ * time in the reader's own zone the two are not read as one clock.
  */
 export function day(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? "—"
-    : d.toLocaleDateString(undefined, {
+    : `${d.toLocaleDateString(undefined, {
       timeZone: "UTC", year: "numeric", month: "short", day: "numeric",
-    });
+    })} (UTC)`;
 }
 
 /**
@@ -349,6 +358,22 @@ export function auditQuery({ since = "", until = "" } = {}, extra = {}) {
   }
   const text = params.toString();
   return text ? `?${text}` : "";
+}
+
+/**
+ * The audit log's From / To dates (`YYYY-MM-DD`, as a date input gives them)
+ * as instants in the browser's time zone: From's local midnight, and the
+ * local midnight after To, so To's day is included. The rows are shown in
+ * local time (`when`); a bare date reached the backend as a UTC day, so east
+ * of UTC "18 Oct to 18 Oct" listed rows shown as 18 Oct 05:30 to 19 Oct 05:29.
+ * Anything not a date is passed on as typed, for the backend to refuse.
+ */
+export function localDayRange({ since = "", until = "" } = {}) {
+  const local = (text, after) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+    return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + after).toISOString() : text;
+  };
+  return { since: local(since, 0), until: local(until, 1) };
 }
 
 /** An address list typed as "a@x, b@x", normalised as the backend stores it. */

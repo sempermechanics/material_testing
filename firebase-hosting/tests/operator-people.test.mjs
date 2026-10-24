@@ -10,6 +10,7 @@ import { test, reset, settle, json, net, confirms, alerts, sent, $, loadAuth, de
 import { IND, openDesk, status, tableRows, rowButton, offline, bodyOf, PENDING } from "./operator-desk.mjs";
 
 await loadAuth();
+const { when } = await import("../public/console/util.js");
 
 beforeEach(reset);
 afterEach(async () => {
@@ -61,11 +62,13 @@ test("a device history line names what was left, signed out and bound, per app",
     { ts: "2026-10-07T11:25Z", action: "bind", uid: "u1" },
   ] }) } });
   await click(rowButton("history", IND.id));
+  // Each move's time as every other time on the desk is shown (when): local,
+  // its zone named, not the raw ISO string.
   assert.deepEqual(alerts, [
     "Device history for SEMP-IND1\n\n" +
-    "2026-10-07T11:21Z  clear  by staff  left dev-1  signed out dev-9  left mt-1 (Material Testing)\n" +
-    "?  clear  by —  left dev-2\n" +
-    "2026-10-07T11:25Z  bind  by u1",
+    `${when("2026-10-07T11:21Z")}  clear  by staff  left dev-1  signed out dev-9  left mt-1 (Material Testing)\n` +
+    "—  clear  by —  left dev-2\n" +
+    `${when("2026-10-07T11:25Z")}  bind  by u1`,
   ]);
 });
 

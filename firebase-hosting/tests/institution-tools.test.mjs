@@ -296,8 +296,14 @@ const events = [
     target: { type: "license", id: "L1" }, detail: {} },
 ];
 
+/** The query a From / To pair sends: local midnights, the To day included. */
+const localRange = (from, to) => new URLSearchParams({
+  ...(from ? { since: new Date(...from).toISOString() } : {}),
+  ...(to ? { until: new Date(...to).toISOString() } : {}),
+}).toString();
+
 test("Show reads the log for the dates chosen and names members by address", async () => {
-  const query = "since=2026-10-01&until=2026-10-02&page_size=50";
+  const query = `${localRange([2026, 9, 1], [2026, 9, 3])}&page_size=50`;
   await open({ routes: {
     [`GET ${L1}/audit?${query}`]: () => json(200, { events, page: { nextPageToken: "e2" } }),
     [`GET ${L1}/audit?${query}&page_token=e2`]: () => json(200, {
@@ -363,9 +369,9 @@ test("a log page for a licence no longer shown is dropped", async () => {
 
 test("the log exports as CSV and as JSON", async () => {
   await open({ routes: {
-    [`GET ${L1}/audit?since=2026-10-01&format=csv&page_size=5000`]: () =>
+    [`GET ${L1}/audit?${localRange([2026, 9, 1])}&format=csv&page_size=5000`]: () =>
       new Response("ts,action\r\n", { status: 200 }),
-    [`GET ${L1}/audit?since=2026-10-01&page_size=5000`]: () =>
+    [`GET ${L1}/audit?${localRange([2026, 9, 1])}&page_size=5000`]: () =>
       json(200, { licenseId: "L1", events, page: { hasMore: false } }),
   } });
   $("auditSince").value = "2026-10-01";
@@ -379,7 +385,7 @@ test("the log exports as CSV and as JSON", async () => {
   assert.deepEqual(saved.map((s) => s.name), ["audit-SEMP-UNI1.csv", "audit-SEMP-UNI1.json"]);
   assert.equal(await saved[0].blob.text(), "ts,action\r\n");
   assert.deepEqual(JSON.parse(await saved[1].blob.text()),
-    { licenseId: "L1", since: "2026-10-01", until: "", events });
+    { licenseId: "L1", since: new Date(2026, 9, 1).toISOString(), until: "", events });
   assert.deepEqual(status(), ["Audit log exported.", "muted"]);
 });
 

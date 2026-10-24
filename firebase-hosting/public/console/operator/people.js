@@ -5,7 +5,7 @@
 import { api } from "../api.js";
 import { confirmInPage, tellInPage } from "../dialogs.js";
 import { setStatus } from "../status.js";
-import { esc, seatDevices, placeholderRows, retryRow } from "../util.js";
+import { esc, seatDevices, placeholderRows, retryRow, when } from "../util.js";
 import { explain } from "../messages.js";
 import { $, labelOf } from "./state.js";
 import { showLicence } from "./licences.js";
@@ -49,7 +49,7 @@ export async function showDeviceHistory(id) {
       const prevMt = (e.detail && e.detail.previousDeviceIdMaterialTesting) || "";
       const app = (e.detail && e.detail.app) || "";
       const who = e.uid || "—";
-      return `${e.ts || "?"}  ${e.action}  by ${who}` +
+      return `${when(e.ts)}  ${e.action}  by ${who}` +
         (app ? ` (${app})` : "") +
         (prev ? `  left ${prev}` : "") +
         (released && released !== prev ? `  signed out ${released}` : "") +

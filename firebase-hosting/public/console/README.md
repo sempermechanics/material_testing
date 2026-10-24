@@ -24,6 +24,10 @@ dead. Shared by all four:
 - `util.js` — the DOM-free helpers (`esc`, `when`, `day`, and the roster cells
   both seat tables render), so `node --test` can run them.
 
+Times: every instant is `util.js` `when` (the browser's zone, named:
+"7 Oct 2026, 04:53 pm IST"); a licence end, a test account's end and a
+deletion are `day`, the UTC calendar day they are stored as, marked "(UTC)".
+
 A page imports each name from the module that owns it. `util.test.mjs` fails
 if `util.js`, `dialogs.js`, `status.js` or `messages.js` comes to load
 Firebase, or if `auth.js` re-exports anything; `check_console.py` fails a
@@ -41,7 +45,8 @@ Shared beside them:
   row-count preview and one result line per row.
 - `audit-log.js` — the licence's audit log, `GET …/audit`, read on demand
   with a date range, a page of 50 at a time, and exported as CSV or JSON, up
-  to 5,000 events each.
+  to 5,000 events each. From / To are local days, sent as instants
+  (`localDayRange`), because the rows are shown in local time.
 - `messages.js` — `explain(error, sentences, fallback)`: a page's own sentence
   for a refusal code, else a common one, else the raw text; and `ACCOUNT`, the
   account page's words, the claim card's refusal sentences among them. Its

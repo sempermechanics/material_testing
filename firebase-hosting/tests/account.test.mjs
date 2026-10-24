@@ -120,8 +120,9 @@ test("a licence past its grace reads expired, and the account is on the demo", a
     mode: "demo", held: true, kind: "individual", expiresAt, graceEndsAt: iso(-10 * DAY),
   } });
   assert.deepEqual(pills(), [["demo", "pill off"], ["individual", "pill"], [`expired ${day(expiresAt)}`, "pill off"]]);
-  assert.match($("explain").textContent,
-    new RegExp(`^Your licence ended on ${day(expiresAt)} and its grace period is over`));
+  // Plain text, not a RegExp: day() ends "(UTC)".
+  const ended = `Your licence ended on ${day(expiresAt)} and its grace period is over`;
+  assert.ok($("explain").textContent.startsWith(ended), $("explain").textContent);
   assert.equal($("unbind").hidden, false, "a held licence can still be moved");
 });
 
@@ -130,7 +131,8 @@ test("a licence in its grace period reads ended, and says when access ends", asy
   const graceEndsAt = iso(12 * DAY);
   await open({ license: { mode: "licensed", held: true, inGrace: true, expiresAt, graceEndsAt } });
   assert.deepEqual(pills(), [["licensed", "pill ok"], [`ended ${day(expiresAt)}`, "pill warn"]]);
-  assert.match($("explain").textContent, new RegExp(`full access ends ${day(graceEndsAt)} unless it is renewed`));
+  const ends = `full access ends ${day(graceEndsAt)} unless it is renewed`;
+  assert.ok($("explain").textContent.includes(ends), $("explain").textContent);
 });
 
 test("a shared seat held shows until when, and can be given back", async () => {

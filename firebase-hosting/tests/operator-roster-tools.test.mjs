@@ -231,7 +231,10 @@ const events = [
 ];
 
 test("the audit log reads the staff route on demand, by date, a page at a time", async () => {
-  const query = "since=2026-10-01&until=2026-10-02&page_size=50";
+  // From / To are local days: local midnights, the To day included.
+  const query = `${new URLSearchParams({
+    since: new Date(2026, 9, 1).toISOString(), until: new Date(2026, 9, 3).toISOString(),
+  })}&page_size=50`;
   await openCard({
     [`GET ${STAFF}/audit?${query}`]: () => json(200, { events, page: { nextPageToken: "e1" } }),
     [`GET ${STAFF}/audit?${query}&page_token=e1`]: () => json(200, {

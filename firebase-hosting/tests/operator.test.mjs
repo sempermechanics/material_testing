@@ -12,7 +12,7 @@ import {
 } from "./harness.mjs";
 
 await loadAuth();
-const { day, isoDay, unfinishedStepUpText } = await import("../public/console/util.js");
+const { day, isoDay, unfinishedStepUpText, when } = await import("../public/console/util.js");
 
 beforeEach(reset);
 afterEach(async () => {
@@ -738,8 +738,8 @@ test("Device history is shown in the page, one move a line", async () => {
   await settle();
   assert.deepEqual(alerts, [
     "Device history for SEMP-IND1\n\n" +
-    "2026-10-07T11:23Z  bind  by u1 (semper)  → dev-2\n" +
-    "2026-10-07T11:21Z  clear  by staff  left dev-1",
+    `${when("2026-10-07T11:23Z")}  bind  by u1 (semper)  → dev-2\n` +
+    `${when("2026-10-07T11:21Z")}  clear  by staff  left dev-1`,
   ]);
   assert.equal(confirms.cards[0].removed, true);
 });
