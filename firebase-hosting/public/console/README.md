@@ -35,7 +35,9 @@ page that does not `modulepreload` every module it runs.
 
 Shared beside them:
 - `roster.js` — one institution roster: the table, its actions, adding a
-  member, and what each refusal says. The institution page drives it on the IT
+  member, and what each refusal says. The rows read are drawn 100 at a time
+  (Show more), narrowed by a filter box (address, status or device) and sorted
+  by Member or Status (`aria-sort` on the heading), with "Showing n of m". The institution page drives it on the IT
   routes (`/v1/institutions/licenses/{id}`), the operator desk on the staff
   routes (`/v1/admin/licenses/{id}`); the backend serves both from
   `routers/roster.py`. It reads a paged roster to the end.

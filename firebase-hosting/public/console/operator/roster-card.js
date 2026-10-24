@@ -46,6 +46,9 @@ const renderRoster = wireRoster({
   report: rosterReport,
   reload: reloadAfterChange,
   retry: () => loadRoster(),
+  filter: $("rosterFilter"),
+  count: $("rosterCount"),
+  head: $("rosterHead"),
 });
 
 wireExport({ button: $("rosterExport"), base: rosterBase, name: fileName, report: rosterReport });

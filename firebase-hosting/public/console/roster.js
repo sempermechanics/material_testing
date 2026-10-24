@@ -101,6 +101,26 @@ const ASK = {
   }),
 };
 
+/** Rows drawn at a time: a 500-seat roster is one table, but not one page of it. */
+export const PAGE_ROWS = 100;
+
+/** A seat's status as the Status cell words it, for the filter and the sort. */
+const STATUS_WORDS = { active: "active", disabled: "on hold", revoked: "removed" };
+
+/** One roster line, seat or invite, with what the filter and sort read. */
+function entry(kind, item) {
+  const email = String((kind === "seat" ? item.email || item.uid : item.email) || "");
+  const status = kind === "seat" ? STATUS_WORDS[item.status] || String(item.status || "") : "invited";
+  const text = [email, status, item.deviceIdLock, item.deviceIdLockMaterialTesting]
+    .filter(Boolean).join(" ").toLowerCase();
+  return { kind, item, email: email.toLowerCase(), status, text };
+}
+
+const BY = {
+  member: (a, b) => a.email.localeCompare(b.email),
+  status: (a, b) => a.status.localeCompare(b.status) || a.email.localeCompare(b.email),
+};
+
 const ACT_ERRORS = {
   seat_revoked: "That member was removed. Add their address again to restore them.",
   license_revoked: "This licence has been revoked, so its seats cannot be changed.",
@@ -113,8 +133,22 @@ const ACT_ERRORS = {
  * licence again after a change (the page re-renders through `render`), and
  * `retry()` (default `reload`) answers the Retry of a failed load.
  * Returns `render(seats, invites)`, which fills `rows`.
+ *
+ * A roster runs to hundreds of rows, so it is drawn `PAGE_ROWS` at a time
+ * with Show more; `filter` (a text box) narrows it by address, status or
+ * device; each `button[data-sort]` in `head` sorts by its column, its <th>
+ * saying which way (aria-sort); `count` says how many are shown of how many.
+ * All three work on the rows already read; another licence opened starts
+ * them afresh.
  */
-export function wireRoster({ rows, email, add, base, report, reload, retry = reload }) {
+export function wireRoster({
+  rows, email, add, base, report, reload, retry = reload, filter = null, count = null, head = null,
+}) {
+  let all = [];
+  let shown = PAGE_ROWS;
+  let order = { key: "", dir: 1 };
+  let drawnFor = null; // the licence the rows are for
+  const sorters = head ? Array.from(head.querySelectorAll("button[data-sort]")) : [];
   // Each action takes the roster's path before it asks, so an answer given after
   // another roster was opened (or this one closed) still goes to the one asked on.
   async function act(action, uid, who) {
@@ -193,6 +227,28 @@ Nobody has claimed it yet.`,
     }
   }
 
+  /** Draw the rows the filter, the sort and Show more leave. */
+  function draw() {
+    const q = filter ? filter.value.trim().toLowerCase() : "";
+    const matching = q ? all.filter((e) => e.text.includes(q)) : all.slice();
+    if (order.key) matching.sort((a, b) => BY[order.key](a, b) * order.dir);
+    const visible = matching.slice(0, shown);
+    const more = matching.length - visible.length;
+    rows.innerHTML = visible.map((e) => (e.kind === "seat" ? seatRow(e.item) : inviteRow(e.item))).join("") +
+      (more ? `<tr><td colspan="5"><button class="secondary" data-more>Show ${Math.min(more, PAGE_ROWS)} more</button></td></tr>` : "") ||
+      `<tr><td colspan="5" class="muted">${all.length ? "Nobody on the roster matches that filter." : "Nobody on this licence yet."}</td></tr>`;
+    if (count) {
+      count.textContent = !all.length ? ""
+        : q ? `Showing ${visible.length} of ${matching.length} matching, ${all.length} on the roster`
+          : `Showing ${visible.length} of ${all.length}`;
+    }
+    for (const button of sorters) {
+      const key = button.dataset.sort;
+      const way = order.key !== key ? "none" : order.dir > 0 ? "ascending" : "descending";
+      button.closest("th").setAttribute("aria-sort", way);
+    }
+  }
+
   // One listener on the table body: its rows are rebuilt on every load.
   rows.addEventListener("click", (ev) => {
     const btn = ev.target.closest("button");
@@ -200,12 +256,42 @@ Nobody has claimed it yet.`,
     if (btn.dataset.act) act(btn.dataset.act, btn.dataset.uid, btn.dataset.email);
     else if (btn.dataset.invite) withdraw(btn.dataset.invite, btn.dataset.email);
     else if ("retry" in btn.dataset) retry();
+    else if ("more" in btn.dataset) {
+      const first = shown;
+      shown += PAGE_ROWS;
+      draw();
+      // Carry on from the first row just shown, not the top of the page.
+      const row = rows.querySelectorAll("tr")[first];
+      const next = row && row.querySelector("button");
+      if (next) next.focus();
+    }
   });
   add.addEventListener("click", addMember);
   email.addEventListener("keydown", (e) => { if (e.key === "Enter") addMember(); });
+  if (filter) {
+    filter.addEventListener("input", () => {
+      shown = PAGE_ROWS;
+      draw();
+    });
+  }
+  for (const button of sorters) {
+    button.addEventListener("click", () => {
+      const key = button.dataset.sort;
+      order = { key, dir: order.key === key ? -order.dir : 1 };
+      draw();
+    });
+  }
 
   return function render(seats, invites) {
-    rows.innerHTML = seats.map(seatRow).concat(invites.map(inviteRow)).join("") ||
-      '<tr><td colspan="5" class="muted">Nobody on this licence yet.</td></tr>';
+    // Another licence: its own rows, unfiltered and unsorted, from the top.
+    const root = base();
+    if (root !== drawnFor) {
+      drawnFor = root;
+      shown = PAGE_ROWS;
+      order = { key: "", dir: 1 };
+      if (filter) filter.value = "";
+    }
+    all = seats.map((s) => entry("seat", s)).concat(invites.map((i) => entry("invite", i)));
+    draw();
   };
 }

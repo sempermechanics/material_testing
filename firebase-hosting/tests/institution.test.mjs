@@ -174,6 +174,67 @@ test("each member row offers only what applies to that seat", async () => {
   assert.equal($("rows").querySelectorAll('[data-uid="u3"]').length, 0, "nothing to act on for a removed member");
 });
 
+/* -------------------------------------------- filter, sort and pages */
+
+const cellsOf = (col) => rows().map((r) => r[col]);
+const sortHead = (key) => $("rosterCard").querySelector(`button[data-sort="${key}"]`);
+const ariaSort = (key) => sortHead(key).parentNode.getAttribute("aria-sort");
+
+test("a long roster shows a hundred rows at a time, and says how many there are", async () => {
+  const seats = Array.from({ length: 230 }, (_, i) => ({
+    uid: `u${i}`, email: `m${String(i).padStart(3, "0")}@uni.edu`, status: "active",
+  }));
+  await open({ roster: { ...assigned, seats, invites: [] } });
+  assert.equal(rows().length, 101, "100 rows and the Show more row");
+  assert.equal($("rowCount").textContent, "Showing 100 of 230");
+  const more = () => $("rows").querySelector("button[data-more]");
+  assert.equal(more().textContent, "Show 100 more");
+  more().click();
+  assert.equal(rows().length, 201);
+  assert.equal(document.activeElement.dataset.uid, "u100", "focus on the first row just shown");
+  more().click();
+  assert.equal(rows().length, 230);
+  assert.equal(more(), null);
+  assert.equal($("rowCount").textContent, "Showing 230 of 230");
+});
+
+test("the filter narrows the roster by address, status or device", async () => {
+  await open();
+  const filter = (text) => {
+    $("rowFilter").value = text;
+    $("rowFilter").dispatch("input");
+  };
+  filter("on hold");
+  assert.deepEqual(cellsOf(0), ["ben@uni.edu"]);
+  filter("DEE@");
+  assert.deepEqual(cellsOf(0), ["dee@uni.edu"]);
+  filter("device-abc");
+  assert.deepEqual(cellsOf(0), ["ana@uni.edu"]);
+  assert.equal($("rowCount").textContent, "Showing 1 of 1 matching, 5 on the roster");
+  filter("invited");
+  assert.deepEqual(cellsOf(0), ["dee@uni.edu", "eve@uni.edu"]);
+  filter("nobody-here");
+  assert.deepEqual(rows(), [["Nobody on the roster matches that filter."]]);
+  filter("");
+  assert.equal(rows().length, 5);
+  assert.equal($("rowCount").textContent, "Showing 5 of 5");
+});
+
+test("Member and Status sort the roster, and say which way", async () => {
+  await open({ roster: { ...assigned, invites: [{ id: "i1", email: "abe@uni.edu" }] } });
+  assert.equal(ariaSort("member"), "none");
+  sortHead("member").click();
+  assert.equal(ariaSort("member"), "ascending");
+  assert.deepEqual(cellsOf(0), ["abe@uni.edu", "ana@uni.edu", "ben@uni.edu", "cy@uni.edu"]);
+  sortHead("member").click();
+  assert.equal(ariaSort("member"), "descending");
+  assert.deepEqual(cellsOf(0), ["cy@uni.edu", "ben@uni.edu", "ana@uni.edu", "abe@uni.edu"]);
+  sortHead("status").click();
+  assert.equal(ariaSort("status"), "ascending");
+  assert.equal(ariaSort("member"), "none");
+  assert.deepEqual(cellsOf(1), ["active", "invited", "on hold", "removed"]);
+});
+
 test("the seat manager stays hidden until the licence list names this address", async () => {
   const list = deferred();
   await open({ routes: { "GET /v1/institutions/licenses": () => list.promise } });

@@ -142,6 +142,15 @@ th {
   padding-top: .4rem; padding-bottom: .5rem; border-bottom-color: var(--line-strong);
 }
 td.actions { text-align: right; white-space: nowrap; }
+/* A sortable column's heading (roster.js): the heading's own look, as a
+   button, with the way it sorts shown beside it. */
+th button.sort {
+  font: inherit; color: inherit; background: none; border: 0; padding: 0; border-radius: 4px;
+}
+th button.sort:hover { color: var(--ink); background: none; }
+th button.sort::after { content: " ↕"; opacity: .5; }
+th[aria-sort="ascending"] button.sort::after { content: " ▲"; opacity: 1; }
+th[aria-sort="descending"] button.sort::after { content: " ▼"; opacity: 1; }
 /* Row buttons are a size down from a card's own, so a row of three does not
    outweigh the data beside it. */
 td.actions button, td.actions details.more > summary { padding: .35rem .75rem; font-size: .85rem; }

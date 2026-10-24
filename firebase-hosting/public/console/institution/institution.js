@@ -22,6 +22,7 @@ const fileName = () => (keyPrefix || licenseId).replace(/[^\w.-]+/g, "_");
 
 const renderRows = wireRoster({
   rows: $("rows"), email: $("addEmail"), add: $("add"), base, report: setStatus, reload: load,
+  filter: $("rowFilter"), count: $("rowCount"), head: $("rosterHead"),
 });
 
 wireExport({ button: $("exportRoster"), base, name: fileName, report: setStatus });

@@ -304,6 +304,24 @@ test("another licence opened resets the audit log", async () => {
   assert.equal(text($("rosterAuditRows")), "Choose dates, or none for everything, and press Show.");
 });
 
+test("the desk's roster filters, sorts and counts as the institution page's does", async () => {
+  await openCard();
+  assert.equal($("rosterCount").textContent, "Showing 2 of 2");
+  $("rosterFilter").value = "ben";
+  $("rosterFilter").dispatch("input");
+  assert.deepEqual(tableRows("rosterRows").map((r) => r[0]), ["ben@uni.edu"]);
+  $("rosterFilter").value = "";
+  $("rosterFilter").dispatch("input");
+  $("rosterHead").querySelector('button[data-sort="member"]').click();
+  $("rosterHead").querySelector('button[data-sort="member"]').click();
+  assert.deepEqual(tableRows("rosterRows").map((r) => r[0]), ["ben@uni.edu", "ana@uni.edu"]);
+  // Another licence's roster starts unfiltered and unsorted.
+  $("rosterFilter").value = "ana";
+  await click(rowButton("roster", UNI2.id));
+  assert.equal($("rosterFilter").value, "");
+  assert.equal($("rosterHead").querySelector("th").getAttribute("aria-sort"), "none");
+});
+
 /* --------------------------------------------------------------- parity */
 
 test("the desk's tools draw exactly what the institution page draws for the same answers", async () => {
