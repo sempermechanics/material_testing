@@ -29,6 +29,11 @@ Checks (FAIL exits 1; WARN is reported and does not fail):
                     `a -> a`)
   cert-pins         WARN when no `sha256/<base64>` pin string is in the dex,
                     i.e. SEMPER_API_CERT_PINS (BuildConfig) was empty at build
+  entitlement-pins  WARN (FAIL with --require-entitlement-pins) when no
+                    `kid:<P-256 SPKI base64>` entitlement key is in the dex,
+                    i.e. SEMPER_ENTITLEMENT_PUBKEYS was empty at build: the
+                    app then trusts its unsigned /v1/config cache with no
+                    offline bound (ADR-023, TD-215)
   consent-defaults  <application> meta-data firebase_crashlytics_collection_enabled,
                     firebase_analytics_collection_enabled and
                     google_analytics_adid_collection_enabled are present and
@@ -41,6 +46,7 @@ apksigner). Standard library only.
 Usage:
   python3 scripts/check_release_apk.py APP.apk --mapping mapping.txt
       [--gradle app/build.gradle.kts] [--debug-src app/src/debug] [--aapt2 PATH]
+      [--require-entitlement-pins]
 """
 
 from __future__ import annotations
@@ -62,6 +68,9 @@ COMPONENT_TAGS = ("activity", "activity-alias", "provider", "receiver", "service
 DEBUG_APPCHECK = b"DebugAppCheckProviderFactory"
 R8_REMOVED = "R8$$REMOVED$$"
 PIN_RE = re.compile(rb"sha256/[A-Za-z0-9+/]{43}=")
+# `kid:SPKI` (EntitlementPins.parse): an EC P-256 SubjectPublicKeyInfo is 91
+# bytes, 124 base64 characters, and starts with the same 36 for every key.
+ENTITLEMENT_PIN_RE = re.compile(rb"[A-Za-z0-9._-]+: *(MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE[A-Za-z0-9+/]{86}==)")
 CONSENT_OFF_META = (
     "firebase_crashlytics_collection_enabled",
     "firebase_analytics_collection_enabled",
@@ -298,7 +307,8 @@ def kept_in(class_map: dict[str, str], name: str) -> bool:
 
 
 def evaluate(facts: ApkFacts, *, expected_min_sdk: int | None, debug_names: set[str],
-             mapping: Path | None, app_package: str | None = None) -> list[Result]:
+             mapping: Path | None, app_package: str | None = None,
+             require_entitlement_pins: bool = False) -> list[Result]:
     results: list[Result] = []
     app = facts.manifest.find("application") or Element("application", 0)
     # R8 renames every class that is not kept, so the dex alone cannot show a
@@ -435,6 +445,18 @@ def evaluate(facts: ApkFacts, *, expected_min_sdk: int | None, debug_names: set[
                               "no sha256/ pin in the dex: SEMPER_API_CERT_PINS was empty at build "
                               "(system trust store only)"))
 
+    # entitlement pins (TE4-001): WARN while TD-215 is open, FAIL once the
+    # release workflow asks for them (the key is live).
+    entries = {m.group(0) for data in facts.dex.values() for m in ENTITLEMENT_PIN_RE.finditer(data)}
+    if entries:
+        results.append(Result("entitlement-pins", "PASS",
+                              f"{len(entries)} entitlement key(s) compiled in (kid:SPKI)"))
+    else:
+        results.append(Result("entitlement-pins", "FAIL" if require_entitlement_pins else "WARN",
+                              "no kid:SPKI entitlement key in the dex: SEMPER_ENTITLEMENT_PUBKEYS was empty "
+                              "at build, so signed tokens are ignored and the cached licence has no offline "
+                              "bound (TD-215)"))
+
     # Consent defaults (TE5-005): diagnostics stay off until the user opts in
     # (AppSettings.diagnosticsEnabled), the advertising ID is never collected,
     # and its permissions stay removed (TD-232). A manifest merge can undo any
@@ -525,6 +547,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--gradle", type=Path, default=REPO / "app" / "build.gradle.kts")
     ap.add_argument("--debug-src", type=Path, default=REPO / "app" / "src" / "debug")
     ap.add_argument("--aapt2", help="path to aapt2 (default: $AAPT2, PATH, newest build-tools)")
+    ap.add_argument("--require-entitlement-pins", action="store_true",
+                    help="entitlement-pins FAILs instead of WARNs when no key is compiled in (once TD-215 is live)")
     args = ap.parse_args(argv)
 
     if not args.apk.is_file():
@@ -538,6 +562,7 @@ def main(argv: list[str] | None = None) -> int:
         debug_names=debug_classes(args.debug_src, gradle_namespace(gradle_text)),
         mapping=args.mapping,
         app_package=gradle_namespace(gradle_text),
+        require_entitlement_pins=args.require_entitlement_pins,
     )
     print(f"Release APK inspection: {args.apk}")
     print(render(results))

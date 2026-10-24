@@ -176,17 +176,25 @@ jobs:
       # What the release build type promises, read back from the APK itself:
       # not debuggable or testOnly, no debug source-set component, no App Check
       # debug provider, no cleartext, minSdk as app/build.gradle.kts says, the
-      # consent defaults (collection off, no AD_ID permission), a non-empty R8
-      # mapping (readiness A1.5; MASWE-0067 / MASWE-0089). Warns,
-      # without failing, when no certificate pin was compiled in.
+      # consent defaults (collection off, no AD_ID permission), an R8 mapping
+      # that renames app classes (readiness A1.5; MASWE-0067 / MASWE-0089).
+      # Warns, without failing, when no certificate pin was compiled in.
+      # Entitlement keys (TE4-001): a warning while TD-215 is open. Once the
+      # signing key is live SEMPER_ENTITLEMENT_PUBKEYS is set, and from then a
+      # release that compiled none fails here; SEMPER_REQUIRE_ENTITLEMENT_PINS
+      # =true keeps that on should the pubkeys variable be cleared by mistake
+      # (RELEASING.md, step 5). Both are unset today: no release fails on it.
       - name: Inspect release APK hardening
+        env:
+          REQUIRE_ENTITLEMENT_PINS: ${{ (vars.SEMPER_ENTITLEMENT_PUBKEYS != '' || vars.SEMPER_REQUIRE_ENTITLEMENT_PINS == 'true') && 'true' || '' }}
         run: |
           set -euo pipefail
           APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
           BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
           python3 scripts/check_release_apk.py "$APK" \
             --aapt2 "$BUILD_TOOLS/aapt2" \
-            --mapping app/build/outputs/mapping/release/mapping.txt
+            --mapping app/build/outputs/mapping/release/mapping.txt \
+            ${REQUIRE_ENTITLEMENT_PINS:+--require-entitlement-pins}
 
       # An AAB is a signed JAR, not an APK: apksigner does not read it.
       - name: Verify release bundle signature

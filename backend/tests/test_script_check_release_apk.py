@@ -142,11 +142,12 @@ def _by_check(results):
 def test_a_hardened_release_passes(apk, tmp_path):
     mapping = tmp_path / "mapping.txt"
     mapping.write_text("# compiler: R8\ncom.x.A -> a.a:\n    void f() -> a\n", encoding="utf-8")
-    res = _by_check(apk.evaluate(_facts(apk), expected_min_sdk=30, debug_names=_DEBUG, mapping=mapping))
+    res = _by_check(apk.evaluate(_facts(apk, dex=_dex_with(_PIN, f"ent-1:{_ENT_SPKI}")), expected_min_sdk=30,
+                                 debug_names=_DEBUG, mapping=mapping, require_entitlement_pins=True))
     assert {k: r.status for k, r in res.items()} == {
         "debuggable": "PASS", "debug-components": "PASS", "appcheck-debug": "PASS",
         "cleartext": "PASS", "min-sdk": "PASS", "r8-mapping": "PASS", "cert-pins": "PASS",
-        "consent-defaults": "PASS",
+        "entitlement-pins": "PASS", "consent-defaults": "PASS",
     }
 
 
@@ -277,6 +278,54 @@ def test_main_requires_a_mapping(apk, tmp_path, capsys):
     assert "--mapping" in capsys.readouterr().err
 
 
+# An EC P-256 SubjectPublicKeyInfo, base64: the format SEMPER_ENTITLEMENT_PUBKEYS
+# pins (`kid:SPKI`, EntitlementPins.kt). 36 fixed header characters, 88 of key.
+_ENT_SPKI = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE" + "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+Pw=="
+
+
+def _dex_with(*strings: str) -> dict[str, bytes]:
+    return {"classes.dex": b"dex\n035\x00" + b"\x00".join(s.encode() for s in strings) + b"\x00"}
+
+
+def test_entitlement_pins_warn_while_none_is_compiled_in(apk):
+    """TE4-001: with SEMPER_ENTITLEMENT_PUBKEYS empty the app trusts its
+    unsigned /v1/config cache with no offline bound (TD-215). WARN today, like
+    cert-pins; a release built without the key after it is live must not go
+    out unnoticed."""
+    res = _by_check(apk.evaluate(_facts(apk, dex=_dex_with(_PIN)), expected_min_sdk=30,
+                                 debug_names=_DEBUG, mapping=None))
+    assert res["entitlement-pins"].status == "WARN"
+    assert "SEMPER_ENTITLEMENT_PUBKEYS" in res["entitlement-pins"].detail
+    res = _by_check(apk.evaluate(_facts(apk, dex=_dex_with(_PIN, f"ent-2026:{_ENT_SPKI},ent-2027:{_ENT_SPKI}")),
+                                 expected_min_sdk=30, debug_names=_DEBUG, mapping=None))
+    assert res["entitlement-pins"].status == "PASS"
+    assert res["entitlement-pins"].detail.startswith("2 entitlement key(s)")
+
+
+def test_entitlement_pins_fail_when_required(apk):
+    res = _by_check(apk.evaluate(_facts(apk, dex=_dex_with(_PIN)), expected_min_sdk=30, debug_names=_DEBUG,
+                                 mapping=None, require_entitlement_pins=True))
+    assert res["entitlement-pins"].status == "FAIL"
+    # A bare SPKI with no kid is not a pin EntitlementPins accepts.
+    res = _by_check(apk.evaluate(_facts(apk, dex=_dex_with(_ENT_SPKI)), expected_min_sdk=30, debug_names=_DEBUG,
+                                 mapping=None, require_entitlement_pins=True))
+    assert res["entitlement-pins"].status == "FAIL"
+    res = _by_check(apk.evaluate(_facts(apk, dex=_dex_with(f"k1:{_ENT_SPKI}")), expected_min_sdk=30,
+                                 debug_names=_DEBUG, mapping=None, require_entitlement_pins=True))
+    assert res["entitlement-pins"].status == "PASS"
+
+
+def test_release_workflow_requires_entitlement_pins_only_once_the_key_is_live():
+    """The flag is passed from repo variables, never unconditionally, so no
+    release fails while TD-215 is open (Admin decision 2026-10-24)."""
+    workflow = (_REPO / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    step = workflow[workflow.index("- name: Inspect release APK hardening"):]
+    step = step[:step.index("\n      - ")]
+    assert "--require-entitlement-pins" in step
+    assert "vars.SEMPER_ENTITLEMENT_PUBKEYS" in step and "vars.SEMPER_REQUIRE_ENTITLEMENT_PINS" in step
+    assert '${REQUIRE_ENTITLEMENT_PINS:+--require-entitlement-pins}' in step
+
+
 def test_no_dex_is_a_failure_not_a_pass(apk):
     res = _by_check(apk.evaluate(_facts(apk, dex={}), expected_min_sdk=30, debug_names=_DEBUG, mapping=None))
     assert res["appcheck-debug"].status == "FAIL"
@@ -358,6 +407,22 @@ def test_main_fails_a_debug_apk_with_annotations(apk, tmp_path, capsys, monkeypa
     assert "::error title=Release APK debuggable::" in captured.out
     assert "::warning title=Release APK cert-pins::" in captured.out
     assert "check(s) failed" in captured.err
+
+
+@pytest.mark.skipif(os.name == "nt", reason="fake aapt2 is a shebang script")
+def test_main_require_entitlement_pins_fails_a_release_without_them(apk, tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    args = [
+        str(_zip(tmp_path, b"dex\n035\x00" + _PIN.encode())),
+        "--aapt2", str(_fake_aapt2(tmp_path, "manifest_release.txt", "badging_release.txt")),
+        "--gradle", str(_gradle(tmp_path, 30)),
+        "--debug-src", str(_REPO / "app" / "src" / "debug"),
+        "--mapping", str(_mapping(tmp_path, _OBFUSCATED)),
+    ]
+    assert apk.main(args) == 0
+    assert "::warning title=Release APK entitlement-pins::" in capsys.readouterr().out
+    assert apk.main([*args, "--require-entitlement-pins"]) == 1
+    assert "::error title=Release APK entitlement-pins::" in capsys.readouterr().out
 
 
 def test_aapt2_output_is_read_as_utf8_whatever_the_locale(tmp_path):

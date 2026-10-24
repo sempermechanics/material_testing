@@ -243,8 +243,18 @@ so none of the signing steps run if any of the above fails.
    class (an identity mapping, as `-dontobfuscate` writes; `--mapping` is
    required). It
    **warns** when no `sha256/…` pin is compiled in, i.e. the
-   `SEMPER_API_CERT_PINS` secret was empty. CI tier 5 runs the same check on
-   its own release build. Locally:
+   `SEMPER_API_CERT_PINS` secret was empty. It also **warns** when no
+   entitlement key (`kid:<P-256 SPKI>`) is compiled in, i.e.
+   `SEMPER_ENTITLEMENT_PUBKEYS` was empty: the build then ignores signed tokens
+   and trusts its cached licence with no offline bound (ADR-023, TD-215). The
+   workflow turns that warning into a failure (`--require-entitlement-pins`)
+   as soon as the `SEMPER_ENTITLEMENT_PUBKEYS` variable is set, or when
+   `SEMPER_REQUIRE_ENTITLEMENT_PINS` is `true`. **Once TD-215 lands** (the
+   signing key is live and the pubkeys variable set), also set
+   `SEMPER_REQUIRE_ENTITLEMENT_PINS=true` on the `release` environment, so a
+   cleared pubkeys variable cannot ship a key-less build quietly. Both are unset
+   today, so no release fails on it. CI tier 5 runs the same check on its own
+   release build, without the flag. Locally:
    `python3 scripts/check_release_apk.py app-release.apk --mapping mapping.txt`.
 6. **Verifies the bundle's signature** (`jarsigner -verify` on the `.aab`).
 7. **Verifies `assetlinks.json` lists the release certificate.** It extracts the
@@ -293,7 +303,8 @@ Creates the **GitHub Release** with the APK and the AAB attached, gated on the
 | Variable | Description |
 |----------|-------------|
 | `SEMPER_API_BASE_URL` | HTTPS base URL of the API Gateway (preferred) or Cloud Run service |
-| `SEMPER_ENTITLEMENT_PUBKEYS` | Public key(s) the app verifies signed entitlements with, passed to Gradle as env. Public material, so a variable, not a secret |
+| `SEMPER_ENTITLEMENT_PUBKEYS` | Public key(s) the app verifies signed entitlements with, passed to Gradle as env. Public material, so a variable, not a secret. Set, it also makes the APK inspection require an entitlement key in the build (step 5) |
+| `SEMPER_REQUIRE_ENTITLEMENT_PINS` | Optional, `true` once TD-215 is live: the APK inspection fails a release with no entitlement key compiled in, whatever `SEMPER_ENTITLEMENT_PUBKEYS` holds |
 
 ### Backend staging / production
 
