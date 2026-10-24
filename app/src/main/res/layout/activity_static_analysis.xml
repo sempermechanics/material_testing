@@ -144,14 +144,17 @@
                                     android:layout_height="wrap_content"
                                     android:textColor="@color/viewer_chrome_muted"
                                     android:textSize="12sp" />
-                            </LinearLayout>
 
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/btnRefChange"
-                                style="@style/Widget.MaterialComponents.Button.TextButton"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/action_change" />
+                                <!-- Under the name, not beside it: beside it, a large font
+                                     scale left the name a few letters wide (AE1V-001). -->
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/btnRefChange"
+                                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="-8dp"
+                                    android:text="@string/action_change" />
+                            </LinearLayout>
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
 
@@ -293,14 +296,15 @@
                                         android:maxLines="1"
                                         android:textColor="@color/viewer_chrome_muted"
                                         android:textSize="12sp" />
-                                </LinearLayout>
 
-                                <com.google.android.material.button.MaterialButton
-                                    android:id="@+id/btnDefChange"
-                                    style="@style/Widget.MaterialComponents.Button.TextButton"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="@string/action_change" />
+                                    <com.google.android.material.button.MaterialButton
+                                        android:id="@+id/btnDefChange"
+                                        style="@style/Widget.MaterialComponents.Button.TextButton"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="-8dp"
+                                        android:text="@string/action_change" />
+                                </LinearLayout>
 
                                 <ImageButton
                                     android:id="@+id/btnFrameOrderSort"

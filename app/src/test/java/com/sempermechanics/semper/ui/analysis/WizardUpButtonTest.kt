@@ -1,6 +1,7 @@
 package com.sempermechanics.semper.ui.analysis
 
 import android.app.Application
+import android.widget.TextView
 import androidx.appcompat.widget.Toolbar
 import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.R
@@ -18,7 +19,8 @@ import org.robolectric.annotation.Config
 
 /**
  * The wizard's Up arrow is named for TalkBack (readiness AE1V-007); it used to be
- * an unlabelled image button on every step.
+ * an unlabelled image button on every step. Its title may wrap to a second line
+ * rather than read "New analy…" at font scale 2.0 (AE1V-001).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
@@ -46,5 +48,14 @@ class WizardUpButtonTest {
         val wizard = Robolectric.buildActivity(StaticAnalysisActivity::class.java).also { built = it }.setup().get()
         val toolbar = wizard.findViewById<Toolbar>(R.id.toolbar)
         assertEquals(app.getString(R.string.back), toolbar.navigationContentDescription)
+    }
+
+    @Test
+    fun `the wizard's title may take two lines`() {
+        val wizard = Robolectric.buildActivity(StaticAnalysisActivity::class.java).also { built = it }.setup().get()
+        val toolbar = wizard.findViewById<Toolbar>(R.id.toolbar)
+        val title = (0 until toolbar.childCount).map(toolbar::getChildAt).filterIsInstance<TextView>()
+            .first { it.text == toolbar.title }
+        assertEquals(2, title.maxLines)
     }
 }

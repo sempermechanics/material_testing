@@ -35,6 +35,7 @@ import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.dialog.CrispToast
 import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
 import com.sempermechanics.semper.ui.common.dialog.Feedback
+import com.sempermechanics.semper.ui.common.letTitleWrap
 import com.sempermechanics.semper.ui.common.onButtonChecked
 import com.sempermechanics.semper.ui.viewer.ViewerArgs
 import kotlinx.coroutines.Dispatchers
@@ -129,6 +130,7 @@ class VsgLatticeActivity : AppCompatActivity() {
             setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
             setNavigationContentDescription(R.string.back)
             setNavigationOnClickListener { finish() }
+            letTitleWrap()
         }
 
         val solved = solvedLatticeNodes(args.sweep)

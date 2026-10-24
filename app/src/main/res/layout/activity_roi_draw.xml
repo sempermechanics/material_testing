@@ -19,6 +19,9 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
+        <!-- Cancel and Save share the first row; Draw/Manual gets a row of its own
+             and the Crop/Erase row scrolls sideways if it must, so no label is cut
+             at a large font scale (readiness AE1V-003, AE1V-014). -->
         <LinearLayout
             android:id="@+id/topBar"
             android:layout_width="match_parent"
@@ -36,33 +39,10 @@
                 android:layout_height="wrap_content"
                 android:text="@string/cancel" />
 
-            <com.google.android.material.button.MaterialButtonToggleGroup
-                android:id="@+id/rgEditMode"
+            <View
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginHorizontal="8dp"
-                android:layout_weight="1"
-                android:gravity="center"
-                app:checkedButton="@+id/rbModeDraw"
-                app:selectionRequired="true"
-                app:singleSelection="true">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/rbModeDraw"
-                    style="@style/Widget.Semper.SegmentedButton.Dark"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/roi_mode_draw" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/rbModeManual"
-                    style="@style/Widget.Semper.SegmentedButton.Dark"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/roi_mode_manual" />
-            </com.google.android.material.button.MaterialButtonToggleGroup>
+                android:layout_height="0dp"
+                android:layout_weight="1" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnSaveRoi"
@@ -72,57 +52,90 @@
                 android:text="@string/save_roi" />
         </LinearLayout>
 
-        <LinearLayout
+        <com.google.android.material.button.MaterialButtonToggleGroup
+            android:id="@+id/rgEditMode"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
             android:paddingHorizontal="12dp"
-            android:paddingBottom="8dp">
+            app:checkedButton="@+id/rbModeDraw"
+            app:selectionRequired="true"
+            app:singleSelection="true">
 
-            <com.google.android.material.chip.Chip
-                android:id="@+id/btnFullImageRoi"
-                style="@style/Widget.MaterialComponents.Chip.Action"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:checkable="false"
-                android:text="@string/use_full_image"
-                android:textColor="@color/viewer_on_dark"
-                app:chipBackgroundColor="@color/chip_toggle_bg_dark"
-                app:chipStrokeColor="@color/surface_outline"
-                app:chipStrokeWidth="1dp"
-                app:ensureMinTouchTargetSize="false" />
-
-            <View
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/rbModeDraw"
+                style="@style/Widget.Semper.SegmentedButton.Dark"
                 android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:layout_weight="1" />
-
-            <com.google.android.material.button.MaterialButtonToggleGroup
-                android:id="@+id/rgCropErase"
-                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                app:checkedButton="@+id/rbCrop"
-                app:selectionRequired="true"
-                app:singleSelection="true">
+                android:layout_weight="1"
+                android:text="@string/roi_mode_draw" />
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/rbCrop"
-                    style="@style/Widget.Semper.SegmentedButton.Dark"
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/rbModeManual"
+                style="@style/Widget.Semper.SegmentedButton.Dark"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/roi_mode_manual" />
+        </com.google.android.material.button.MaterialButtonToggleGroup>
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fillViewport="true"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="12dp"
+                android:paddingBottom="8dp">
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/btnFullImageRoi"
+                    style="@style/Widget.MaterialComponents.Chip.Action"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:minWidth="0dp"
-                    android:text="@string/roi_mode_crop" />
+                    android:checkable="false"
+                    android:text="@string/use_full_image"
+                    android:textColor="@color/viewer_on_dark"
+                    app:chipBackgroundColor="@color/chip_toggle_bg_dark"
+                    app:chipStrokeColor="@color/surface_outline"
+                    app:chipStrokeWidth="1dp"
+                    app:ensureMinTouchTargetSize="false" />
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/rbErase"
-                    style="@style/Widget.Semper.SegmentedButton.Dark"
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:layout_weight="1" />
+
+                <com.google.android.material.button.MaterialButtonToggleGroup
+                    android:id="@+id/rgCropErase"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:minWidth="0dp"
-                    android:text="@string/roi_mode_erase" />
-            </com.google.android.material.button.MaterialButtonToggleGroup>
-        </LinearLayout>
+                    app:checkedButton="@+id/rbCrop"
+                    app:selectionRequired="true"
+                    app:singleSelection="true">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/rbCrop"
+                        style="@style/Widget.Semper.SegmentedButton.Dark"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minWidth="0dp"
+                        android:text="@string/roi_mode_crop" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/rbErase"
+                        style="@style/Widget.Semper.SegmentedButton.Dark"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minWidth="0dp"
+                        android:text="@string/roi_mode_erase" />
+                </com.google.android.material.button.MaterialButtonToggleGroup>
+            </LinearLayout>
+        </HorizontalScrollView>
     </LinearLayout>
 
     <!-- forceDarkAllowed=false: specimen image and ROI strokes keep exact colors. -->

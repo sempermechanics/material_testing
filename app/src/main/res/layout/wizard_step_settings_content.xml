@@ -156,78 +156,93 @@
                     app:tint="@color/viewer_chrome_text" />
             </LinearLayout>
 
-            <!-- Subset size, with the measured speckle beside it -->
-            <LinearLayout
+            <!-- Subset size, with the measured speckle under its label. A
+                 ConstraintLayout so the label wraps before the value is squeezed:
+                 at font scale 2.0 a LinearLayout left the value 0 px wide (AE1V-001). -->
+            <androidx.constraintlayout.widget.ConstraintLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_8"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:layout_marginTop="@dimen/space_8">
 
                 <TextView
+                    android:id="@+id/tvSubsetLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/subset_size"
                     android:textColor="@color/viewer_chrome_text"
-                    android:textStyle="bold" />
+                    android:textStyle="bold"
+                    app:layout_constrainedWidth="true"
+                    app:layout_constraintBottom_toBottomOf="@id/btnSubsetInfo"
+                    app:layout_constraintEnd_toStartOf="@id/btnSubsetInfo"
+                    app:layout_constraintHorizontal_bias="0"
+                    app:layout_constraintHorizontal_chainStyle="packed"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="@id/btnSubsetInfo" />
 
                 <ImageButton
                     android:id="@+id/btnSubsetInfo"
                     android:layout_width="48dp"
                     android:layout_height="48dp"
-                    android:layout_marginStart="0dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/info"
                     android:padding="15dp"
                     android:scaleType="fitCenter"
                     android:src="@drawable/ic_info_min"
+                    app:layout_constraintEnd_toStartOf="@id/etSubsetValue"
+                    app:layout_constraintStart_toEndOf="@id/tvSubsetLabel"
+                    app:layout_constraintTop_toTopOf="parent"
                     app:tint="@color/viewer_chrome_muted" />
-
-                <com.google.android.material.chip.Chip
-                    android:id="@+id/chipSpeckle"
-                    style="@style/Widget.Semper.Chip.Assist"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="@dimen/space_8"
-                    android:checkable="false"
-                    android:clickable="false"
-                    android:textSize="12sp"
-                    android:visibility="gone"
-                    app:chipMinHeight="24dp"
-                    app:ensureMinTouchTargetSize="false"
-                    tools:text="Speckle 4.3 px"
-                    tools:visibility="visible" />
-
-                <View
-                    android:layout_width="0dp"
-                    android:layout_height="1dp"
-                    android:layout_weight="1" />
 
                 <EditText
                     android:id="@+id/etSubsetValue"
-                    android:layout_width="52dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/space_8"
                     android:background="@android:color/transparent"
                     android:gravity="end"
                     android:hint="@string/subset_size"
                     android:imeOptions="actionDone"
                     android:importantForAutofill="no"
                     android:inputType="number"
+                    android:maxEms="4"
                     android:maxLength="3"
+                    android:minEms="2"
                     android:paddingTop="0dp"
                     android:paddingBottom="0dp"
                     android:textColor="@color/sky_primary"
                     android:textStyle="bold"
+                    app:layout_constraintBottom_toBottomOf="@id/btnSubsetInfo"
+                    app:layout_constraintEnd_toStartOf="@id/tvSubsetUnit"
+                    app:layout_constraintTop_toTopOf="@id/btnSubsetInfo"
                     tools:text="41" />
 
                 <TextView
+                    android:id="@+id/tvSubsetUnit"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="4dp"
                     android:text="@string/scale_unit_px"
                     android:textColor="@color/sky_primary"
-                    android:textStyle="bold" />
-            </LinearLayout>
+                    android:textStyle="bold"
+                    app:layout_constraintBaseline_toBaselineOf="@id/etSubsetValue"
+                    app:layout_constraintEnd_toEndOf="parent" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipSpeckle"
+                    style="@style/Widget.Semper.Chip.Assist"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checkable="false"
+                    android:clickable="false"
+                    android:textSize="12sp"
+                    android:visibility="gone"
+                    app:chipMinHeight="24dp"
+                    app:ensureMinTouchTargetSize="false"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toBottomOf="@id/btnSubsetInfo"
+                    tools:text="Speckle 4.3 px"
+                    tools:visibility="visible" />
+            </androidx.constraintlayout.widget.ConstraintLayout>
 
             <!-- The recommended band is drawn behind the track (SubsetBand); the
                  subset's ⓘ says what it means. -->
@@ -285,7 +300,7 @@
 
                 <EditText
                     android:id="@+id/etStepValue"
-                    android:layout_width="52dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:background="@android:color/transparent"
                     android:contentDescription="@string/step_size_density"
@@ -293,7 +308,9 @@
                     android:imeOptions="actionDone"
                     android:importantForAutofill="no"
                     android:inputType="number"
+                    android:maxEms="4"
                     android:maxLength="2"
+                    android:minEms="2"
                     android:paddingTop="0dp"
                     android:paddingBottom="0dp"
                     android:textColor="@color/sky_primary"
@@ -330,72 +347,86 @@
                 android:valueTo="99"
                 android:visibility="gone" />
 
-            <!-- Strain window, in data points, with the VSG in px beside the value -->
-            <LinearLayout
+            <!-- Strain window, in data points, with the VSG in px under its label
+                 (laid out as the subset row above, AE1V-001). -->
+            <androidx.constraintlayout.widget.ConstraintLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_16"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:layout_marginTop="@dimen/space_16">
 
                 <TextView
+                    android:id="@+id/tvStrainLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/strain_window"
                     android:textColor="@color/viewer_chrome_text"
-                    android:textStyle="bold" />
+                    android:textStyle="bold"
+                    app:layout_constrainedWidth="true"
+                    app:layout_constraintBottom_toBottomOf="@id/btnStrainInfo"
+                    app:layout_constraintEnd_toStartOf="@id/btnStrainInfo"
+                    app:layout_constraintHorizontal_bias="0"
+                    app:layout_constraintHorizontal_chainStyle="packed"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="@id/btnStrainInfo" />
 
                 <ImageButton
                     android:id="@+id/btnStrainInfo"
                     android:layout_width="48dp"
                     android:layout_height="48dp"
-                    android:layout_marginStart="0dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/info"
                     android:padding="15dp"
                     android:scaleType="fitCenter"
                     android:src="@drawable/ic_info_min"
+                    app:layout_constraintEnd_toStartOf="@id/etStrainValue"
+                    app:layout_constraintStart_toEndOf="@id/tvStrainLabel"
+                    app:layout_constraintTop_toTopOf="parent"
                     app:tint="@color/viewer_chrome_muted" />
-
-                <View
-                    android:layout_width="0dp"
-                    android:layout_height="1dp"
-                    android:layout_weight="1" />
-
-                <!-- The VSG the window gives at the current step. -->
-                <TextView
-                    android:id="@+id/tvStrainVsg"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="@dimen/space_8"
-                    android:textAppearance="@style/TextAppearance.Semper.Caption"
-                    tools:text="21 px VSG" />
 
                 <EditText
                     android:id="@+id/etStrainValue"
-                    android:layout_width="52dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/space_8"
                     android:background="@android:color/transparent"
                     android:gravity="end"
                     android:hint="@string/strain_window"
                     android:imeOptions="actionDone"
                     android:importantForAutofill="no"
                     android:inputType="number"
+                    android:maxEms="4"
                     android:maxLength="3"
+                    android:minEms="2"
                     android:paddingTop="0dp"
                     android:paddingBottom="0dp"
                     android:textColor="@color/sky_primary"
                     android:textStyle="bold"
+                    app:layout_constraintBottom_toBottomOf="@id/btnStrainInfo"
+                    app:layout_constraintEnd_toStartOf="@id/tvStrainUnit"
+                    app:layout_constraintTop_toTopOf="@id/btnStrainInfo"
                     tools:text="5" />
 
                 <TextView
+                    android:id="@+id/tvStrainUnit"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="4dp"
                     android:text="@string/strain_window_unit_points"
                     android:textColor="@color/sky_primary"
-                    android:textStyle="bold" />
-            </LinearLayout>
+                    android:textStyle="bold"
+                    app:layout_constraintBaseline_toBaselineOf="@id/etStrainValue"
+                    app:layout_constraintEnd_toEndOf="parent" />
+
+                <!-- The VSG the window gives at the current step. -->
+                <TextView
+                    android:id="@+id/tvStrainVsg"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textAppearance="@style/TextAppearance.Semper.Caption"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toBottomOf="@id/btnStrainInfo"
+                    tools:text="21 px VSG" />
+            </androidx.constraintlayout.widget.ConstraintLayout>
 
             <!-- In data points (SweepStudy.MIN_WINDOW_POINTS..MAX_WINDOW_POINTS). -->
             <com.google.android.material.slider.Slider
@@ -460,7 +491,7 @@
 
                     <EditText
                         android:id="@+id/etOverlapValue"
-                        android:layout_width="52dp"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:background="@android:color/transparent"
                         android:contentDescription="@string/subset_overlap"
@@ -468,7 +499,9 @@
                         android:imeOptions="actionDone"
                         android:importantForAutofill="no"
                         android:inputType="numberDecimal"
+                        android:maxEms="4"
                         android:maxLength="4"
+                        android:minEms="2"
                         android:paddingTop="0dp"
                         android:paddingBottom="0dp"
                         android:textColor="@color/sky_primary"

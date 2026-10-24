@@ -59,6 +59,7 @@ import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.Motion
 import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
 import com.sempermechanics.semper.ui.common.dialog.WarnChip
+import com.sempermechanics.semper.ui.common.letTitleWrap
 import com.sempermechanics.semper.ui.common.showUnlessEditing
 import kotlinx.coroutines.launch
 import java.io.File
@@ -227,6 +228,7 @@ class StaticAnalysisActivity :
             setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
             setNavigationContentDescription(R.string.back)
             setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
+            letTitleWrap()
         }
         val maxFrames = AppSettings.maxFrames(this, AppRemoteConfig.maxFrames(this))
         binding.tvDefDropHint.text =

@@ -1,104 +1,112 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- Scrolls, so the recovery actions stay reachable at a large font scale
+     (readiness AE1V-008); fillViewport keeps the column centred when it fits. -->
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:id="@+id/pendingRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/surface_muted"
-    android:gravity="center"
-    android:orientation="vertical"
-    android:padding="32dp" tools:ignore="Overdraw">
-
-    <ImageView
-        android:layout_width="56dp"
-        android:layout_height="56dp"
-        android:background="@drawable/bg_warn_chip"
-        android:contentDescription="@string/approval_title"
-        android:padding="14dp"
-        android:src="@android:drawable/stat_sys_warning"
-        app:tint="@color/semantic_warning_ink" />
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="14dp"
-        android:text="@string/approval_title"
-        android:textColor="@color/text_primary"
-        android:textSize="18sp"
-        android:textStyle="bold" />
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:gravity="center"
-        android:maxWidth="280dp"
-        android:text="@string/approval_body"
-        android:textColor="@color/text_secondary"
-        android:textSize="13sp" />
-
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btnRequestAccess"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="18dp"
-        android:text="@string/action_request_access" />
-
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btnRefreshStatus"
-        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/check_now"
-        android:textColor="@color/sky_primary" />
-
-    <ProgressBar
-        android:id="@+id/progressLoading"
-        android:layout_width="22dp"
-        android:layout_height="22dp"
-        android:layout_marginTop="10dp"
-        android:indeterminateTint="@color/sky_primary"
-        android:visibility="invisible" />
+    android:fillViewport="true" tools:ignore="Overdraw">
 
     <LinearLayout
-        android:layout_width="wrap_content"
+        android:id="@+id/pendingRoot"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="22dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="32dp">
+
+        <ImageView
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@drawable/bg_warn_chip"
+            android:contentDescription="@string/approval_title"
+            android:padding="14dp"
+            android:src="@android:drawable/stat_sys_warning"
+            app:tint="@color/semantic_warning_ink" />
 
         <TextView
-            android:id="@+id/tvUserEmail"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="@color/text_secondary"
-            android:textSize="12sp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/dot_separator"
-            android:textColor="@color/text_secondary"
-            android:textSize="12sp" />
-
-        <TextView
-            android:id="@+id/tvLogout"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:padding="4dp"
-            android:text="@string/action_sign_out"
-            android:textColor="@color/sky_primary"
-            android:textSize="12sp"
+            android:layout_marginTop="14dp"
+            android:text="@string/approval_title"
+            android:textColor="@color/text_primary"
+            android:textSize="18sp"
             android:textStyle="bold" />
-    </LinearLayout>
 
-    <TextView
-        android:id="@+id/tvDeviceId"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:textColor="@color/text_secondary"
-        android:textSize="11sp" />
-</LinearLayout>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center"
+            android:maxWidth="280dp"
+            android:text="@string/approval_body"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnRequestAccess"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:text="@string/action_request_access" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnRefreshStatus"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/check_now"
+            android:textColor="@color/sky_primary" />
+
+        <ProgressBar
+            android:id="@+id/progressLoading"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:layout_marginTop="10dp"
+            android:indeterminateTint="@color/sky_primary"
+            android:visibility="invisible" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="22dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvUserEmail"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/dot_separator"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/tvLogout"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="4dp"
+                android:text="@string/action_sign_out"
+                android:textColor="@color/sky_primary"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvDeviceId"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp" />
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

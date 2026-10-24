@@ -230,6 +230,10 @@
         <item name="android:textAllCaps">false</item>
         <item name="android:textColor">@color/viewer_on_dark</item>
         <item name="android:textSize">12sp</item>
+        <!-- 12dp sides, not the default 16dp: "Square" keeps its last letters in a
+             half-width pill at font scale 2.0. -->
+        <item name="android:paddingLeft">12dp</item>
+        <item name="android:paddingRight">12dp</item>
         <item name="cornerRadius">20dp</item>
         <item name="backgroundTint">@color/chip_toggle_bg_dark</item>
         <item name="strokeColor">@color/surface_outline</item>
