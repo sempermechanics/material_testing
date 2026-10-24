@@ -774,6 +774,13 @@ jobs:
         with:
           abi: arm64
 
+      # A missing export links fine and throws UnsatisfiedLinkError on the first
+      # call; the sync merge of 2026-10-22 pinned an engine without the
+      # incremental calls and no test called them (MT-TE2-001). Needs the
+      # submodule, which only this tier and Tier 3 check out.
+      - name: Every SemperNativeLib external fun is exported by the pinned engine
+        run: python3 scripts/check_jni_parity.py
+
       - name: Decode keystore
         if: env.KEYSTORE_BASE64 != ''
         run: echo "$KEYSTORE_BASE64" | base64 -d > app/release.keystore
