@@ -17,7 +17,7 @@
         android:contentDescription="@string/limit_title"
         android:padding="14dp"
         android:src="@android:drawable/stat_sys_warning"
-        app:tint="@color/semantic_warning" />
+        app:tint="@color/semantic_warning_ink" />
 
     <TextView
         android:layout_width="wrap_content"

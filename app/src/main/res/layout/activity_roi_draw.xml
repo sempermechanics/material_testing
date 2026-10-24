@@ -222,7 +222,7 @@
                 android:layout_marginStart="12dp"
                 android:text="@string/reset"
                 android:textColor="@color/viewer_on_dark"
-                app:strokeColor="#55FFFFFF" />
+                app:strokeColor="@color/outline_strong" />
         </LinearLayout>
 
         <!-- Invisible (not gone) so bottomToolbar height stays fixed when
@@ -247,7 +247,7 @@
                     android:layout_marginEnd="6dp"
                     android:layout_weight="1"
                     android:hint="@string/roi_hint_x"
-                    app:boxStrokeColor="@color/sky_bright"
+                    app:boxStrokeColor="@color/input_box_stroke"
                     app:hintTextColor="@color/viewer_on_dark">
 
                     <com.google.android.material.textfield.TextInputEditText
@@ -266,7 +266,7 @@
                     android:layout_marginStart="6dp"
                     android:layout_weight="1"
                     android:hint="@string/roi_hint_y"
-                    app:boxStrokeColor="@color/sky_bright"
+                    app:boxStrokeColor="@color/input_box_stroke"
                     app:hintTextColor="@color/viewer_on_dark">
 
                     <com.google.android.material.textfield.TextInputEditText
@@ -292,7 +292,7 @@
                     android:layout_marginEnd="6dp"
                     android:layout_weight="1"
                     android:hint="@string/roi_hint_w"
-                    app:boxStrokeColor="@color/sky_bright"
+                    app:boxStrokeColor="@color/input_box_stroke"
                     app:hintTextColor="@color/viewer_on_dark">
 
                     <com.google.android.material.textfield.TextInputEditText
@@ -311,7 +311,7 @@
                     android:layout_marginStart="6dp"
                     android:layout_weight="1"
                     android:hint="@string/roi_hint_h"
-                    app:boxStrokeColor="@color/sky_bright"
+                    app:boxStrokeColor="@color/input_box_stroke"
                     app:hintTextColor="@color/viewer_on_dark">
 
                     <com.google.android.material.textfield.TextInputEditText
@@ -338,7 +338,7 @@
                     android:layout_weight="1"
                     android:text="@string/reset"
                     android:textColor="@color/viewer_on_dark"
-                    app:strokeColor="#55FFFFFF" />
+                    app:strokeColor="@color/outline_strong" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnApplyManualRoi"
@@ -349,7 +349,7 @@
                     android:layout_weight="1"
                     android:text="@string/roi_apply_manual"
                     android:textColor="@color/viewer_on_dark"
-                    app:strokeColor="#55FFFFFF" />
+                    app:strokeColor="@color/outline_strong" />
             </LinearLayout>
         </LinearLayout>
     </FrameLayout>

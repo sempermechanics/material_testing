@@ -12,7 +12,8 @@
     <color name="wordmark_ink">#E9E9E7</color>
     <color name="viewer_canvas">#101518</color>
     <color name="viewer_chrome_text">#FFFFFFFF</color>
-    <color name="viewer_chrome_muted">#B0B8C0</color>
+    <!-- 5:1 on the glass puck over the canvas (#B0B8C0 was 3.2:1). -->
+    <color name="viewer_chrome_muted">#E0E4E8</color>
 
     <!-- Immersive viewer chrome, dark half. These are the original 19e5209 values:
          white frost over a dark canvas with white ink and a dark text shadow. The

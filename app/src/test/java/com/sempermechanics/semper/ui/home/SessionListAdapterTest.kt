@@ -182,7 +182,7 @@ class SessionListAdapterTest {
 
         val low = bind(0).subtitle.text
         assertEquals("12 frames · 84.9%", low.toString())
-        assertEquals(listOf("84.9%" to activity.getColor(R.color.semantic_warning)), colouredParts(low))
+        assertEquals(listOf("84.9%" to activity.getColor(R.color.semantic_warning_ink)), colouredParts(low))
         assertTrue("85.0 exactly is fine", colouredParts(bind(1).subtitle.text).isEmpty())
     }
 
@@ -229,7 +229,7 @@ class SessionListAdapterTest {
         assertEquals("Video · 40 frames, 0:00–0:11 · 91.2% converged", row.subtitle.contentDescription)
         assertEquals(
             "only the figure is amber",
-            listOf("80.0%" to activity.getColor(R.color.semantic_warning)),
+            listOf("80.0%" to activity.getColor(R.color.semantic_warning_ink)),
             colouredParts(bind(1).subtitle.text),
         )
     }

@@ -55,7 +55,7 @@
             app:iconGravity="textStart"
             app:iconTint="@null"
             app:strokeColor="@color/surface_outline"
-            app:rippleColor="#22000000" />
+            app:rippleColor="@color/ripple_neutral" />
 
         <!-- Divider with "or" (hidden with Google when Google is unconfigured) -->
         <LinearLayout
