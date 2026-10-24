@@ -231,6 +231,10 @@ export function renderLicences() {
     ? `Newest ${desk.licences.length} shown${note}; more exist.`
     : `${desk.licences.length} licence(s)${note}.`;
   $("loadMore").hidden = !desk.licencePage.hasMore;
+  // What a Demo row's "demo (25)" means, under the table while one is shown:
+  // it was a hover-only title, out of reach from a keyboard or a finger.
+  $("demoNote").hidden = !rows.some((l) => l.mode === "demo");
+  $("demoNote").textContent = $("demoNote").hidden ? "" : demoCapNote();
   refocus(focus);
 }
 
@@ -317,7 +321,7 @@ function licenceRow(lic) {
   // shows the demo allowance instead: a number stored on one never applied.
   const demo = lic.mode === "demo";
   const cap = demo
-    ? `<span class="muted" title="${esc(demoCapNote())}">demo${desk.demoAllowance == null ? "" : ` (${esc(desk.demoAllowance)})`}</span>`
+    ? `<span class="muted">demo${desk.demoAllowance == null ? "" : ` (${esc(desk.demoAllowance)})`}</span>`
     : lic.maxAnalyses == null ? '<span class="muted">default</span>' : esc(lic.maxAnalyses);
   // An individual licensed key can become an institution one; a Demo key is
   // not a licence anyone bought, so there is nothing to carry over.

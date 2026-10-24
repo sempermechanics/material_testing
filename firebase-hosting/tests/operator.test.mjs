@@ -276,6 +276,15 @@ test("Demo keys are fetched only when asked for, show the demo allowance, and ar
   assert.equal(demo[5], "demo (25)");
   assert.equal(demo[8], "Edit More New device Devices Revoke", "no convert, no delete for a system Demo key");
   assert.equal($("licencePaging").textContent, "2 licence(s) (revoked hidden).");
+  // What "demo (25)" means is text under the table, not a hover-only title
+  // (AE2-011): keyboard and touch reach it, and a screen reader reads it.
+  assert.equal($("licenceRows").querySelectorAll("[title]").length, 0);
+  assert.equal($("demoNote").hidden, false);
+  assert.equal($("demoNote").textContent, "Demo keys use the demo allowance of 25; issue a licensed key to raise it.");
+  $("showDemo").checked = false;
+  $("showDemo").dispatch("change");
+  await settle();
+  assert.equal($("demoNote").hidden, true, "no Demo row, no note");
 });
 
 test("a revoked row offers only Delete, and is shown only on request", async () => {
