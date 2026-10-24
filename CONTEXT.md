@@ -136,8 +136,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **[Checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md) still open:** monitoring `--apply` (§5;
   no notification channel exists yet); staff/IT phones re-registering with TOTP, the 24 h log
   watch, ending the staging QC test account, and the erasure check (§6; the audit backfill, the
-  `expireAt` TTL and the locked `audit-trail` log bucket went in 2026-10-23). The posture check's 18 FAILs
-  ([gate](docs/ops/PRODUCTION_READINESS_GATE.md)) are console or `gcloud` changes. Optional and
+  `expireAt` TTL and the locked `audit-trail` log bucket went in 2026-10-23). The posture check's FAILs (18 on
+  2026-10-22; 17 once 3.4's `CHECK_REVOKED_ON_STEP_UP` went live 2026-10-23, not re-run;
+  [gate](docs/ops/PRODUCTION_READINESS_GATE.md)) are console or `gcloud` changes. Optional and
   unset: TD-215 (entitlement key), TD-309.
 - **App** `com.sempermechanics.semper` ([ADR-019](docs/adr/ADR-019-sempermechanics-app-id.md)).
   Latest release `v1.2-beta.4` (versionCode 1036, `33dce87d`, 2026-10-17, engine 0.4.2).
@@ -150,7 +151,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Release blockers:** TD-229 (Play account; TD-226 App Check and TD-230/TD-231 follow it),
   TD-232 (Data safety answers ready; two owner decisions, then submit), TD-219's device checks,
   counsel on the Terms (TD-277).
-- **material_testing** merges this `main` (last `9d116f2`, material_testing#142, 2026-10-22;
+- **material_testing** merges this `main` (last `968637cb`, material_testing#144, 2026-10-22;
   [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); it released `v1.4-beta.2` 2026-10-17.
 - **CI.** Tiers follow the diff, coverage floors rise with every test PR
   ([TESTING.md](docs/app/TESTING.md#coverage-floors)), and `main` requires `CI OK`. Tier 3 signs
