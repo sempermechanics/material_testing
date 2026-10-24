@@ -12,7 +12,7 @@ import {
 } from "./harness.mjs";
 
 await loadAuth();
-const { day, isoDay, unfinishedStepUpText } = await import("../public/console/util.js");
+const { day, isoDay, unfinishedStepUpText, when } = await import("../public/console/util.js");
 
 beforeEach(reset);
 afterEach(async () => {
@@ -276,6 +276,15 @@ test("Demo keys are fetched only when asked for, show the demo allowance, and ar
   assert.equal(demo[5], "demo (25)");
   assert.equal(demo[8], "Edit More New device Devices Revoke", "no convert, no delete for a system Demo key");
   assert.equal($("licencePaging").textContent, "2 licence(s) (revoked hidden).");
+  // What "demo (25)" means is text under the table, not a hover-only title
+  // (AE2-011): keyboard and touch reach it, and a screen reader reads it.
+  assert.equal($("licenceRows").querySelectorAll("[title]").length, 0);
+  assert.equal($("demoNote").hidden, false);
+  assert.equal($("demoNote").textContent, "Demo keys use the demo allowance of 25; issue a licensed key to raise it.");
+  $("showDemo").checked = false;
+  $("showDemo").dispatch("change");
+  await settle();
+  assert.equal($("demoNote").hidden, true, "no Demo row, no note");
 });
 
 test("a revoked row offers only Delete, and is shown only on request", async () => {
@@ -405,7 +414,7 @@ test("a refused revoke reports the backend's code", async () => {
   prompts.answer("SEMP-IND1");
   rowButton("revoke", IND.id).click();
   await settle();
-  assert.deepEqual(status(), ["Could not revoke: license_revoked", "muted err"]);
+  assert.deepEqual(status(), ["Could not revoke: the server refused it (ref: license_revoked)", "muted err"]);
   assert.deepEqual(labels(), ["SEMP-IND1", "SEMP-UNI1"]);
 });
 
@@ -738,8 +747,8 @@ test("Device history is shown in the page, one move a line", async () => {
   await settle();
   assert.deepEqual(alerts, [
     "Device history for SEMP-IND1\n\n" +
-    "2026-10-07T11:23Z  bind  by u1 (semper)  → dev-2\n" +
-    "2026-10-07T11:21Z  clear  by staff  left dev-1",
+    `${when("2026-10-07T11:23Z")}  bind  by u1 (semper)  → dev-2\n` +
+    `${when("2026-10-07T11:21Z")}  clear  by staff  left dev-1`,
   ]);
   assert.equal(confirms.cards[0].removed, true);
 });
@@ -765,7 +774,7 @@ test("the roster is read and changed through the staff routes, whoever IT lists"
   // The same actions IT has: the desk used to offer only New device and Remove.
   assert.deepEqual(
     $("rosterRows").querySelectorAll("button").map((b) => b.textContent.trim()),
-    ["New device", "Hold", "Remove", "Withdraw"],
+    ["New device", "Pause", "Remove", "Withdraw"],
   );
   confirms.answer(true);
   $("rosterRows").querySelector('button[data-act="remove"]').click();
