@@ -238,16 +238,28 @@ jobs:
       # release that compiled none fails here; SEMPER_REQUIRE_ENTITLEMENT_PINS
       # =true keeps that on should the pubkeys variable be cleared by mistake
       # (RELEASING.md, step 5). Both are unset today: no release fails on it.
+      # Signing key (TE1-007): the signer must be the release certificate every
+      # Semper release so far carries (runs 31565590316 to 39064532280, last
+      # v1.2-beta.4 = versionCode 1036), or the APK would not install over
+      # theirs. SEMPER_RELEASE_CERT_SHA256 overrides it (a deliberate rotation,
+      # with a v3 lineage); a fork, which signs with its own key, has no
+      # default and gets a warning until it sets the variable.
       - name: Inspect release APK hardening
         env:
           REQUIRE_ENTITLEMENT_PINS: ${{ (vars.SEMPER_ENTITLEMENT_PUBKEYS != '' || vars.SEMPER_REQUIRE_ENTITLEMENT_PINS == 'true') && 'true' || '' }}
+          EXPECTED_SIGNER: ${{ vars.SEMPER_RELEASE_CERT_SHA256 || (github.repository == 'sempermechanics/semperdic-app' && 'ff72a8b08f02a05d65b53d91250bef7e3b0ff7538af2b0168ee52d5f36b15c9a' || '') }}
         run: |
           set -euo pipefail
           APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
           BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          SIGNER=$("$BUILD_TOOLS/apksigner" verify --print-certs "$APK" \
+            | grep -iE "(Signer #1|V[0-9]+ Signer):? ?certificate SHA-256 digest:" \
+            | head -1 | awk '{print $NF}')
           python3 scripts/check_release_apk.py "$APK" \
             --aapt2 "$BUILD_TOOLS/aapt2" \
             --mapping app/build/outputs/mapping/release/mapping.txt \
+            --signer-sha256 "$SIGNER" \
+            ${EXPECTED_SIGNER:+--expected-signer-sha256 "$EXPECTED_SIGNER"} \
             ${REQUIRE_ENTITLEMENT_PINS:+--require-entitlement-pins}
 
       # An AAB is a signed JAR, not an APK: apksigner does not read it.

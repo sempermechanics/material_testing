@@ -143,11 +143,12 @@ def test_a_hardened_release_passes(apk, tmp_path):
     mapping = tmp_path / "mapping.txt"
     mapping.write_text("# compiler: R8\ncom.x.A -> a.a:\n    void f() -> a\n", encoding="utf-8")
     res = _by_check(apk.evaluate(_facts(apk, dex=_dex_with(_PIN, f"ent-1:{_ENT_SPKI}")), expected_min_sdk=30,
-                                 debug_names=_DEBUG, mapping=mapping, require_entitlement_pins=True))
+                                 debug_names=_DEBUG, mapping=mapping, require_entitlement_pins=True,
+                                 signer_sha256=_RELEASE_CERT, expected_signer_sha256=_RELEASE_CERT_COLONS))
     assert {k: r.status for k, r in res.items()} == {
         "debuggable": "PASS", "debug-components": "PASS", "appcheck-debug": "PASS",
         "cleartext": "PASS", "min-sdk": "PASS", "r8-mapping": "PASS", "cert-pins": "PASS",
-        "entitlement-pins": "PASS", "consent-defaults": "PASS",
+        "entitlement-pins": "PASS", "signing-key": "PASS", "consent-defaults": "PASS",
     }
 
 
@@ -324,6 +325,43 @@ def test_release_workflow_requires_entitlement_pins_only_once_the_key_is_live():
     assert "--require-entitlement-pins" in step
     assert "vars.SEMPER_ENTITLEMENT_PUBKEYS" in step and "vars.SEMPER_REQUIRE_ENTITLEMENT_PINS" in step
     assert '${REQUIRE_ENTITLEMENT_PINS:+--require-entitlement-pins}' in step
+
+
+# The certificate every Semper release so far was signed with (release runs
+# 31565590316 to 39064532280, v1.2-beta.4 = versionCode 1036), as apksigner prints it.
+_RELEASE_CERT = "ff72a8b08f02a05d65b53d91250bef7e3b0ff7538af2b0168ee52d5f36b15c9a"
+_RELEASE_CERT_COLONS = ":".join(_RELEASE_CERT[i:i + 2] for i in range(0, 64, 2)).upper()
+
+
+@pytest.mark.parametrize(("signer", "expected", "status"), [
+    (_RELEASE_CERT, _RELEASE_CERT, "PASS"),
+    (_RELEASE_CERT, _RELEASE_CERT_COLONS, "PASS"),   # assetlinks' form
+    (_RELEASE_CERT.upper(), " " + _RELEASE_CERT_COLONS.lower() + "\n", "PASS"),
+    ("39" + _RELEASE_CERT[2:], _RELEASE_CERT, "FAIL"),
+    (_RELEASE_CERT, None, "WARN"),
+    (None, _RELEASE_CERT, "SKIP"),                   # unsigned (CI tier 5 without the keystore)
+    ("", _RELEASE_CERT, "SKIP"),
+    ("not-a-digest", _RELEASE_CERT, "FAIL"),
+])
+def test_signing_key_continuity(apk, signer, expected, status):
+    """TE1-007: the release gate only grepped assetlinks.json, which lists two
+    Semper certificates; a release signed with the other key would refuse to
+    install over 1036, and uninstalling deletes local analyses."""
+    res = _by_check(apk.evaluate(_facts(apk), expected_min_sdk=30, debug_names=_DEBUG, mapping=None,
+                                 signer_sha256=signer, expected_signer_sha256=expected))
+    assert res["signing-key"].status == status, res["signing-key"].detail
+
+
+def test_release_workflow_pins_the_release_certificate():
+    workflow = (_REPO / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    step = workflow[workflow.index("- name: Inspect release APK hardening"):]
+    step = step[:step.index("\n      - ")]
+    assert "vars.SEMPER_RELEASE_CERT_SHA256" in step
+    # The upstream repository's default is the certificate of every release so
+    # far; a fork (material_testing signs with its own key) gets no default.
+    assert f"github.repository == 'sempermechanics/semperdic-app' && '{_RELEASE_CERT}'" in step
+    assert '--signer-sha256 "$SIGNER"' in step
+    assert '${EXPECTED_SIGNER:+--expected-signer-sha256 "$EXPECTED_SIGNER"}' in step
 
 
 def test_no_dex_is_a_failure_not_a_pass(apk):

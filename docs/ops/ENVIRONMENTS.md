@@ -57,6 +57,7 @@ and must never be able to import over production. See
 | `SEMPER_API_CERT_PINS` | secret | Optional comma-separated `sha256/…=` pins for the API host; empty = system trust only (`check_release_apk.py` warns) |
 | `SEMPER_ENTITLEMENT_PUBKEYS` | var | Entitlement-signature public key(s) baked into the release build; once set, `check_release_apk.py --require-entitlement-pins` fails a release that compiled none |
 | `SEMPER_REQUIRE_ENTITLEMENT_PINS` | var | Optional; `true` once TD-215 is live keeps that requirement on even if the pubkeys variable is cleared ([RELEASING.md](RELEASING.md) step 5) |
+| `SEMPER_RELEASE_CERT_SHA256` | var | Optional upstream (defaults to the certificate of every Semper release, `FF:72:…:5C:9A`); the release must be signed with it. Set it only for a deliberate key rotation; material_testing sets its own |
 
 Dispatch **from `main` only** — jobs no-op on other refs.
 

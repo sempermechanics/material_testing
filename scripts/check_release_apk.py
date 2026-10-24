@@ -34,6 +34,10 @@ Checks (FAIL exits 1; WARN is reported and does not fail):
                     i.e. SEMPER_ENTITLEMENT_PUBKEYS was empty at build: the
                     app then trusts its unsigned /v1/config cache with no
                     offline bound (ADR-023, TD-215)
+  signing-key       with --signer-sha256: the signer's certificate equals
+                    --expected-signer-sha256 (FAIL otherwise: the build would
+                    not install over the released ones); WARN with no pin,
+                    SKIP for an unsigned build
   consent-defaults  <application> meta-data firebase_crashlytics_collection_enabled,
                     firebase_analytics_collection_enabled and
                     google_analytics_adid_collection_enabled are present and
@@ -46,7 +50,7 @@ apksigner). Standard library only.
 Usage:
   python3 scripts/check_release_apk.py APP.apk --mapping mapping.txt
       [--gradle app/build.gradle.kts] [--debug-src app/src/debug] [--aapt2 PATH]
-      [--require-entitlement-pins]
+      [--require-entitlement-pins] [--signer-sha256 HEX [--expected-signer-sha256 HEX]]
 """
 
 from __future__ import annotations
@@ -286,6 +290,13 @@ class ApkFacts:
     nsc_note: str = ""
 
 
+def cert_digest(text: str | None) -> str | None:
+    """A SHA-256 certificate digest as lowercase hex, from apksigner's bare hex
+    or assetlinks' colon-separated uppercase form; None if it is neither."""
+    hexed = re.sub(r"[\s:]", "", text or "").lower()
+    return hexed if re.fullmatch(r"[0-9a-f]{64}", hexed) else None
+
+
 def parse_mapping(lines) -> dict[str, str]:
     """Class lines of an R8 `mapping.txt`: original name -> name in the dex.
     Member lines are indented; `#` lines are comments."""
@@ -308,7 +319,8 @@ def kept_in(class_map: dict[str, str], name: str) -> bool:
 
 def evaluate(facts: ApkFacts, *, expected_min_sdk: int | None, debug_names: set[str],
              mapping: Path | None, app_package: str | None = None,
-             require_entitlement_pins: bool = False) -> list[Result]:
+             require_entitlement_pins: bool = False, signer_sha256: str | None = None,
+             expected_signer_sha256: str | None = None) -> list[Result]:
     results: list[Result] = []
     app = facts.manifest.find("application") or Element("application", 0)
     # R8 renames every class that is not kept, so the dex alone cannot show a
@@ -457,6 +469,25 @@ def evaluate(facts: ApkFacts, *, expected_min_sdk: int | None, debug_names: set[
                               "at build, so signed tokens are ignored and the cached licence has no offline "
                               "bound (TD-215)"))
 
+    # Signing-key continuity (TE1-007): an update installs only over a build
+    # signed with the same certificate. assetlinks.json lists two for Semper,
+    # so the grep there passes either; this compares with the one pinned.
+    if not signer_sha256:
+        results.append(Result("signing-key", "SKIP", "no --signer-sha256 given (unsigned build)"))
+    elif not cert_digest(signer_sha256):
+        results.append(Result("signing-key", "FAIL", f"--signer-sha256 {signer_sha256!r} is not a SHA-256 digest"))
+    elif not expected_signer_sha256 or not expected_signer_sha256.strip():
+        results.append(Result("signing-key", "WARN",
+                              f"signed with {cert_digest(signer_sha256)}; no pinned release certificate to compare "
+                              "(SEMPER_RELEASE_CERT_SHA256)"))
+    elif cert_digest(signer_sha256) != cert_digest(expected_signer_sha256):
+        results.append(Result("signing-key", "FAIL",
+                              f"signed with {cert_digest(signer_sha256)}, not the release certificate "
+                              f"{cert_digest(expected_signer_sha256) or expected_signer_sha256!r}: it would not "
+                              "install over the released builds (INSTALL_FAILED_UPDATE_INCOMPATIBLE)"))
+    else:
+        results.append(Result("signing-key", "PASS", f"signed with the release certificate {cert_digest(signer_sha256)}"))
+
     # Consent defaults (TE5-005): diagnostics stay off until the user opts in
     # (AppSettings.diagnosticsEnabled), the advertising ID is never collected,
     # and its permissions stay removed (TD-232). A manifest merge can undo any
@@ -549,6 +580,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--aapt2", help="path to aapt2 (default: $AAPT2, PATH, newest build-tools)")
     ap.add_argument("--require-entitlement-pins", action="store_true",
                     help="entitlement-pins FAILs instead of WARNs when no key is compiled in (once TD-215 is live)")
+    ap.add_argument("--signer-sha256", help="the APK signer's certificate SHA-256 (apksigner --print-certs)")
+    ap.add_argument("--expected-signer-sha256",
+                    help="the release certificate's SHA-256 (hex or colon form); a different signer FAILs")
     args = ap.parse_args(argv)
 
     if not args.apk.is_file():
@@ -563,6 +597,8 @@ def main(argv: list[str] | None = None) -> int:
         mapping=args.mapping,
         app_package=gradle_namespace(gradle_text),
         require_entitlement_pins=args.require_entitlement_pins,
+        signer_sha256=args.signer_sha256,
+        expected_signer_sha256=args.expected_signer_sha256,
     )
     print(f"Release APK inspection: {args.apk}")
     print(render(results))

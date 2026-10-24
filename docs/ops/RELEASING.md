@@ -277,8 +277,21 @@ fails.
    signing key is live and the pubkeys variable set), also set
    `SEMPER_REQUIRE_ENTITLEMENT_PINS=true` on the `release` environment, so a
    cleared pubkeys variable cannot ship a key-less build quietly. Both are unset
-   today, so no release fails on it. CI tier 5 runs the same check on its own
-   release build, without the flag. Locally:
+   today, so no release fails on it. **Signing-key continuity** (`signing-key`):
+   the signer's certificate must be the release certificate, SHA-256
+   `FF:72:A8:B0:8F:02:A0:5D:65:B5:3D:91:25:0B:EF:7E:3B:0F:F7:53:8A:F2:B0:16:8E:E5:2D:5F:36:B1:5C:9A`,
+   which signed every Semper release so far (release runs 31565590316 to
+   39064532280; `v1.2-beta.4`, versionCode 1036). A build signed with any other
+   key (a different `KEYSTORE_BASE64`) would not install over them
+   (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`), and the only way past that is an
+   uninstall, which deletes analyses not in the cloud. `assetlinks.json` lists a
+   second Semper certificate, so step 7 alone does not catch it. The value is the
+   workflow's default for this repository; the variable
+   `SEMPER_RELEASE_CERT_SHA256` overrides it, which is how a deliberate rotation
+   (with an APK Signature Scheme v3 lineage, or Play App Signing's upload key)
+   is made. A fork gets no default and only a warning until it sets the variable.
+   CI tier 5 runs the same check on its own release build, without the
+   entitlement flag or a signer. Locally:
    `python3 scripts/check_release_apk.py app-release.apk --mapping mapping.txt`.
 6. **Verifies the bundle's signature** (`jarsigner -verify` on the `.aab`).
 7. **Verifies `assetlinks.json` lists the release certificate.** It extracts the
@@ -329,6 +342,7 @@ Creates the **GitHub Release** with the APK and the AAB attached, gated on the
 | `SEMPER_API_BASE_URL` | HTTPS base URL of the API Gateway (preferred) or Cloud Run service |
 | `SEMPER_ENTITLEMENT_PUBKEYS` | Public key(s) the app verifies signed entitlements with, passed to Gradle as env. Public material, so a variable, not a secret. Set, it also makes the APK inspection require an entitlement key in the build (step 5) |
 | `SEMPER_REQUIRE_ENTITLEMENT_PINS` | Optional, `true` once TD-215 is live: the APK inspection fails a release with no entitlement key compiled in, whatever `SEMPER_ENTITLEMENT_PUBKEYS` holds |
+| `SEMPER_RELEASE_CERT_SHA256` | Optional here (the workflow defaults to the release certificate of every release so far, step 5); set only to rotate the signing key deliberately. A fork must set it to its own release certificate |
 
 ### Backend staging / production
 
