@@ -136,3 +136,17 @@ def test_a_header_with_line_breaks_is_logged_as_unknown():
     assert apps.logged_application_id("com.indicvision.semper\r\n") == "com.indicvision.semper"
     assert apps.logged_application_id("") == "none"
     assert apps.logged_application_id(None) == "none"
+
+
+def test_the_image_turns_off_uvicorns_own_access_log():
+    """`semper.access` (main.py) writes one sanitised line per request: path
+    only, through observability's allow-list. uvicorn's own access line would
+    log every request again with the raw query string and client address
+    (readiness TE3-011), so the image runs uvicorn with --no-access-log."""
+    import pathlib
+    import re
+
+    dockerfile = (pathlib.Path(__file__).resolve().parents[1] / "Dockerfile").read_text(encoding="utf-8")
+    [cmd] = [line for line in dockerfile.splitlines() if line.startswith("CMD ")]
+    assert re.search(r"\buvicorn\b", cmd), cmd
+    assert "--no-access-log" in cmd.split(), cmd
