@@ -12,6 +12,7 @@
         android:id="@+id/authColumn"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginHorizontal="@dimen/content_side_inset"
         android:orientation="vertical"
         android:padding="24dp"
         android:gravity="center_vertical">

@@ -57,6 +57,7 @@
         <com.sempermechanics.semper.ui.settings.SettingsScrollContentView
             android:id="@+id/settingsSections"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="@dimen/content_side_inset" />
     </androidx.core.widget.NestedScrollView>
 </LinearLayout>
