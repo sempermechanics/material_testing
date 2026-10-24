@@ -310,7 +310,9 @@ Creates the **GitHub Release** with the APK and the AAB attached, gated on the
 
 Use [`deploy-backend.yml`](../../.github/workflows/deploy-backend.yml): choose
 `staging` or `production`, supply GCP project/region. Updates deploy with
-`no_traffic`, tag a candidate, smoke `/readyz` with an ID token, then promote.
+`no_traffic`, tag a candidate, smoke `/readyz` and `/v1/config` (the app's own
+401) with an ID token, then promote, then check the live service the same way
+and roll traffic back to the previous revision if that fails.
 First-time Cloud Run creates omit `no_traffic` (Cloud Run rejects it on create).
 See [CI.md](CI.md) § Backend deploy and [ENVIRONMENTS.md](ENVIRONMENTS.md).
 

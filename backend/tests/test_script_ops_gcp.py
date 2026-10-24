@@ -699,6 +699,58 @@ def test_secret_check_requires_its_arguments(tmp_path):
     assert calls == []
 
 
+def _deploy_steps() -> list[dict]:
+    yaml = pytest.importorskip("yaml")
+    workflow = yaml.safe_load((_REPO / ".github" / "workflows" / "deploy-backend.yml").read_text(encoding="utf-8"))
+    return workflow["jobs"]["deploy"]["steps"]
+
+
+def _step(steps: list[dict], step_id: str) -> tuple[int, dict]:
+    return next((i, s) for i, s in enumerate(steps) if s.get("id") == step_id)
+
+
+def test_the_candidate_smoke_loads_an_app_route():
+    """TE6-004 (a): /readyz alone proves the container answers, not that the
+    routers and auth stack loaded. GET /v1/config with a non-Bearer forwarded
+    header is the app's own JSON 401 missing_bearer (no token verified, no
+    audit row); Cloud Run's IAM answers HTML, a missing route 404."""
+    _, smoke = _step(_deploy_steps(), "smoke")
+    run = smoke["run"]
+    assert '"${URL}/v1/config"' in run and "X-Forwarded-Authorization: smoke" in run
+    assert '.detail == "missing_bearer"' in run and '"401"' in run
+
+
+def test_a_post_promote_health_check_can_trigger_the_rollback():
+    """TE6-004 (b): after the promote nothing called the live service, so the
+    rollback could fire only when a gcloud describe failed."""
+    steps = _deploy_steps()
+    promote_at, _ = _step(steps, "promote")
+    health_at, health = _step(steps, "post_promote_health")
+    rollback_at = next(i for i, s in enumerate(steps) if s.get("name") == "Rollback traffic on post-promote failure")
+    assert promote_at < health_at < rollback_at
+    assert "continue-on-error" not in health
+    assert "steps.service_url.outputs.url" in health["env"]["URL"]
+    run = health["run"]
+    assert '"${URL}/readyz"' in run and '"${URL}/v1/config"' in run and "exit 1" in run
+    assert "failure() && steps.promote.outcome == 'success'" in steps[rollback_at]["if"]
+    # Every step between the promote and the health check must not hide a
+    # failure either, or the rollback never runs for it.
+    assert all("continue-on-error" not in s for s in steps[promote_at:health_at])
+
+
+def test_the_rollback_drill_fails_on_purpose_only_on_staging():
+    """TE6-004 (c): the D5 revision-rollback drill (TD-220) needs a deploy whose
+    post-promote check fails; never production."""
+    yaml = pytest.importorskip("yaml")
+    workflow = yaml.safe_load((_REPO / ".github" / "workflows" / "deploy-backend.yml").read_text(encoding="utf-8"))
+    on = workflow.get("on") or workflow.get(True)
+    drill = on["workflow_dispatch"]["inputs"]["rollback_drill"]
+    assert drill["type"] == "boolean" and drill["default"] is False
+    _, health = _step(_deploy_steps(), "post_promote_health")
+    assert "github.event.inputs.rollback_drill" in health["env"]["DRILL"]
+    assert '[ "$ENVIRONMENT" = "staging" ]' in health["run"]
+
+
 def test_the_deploy_runs_the_secret_check_before_mounting():
     workflow = (_REPO / ".github" / "workflows" / "deploy-backend.yml").read_text(encoding="utf-8")
     check = workflow.index("scripts/check_secret_access.sh")

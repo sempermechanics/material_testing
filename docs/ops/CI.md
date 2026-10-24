@@ -266,10 +266,20 @@ Environments. A **production** deploy runs only when dispatched from `main`
    token whose audience is the service URL — both environments run
    `--no-allow-unauthenticated` (staging too: the opposite flag binds
    `allUsers`), so an unauthenticated probe would only prove the
-   gateway rejects it. The deploy SA needs `run.invoker` on each service.
+   gateway rejects it. The deploy SA needs `run.invoker` on each service. Then
+   `GET /v1/config` on the candidate with `X-Forwarded-Authorization: smoke`
+   must be the app's own JSON 401 `missing_bearer`: the routers and auth stack
+   loaded (no token is verified and no audit row written; Cloud Run's own 401
+   is HTML, a missing route 404).
 4. Promotes the candidate to 100% traffic once the smoke passes (when
    `no_traffic` was used), with `--to-latest` after checking the latest ready
    revision is the candidate, and removes every `cand-*` tag in the same call.
+   Then **checks the live service** on its own URL (`post_promote_health`): the
+   same `/readyz` 200 and `/v1/config` 401 probes, three tries 10 s apart. A
+   failure there runs "Rollback traffic on post-promote failure", which routes
+   100 % back to the previous revision. Dispatch input `rollback_drill`
+   (staging only, ignored for production) fails this check on purpose, for the
+   revision-rollback drill (TD-220).
 5. Records the serving revision's image digest and its `release-train` label in
    the job summary. A label that does not match is a warning carrying the
    `gcloud run services update … --update-labels` command that sets it, not a
