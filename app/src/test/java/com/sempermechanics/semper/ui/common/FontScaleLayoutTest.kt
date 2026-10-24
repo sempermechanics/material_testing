@@ -108,6 +108,12 @@ class FontScaleLayoutTest {
                 .filter { end -> !text[end - 1].isWhitespace() }
             assertEquals("$name breaks mid-word at $midWord", emptyList<Int>(), midWord)
         }
+        // A value keeps a gap before its unit ("31 px", not "31px").
+        for ((value, unit) in listOf(R.id.etSubsetValue to R.id.tvSubsetUnit, R.id.etStrainValue to R.id.tvStrainUnit)) {
+            val gap = root.findViewById<View>(unit).left - root.findViewById<View>(value).right
+            val name = ctx.resources.getResourceEntryName(unit)
+            assertTrue("$name is ${gap}px from its value", gap >= ctx.px(UNIT_GAP_DP))
+        }
     }
 
     @Test
@@ -208,5 +214,6 @@ class FontScaleLayoutTest {
         const val PHONE_DP = 360
         const val GOOGLE_MIN_DP = 52
         const val TILE_DP = 72
+        const val UNIT_GAP_DP = 4
     }
 }
