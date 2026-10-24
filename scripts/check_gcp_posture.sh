@@ -18,7 +18,8 @@
 #   3.7  Data Access audit logs on for Firebase, rules, App Check, Firestore
 #
 # Only describe / list / ls / get-iam-policy calls and REST GETs (Identity
-# Toolkit config) are made; a wrapper refuses any other gcloud verb. UNKNOWN
+# Toolkit config) are made; a wrapper refuses any gcloud call that does not
+# start with one of those read-only command paths. UNKNOWN
 # means the call failed (permission, API off) and says why.
 #
 #   scripts/check_gcp_posture.sh --app-project indicvision-dic-app \
@@ -64,19 +65,21 @@ trap 'rm -rf "$WORK"' EXIT
 FAILS=0
 UNKNOWNS=0
 
-# gc ARGS...: gcloud, read-only verbs only. Output to stdout; on failure the
-# first stderr line is left in $WORK/err.
+# gc ARGS...: gcloud, read-only commands only. Output to stdout; on failure the
+# first stderr line is left in $WORK/err. The call must START with one of the
+# read-only command paths below, word for word: a read verb elsewhere in the
+# arguments (`gc projects delete describe`) is refused, as is any leading flag.
 gc() {
-  local verb=""
-  for a in "$@"; do
-    case "$a" in
-      describe|list|ls|get-iam-policy|print-access-token) verb=$a ;;
-    esac
-  done
-  if [ -z "$verb" ]; then
-    echo "refusing non-read-only gcloud call: gcloud $*" >&2
-    exit 3
-  fi
+  case "$* " in
+    'projects describe '*|'projects get-iam-policy '*|'alpha resource-manager liens list '*|\
+    'resource-manager tags bindings list '*|'services api-keys list '*|'auth print-access-token '*|\
+    'billing projects describe '*|'billing budgets list '*|'run services describe '*|\
+    'firestore databases describe '*|'firestore backups schedules list '*|'storage ls '*|\
+    'iam roles describe '*) ;;
+    *)
+      echo "refusing non-read-only gcloud call: gcloud $*" >&2
+      exit 3 ;;
+  esac
   gcloud "$@" 2>"$WORK/err"
 }
 

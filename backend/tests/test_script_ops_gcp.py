@@ -138,19 +138,52 @@ def test_posture_reports_each_failure(tmp_path):
     assert status == "UNKNOWN" and "PERMISSION_DENIED" in detail
 
 
+# The command paths check_gcp_posture.sh's gc() lets through, word for word
+# from the start of the call (TE6-010): the verb is matched where gcloud reads
+# it, not anywhere in the arguments.
+_READ_COMMANDS = (
+    "projects describe ", "projects get-iam-policy ", "alpha resource-manager liens list ",
+    "resource-manager tags bindings list ", "services api-keys list ", "auth print-access-token ",
+    "billing projects describe ", "billing budgets list ", "run services describe ",
+    "firestore databases describe ", "firestore backups schedules list ", "storage ls ",
+    "iam roles describe ",
+)
+
+
 def test_posture_only_reads(tmp_path):
-    """Every gcloud call is a describe / list / get-iam-policy / token print,
-    and curl is only ever a GET."""
+    """Every gcloud call starts with one of the read-only command paths, and
+    curl is only ever a GET."""
     _, calls = _run(tmp_path, _POSTURE, "posture_pass", *_ARGS)
-    read_verbs = {"describe", "list", "ls", "get-iam-policy", "print-access-token"}
+    assert any(c.startswith("gcloud ") for c in calls)
     for call in calls:
         words = call.split()
         if words[0] == "gcloud":
-            assert read_verbs & set(words), call
-            assert not {"create", "update", "delete", "set-iam-policy", "add-iam-policy-binding",
-                        "remove-iam-policy-binding", "patch"} & set(words), call
+            assert (call[len("gcloud "):] + " ").startswith(_READ_COMMANDS), call
         else:
             assert words[:2] == ["curl", "GET"], call
+
+
+@pytest.mark.parametrize("call", [
+    "run services update semper-api --update-env-vars APP_CHECK_MODE=off list",
+    "projects delete describe",
+    "projects delete demo-app-prod --format=json describe",
+    "--project demo-app-prod projects describe",
+    "storage rm gs://demo-backups/firestore/ ls",
+    "services api-keys delete key-1 list",
+])
+def test_posture_wrapper_matches_the_verb_position(tmp_path, call):
+    """TE6-010: a read verb anywhere in the arguments used to let a write
+    through (`gc projects delete describe` ran)."""
+    script = _POSTURE.read_text(encoding="utf-8")
+    probe = tmp_path / "probe.sh"
+    start = script.index("gc() {")
+    end = script.index("\n}\n", start) + 3
+    probe.write_text("set -euo pipefail\nWORK=$(mktemp -d)\n" + script[start:end]
+                     + f'gc {call}\necho "ran"\n', encoding="utf-8")
+    proc, calls = _run(tmp_path, probe, "posture_pass")
+    assert proc.returncode == 3, proc.stdout + proc.stderr
+    assert "refusing non-read-only gcloud call" in proc.stderr
+    assert calls == [] and "ran" not in proc.stdout
 
 
 def test_posture_backups_pass_on_a_recent_export_without_a_schedule(tmp_path):
