@@ -414,6 +414,55 @@ def test_checkout_refusal_alert_leaves_out_a_full_pool():
     assert 'metric.label.errorCode!=\\"no_floating_seat\\"' in text
 
 
+def _halt_criteria() -> str:
+    text = (_REPO / "docs" / "ops" / "RELEASING.md").read_text(encoding="utf-8")
+    start = text.index("**Halt criteria.**")
+    return text[start:text.index("\n## ", start)]
+
+
+def test_halt_criteria_read_metrics_that_carry_the_build():
+    """TE6-007: a per-version criterion needs a metric labelled with appId and
+    appVersion (Material Testing numbers its builds from its own counter, so
+    a bare appVersion matches both apps); semper_auth_denied has stage only."""
+    criteria = _halt_criteria()
+    named = set(re.findall(r"`(semper_[a-z_]+)`", criteria))
+    assert {"semper_activation", "semper_checkout", "semper_devlock_drop", "semper_app_check_failed"} <= named
+    labels = _metric_labels()
+    for metric in named:
+        assert {"appId", "appVersion"} <= labels[metric], metric
+    assert "rising" not in criteria
+    assert "(appId, appVersion)" in criteria
+
+
+def test_devlock_halt_criterion_is_a_number():
+    criteria = _halt_criteria()
+    line = criteria[criteria.index("**Device-lock drops:**"):]
+    line = line[:line.index("\n- ")]
+    assert re.search(r"\*\*\d+\*\*", line), line
+    assert "7-day" in line
+
+
+def test_licensing_charts_the_refused_share_by_build():
+    """The activation / checkout criteria compare refused shares; the board
+    plots them per (appId, appVersion), checkout without a full pool."""
+    board = json.loads((_MON / "dashboards" / "licensing.json").read_text(encoding="utf-8"))
+    ratios = {}
+    for tile in board["mosaicLayout"]["tiles"]:
+        for ds in tile["widget"].get("xyChart", {}).get("dataSets", []):
+            ratio = ds["timeSeriesQuery"].get("timeSeriesFilterRatio")
+            if ratio:
+                ratios[_USER_METRIC.search(ratio["denominator"]["filter"]).group(1)] = ratio
+    assert set(ratios) == {"semper_activation", "semper_checkout"}
+    for metric, ratio in ratios.items():
+        assert 'metric.label.outcome="refused"' in ratio["numerator"]["filter"], metric
+        assert "metric.label.outcome" not in ratio["denominator"]["filter"], metric
+        for part in ("numerator", "denominator"):
+            assert ratio[part]["aggregation"]["groupByFields"] == ["metric.label.appId", "metric.label.appVersion"]
+            assert _USER_METRIC.search(ratio[part]["filter"]).group(1) == metric
+    for part in ("numerator", "denominator"):
+        assert 'metric.label.errorCode!="no_floating_seat"' in ratios["semper_checkout"][part]["filter"]
+
+
 def test_every_policy_runbook_anchor_exists():
     """Each policy's documentation names a README section; it must exist."""
     readme = (_MON / "README.md").read_text(encoding="utf-8")

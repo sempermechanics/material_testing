@@ -121,21 +121,29 @@ staged percentage never rises by itself.
 | 4 | 100 % | — |
 
 **Halt criteria.** Halt the rollout (Play Console → Release → Halt) when any of
-these holds for the new version. The numbers are starting values, to be tuned
-after the first rollouts:
+these holds for the new version. "The new version" is always the pair
+(appId, appVersion): Material Testing numbers its builds from its own counter, so
+a bare `appVersion` can match both apps. The numbers are starting values, to be
+tuned after the first rollouts:
 
 - **Crash-free users** below **99.5 %** (Crashlytics, the release's version) once at
   least 200 users run it, or a new crash cluster in licensing, upload or restore.
 - **User-perceived ANR rate** above **0.47 %**, Play's bad-behaviour threshold
   (Android vitals).
 - **Activation errors:** the share of `semper_activation` lines with
-  `outcome="refused"` on the new `appVersion` more than 5 points above the previous
-  version's 7-day share, with at least 20 attempts (`ops/monitoring/metrics/semper_activation.yaml`).
+  `outcome="refused"` on the new (appId, appVersion) more than 5 points above the
+  previous version's 7-day share, with at least 20 attempts (`ops/monitoring/metrics/semper_activation.yaml`).
   The same for `semper_checkout`, leaving out `no_floating_seat`, which is a full pool.
-- **Device-lock drops:** `semper_devlock_drop` with `stage="mismatch"` rising on the
-  new version.
-- **Refusals:** the `auth-denied-spike` alert, or any `AUTH_DENIED` with
-  `stage="app_check"` from the new version.
+  Both shares are charted per build on the `semper-licensing` dashboard.
+- **Device-lock drops:** `semper_devlock_drop` with `stage="mismatch"` on the new
+  (appId, appVersion): at least **10** in 24 h, and that 24 h count divided by the
+  stage's percentage more than **2** times the previous version's 7-day daily mean
+  divided by the rest (at 5 %: new ÷ 5 against previous ÷ 95). The
+  `devlock-mismatch` alert catches one licence looping sooner.
+- **Refusals:** the `auth-denied-spike` alert, or any `semper_app_check_failed`
+  line (`app_check_missing` or `app_check_invalid`) from the new (appId, appVersion).
+  The `AUTH_DENIED` metric carries only `stage`, so it cannot say which build was
+  refused; the `app-check-refused` alert fires on it for any build.
 - **Backend:** the `http-5xx-ratio` or `slo-burn-fast` alert while the rollout is
   under way.
 

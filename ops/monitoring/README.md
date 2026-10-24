@@ -193,8 +193,10 @@ to look when the ratio moves.
 ### semper-licensing
 Hourly counts on production: activations, seat checkouts and device-lock drops, each
 by outcome (or stage, for drops) and by app and build (`appId`, `appVersion`);
-activation and checkout refusals by `errorCode`. A new build whose refusals climb
-shows here before support hears of it. Per-licence counts are the activation-anomaly
+activation and checkout refusals by `errorCode`; and, daily, the refused share of
+activations and of checkouts (a full pool left out) per build, the two shares the
+rollout halt criteria compare ([RELEASING.md](../../docs/ops/RELEASING.md)). A new
+build whose refusals climb shows here before support hears of it. Per-licence counts are the activation-anomaly
 alert's, not a chart's.
 
 ### semper-security
