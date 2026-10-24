@@ -114,11 +114,11 @@ emulator (`scripts/micro_ab.py`, [TESTING.md](docs/app/TESTING.md)); the phone-r
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-23)
+## Current state (2026-10-24)
 
-- **Deployed.** Backend and gateways from `d79aa0c7` (2026-10-23; #466–#468): Cloud Run
-  `semper-api` (`semper-api-39900623312-1`, gateway config `v202610230501-112`) and staging
-  `semper-api-staging` (`semper-api-staging-39900999296-1`, `v202610221243-110`)
+- **Deployed.** Backend from `187f4870` (2026-10-24; #482 on top of #466–#468): Cloud Run
+  `semper-api` (`semper-api-40063322039-1`, gateway config `v202610230501-112`) and staging
+  `semper-api-staging` (`semper-api-staging-39948110403-1`, `v202610221243-110`)
   ([CHANGELOG](docs/ops/CHANGELOG.md)). Hosting is from `000575b0` (2026-10-23, the operator desk
   redesign, #478) with `/privacy` and `/terms` held at `b940cc29`. Live: licensing
   ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)), device binding per app

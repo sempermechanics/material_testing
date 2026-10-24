@@ -12,6 +12,23 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-10-24 — Backend: a staff-released phone is told so (#482)
+
+The backend from `main` at `187f4870` went live, staging first. It carries #482: a QC phone
+staff released from its test account (TD-314) is now refused registration with 409
+`device_released` instead of `device_conflict` (still audited `DEVICE_REGISTER` DENIED,
+`reason=staff_released`), and app builds from `187f4870` say "Staff released this phone from
+this account". Installed builds read any 409 there as a conflict, as before. The other PRs
+merged since `d79aa0c7` are docs, the console (#478, Hosting 2026-10-23) and the Firestore
+index script (#476). No gateway change, no Hosting deploy, no app release.
+
+- **Staging.** Run 39948110403 (`semper-api-staging-39948110403-1`, 100 %), gateway dry run.
+  On emulator-5586, the QC phone released on 2026-10-23 (`and-36439a0f18da2a33`), a debug
+  build of `187f4870` signing in to the QC account was refused and showed the new message.
+- **Production.** Run 40063322039, approved by the required reviewer (TD-228):
+  `semper-api-40063322039-1` at 100 % after `/readyz` passed on the candidate; the gateway
+  job found `v202610230501-112` already serving this spec and changed nothing.
+
 ## 2026-10-23 — Backend, gateways and the console: #466–#468; main green again
 
 The backend from `main` at `d79aa0c7` went live: staging first, then production with the
