@@ -237,6 +237,14 @@ class VsgLatticeActivity : AppCompatActivity() {
 
     private fun showSummary(nodes: List<SweepLatticeView.Node>, solvedCount: Int, skippedCount: Int) {
         val summary = binding.tvLatticeSummary
+        if (nodes.isEmpty()) {
+            // No sweep reached this screen: nothing ran, so nothing failed (AE1V-020).
+            summary.text = getString(R.string.vsg_lattice_empty)
+            // Listener first: setting one, even null, makes the view clickable again.
+            summary.setOnClickListener(null)
+            summary.isClickable = false
+            return
+        }
         if (solvedCount == 0) {
             summary.text = getString(R.string.vsg_lattice_all_failed)
             summary.isClickable = true
@@ -245,8 +253,8 @@ class VsgLatticeActivity : AppCompatActivity() {
             }
             return
         }
-        summary.isClickable = false
         summary.setOnClickListener(null)
+        summary.isClickable = false
         summary.text = latticeSummary(resources, nodes, solvedCount, skippedCount, args.plannedFrames)
     }
 

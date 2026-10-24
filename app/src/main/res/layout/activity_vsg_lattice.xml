@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Same minimal-chrome vocabulary as the result viewer (glass pucks, hairline
-     rules, zero elevation, monospace numerics); see viewer_* tokens in
+     rules, zero elevation, tabular numerics); see viewer_* tokens in
      colors.xml. forceDarkAllowed=false: every colour on this screen is an
      explicit day/night resource now, so the OS's force-dark auto-invert would
      only double-apply on top of the already-tuned glass fills. -->
@@ -93,7 +93,7 @@
                 android:layout_marginEnd="4dp"
                 android:layout_weight="1"
                 android:contentDescription="@string/vsg_lattice_readout_copy_hint"
-                android:fontFamily="monospace"
+                android:fontFeatureSettings="tnum"
                 android:insetTop="0dp"
                 android:insetBottom="0dp"
                 android:paddingTop="10dp"
@@ -243,7 +243,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
-                android:fontFamily="monospace"
+                android:fontFeatureSettings="tnum"
                 android:minLines="1"
                 android:textColor="@color/viewer_chrome_muted"
                 android:textSize="12sp"

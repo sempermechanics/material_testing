@@ -572,6 +572,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="error_low_convergence_why">The images may have decorrelated: the speckle pattern changed, or the specimen moved out of view.</string>
     <string name="action_open_faq">Open FAQ</string>
     <string name="vsg_lattice_all_failed">All combinations failed — tap a node for details.</string>
+    <!-- The lattice opened without a sweep to draw: nothing ran, so nothing failed. -->
+    <string name="vsg_lattice_empty">No sweep to show. Run a parameter sweep from a new analysis.</string>
 
     <!-- One-line failure labels for lattice nodes, in measurement terms. -->
     <string name="sweep_reason_decorrelated">Decorrelated — the pair could not be matched</string>

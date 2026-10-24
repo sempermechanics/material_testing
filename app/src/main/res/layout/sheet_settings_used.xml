@@ -42,7 +42,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="18dp"
-        android:fontFamily="monospace"
+        android:fontFeatureSettings="tnum"
         android:lineSpacingExtra="4dp"
         android:textColor="@color/viewer_chrome_text"
         android:textSize="14sp" />
@@ -78,7 +78,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
             android:accessibilityLiveRegion="polite"
-            android:fontFamily="monospace"
+            android:fontFeatureSettings="tnum"
             android:textColor="@color/viewer_chrome_muted"
             android:textSize="12sp" />
     </LinearLayout>
