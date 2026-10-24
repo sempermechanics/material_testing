@@ -44,7 +44,10 @@ Shared beside them:
 - `roster-tools.js` — a roster's bulk tools: the seat-count tiles from
   `GET …/summary`, read after every roster load; Export roster CSV,
   `GET …/seats/export`; and the bulk import, `POST …/seats/import`, with a
-  row-count preview and one result line per row.
+  row-count preview and one result line per row. A whole-file refusal names
+  its line when the backend gives one (`"line": n` beside the code, or a
+  `<code>: line <n>` suffix; `ApiError.line`), and a file over the body limit
+  (a validation 422) is said as too large.
 - `audit-log.js` — the licence's audit log, `GET …/audit`, read on demand
   with a date range, a page of 50 at a time, and exported as CSV or JSON, up
   to 5,000 events each. From / To are local days, sent as instants
