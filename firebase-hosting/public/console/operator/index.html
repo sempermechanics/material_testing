@@ -346,9 +346,11 @@
             as it is. Up to 500 rows at a time. Anyone already on the roster
             is left as they are, so importing a file twice is harmless.
           </p>
+          <label for="rosterImportText" class="visually-hidden">Addresses to import</label>
           <textarea id="rosterImportText" rows="5" spellcheck="false" autocomplete="off"
                     placeholder="email&#10;ana@institution.edu&#10;ben@institution.edu"></textarea>
           <div class="row">
+            <label for="rosterImportFile" class="visually-hidden">CSV file</label>
             <input id="rosterImportFile" type="file" accept=".csv,text/csv,text/plain" />
             <span class="muted" id="rosterImportPreview"></span>
             <span class="spacer"></span>

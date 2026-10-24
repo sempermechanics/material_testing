@@ -74,7 +74,7 @@
         </p>
         <div class="row" id="licenceChoices"></div>
         <div class="row">
-          <input id="licenseId" size="44" placeholder="licence id"
+          <input id="licenseId" size="44" placeholder="licence id" aria-label="Licence id"
                  autocomplete="off" spellcheck="false" />
           <button id="load">Open</button>
         </div>
@@ -88,7 +88,7 @@
         <h2>Roster</h2>
         <p class="muted" id="rosterHelp"></p>
         <div class="row" style="margin-bottom:1rem">
-          <input id="addEmail" size="32" type="email" placeholder="name@institution.edu"
+          <input id="addEmail" size="32" type="email" placeholder="name@institution.edu" aria-label="Member's email"
                  autocomplete="off" />
           <button id="add">Add member</button>
           <span class="spacer"></span>
@@ -117,9 +117,11 @@
           as it is. Up to 500 rows at a time. Anyone already on the roster
           is left as they are, so importing a file twice is harmless.
         </p>
+        <label for="importText" class="visually-hidden">Addresses to import</label>
         <textarea id="importText" rows="6" spellcheck="false" autocomplete="off"
                   placeholder="email&#10;ana@institution.edu&#10;ben@institution.edu"></textarea>
         <div class="row">
+          <label for="importFile" class="visually-hidden">CSV file</label>
           <input id="importFile" type="file" accept=".csv,text/csv,text/plain" />
           <span class="muted" id="importPreview"></span>
           <span class="spacer"></span>

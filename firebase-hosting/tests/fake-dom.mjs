@@ -69,6 +69,16 @@ export class FakeElement {
     return name in this.attributes ? this.attributes[name] : null;
   }
 
+  setAttribute(name, value) {
+    this.attributes[name] = String(value);
+    if (name === "id") this.id = String(value);
+    if (name.startsWith("data-")) this.dataset[camel(name.slice(5))] = String(value);
+  }
+
+  removeAttribute(name) {
+    delete this.attributes[name];
+  }
+
   get textContent() {
     return this.childNodes.map((n) => (typeof n === "string" ? n : n.textContent)).join("");
   }

@@ -23,10 +23,11 @@ export const ERR_CANCELLED = "console_cancelled";
  * (default: the status line). The Edit dialog passes an element inside
  * itself, because a modal dialog makes everything outside it unreachable.
  * Every piece of text goes in as a text node, so a licence label or address
- * is never markup.
+ * is never markup. The box is named `label` ("Password", "Licence key"), or
+ * the card's title, for a screen reader: it has no visible label of its own.
  */
 function pageCard(kind, {
-  title, message, input = false, password = false, confirm, cancel = "Cancel", anchor, answer,
+  title, message, input = false, password = false, label, confirm, cancel = "Cancel", anchor, answer,
 }) {
   const card = document.createElement("section");
   card.className = `card ${kind}`;
@@ -50,6 +51,7 @@ function pageCard(kind, {
   if (input) {
     box.type = password ? "password" : "text";
     box.autocomplete = password ? "current-password" : "off";
+    box.setAttribute("aria-label", label || title);
   } else {
     box.remove();
   }
@@ -83,11 +85,11 @@ function pageCard(kind, {
 
 /**
  * Ask for one line of text in the page. Resolves the trimmed answer ("" if
- * left blank), or null on Cancel.
+ * left blank), or null on Cancel. `label` names the box (default: `title`).
  */
-export function askInPage({ title, message, password = false, confirm = "Confirm", anchor } = {}) {
+export function askInPage({ title, message, password = false, label, confirm = "Confirm", anchor } = {}) {
   return pageCard("ask", {
-    title, message, input: true, password, confirm, anchor, answer: (text) => text,
+    title, message, input: true, password, label, confirm, anchor, answer: (text) => text,
   });
 }
 
@@ -110,10 +112,11 @@ export async function tellInPage({ title, message, anchor } = {}) {
  * the wrong licence drops a whole institution to demo, so the friction is the
  * point.
  */
-export async function confirmByTyping(label, what, { title = "Confirm", anchor } = {}) {
+export async function confirmByTyping(label, what, { title = "Confirm", anchor, boxLabel } = {}) {
   const typed = await askInPage({
     title,
     message: `This cannot be undone.\n\nType ${label} to ${what}:`,
+    label: boxLabel || `Type ${label}`,
     confirm: "Confirm",
     anchor,
   });
@@ -141,7 +144,7 @@ export function codeCard() {
     <h2>Enter your authenticator code</h2>
     <p class="muted">The 6-digit code your authenticator app shows for Semper DIC.</p>
     <div class="row">
-      <input inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*"
+      <input inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" aria-label="Authenticator code"
              placeholder="6-digit code" size="12" />
       <button class="confirm">Confirm</button>
       <button class="retry" hidden>Try again</button>
@@ -231,7 +234,7 @@ export function enrolInPage(enrolment, account, qrSvg) {
         Semper DIC · Time-based, 6 digits, 30 seconds</p>
     </details>
     <div class="row">
-      <input inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*"
+      <input inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" aria-label="Authenticator code"
              placeholder="6-digit code" size="12" />
       <button class="confirm">Confirm</button>
       <button class="secondary cancel">Cancel</button>

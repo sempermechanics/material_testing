@@ -219,6 +219,7 @@ async function extend(uid) {
     title: `Extend ${email}`,
     message: "Days from today, 1 to 90. The account and its licence then end " +
       "that many days from now.",
+    label: "Days",
     confirm: "Extend",
   });
   if (typed == null) return;
@@ -310,7 +311,7 @@ async function endNow(uid) {
       "It is suspended and its phones signed out, its analyses and cloud " +
       "backups are erased, and its sign-in is deleted. Its audit rows are kept.",
   }))) return;
-  if (!(await confirmByTyping(email, "end this test account", { title: `End ${email}` }))) {
+  if (!(await confirmByTyping(email, "end this test account", { title: `End ${email}`, boxLabel: "Test account's email" }))) {
     setStatus("Not ended — the address did not match.");
     return;
   }

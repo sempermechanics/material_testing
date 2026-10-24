@@ -522,6 +522,7 @@ export async function stepUpFresh(resume, what) {
             "authenticator code when asked."
           : "Then enter your authenticator code when asked."),
       password: true,
+      label: "Password",
       confirm: "Continue",
     });
     if (password === null || (!password && !can.google)) {
