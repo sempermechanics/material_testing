@@ -160,6 +160,16 @@ export async function confirmByTyping(label, what, { title = "Confirm", anchor, 
 }
 
 /**
+ * Give `feedback` (a code card's "not accepted" line, an alert) an id and
+ * point each control at it, so the box and Try again are read with why.
+ */
+function describeBy(feedback, ...controls) {
+  cards += 1;
+  feedback.id = `card-feedback-${cards}`;
+  for (const control of controls) control.setAttribute("aria-describedby", feedback.id);
+}
+
+/**
  * The authenticator-code card: a code box, Confirm and Cancel under the
  * status line, and after a rejected code a Try again button.
  *
@@ -186,13 +196,14 @@ export function codeCard() {
       <button class="retry" hidden>Try again</button>
       <button class="secondary cancel">Cancel</button>
     </div>
-    <p class="muted err feedback"></p>`;
+    <p class="muted err feedback" role="alert"></p>`;
   const anchor = document.getElementById("status") || document.querySelector("main");
   anchor.insertAdjacentElement("afterend", card);
   const input = card.querySelector("input");
   const confirmBtn = card.querySelector(".confirm");
   const retryBtn = card.querySelector(".retry");
   const feedback = card.querySelector(".feedback");
+  describeBy(feedback, input, retryBtn);
 
   // Whoever is waiting on the card, next() or rejected(), and what Cancel
   // answers it with.
@@ -275,7 +286,7 @@ export function enrolInPage(enrolment, account, qrSvg) {
       <button class="confirm">Confirm</button>
       <button class="secondary cancel">Cancel</button>
     </div>
-    <p class="muted err feedback"></p>`;
+    <p class="muted err feedback" role="alert"></p>`;
   if (qrSvg) {
     card.querySelector(".qr").innerHTML = qrSvg(enrolment.qrUrl);
   } else {
@@ -289,6 +300,7 @@ export function enrolInPage(enrolment, account, qrSvg) {
   anchor.insertAdjacentElement("afterend", card);
   const input = card.querySelector("input");
   const feedback = card.querySelector(".feedback");
+  describeBy(feedback, input);
   input.focus();
 
   return new Promise((resolve, reject) => {

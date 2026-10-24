@@ -143,7 +143,8 @@ export function wireImport({ text, file, preview, submit, summary, results, rows
       const out = await api(`${root}/seats/import`,
         { method: "POST", body: JSON.stringify({ csv: text.value }) });
       const counts = out.counts || {};
-      summary.textContent = importSummary(counts);
+      const said = importSummary(counts);
+      summary.textContent = said;
       // Every row is listed, the ones that need nothing doing too: IT reads
       // the table against the file they sent.
       rows.innerHTML = (out.results || []).map((r) => `
@@ -151,8 +152,10 @@ export function wireImport({ text, file, preview, submit, summary, results, rows
           <td>${esc(r.row)}</td><td>${esc(r.email || "—")}</td><td>${esc(rowResult(r))}</td>
         </tr>`).join("");
       results.hidden = false;
-      report("");
       if (counts.seated || counts.invited) await reload();
+      // On the live status line as well, after the reload's own messages,
+      // so the outcome is read out and not only drawn.
+      report(said);
     } catch (e) {
       report(explain(e, IMPORT_ERRORS, (msg) => `Could not import: ${msg}`), true);
     } finally {

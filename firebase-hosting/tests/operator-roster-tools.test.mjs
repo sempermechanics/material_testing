@@ -179,7 +179,9 @@ test("an import previews its rows, posts to the staff route, answers every row a
     `GET ${STAFF}/seats`, `GET ${STAFF}/summary`, `GET ${STAFF}`,
   ]);
   assert.equal(rows().find((r) => r[0] === "SEMP-UNI1")[3], "1/5 in use · 5 on roster", "the licence row re-read");
-  assert.deepEqual(hint(), ["", "muted"]);
+  // The card's own message line, live, says the outcome too (AE2-009).
+  assert.deepEqual(hint(), ["1 added, 1 already on the roster, 1 not added.", "muted"]);
+  assert.equal($("rosterHint").getAttribute("aria-live"), "polite");
 });
 
 test("a chosen file fills the import; a refused one is said in the card", async () => {

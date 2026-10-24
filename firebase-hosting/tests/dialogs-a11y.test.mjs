@@ -3,9 +3,9 @@
 // its message, Escape answers it as Cancel, and focus goes back to whatever
 // opened it.
 import assert from "node:assert/strict";
-import { test, reset, settle, page, prompts, confirms, alerts, loadAuth, FakeElement } from "./harness.mjs";
+import { test, reset, settle, page, prompts, confirms, codes, alerts, loadAuth, FakeElement } from "./harness.mjs";
 
-const { askInPage, confirmInPage, tellInPage } = await loadAuth();
+const { askInPage, confirmInPage, tellInPage, codeCard, enrolInPage } = await loadAuth();
 
 /** A button in the page that opens a card, focused as a click would leave it. */
 function trigger() {
@@ -111,4 +111,24 @@ test("an opener the page has since removed is not focused", async () => {
   card.querySelector(".confirm").click();
   await yes;
   assert.notEqual(document.activeElement, opener);
+});
+
+test("a rejected code is announced, and the box and Try again point at why", async () => {
+  reset();
+  const card = codeCard();
+  const el = codes.cards[0];
+  const feedback = el.querySelector(".feedback");
+  assert.equal(feedback.getAttribute("role"), "alert");
+  assert.ok(feedback.id);
+  assert.equal(el.querySelector("input").getAttribute("aria-describedby"), feedback.id);
+  assert.equal(el.querySelector(".retry").getAttribute("aria-describedby"), feedback.id);
+  card.close();
+  const enrol = enrolInPage({ qrUrl: "otpauth://x", secret: "S", finish: async () => {} }, "a@b.test", null);
+  const enrolCard = page.inserted.find((e) => e.className === "card enrol");
+  const said = enrolCard.querySelector(".feedback");
+  assert.equal(said.getAttribute("role"), "alert");
+  assert.equal(enrolCard.querySelector("input").getAttribute("aria-describedby"), said.id);
+  assert.notEqual(said.id, feedback.id);
+  enrolCard.querySelector(".cancel").click();
+  await enrol.catch(() => {});
 });

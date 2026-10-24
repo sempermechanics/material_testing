@@ -324,7 +324,7 @@
         <div class="row toolbar">
           <input id="memberEmail" type="email" placeholder="person@university.edu" aria-label="Member's email" />
           <button id="addMember">Add to roster</button>
-          <span id="rosterHint" class="muted"></span>
+          <span id="rosterHint" class="muted" aria-live="polite"></span>
         </div>
         <!-- Narrows, sorts and pages the rows already read (../roster.js). -->
         <div class="row toolbar">
@@ -362,7 +362,7 @@
           <div class="row">
             <label for="rosterImportFile" class="visually-hidden">CSV file</label>
             <input id="rosterImportFile" type="file" accept=".csv,text/csv,text/plain" />
-            <span class="muted" id="rosterImportPreview"></span>
+            <span class="muted" id="rosterImportPreview" aria-live="polite"></span>
             <span class="spacer"></span>
             <button id="rosterImportSubmit" disabled>Import</button>
           </div>

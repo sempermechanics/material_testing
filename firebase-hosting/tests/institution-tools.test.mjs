@@ -171,6 +171,7 @@ test("the import says how many rows it holds before it is sent", async () => {
   assert.equal($("importSubmit").disabled, true, "nothing to send yet");
   typeImport("email\nana@uni.edu\n\nben@uni.edu\n");
   assert.deepEqual([$("importPreview").textContent, $("importSubmit").disabled], ["2 rows ready", false]);
+  assert.equal($("importPreview").getAttribute("aria-live"), "polite", "the count and the 500-row stop are read out");
   typeImport("ana@uni.edu");
   assert.equal($("importPreview").textContent, "1 row ready");
   typeImport("email\n");
@@ -216,6 +217,9 @@ test("an import sends the file, lists every row's result and reloads the roster"
   assert.deepEqual(JSON.parse(post.body), { csv: file });
   assert.equal($("importSummary").textContent,
     "1 added, 1 invited, 1 already on the roster, 1 repeated, 1 not added.");
+  // Said on the live status line too, after the roster reload, so a screen
+  // reader hears the outcome (AE2-009).
+  assert.deepEqual(status(), ["1 added, 1 invited, 1 already on the roster, 1 repeated, 1 not added.", "muted"]);
   assert.equal($("importResults").hidden, false);
   assert.deepEqual(tableRows("importRows"), [
     ["2", "new@uni.edu", "on the licence now"],
@@ -239,6 +243,7 @@ test("an import that added nobody leaves the roster as it is", async () => {
   $("importSubmit").click();
   await settle();
   assert.equal($("importSummary").textContent, "1 already on the roster.");
+  assert.deepEqual(status(), ["1 already on the roster.", "muted"]);
   assert.deepEqual(sent(/GET .*seats$/), [`GET ${L1}/seats`]);
 });
 
