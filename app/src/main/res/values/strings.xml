@@ -615,6 +615,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- Compact lattice: unit folded onto the rightmost subset tick instead of a
          separate axis title (see SweepLatticeView.compact). -->
     <string name="vsg_lattice_axis_subset_unit_fmt">%1$d px</string>
+    <!-- The result lattice's y-axis title: what the axis is and its unit. -->
+    <string name="vsg_lattice_axis_vsg">VSG (px)</string>
     <string name="vsg_lattice_param_fmt">ss:%1$d · st:%2$d · %3$s</string>
     <string name="vsg_lattice_param_labeled_fmt">subset size %1$d · step size %2$d · %3$s</string>
     <string name="vsg_lattice_scrub_xy_fmt">x=%1$.1f  y=%2$.4g</string>
@@ -833,8 +835,11 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="field_eyy">Eyy</string>
     <string name="field_exy">Exy</string>
     <string name="stat_empty">--</string>
-    <string name="viewer_stats_fmt">max %1$s at (%2$d, %3$d)\nmin %4$s at (%5$d, %6$d)\nmean %7$s %8$s</string>
-    <string name="viewer_stats_plain_fmt">max %1$s · min %2$s · mean %3$s %4$s</string>
+    <!-- Every value with its unit, and the point's coordinates in px (readiness AE1V-018). -->
+    <string name="viewer_stats_fmt">max %1$s %8$s at (%2$d, %3$d) px\nmin %4$s %8$s at (%5$d, %6$d) px\nmean %7$s %8$s</string>
+    <string name="viewer_stats_plain_fmt">max %1$s %4$s · min %2$s %4$s · mean %3$s %4$s</string>
+    <!-- The Details histogram's y axis: how many points fall in each bin. -->
+    <string name="viewer_histogram_y_axis">points</string>
     <!-- Summary colour bar is a whole-sequence scale; the ⓘ sheet must quote
          those same ends, not the hidden first frame's extrema. They are the
          scale's ends (a percentile clamp, or the user's fixed scale), not the

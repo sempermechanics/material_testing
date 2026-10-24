@@ -94,12 +94,7 @@ class SweepLatticeView @JvmOverloads constructor(
     private val placed = ArrayList<Placed>()
 
     private companion object {
-        /** [compact] gutters (result lattice): tick labels only, unit folded in. */
-        const val PAD_LEFT_COMPACT_DP = 30f
-        const val PAD_BOTTOM_DP = 20f
-
-        const val PAD_RIGHT_DP = 14f
-        const val PAD_TOP_DP = 14f
+        // The gutters (PAD_*) live in SweepLatticeGutters.
         const val NODE_RADIUS_DP = 5f
 
         /** The run overlay's node radius, where its rows leave room. */
@@ -112,8 +107,8 @@ class SweepLatticeView @JvmOverloads constructor(
         const val NODE_ROW_SHARE = 0.4f
         const val NODE_STROKE_DP = 2f
         const val CONNECTOR_DP = 1.5f
-        const val TICK_GAP_DP = PlotStyle.LATTICE_TICK_GAP_DP
-        const val Y_TICKS = 4
+        const val TICK_GAP_DP = SweepLatticeGutters.TICK_GAP_DP
+        const val Y_TICKS = SweepLatticeGutters.Y_TICKS
 
         /** Y-axis floor: VSG ticks / origin start at 1. */
         const val AXIS_MIN = 1
@@ -179,29 +174,39 @@ class SweepLatticeView @JvmOverloads constructor(
         placed.clear()
         if (nodes.isEmpty() || columns.isEmpty()) return
 
-        val left = if (compact) {
-            dp(PAD_LEFT_COMPACT_DP)
-        } else {
-            maxOf(textPaint.measureText(vsgLo.toString()), textPaint.measureText(vsgHi.toString())) +
-                dp(TICK_GAP_DP) * 2
-        }
-        val right = width - dp(PAD_RIGHT_DP)
-        val top = dp(PAD_TOP_DP)
-        val bottom = height - dp(PAD_BOTTOM_DP)
-        if (right <= left || bottom <= top) return
+        val gutters = SweepLatticeGutters(resources.displayMetrics.density, compact)
+        if (!gutters.frame(frame, textPaint, yTickLabels, width, height)) return
+        val left = frame.left
+        val right = frame.right
+        val top = frame.top
+        val bottom = frame.bottom
 
         columnX.clear()
         columns.forEachIndexed { i, subset ->
             columnX[subset] = left + (i + HALF_COLUMN) / columns.size * (right - left)
         }
-        frame.set(left, top, right, bottom)
         fun yFor(win: Int) = bottom - (win - winMin).toFloat() / (winMax - winMin) * (bottom - top)
 
         drawGrid(canvas, columnX, frame, ::yFor)
         drawConnectors(canvas, columnX, ::yFor)
         drawNodes(canvas, columnX, ::yFor)
         drawLabels(canvas, columnX, frame)
+        if (compact) {
+            // "VSG (px)" over the y ticks: the axis's name and unit (readiness AE1V-018).
+            textPaint.textAlign = Paint.Align.LEFT
+            canvas.drawText(context.getString(R.string.vsg_lattice_axis_vsg), 0f, top - textPaint.textSize, textPaint)
+        }
     }
+
+    /** The y tick labels [drawGrid] draws, bottom to top. */
+    internal val yTickLabels: List<String>
+        get() = SweepLatticeGutters.yTickLabels(compact, winMin, winMax, vsgLo, vsgHi)
+
+    /** The tick and axis text paint, for tests that measure the labels. */
+    internal val labelPaint: Paint get() = textPaint
+
+    /** The plot area of the last draw. */
+    internal val plotFrame: RectF get() = frame
 
     /** Node where the current press started, for gesture resolution. */
     private var pressedNode: Node? = null

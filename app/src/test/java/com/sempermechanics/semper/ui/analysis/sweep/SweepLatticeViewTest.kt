@@ -78,9 +78,10 @@ class SweepLatticeViewTest {
         view.draw(Canvas(Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)))
     }
 
-    // Compact gutters: 30dp left, 14dp right, 14dp top, 20dp bottom. The swept
-    // VSG range 21..61 is framed with a 12 % margin: (61 - 21) * 0.12 → 4, so
-    // the y axis runs 17..65.
+    // Compact gutters at font scale 1: 30dp left, 14dp right, 20dp bottom, and
+    // on top room for the "VSG (px)" title (two 11sp text heights and a 5dp gap).
+    // The swept VSG range 21..61 is framed with a 12 % margin: (61 - 21) * 0.12
+    // → 4, so the y axis runs 17..65.
     private fun columnX(index: Int, columns: Int = 2): Float {
         val left = 30f * density
         val right = W_DP * density - 14f * density
@@ -88,7 +89,7 @@ class SweepLatticeViewTest {
     }
 
     private fun rowY(vsg: Int, winMin: Int = 17, winMax: Int = 65): Float {
-        val top = 14f * density
+        val top = 2 * view.labelPaint.textSize + 5f * density
         val bottom = H_DP * density - 20f * density
         return bottom - (vsg - winMin).toFloat() / (winMax - winMin) * (bottom - top)
     }
@@ -229,6 +230,23 @@ class SweepLatticeViewTest {
         view.setNodes(nodes)
         layoutAndDraw(W_DP, H_DP)
         assertEquals("two columns draw their range labels without failing", View.VISIBLE, view.visibility)
+    }
+
+    @Test
+    fun `the gutters grow to fit the tick labels at a large font scale`() {
+        val config = android.content.res.Configuration(context.resources.configuration).apply { fontScale = 2f }
+        view = SweepLatticeView(context.createConfigurationContext(config)).apply {
+            compact = true
+            setNodes(listOf(node(subset = 21, vsg = 15, frame = 0), node(subset = 41, vsg = 141, frame = 1)))
+        }
+        layoutAndDraw(W_DP, H_DP)
+
+        val paint = view.labelPaint
+        assertEquals(listOf("0", "39", "78", "117", "156"), view.yTickLabels)
+        val widest = view.yTickLabels.maxOf { paint.measureText(it) }
+        assertTrue("left gutter ${view.plotFrame.left} < $widest", view.plotFrame.left >= widest + 5f * density)
+        val xLabelBottom = view.plotFrame.bottom + paint.textSize + 5f * density + paint.descent()
+        assertTrue("x labels end at $xLabelBottom past ${H_DP * density}", xLabelBottom <= H_DP * density)
     }
 
     private companion object {

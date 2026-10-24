@@ -74,7 +74,8 @@ class FieldHistogramView @JvmOverloads constructor(
 
         val left = dp(PAD_LEFT_DP)
         val right = width - dp(PAD_RIGHT_DP)
-        val top = dp(PAD_TOP_DP)
+        // A row above the plot for the y axis's title ("points").
+        val top = dp(PAD_TOP_DP) + textPaint.textSize
         val bottom = height - dp(PAD_BOTTOM_DP)
         if (right <= left || bottom <= top) return
 
@@ -105,8 +106,10 @@ class FieldHistogramView @JvmOverloads constructor(
             textPaint,
         )
 
-        val baseline = bottom + textPaint.textSize + tickGap
         textPaint.textAlign = Paint.Align.LEFT
+        canvas.drawText(context.getString(R.string.viewer_histogram_y_axis), 0f, textPaint.textSize, textPaint)
+
+        val baseline = bottom + textPaint.textSize + tickGap
         canvas.drawText(ReportBuilder.formatMetric(hist.min), left, baseline, textPaint)
         textPaint.textAlign = Paint.Align.RIGHT
         val maxLabel = "${ReportBuilder.formatMetric(hist.max)} $unit"
