@@ -17,6 +17,10 @@
   --card: #1a2230;
   --line: rgba(255, 255, 255, 0.08);
   --line-strong: rgba(255, 255, 255, 0.2);
+  /* A text box's edge: a UI component boundary, so 3:1 against the box and the
+     card around it (WCAG 1.4.11; tests/css-contrast.test.mjs). --line-strong
+     is 1.7:1 there. */
+  --field-line: rgba(255, 255, 255, 0.42);
   --ink: #eef1f6;
   --muted: #a8b2c1;
   --accent: #d4a054;
@@ -46,7 +50,9 @@ a:hover { color: var(--accent); }
 /* Keyboard focus is always visible: the desk is driven by keyboard as much
    as by mouse, and the browsers' default ring was lost on the dark ground. */
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; }
+/* Text boxes show focus by their border and glow (below). The outline stays,
+   transparent: forced-colours mode drops the glow and paints the outline. */
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid transparent; }
 
 /* Until auth.js knows whether anyone is signed in (body[data-auth]), Sign in
    and the signed-out note stay out of sight: someone already signed in was
@@ -127,9 +133,9 @@ button.danger:hover { background: rgba(242, 184, 181, 0.08); }
 button[disabled] { opacity: .5; cursor: not-allowed; }
 input, select, textarea {
   font: inherit; padding: .55rem .7rem; border-radius: 8px;
-  border: 1px solid var(--line-strong); background: var(--bg-elevated); color: var(--ink);
+  border: 1px solid var(--field-line); background: var(--bg-elevated); color: var(--ink);
 }
-input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+input:focus, select:focus, textarea:focus { outline: 2px solid transparent; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
 input:disabled, select:disabled { opacity: .5; }
 
 /* Tables are read down a column as often as across a row, so the heading is
