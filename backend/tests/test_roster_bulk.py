@@ -258,8 +258,8 @@ async def test_five_hundred_rows_are_taken_and_five_hundred_and_one_refused(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("text,code", [
-    ('email\n"unterminated@uni-a.edu\n', "roster_import_malformed"),
-    ('"a@uni-a.edu"x\n', "roster_import_malformed"),
+    ('email\n"unterminated@uni-a.edu\n', "roster_import_malformed: line 2"),
+    ('"a@uni-a.edu"x\n', "roster_import_malformed: line 1"),
     ("\n\n  \n", "roster_import_empty"),
     ("email\n", "roster_import_empty"),
     ("name,mail\nAna,Ana\n", "roster_import_no_email_column"),
@@ -268,6 +268,36 @@ async def test_a_file_that_cannot_be_read_is_refused_whole(it, client, text, cod
     r = await _import(client, it, text)
     assert r.status_code == 400, r.text
     assert r.json()["detail"] == code
+    assert f"licenses/{it.a}/seats" not in it._data
+    assert [a["action"] for a in it.audited] == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("text,line", [
+    # A stray character after a closing quote, on line 3.
+    ('email\na@uni-a.edu\n"b@uni-a.edu"x\nc@uni-a.edu\n', 3),
+    # A quote opened on line 3 and never closed: the reader only fails at the
+    # end of the file, but the record it was reading began on line 3.
+    ('email\na@uni-a.edu\n"open@uni-a.edu\nb@uni-a.edu\nc@uni-a.edu\n', 3),
+])
+async def test_a_malformed_file_names_the_line_to_fix(it, client, text, line):
+    """The code before the colon is unchanged, so a console that reads the
+    code (errorDetail) still matches it; the line is the suffix, as
+    device_change_too_soon carries its instant (readiness AE2-008)."""
+    r = await _import(client, it, text)
+    assert r.status_code == 400, r.text
+    assert r.json()["detail"] == f"roster_import_malformed: line {line}"
+    assert f"licenses/{it.a}/seats" not in it._data
+
+
+@pytest.mark.asyncio
+async def test_an_oversized_file_is_refused_with_a_code(it, client):
+    """Over MAX_IMPORT_CHARS the refusal is a code the console can word, 413
+    like too many rows, not pydantic's 422 sentence (readiness AE2-008)."""
+    text = "email\n" + "a" * roster_io.MAX_IMPORT_CHARS
+    r = await _import(client, it, text)
+    assert r.status_code == 413, r.text
+    assert r.json() == {"detail": "roster_import_too_large"}
     assert f"licenses/{it.a}/seats" not in it._data
     assert [a["action"] for a in it.audited] == []
 

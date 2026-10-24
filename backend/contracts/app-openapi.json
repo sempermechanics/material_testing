@@ -749,7 +749,6 @@
         "description": "A bulk roster import: the CSV file's text (see `roster_io.parse_import`).",
         "properties": {
           "csv": {
-            "maxLength": 512000,
             "minLength": 1,
             "title": "Csv",
             "type": "string"
