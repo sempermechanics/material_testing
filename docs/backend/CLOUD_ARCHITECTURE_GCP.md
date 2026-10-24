@@ -827,7 +827,7 @@ also refuses when the device's stored analyses, every account's, reach the cap
 `409 device_quota_exceeded` that names neither the count nor the owners (its
 own code since TD-279, so the app does not lift it on the account's count). A
 session with no `deviceId` counts toward no device. `GET /v1/sessions`
-`quota.used` stays the account's count (`sessions.py:131`). A demo create costs
+`quota.used` stays the account's count (`backend/app/routers/sessions.py:98`). A demo create costs
 11 reads, not 9 ([request-volume.md](../perf/request-volume.md) Pass 4). After
 a staff device release, or a staff or IT licence lock clear, the phone no longer
 counts its previous holder's analyses: `forget_device_sessions` drops their
