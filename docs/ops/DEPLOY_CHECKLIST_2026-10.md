@@ -229,7 +229,11 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       Refresh licence; a demo account sees locked features; the device-limit
       screen.
 - [ ] Only after those builds are out, raise `MIN_SUPPORTED_VERSION_CODE` if
-      older builds must update; drill it on staging first (TD-220).
+      older builds must update; drill it on staging first (TD-220). It reaches
+      only builds released after `v1.2-beta.4` (versionCode 1036): that build and
+      every earlier one have no version gate and no client kill switch, so for
+      them the levers are the server-side `KILL_SWITCHES` (503 `feature_paused`)
+      and nothing else ([RELEASING.md](RELEASING.md), Rollback levers).
 
 ## Still external (not deploy steps)
 
