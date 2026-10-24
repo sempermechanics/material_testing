@@ -57,6 +57,19 @@ rejected, so it does not block. Observations (11) are reported only. AE-1 visual
 (emulator) findings and the posture result arrive after this checkpoint and are triaged
 as an addendum.
 
+### Checkpoint 1 addendum — AE-1 visual (emulator) findings (2026-10-24)
+
+Captured on the Semper_API30 AVD (121 screens in [20261024/screens/](20261024/screens/)),
+verified from the screenshots, uiautomator dumps and source. Ids renumbered `AE1V-*`.
+
+| Finding(s) | Severity | Decision (verbatim) |
+|---|---|---|
+| AE1V-001, AE1V-002, AE1V-003, AE1V-008 | P1 | "Fix now (Recommended)" (each asked separately) |
+| AE1V-010, AE1V-004, AE1V-005, AE1V-007 | P1 | "Fix now (Recommended)" (each asked separately) |
+| AE1V-012 | P1 | "Fix now (Recommended)" |
+| AE1V-006 → AE1-006, AE1V-009 → TE5-002, AE1V-013 → AE1-019 | — | duplicates; the earlier decisions apply |
+| Visual P2/P3 (AE1V-011, -014, -015, -016, -018, -020, -021) | P2, P3 | "Fix all now" |
+
 ### Checkpoint 2 — acceptance
 
 _Pending._

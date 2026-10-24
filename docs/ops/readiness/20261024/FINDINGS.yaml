@@ -1,6 +1,7 @@
 # Readiness findings, run 2026-10-24 (semperdic-app 875e2334 + material_testing 839d4285).
 # Phase 1 lanes, Phase 2 verifier fields (verdict, verified_*). severity_final = verifier's severity if it disagreed.
 # Statuses: confirmed | needs_admin | duplicate; triage decisions in ../ADMIN_DECISIONS.md.
+# AE1V-* = AE-1 visual (emulator) lane, renumbered from AE1-* to avoid id collisions.
 - id: MT-TE2-001
   axis: technical
   gate: G1
@@ -306,6 +307,371 @@
     grep append("# AnalysisCsvWriter.kt; grep STRAIN_UNIT FieldKind.kt
   verified_observation: CSV_POINT_HEADER 'x_px,y_px,u_px,v_px,exx,eyy,exy,znssd' (no strain unit, raw sci values via appendPoint);
     fieldStats x1000 and stats rows end in field.unit = 'mε'. Preamble (:145-153) has no point-strain unit line.
+  severity_final: P1
+- id: AE1V-001
+  axis: aesthetic
+  gate: UX
+  title: Font scale 2.0 hides the analysis parameter values (Subset size value gone, Strain window value 1 px wide) and breaks
+    wizard step-1 text mid-word
+  type: defect
+  severity: P1
+  criterion: 'AE-1 font-scale: ''At font scale 2.0 no text on a core flow is clipped, truncated or overlapping, and every
+    control stays visible.'''
+  evidence:
+  - SCR/wizard_360_light_fs2_step2.png — 'Subset size' row shows the chip 'Speckle 6.8' but no '31 px' value; 'Strain window'
+    row ends at '21 px VSG'; button reads 'Compute ·'
+  - ae1_dumps/p2fs2.txt — etSubsetValue absent from the hierarchy; etStrainValue bounds [1029,1925][1032,2040] (3 px wide)
+  - SCR/wizard1_360_light_fs2.png, SCR/wizard1_360_dark_fs2.png — 'New analy…', 'spec…png', '4 defo / rmed f / rames'
+  - app/src/main/res/layout/wizard_step_settings_content.xml:174-220 — 18dp info button + wrap_content chip + fixed layout_width=52dp
+    EditText in one horizontal row
+  reproduce: '1) Emulator, debug build. 2) adb shell settings put system font_scale 2.0 BEFORE opening the wizard (the wizard
+    absorbs fontScale changes, see AE1-015). 3) Home > + > pick a reference > add deformed frames > Next. 4) Observe Parameters:
+    no subset value; strain value squeezed off-screen; step 1 title/file names broken.'
+  proposed_fix: Let the label/chip row wrap (put chip on its own line below the label or use a ConstraintLayout with chain
+    + barrier), give value fields min width in sp/ems not 52dp, allow two-line titles in the wizard toolbar and the reference/deformed
+    cards.
+  files_touched:
+  - app/src/main/res/layout/wizard_step_settings_content.xml
+  - app/src/main/res/layout/activity_static_analysis.xml
+  effort: M
+  fix_risk: low — layout only; covered by UI tests that look up the same ids
+  external_action: null
+  status: confirmed
+  verdict: CONFIRMED
+  verified_by_command: Read SCR/wizard_360_light_fs2_step2.png, SCR/wizard1_360_light_fs2.png; grep etSubsetValue/etStrainValue
+    in ae1_dumps/p2fs2.xml (record cites p2fs2.txt, which does not exist); sed -n 165,225p wizard_step_settings_content.xml
+  verified_observation: 'Screenshot: Subset size row shows only ''Speckle 6.8'' chip, Strain window ends ''21 px VSG'', button
+    ''Compute ·''; step 1 shows ''New analy…'', ''spec…png'', ''4 defo/rmed f/rames''. p2fs2.xml: etSubsetValue absent (0
+    hits), etStrainValue bounds [1029,1925][1032,2040] = 3 px wide. Layout: 18dp info + wrap_content chip + fixed 52dp EditText
+    in one row.'
+  severity_final: P1
+- id: AE1V-002
+  axis: aesthetic
+  gate: UX
+  title: 'Sign-in: ''Continue with Google'' label clipped at font scale 2.0 (fixed 52dp button height)'
+  type: defect
+  severity: P1
+  criterion: 'AE-1 font-scale: ''At font scale 2.0 no text on a core flow (sign-in) is clipped.'''
+  evidence:
+  - SCR/auth_360_light_fs2.png, SCR/auth_360_dark_fs2.png — button shows 'Continue with' only
+  - SCR/auth_840_dark_fs2.png — 'Google' descenders cut at the bottom edge
+  - app/src/main/res/layout/activity_auth.xml:45-48 — btnGoogleSignIn android:layout_height="52dp"
+  reproduce: adb shell settings put system font_scale 2.0; adb shell am start -n com.sempermechanics.semper/.ui.auth.AuthActivity;
+    look at the first button.
+  proposed_fix: layout_height=wrap_content with android:minHeight=52dp (and let the label wrap or shrink via autoSize).
+  files_touched:
+  - app/src/main/res/layout/activity_auth.xml
+  effort: S
+  fix_risk: low — one attribute
+  external_action: null
+  status: confirmed
+  verdict: CONFIRMED
+  verified_by_command: Read SCR/auth_360_light_fs2.png; sed -n 40,50p activity_auth.xml
+  verified_observation: Button label reads 'Continue with' only (Google cut off). activity_auth.xml:47 btnGoogleSignIn layout_height="52dp".
+  severity_final: P1
+- id: AE1V-003
+  axis: aesthetic
+  gate: UX
+  title: 'ROI editor at font scale 2.0: Draw/Manual toggle renders empty, ''Erase'' and ''Square'' clipped'
+  type: defect
+  severity: P1
+  criterion: 'AE-1 font-scale: ''At font scale 2.0 every control label on a core flow stays legible.'''
+  evidence:
+  - SCR/roi_360_dark_fs2_drawn.png — segmented Draw/Manual control is a blank pill; 'Era' and 'Squa…' cut
+  - ae1_dumps/roi_fs2.xml — rbModeDraw [362,218][449,375] and rbModeManual [446,218][534,375] (29 dp wide each)
+  - SCR/roi_360_light_fs1_drawn.png — even at fs 1.0 the toggle reads 'Man…' (see AE1-014)
+  - app/src/main/res/layout/activity_roi_draw.xml:40-62 — rgEditMode/rbModeDraw/rbModeManual layout_width=0dp weights in a
+    row shared with Cancel and Save ROI
+  reproduce: Wizard > Parameters > Region of interest > Edit; adb shell settings put system font_scale 2.0; observe the top
+    bar.
+  proposed_fix: Move Draw/Manual to its own row (or an overflow), let the top bar wrap; give the Crop/Erase and Rect/Square
+    groups wrap_content widths with a scroll fallback.
+  files_touched:
+  - app/src/main/res/layout/activity_roi_draw.xml
+  effort: S
+  fix_risk: low — layout
+  external_action: null
+  status: confirmed
+  verdict: CONFIRMED
+  verified_by_command: Read SCR/roi_360_dark_fs2_drawn.png; grep rbMode* bounds in ae1_dumps/roi_fs2.xml; sed -n 30,70p activity_roi_draw.xml
+  verified_observation: 'Draw/Manual toggle is an empty pill; ''Era'' and ''Squa…'' clipped. Dump: rbModeDraw [362,218][449,375],
+    rbModeManual [446,218][534,375] (~29 dp each). Toggle group is 0dp/weight=1 between Cancel and Save ROI.'
+  severity_final: P1
+- id: AE1V-004
+  axis: technical
+  gate: UX
+  title: ROI editor drops Erase regions on any activity recreation (rotation, dark-mode or font change) without notice
+  type: defect
+  severity: P1
+  criterion: 'AE-1 state: ''User input on a core flow (ROI mask) survives configuration change.'''
+  evidence:
+  - SCR/roi_360_light_fs1_erase_before.png (red erase box inside the ROI) vs SCR/roi_360_light_fs1_erase_after_recreate.png
+    (erase box gone, ROI kept) after `cmd uimode night yes` then `no`
+  - app/src/main/java/com/sempermechanics/semper/ui/analysis/RoiDrawActivity.kt:349-357 — onSaveInstanceState stores draw
+    mode, manual, erase flag and putRoiEdges only; overlayRoi.holes is never saved
+  - RoiDrawActivity.kt:311-316 — Save builds the mask from overlay.holes, so the lost holes silently widen the analysed area
+  reproduce: Wizard > Parameters > Edit ROI; drag a rectangle; tap Erase; drag a smaller rectangle inside; adb shell cmd uimode
+    night yes; adb shell cmd uimode night no; the erase rectangle is gone; Save ROI and the wizard summary shows the un-erased
+    point count.
+  proposed_fix: Persist holes (relative rects) in onSaveInstanceState next to the ROI edges and restore them in the post{}
+    block at RoiDrawActivity.kt:122-127; or hold the editor state in a ViewModel (ADR-016).
+  files_touched:
+  - app/src/main/java/com/sempermechanics/semper/ui/analysis/RoiDrawActivity.kt
+  effort: S
+  fix_risk: low — additive state; add a Robolectric recreate test
+  external_action: null
+  status: confirmed
+  verdict: CONFIRMED
+  verified_by_command: Read SCR/roi_360_light_fs1_erase_before.png + _erase_after_recreate.png; sed RoiDrawActivity.kt:95-135,295-365;
+    grep onSaveInstanceState/holes in roi/StudioOverlayView.kt
+  verified_observation: 'Before: red erase box inside green ROI; after recreate: ROI kept, erase box gone. onSaveInstanceState
+    saves draw mode, manual, erase flag and ROI edges only; StudioOverlayView has no onSaveInstanceState and holes is a plain
+    mutableList (line 215). Save builds the mask from overlay.holes, so lost holes widen the mask. Code proves it; device
+    timing not re-run.'
+  severity_final: P1
+- id: AE1V-005
+  axis: technical
+  gate: UX
+  title: ROI editor resets to 'Full image' after two configuration changes in quick succession — even a previously saved ROI
+    is replaced by the full frame
+  type: defect
+  severity: P1
+  criterion: 'AE-1 state: ''User input on a core flow (ROI) survives configuration change.'''
+  evidence:
+  - 'Session log: from a saved 399 x 362 px ROI, Edit > draw 294 x 294 > night yes > font 2.0 > (font 1.0 + night no back-to-back)
+    > Save ROI => wizard reads ''Full image · 16,500 points'' (ae1_dumps/w6.txt). Reproduced 3 times (w2.txt, w6.txt); single
+    changes or slow pairs keep the ROI (w3.txt, w4.txt, w5.txt).'
+  - RoiDrawActivity.kt:104-128 — the saved ROI is only re-applied after an async decode on IO + view.post
+  - RoiDrawActivity.kt:354-356 — onSaveInstanceState writes the ROI only if overlayRoi.hasValidRoi; a second recreation before
+    the decode finishes therefore saves nothing
+  - RoiDrawActivity.kt:306-311 — Save with no valid ROI and no holes falls back to Roi.full(imageSize)
+  reproduce: 'Wizard > Parameters > Edit ROI; drag a rectangle; then within ~1 s run: adb shell cmd uimode night yes; adb
+    shell settings put system font_scale 2.0; adb shell settings put system font_scale 1.0; adb shell cmd uimode night no;
+    tap Save ROI; the summary shows ''Full image''.'
+  proposed_fix: Keep the pending saved edges in a field (or ViewModel) until applied and write that field in onSaveInstanceState
+    when hasValidRoi is false; same for holes (AE1-004).
+  files_touched:
+  - app/src/main/java/com/sempermechanics/semper/ui/analysis/RoiDrawActivity.kt
+  effort: S
+  fix_risk: low — state plumbing; add a double-recreate test
+  external_action: null
+  status: confirmed
+  verdict: CONFIRMED
+  verified_by_command: sed RoiDrawActivity.kt:95-135 (async decode + post restore) and :349-357 (onSaveInstanceState); grep
+    ROI summary text in ae1_dumps/w2..w6.xml (record cites .txt; only .xml exist)
+  verified_observation: 'Saved edges are applied only inside lifecycleScope.launch{IO decode}.post{}; onSaveInstanceState
+    writes edges only if overlayRoi.hasValidRoi, so a second recreation before the post runs saves nothing and saveAndFinish
+    falls back to Roi.full. Dumps: w2/w6 ''Full image · 16,500 points'', w3/w4/w5 keep ROIs. Rapid double-change timing itself
+    NOT re-run (no device); code path is unambiguous.'
+  severity_final: P1
+- id: AE1V-006
+  axis: aesthetic
+  gate: UX
+  title: 'Touch targets below 48 dp across the analysis flow: 18 dp info buttons, 24 dp-tall parameter fields, 40 dp viewer
+    toolbar'
+  type: defect
+  severity: P1
+  criterion: 'AE-1 touch-target: ''Every clickable on a core flow is >= 48 x 48 dp (144 px at density 480).'''
+  evidence:
+  - 'scratchpad readiness/ae1_touch_targets.txt — 60+ ids under 48 dp; worst: btnSubsetInfo/btnStepInfo/btnStrainInfo/btnOverlapInfo/btnSubsetRangeInfo/btnVsgMaxInfo/btnStepDepthInfo/btnLineCutInfo/btnSweepFrameInfo/btnMaxFramesInfo/btnAutoFreeInfo
+    54x54 px = 18 dp; etSubsetValue/etStepValue/etStrainValue/etOverlapValue/etSubsetMin/MaxValue 73 px = 24 dp tall; btnViewerBack/Home/Share/SettingsInfo,
+    btnFrameOrderSort, btnAdvancedReset, btnSweepInfo, sessionState 120 px = 40 dp; Settings section headers 96 px = 32 dp;
+    btnFullImageRoi 32 dp; btnDeleteAccount 30 dp; tvLimitBack/tvSeatBack/tvUpdateBack 30 dp; tvLogout (Pending) 24 dp'
+  - app/src/main/res/layout/wizard_step_settings_content.xml:174-178 — btnSubsetInfo layout_width/height=18dp; :205-217 etSubsetValue
+    paddingTop/Bottom=0dp, transparent background
+  - 'No TouchDelegate anywhere: `grep -rn TouchDelegate app/src/main/java` returns nothing'
+  - SCR/wizard_360_light_fs1_step2.png, SCR/viewer_360_light_fs1_summary_chrome.png, SCR/settings_360_light_fs1.png
+  reproduce: grep -n 'layout_width="18dp"' app/src/main/res/layout/wizard_step_settings_content.xml app/src/main/res/layout/*sweep*.xml
+    app/src/main/res/layout/view_settings_scroll_content.xml ; grep -rn TouchDelegate app/src/main/java (empty).
+  proposed_fix: 'Info buttons: 48dp view with 18dp icon (padding 15dp) or minWidth/minHeight=48dp; parameter EditTexts minHeight=48dp;
+    viewer toolbar buttons 48dp; Settings headers minHeight=48dp. Add an Espresso AccessibilityChecks.enable() pass to catch
+    regressions.'
+  files_touched:
+  - app/src/main/res/layout/wizard_step_settings_content.xml
+  - app/src/main/res/layout/activity_result_viewer.xml
+  - app/src/main/res/layout/view_settings_scroll_content.xml
+  - app/src/main/res/layout/activity_roi_draw.xml
+  effort: M
+  fix_risk: low — sizes only; check TooManyViews/layout snapshots
+  external_action: null
+  status: duplicate
+  verdict: CONFIRMED
+  verified_by_command: grep -n 'layout_width="18dp"' wizard_step_settings_content.xml *sweep*.xml view_settings_scroll_content.xml
+    | wc -l; grep -rn TouchDelegate app/src/main/java | wc -l; head ae1_touch_targets.txt; grep btnSubsetInfo/btnViewerBack
+    bounds in wiz2.xml / viewer_360_light_fs1.xml
+  verified_observation: 13 hits of 18dp; TouchDelegate 0. btnSubsetInfo [286,928][340,982] = 18 dp; btnViewerBack [24,175][144,295]
+    = 40 dp. Table lists 60+ ids under 48 dp (it also includes some non-clickable TextViews, e.g. tvLatticeSummary).
+  duplicate_of: AE1-006
+  verifier_note: Duplicate of the already-verified AE1-006 (touch targets under 48 dp on core flows) from another AE1 lane;
+    same id and same finding.
+  severity_final: P1
+- id: AE1V-007
+  axis: aesthetic
+  gate: UX
+  title: 'Unlabelled / mislabelled controls for TalkBack: wizard Up button, consent switches, gallery tiles (all ''Reference
+    image preview'', selection not exposed), parameter sliders'
+  type: defect
+  severity: P1
+  criterion: 'AE-1 a11y labels: ''Every actionable control on a core flow has an accessible name and exposes its state.'''
+  evidence:
+  - 'ae1_dumps/wiz1b.xml — toolbar Up ImageButton NAF="true" content-desc="" [0,145][168,313] (same node on Parameters, Sweep,
+    Parameter sweep: 30 occurrences across dumps)'
+  - ae1_dumps/yd2.xml — switchDiagnostics and switchImprovementConsent NAF="true", text="", content-desc="" (view_settings_scroll_content.xml:497-499,
+    no labelFor/contentDescription)
+  - 'ae1_dumps/defsel.xml — ''Deformed frames'' picker: every tile content-desc ''Reference image preview'', checked/selected=false
+    on picked tiles while the screenshot shows check marks (SCR/sheet_media_360_light_fs1_multiselect.png)'
+  - logcat AccessibilityNodeInfoDumper — sliderSubsetSize/sliderStepSize/sliderStrainWindow SeekBar contentDescription null,
+    stateDescription null
+  reproduce: Open each screen and run `adb shell uiautomator dump /sdcard/u.xml && adb pull /sdcard/u.xml`; grep 'NAF="true"'
+    and 'Reference image preview'.
+  proposed_fix: Set app:navigationContentDescription on the wizard/lattice toolbars; give both switches android:contentDescription
+    or make the row the labelled toggle; per-tile contentDescription = file name, setSelected/isChecked + stateDescription
+    on pick; contentDescription on sliders bound to the visible value.
+  files_touched:
+  - app/src/main/res/layout/activity_static_analysis.xml
+  - app/src/main/res/layout/view_settings_scroll_content.xml
+  - app/src/main/java/com/sempermechanics/semper/ui/common/media/MediaGridAdapter.kt
+  - app/src/main/res/layout/wizard_step_settings_content.xml
+  effort: S
+  fix_risk: low — attributes
+  external_action: null
+  status: confirmed
+  verdict: CONFIRMED
+  verified_by_command: grep NAF="true" in ae1_dumps/wiz1b.xml, yd2.xml; grep 'Reference image preview' checked/selected in
+    defsel.xml; grep NAF across all dumps; StaticAnalysisActivity.kt:225-229; view_settings_scroll_content.xml:485-505; item_media_tile.xml;
+    MediaGridAdapter.kt; wizard_step_settings_content.xml:232-240
+  verified_observation: Up ImageButton NAF, content-desc='' (setNavigationIcon with no description, StaticAnalysisActivity.kt:227,
+    same in VsgLatticeActivity.kt:129). switchDiagnostics/switchImprovementConsent NAF with no label. 6 tiles all 'Reference
+    image preview' (item_media_tile.xml:15 @string/home_thumb_desc), all checked/selected=false; adapter only toggles a check
+    view's visibility. sliderSubsetSize has no contentDescription. 81 NAF nodes over 77 dumps. TalkBack speech not heard (no
+    device), but the dumps show the names are empty.
+  severity_final: P1
+- id: AE1V-008
+  axis: aesthetic
+  gate: UX
+  title: 'Session-limit and Seat-required gates have no scroll container: at font scale 2.0 ''Re-check limit'', ''Refresh
+    licence'', ''Email support'' and ''Back'' are off-screen'
+  type: defect
+  severity: P1
+  criterion: 'AE-1 font-scale + licensing: ''A licensing gate keeps its recovery actions reachable at font scale 2.0.'''
+  evidence:
+  - SCR/sessionlimit_360_dark_fs2.png — body text fills the screen; ae1_dumps/sessionlimit_360_dark_fs2.txt has no clickable
+    node and 0 scrollable nodes
+  - 'SCR/seatrequired_360_dark_fs2.png — ''Back to my analyses'' missing (dump: only btnTakeSeat)'
+  - '`grep -c ScrollView` = 0 for activity_session_limit.xml, activity_seat_required.xml, activity_update_required.xml, activity_pending_approval.xml
+    (activity_terms.xml has 2)'
+  reproduce: 'As root on a debug emulator: adb root; adb shell settings put system font_scale 2.0; adb shell am start -n com.sempermechanics.semper/.ui.limit.SessionLimitActivity
+    — no buttons visible, cannot scroll.'
+  proposed_fix: Wrap the four gate layouts' content in a NestedScrollView (fillViewport, content centred with gravity).
+  files_touched:
+  - app/src/main/res/layout/activity_session_limit.xml
+  - app/src/main/res/layout/activity_seat_required.xml
+  - app/src/main/res/layout/activity_update_required.xml
+  - app/src/main/res/layout/activity_pending_approval.xml
+  effort: S
+  fix_risk: low — wrapper view
+  external_action: null
+  status: confirmed
+  verdict: CONFIRMED
+  verified_by_command: Read SCR/sessionlimit_360_dark_fs2.png, SCR/seatrequired_360_dark_fs2.png; grep -c ScrollView on the
+    5 gate layouts; count clickable/scrollable nodes in sessionlimit_360_dark_fs2.xml; clickable ids in seatrequired_360_dark_fs2.xml
+  verified_observation: 'SessionLimit fs2: text + ''Using 1 of 999'' only, no button visible; dump 0 clickable, 0 scrollable.
+    SeatRequired fs2: only ''Try for a seat'' (btnTakeSeat), no Back. ScrollView count 0 for session_limit/seat_required/update_required/pending_approval,
+    2 for terms.'
+  severity_final: P1
+- id: AE1V-009
+  axis: technical
+  gate: G2
+  title: Terms screen pre-ticks the optional 'Use data to improve Semper' consent
+  type: criterion-conflict
+  severity: P1
+  criterion: 'AE-1 consent/locked-feature treatment: ''Optional data-use consent defaults to off and needs an affirmative
+    act'' (GDPR Art. 4(11)/7, CJEU C-673/17 Planet49; DPDP Act 2023 s.6 ''clear affirmative action'').'
+  evidence:
+  - app/src/main/res/layout/activity_terms.xml:91-95 — cbImprovementConsent android:checked="true"
+  - SCR/terms_360_light_fs1.png — box ticked on first view
+  - 'docs/ops/PRODUCTION_READINESS_GATE.md:159-162 records it as intended: ''pre-ticked but declinable, withdrawable'''
+  - Inconsistent with Settings > Your data, where the same consent shows OFF and diagnostics say 'Off by default' (SCR/settings_yourdata_360_light_fs1.png)
+  reproduce: grep -n 'android:checked="true"' app/src/main/res/layout/activity_terms.xml
+  proposed_fix: Default the box to unchecked (checked=false) and update the gate doc/AUTH_SETUP §3a wording.
+  files_touched:
+  - app/src/main/res/layout/activity_terms.xml
+  - docs/ops/PRODUCTION_READINESS_GATE.md
+  - docs/backend/AUTH_SETUP.md
+  effort: S
+  fix_risk: low — one attribute; consent records already carry the value
+  external_action: 'Admin/legal: confirm the consent default (documented decision conflicts with opt-in requirements).'
+  status: duplicate
+  verdict: CONFIRMED
+  verified_by_command: grep -n 'android:checked="true"' activity_terms.xml; Read SCR/terms_360_light_fs1.png; sed -n 155,165p
+    docs/ops/PRODUCTION_READINESS_GATE.md
+  verified_observation: activity_terms.xml:95 cbImprovementConsent checked=true; screenshot shows it ticked on first view.
+    The gate doc records 'pre-ticked but declinable, withdrawable' as intended. Same finding as TE5-002, whose change the
+    Admin rejected, so the default stays as an owner decision.
+  duplicate_of: TE5-002
+  severity_final: P1
+- id: AE1V-010
+  axis: aesthetic
+  gate: UX
+  title: Parameter-sweep lattice at font scale 2.0 clips the leading digit of y-axis ticks (156 reads '56', 117 reads '17')
+    and overlaps x labels
+  type: defect
+  severity: P1
+  criterion: 'AE-1 measurement display: ''Plot axis values are rendered in full at every supported font scale.'''
+  evidence:
+  - SCR/vsglattice_360_dark_fs2.png — y ticks '56, 17, 78, 39, 0'; x labels '21 31 41 px' cut at the bottom; title 'Parameter
+    s…', 'Str…', 'Save' clipped
+  - SCR/vsglattice_360_dark_fs1.png — same plot at fs 1.0 shows 156/117/78/39/0
+  reproduce: Run a 9-run sweep (wizard > Sweep > Next > Run); adb shell settings put system font_scale 2.0; observe the lattice
+    y axis.
+  proposed_fix: Measure tick-label width in the lattice view and reserve the left gutter from it (or cap tick text size in
+    px for plots); allow the toolbar title to wrap.
+  files_touched:
+  - app/src/main/java/com/sempermechanics/semper/ui/analysis/sweep/
+  - app/src/main/res/layout/activity_vsg_lattice.xml
+  effort: S
+  fix_risk: low — drawing gutter
+  external_action: null
+  status: confirmed
+  verdict: CONFIRMED
+  verified_by_command: Read SCR/vsglattice_360_dark_fs2.png and SCR/vsglattice_360_light_fs1.png
+  verified_observation: 'fs2: y ticks read 56/17/78/39/0, x labels ''21 31 41 px'' cut at bottom, title ''Parameter s…'',
+    ''Str…'', ''Save'' clipped. fs1: y ticks 156/117/78/39/0 in full.'
+  severity_final: P1
+- id: AE1V-012
+  axis: aesthetic
+  gate: UX
+  title: 'Low-contrast text: Terms version 1.22:1 and Pending Device ID use the divider colour; viewer colour-scale labels
+    ~2.6:1 over the field in light theme'
+  type: defect
+  severity: P2
+  criterion: 'AE-1 contrast: ''Text >= 4.5:1 (>= 3:1 large).'''
+  evidence:
+  - SCR/terms_360_light_fs1.png — 'Terms version 2026-09-15' measured (214,228,236) on (244,249,252) = 1.22:1; activity_terms.xml:32
+    textColor=@color/surface_outline (#D6E4EC, 'card strokes, dividers', values/colors.xml:24)
+  - SCR/pendingapproval_360_light_fs1.png — Device ID line; activity_pending_approval.xml:102 textColor=@color/surface_outline
+  - SCR/viewer_360_light_fs1.png — '≥ 71.42400 px' (21,36,48) over field (80,81,216) ≈ 2.64:1; SCR/viewer_360_light_fs1_summary_chrome.png
+    labels sit on dark-red field
+  reproduce: grep -n surface_outline app/src/main/res/layout/activity_terms.xml app/src/main/res/layout/activity_pending_approval.xml
+  proposed_fix: Use text_secondary for both labels; give colour-scale labels an opaque chip background (as the probe readout
+    has).
+  files_touched:
+  - app/src/main/res/layout/activity_terms.xml
+  - app/src/main/res/layout/activity_pending_approval.xml
+  - app/src/main/java/com/sempermechanics/semper/ui/viewer/ColorScaleBar.kt
+  effort: S
+  fix_risk: low — colours
+  external_action: null
+  status: confirmed
+  verdict: CONFIRMED
+  verified_by_command: 'grep -n surface_outline activity_terms.xml activity_pending_approval.xml colors.xml; python PIL: darkest
+    text px vs bg on SCR/terms_360_light_fs1.png and SCR/viewer_360_light_fs1.png; WCAG ratio of the record''s quoted colours'
+  verified_observation: 'terms:32 and pending_approval:102 use @color/surface_outline #D6E4EC (''card strokes, dividers'').
+    Measured on the 50% PNGs: Terms version 1.28:1 (quoted colours 1.22:1); viewer ''≥ 71.42400 px'' (2,19,20) on (74,75,182)
+    = 2.69:1 (quoted 2.64:1). Both under 4.5:1.'
+  severity_verified: P1
+  verifier_note: 'Not a duplicate of the already-verified AE1-012 (''info buttons share one content description''): the ids
+    collide across lanes.'
   severity_final: P1
 - id: AE2-002
   axis: aesthetic
@@ -1180,6 +1546,169 @@
     (empty, exit 1); grep WindowSizeClass|screenWidthDp java (0)
   verified_observation: 'Only values, values-night, layout, drawable(-night/-nodpi), mipmap-*, etc.; no sw/w/land qualifier;
     no WindowSizeClass/screenWidthDp in Kotlin. Rendered tablet look: NEEDS_DEVICE.'
+  severity_final: P2
+- id: AE1V-011
+  axis: aesthetic
+  gate: UX
+  title: 'Dark theme force-darkens specimen thumbnails: reference thumbnail renders as a white square and deformed thumbnails
+    inverted in the wizard'
+  type: defect
+  severity: P2
+  criterion: 'AE-1 dark theme: ''Specimen images keep their true pixels in dark theme.'''
+  evidence:
+  - SCR/wizard1_360_dark_fs1.png vs SCR/wizard1_360_light_fs1.png — reference thumb white in dark, deformed thumbs lighter/inverted
+  - app/src/main/res/values/themes.xml:24 — android:forceDarkAllowed=true app-wide; activity_static_analysis.xml:117-119 imgRefThumb
+    has no forceDarkAllowed=false (viewer/ROI/VSG layouts opt out, wizard does not)
+  reproduce: grep -n forceDarkAllowed app/src/main/res/layout/activity_static_analysis.xml (no hit); open wizard with images
+    in dark mode.
+  proposed_fix: android:forceDarkAllowed="false" on imgRefThumb, imgFrameThumb, roiThumb, imgSweepFrame, the media grid and
+    Home session thumbs.
+  files_touched:
+  - app/src/main/res/layout/activity_static_analysis.xml
+  - app/src/main/res/layout/wizard_step_settings_content.xml
+  effort: S
+  fix_risk: low — attribute
+  external_action: null
+  status: confirmed
+  verdict: CONFIRMED
+  verified_by_command: grep -n forceDarkAllowed activity_static_analysis.xml (no hit); grep -rn forceDarkAllowed res/; sed
+    values/themes.xml:1-30; Read SCR/wizard1_360_dark_fs1.png vs _light_fs1.png
+  verified_observation: 'Theme.Semper has parent Theme.MaterialComponents.Light with forceDarkAllowed=true (themes.xml:24),
+    so force dark applies. Viewer, ROI, auth, home and splash opt out; the wizard does not. Dark screenshot: the reference
+    thumb is a white square (dark speckle in light theme). The deformed thumbs look only a little different.'
+  severity_final: P2
+- id: AE1V-013
+  axis: aesthetic
+  gate: UX
+  title: 'Expanded width (840 dp): phone layouts stretch edge to edge — wizard, Settings, Auth, Home rows, full-width Next/Sign-in
+    buttons'
+  type: gap
+  severity: P2
+  criterion: 'AE-1 large screens: ''No stretched phone layout at >= 840 dp (max content width or two-pane).'''
+  evidence:
+  - SCR/wizard1_840_light_fs1.png, SCR/settings_840_light_fs1.png, SCR/auth_840_light_fs1.png, SCR/homepop_840_light_fs1.png
+  - '`ls app/src/main/res | grep -E ''w600dp|w840dp|sw600dp''` — no width-qualified resources'
+  reproduce: adb shell wm size 2520x1800; adb shell wm density 480; open each screen.
+  proposed_fix: Cap content width (~600dp, centred) via layout-w840dp or a maxWidth container; consider two-pane Settings/Home.
+  files_touched:
+  - app/src/main/res/layout-w840dp/
+  effort: M
+  fix_risk: low — new qualified layouts
+  external_action: null
+  status: duplicate
+  verdict: CONFIRMED
+  verified_by_command: ls app/src/main/res | grep -E 'w600dp|w840dp|sw600dp|land' (empty); Read SCR/settings_840_light_fs1.png
+  verified_observation: No width-qualified resource dirs. At 840 dp, Settings rows and the About/Sign out buttons stretch
+    edge to edge.
+  duplicate_of: AE1-019
+  verifier_note: Duplicate of the already-verified AE1-019 (no tablet layouts) from another AE1 lane; the ids collide (this
+    lane's AE1-019 is viewer auto-hide).
+  severity_final: P2
+- id: AE1V-014
+  axis: aesthetic
+  gate: UX
+  title: 'Truncation at default font scale on a 360 dp phone: ROI ''Man…'' (Manual), deformed-frames list ''specimen…n_04.png'''
+  type: defect
+  severity: P2
+  criterion: 'AE-1: ''No truncated control labels at 360 dp, font 1.0.'''
+  evidence:
+  - SCR/roi_360_light_fs1_drawn.png — 'Man…'
+  - SCR/wizard1_360_light_fs1.png — 'specimen…n_04.png', '4 deformed / frames' wraps
+  reproduce: Open ROI editor on a 1080x2400 / 480 dpi screen.
+  proposed_fix: See AE1-003 (separate row for Draw/Manual).
+  files_touched:
+  - app/src/main/res/layout/activity_roi_draw.xml
+  effort: S
+  fix_risk: low
+  external_action: null
+  status: confirmed
+  verdict: CONFIRMED
+  verified_by_command: Read SCR/roi_360_light_fs1_erase_before.png (same fs1 light ROI bar as roi_360_light_fs1_drawn) and
+    SCR/wizard1_360_light_fs1.png
+  verified_observation: 'ROI toggle reads ''Man…'' at fs 1.0. Wizard: ''specimen…n_04.png'' and ''4 deformed / frames'' wraps.
+    The file name is ellipsized content, not a control label. Same root cause and fix as AE1-003.'
+  verifier_note: Related to AE1-003 (same layout and fix), but a different criterion (fs 1.0), so not marked a duplicate.
+  severity_final: P2
+- id: AE1V-015
+  axis: technical
+  gate: UX
+  title: Wizard absorbs fontScale/density changes without onConfigurationChanged, so a text-size change made mid-wizard is
+    ignored until the wizard is reopened
+  type: defect
+  severity: P2
+  criterion: 'AE-1 font-scale: ''A system font-size change applies to the open screen.'''
+  evidence:
+  - app/src/main/AndroidManifest.xml:209 — StaticAnalysisActivity configChanges includes fontScale|density|uiMode
+  - '`grep -rn onConfigurationChanged app/src/main/java/com/sempermechanics/semper/ui` — no handler (only SemperApp.kt)'
+  - 'First wizard matrix: fs2 captures identical to fs1 except the status bar (re-captured after relaunch at fs2 as wizard1_*_fs2.png)'
+  reproduce: Open wizard step 1; adb shell settings put system font_scale 2.0; text size in the wizard does not change.
+  proposed_fix: Drop fontScale|density from configChanges (keep the run alive via the app-lifetime run per ADR-016) or re-inflate
+    text appearance in onConfigurationChanged.
+  files_touched:
+  - app/src/main/AndroidManifest.xml
+  effort: S
+  fix_risk: medium — the comment at AndroidManifest.xml:203-205 says recreation cancels a running solve; verify the run survives
+    first
+  external_action: null
+  status: confirmed
+  verdict: CONFIRMED
+  verified_by_command: grep -n -A3 StaticAnalysisActivity AndroidManifest.xml; grep -rn onConfigurationChanged app/src/main/java/com/sempermechanics/semper/
+  verified_observation: Manifest:209 configChanges includes uiMode|fontScale|density. The only onConfigurationChanged is SemperApp.kt:74.
+    Without recreation or a handler, sp sizes inflated earlier stay as they were. The 'fs2 identical' captures are not in
+    SCR, so they could not be checked.
+  severity_final: P2
+- id: AE1V-016
+  axis: aesthetic
+  gate: UX
+  title: 'Data-use messaging contradicts itself: first-run ''Beta notice'' says analysis data ''will be collected'', Settings
+    says improvement use is optional and off'
+  type: defect
+  severity: P2
+  criterion: 'AE-1 terminology/privacy: ''One consistent statement of what is collected.'''
+  evidence:
+  - SCR/betanotice_360_light_fs1.png; app/src/main/res/values/strings.xml:976 beta_notice_body
+  - SCR/diagconsent_360_light_fs1.png (opt-in prompt) and SCR/settings_yourdata_360_light_fs1.png ('Optional', 'Off by default')
+  reproduce: grep -n beta_notice_body app/src/main/res/values/strings.xml
+  proposed_fix: Reword the beta notice to match the opt-in model (or remove it now that consent is explicit).
+  files_touched:
+  - app/src/main/res/values/strings.xml
+  effort: S
+  fix_risk: low — copy
+  external_action: 'Admin/legal: approve wording'
+  status: confirmed
+  verdict: CONFIRMED
+  verified_by_command: grep -n beta_notice_body strings.xml + java; Read SCR/betanotice_360_light_fs1.png and SCR/settings_yourdata_360_light_fs1.png
+  verified_observation: 'strings.xml:976 says ''Analysis data generated while using the app will be collected…'' (shown by
+    FirstRunPrompts.kt:50). Settings > Your data: improvement use ''Optional'', switch OFF; diagnostics ''Off by default''.'
+  verifier_note: Related to the consent-default topic (TE5-002 / AE1-009), but this is a copy defect, not the default.
+  severity_final: P2
+- id: AE1V-018
+  axis: aesthetic
+  gate: UX
+  title: 'Measurement plots miss labels: lattice y axis has no title/units; Details sheet min/max lack units and coordinate
+    units; histogram y axis untitled'
+  type: defect
+  severity: P2
+  criterion: 'AE-1 measurement display: ''Every plot shows axis titles with units; every value shows its unit.'''
+  evidence:
+  - SCR/vsglattice_360_light_fs1.png — y ticks 0..156 with no title (x shows 'px', line plot shows 'mε' and 'px')
+  - SCR/sheet_settingsused_360_light_fs1.png — 'max 1.42000 at (20, 0)' / 'min -2.13000 at (0, 0)' without unit (only 'mean
+    … mε'); histogram y axis 0/800 untitled
+  - 'Units are otherwise good: colour scale ''px''/''mε'', parameters ''px''/''points'''
+  reproduce: Open a sweep result; open viewer > (i) Details.
+  proposed_fix: Add 'VSG (px)' y title on the lattice, units on min/max and '(px)' on coordinates, 'points' on the histogram
+    y axis.
+  files_touched:
+  - app/src/main/java/com/sempermechanics/semper/ui/analysis/sweep/
+  - app/src/main/java/com/sempermechanics/semper/ui/viewer/
+  effort: S
+  fix_risk: low — labels (no change to exported .dat/GIF)
+  external_action: null
+  status: confirmed
+  verdict: CONFIRMED
+  verified_by_command: Read SCR/vsglattice_360_light_fs1.png and SCR/sheet_settingsused_360_light_fs1.png
+  verified_observation: Lattice y ticks 0..156 have no title or unit (x has 'px'). Details shows 'max 1.42000 at (20, 0)'
+    and 'min -2.13000 at (0, 0)' with no unit (only mean has mε). The EYY histogram y axis (0/800) has no title.
   severity_final: P2
 - id: AE2-001
   axis: aesthetic
@@ -3345,6 +3874,60 @@
   verified_observation: Stats header 'strain_window_px' <- frame.strainWindow (:108,:171); sweep header 'strain_window' (points)
     + 'vsg_px' <- frame.strainWindow (:56,:303). Same value, two names in one file.
   severity_final: P3
+- id: AE1V-020
+  axis: aesthetic
+  gate: UX
+  title: Parameter-sweep screen without a session shows 'All combinations failed' instead of an empty state
+  type: defect
+  severity: P3
+  criterion: 'AE-1 states: ''Empty state is distinct from failure.'''
+  evidence:
+  - SCR/vsglattice_360_light_fs1_nosession.png (reached by `am start` as root without SESSION_LOCAL_ID; VsgLatticeActivity.kt:102)
+  reproduce: adb root; adb shell am start -n com.sempermechanics.semper/.ui.analysis.VsgLatticeActivity
+  proposed_fix: Finish or show 'No sweep to show' when the session is missing.
+  files_touched:
+  - app/src/main/java/com/sempermechanics/semper/ui/analysis/VsgLatticeActivity.kt
+  effort: S
+  fix_risk: low
+  external_action: null
+  status: confirmed
+  verdict: CONFIRMED
+  verified_by_command: Read SCR/vsglattice_360_light_fs1_nosession.png; sed VsgLatticeActivity.kt:92-115; grep VsgLatticeActivity
+    AndroidManifest.xml
+  verified_observation: Shows 'All combinations failed — tap a node for details.' with an empty plot. Manifest:217-218 has
+    exported=false, so this is reachable only by an internal intent without a session (here via root am start). P3 is right.
+  verifier_note: Not a duplicate of TE1-005 (VsgLattice rotation state loss).
+  severity_final: P3
+- id: AE1V-021
+  axis: aesthetic
+  gate: UX
+  title: 'Polish: Settings sections collapse on recreation; monospace font in probe ''No data'', Details stats and lattice
+    chip; colour-scale values over-precise (''≥ 71.42400 px''); dark-theme cards/nav arrows lose outlines'
+  type: defect
+  severity: P3
+  criterion: AE-1 polish/consistency.
+  evidence:
+  - SCR/settings_yourdata_360_dark_fs2.png sequence (section had to be re-opened after night/font change)
+  - SCR/viewer_360_dark_fs2.png ('No data' monospace), SCR/sheet_settingsused_360_light_fs1.png, SCR/vsglattice_360_light_fs1.png
+    ('ss:21 · st:7')
+  - SCR/viewer_360_light_fs1.png ('≥ 71.42400 px'), SCR/wizard1_360_dark_fs1.png (no card strokes in dark)
+  reproduce: Open the listed screens.
+  proposed_fix: Save expanded sections in instance state; use the app type scale; format scale values to 3 significant figures;
+    dark card stroke token.
+  files_touched:
+  - app/src/main/java/com/sempermechanics/semper/ui/settings/SettingsActivity.kt
+  - app/src/main/java/com/sempermechanics/semper/ui/viewer/ColorScaleBar.kt
+  effort: S
+  fix_risk: low
+  external_action: null
+  status: confirmed
+  verdict: CONFIRMED
+  verified_by_command: sed SettingsActivity.kt:168-195; grep fontFamily monospace activity_result_viewer.xml activity_vsg_lattice.xml;
+    Read SCR/viewer_360_light_fs1.png, SCR/sheet_settingsused_360_light_fs1.png, SCR/wizard1_360_dark_fs1.png
+  verified_observation: wireCollapsible calls apply(false) on every create, and onSaveInstanceState saves only pendingDownload,
+    so sections collapse on recreate. monospace is set at result_viewer.xml:395 and vsg_lattice.xml:96,246. Scale shows '≥
+    71.42400 px'. The dark wizard cards have no stroke.
+  severity_final: P3
 - id: AE2-008
   axis: aesthetic
   gate: UX
@@ -3990,6 +4573,88 @@
   verified_observation: All quoted strings present as cited (Secure Access Portal, CHECK STATUS, Access Granted!, System error…,
     engine error %1$d, beta_notice_body 'will be collected' vs :469 'Optional…').
   severity_verified: observation
+  severity_final: observation
+- id: AE1V-017
+  axis: aesthetic
+  gate: UX
+  title: 'Semper''s delete-account dialog names the fork product: ''your sign-in, for both Semper and Material Testing'''
+  type: observation
+  severity: observation
+  criterion: 'AE-1 terminology: ''Only this product''s name in user copy.'' (May be deliberate if the fork shares the Firebase
+    project.)'
+  evidence:
+  - SCR/dialog_deleteaccount_360_light_fs1.png
+  - app/src/main/res/values/strings.xml:337 delete_account_body
+  reproduce: grep -n 'Material Testing' app/src/main/res/values/strings.xml
+  proposed_fix: If the shared sign-in is intended, say 'all Semper Mechanics apps'; otherwise drop the clause.
+  files_touched:
+  - app/src/main/res/values/strings.xml
+  effort: S
+  fix_risk: low — copy
+  external_action: null
+  status: confirmed
+  verdict: CONFIRMED
+  verified_by_command: grep -n 'Material Testing' strings.xml
+  verified_observation: 'strings.xml:337 delete_account_body: ''• your sign-in, for both Semper and Material Testing''. Kept
+    as an observation: whether the shared sign-in is deliberate is a product call.'
+  severity_final: observation
+- id: AE1V-019
+  axis: aesthetic
+  gate: UX
+  title: Viewer chrome auto-hides within ~2 s, leaving the heatmap with no legend, field name, units or frame index until
+    tapped
+  type: observation
+  severity: observation
+  criterion: 'AE-1 measurement display: ''A shown field is always accompanied by its scale and units.'''
+  evidence:
+  - SCR/viewer_360_light_fs1_summary.png and SCR/viewer_360_light_fs1_frame.png (chrome hidden) vs SCR/viewer_360_light_fs1_summary_chrome.png
+  reproduce: Open any result; wait 3 s.
+  proposed_fix: Keep the colour scale (at least min/max + unit) pinned when chrome hides, or hide only on explicit tap.
+  files_touched:
+  - app/src/main/java/com/sempermechanics/semper/ui/viewer/ViewerChromeController.kt
+  effort: S
+  fix_risk: low
+  external_action: null
+  status: confirmed
+  verdict: CONFIRMED
+  verified_by_command: Read SCR/viewer_360_light_fs1_summary.png vs _summary_chrome.png; grep CHROME_HIDE_DELAY_MS ViewerChromeController.kt
+  verified_observation: Chrome-hidden capture shows the heatmap with no colour scale, field name, units or frame label. CHROME_HIDE_DELAY_MS
+    = 2_500L (ViewerChromeController.kt:114).
+  verifier_note: 'Criterion is pass/fail-measurable and fails; left as observation because the auto-hide is deliberate (design
+    call). Not a duplicate of the already-verified AE1-019 (''no tablet layouts''): the ids collide across lanes.'
+  severity_final: observation
+- id: AE1V-022
+  axis: aesthetic
+  gate: G4
+  title: 'Demo-locked and offline states cannot be shown on the debug emulator: the bypass always installs a licensed ''professional''
+    account with cloud off'
+  type: gap
+  severity: observation
+  criterion: 'AE-1 states: ''demo-locked rows (LicenseLock), offline banner and paid state captured.'''
+  evidence:
+  - app/src/main/java/com/sempermechanics/semper/data/account/DevAuth.kt:52-66 — install() sets MODE_LICENSED, plan professional,
+    cloudBackupEnabled=true on every launch
+  - SemperApi.kt:67 — cloud disabled while bypass active, so offline looks the same as online (Home/Auth/gates captured with
+    Wi-Fi+data off show no offline indication)
+  - SCR/settings_analyses_360_light_fs1.png shows 'Cloud backup is not configured on this build' while SCR/settings_cloud_360_light_fs1.png
+    shows 'Save to cloud' ON — debug-only contradiction
+  reproduce: Read DevAuth.install.
+  proposed_fix: Add a debug-only override (e.g. SEMPER_DEV_LICENSE_MODE=demo in local.properties) so demo/locked rows can
+    be captured without a real backend.
+  files_touched:
+  - app/src/main/java/com/sempermechanics/semper/data/account/DevAuth.kt
+  - app/build.gradle.kts
+  effort: S
+  fix_risk: low — debug-only
+  external_action: 'NEEDS_ADMIN: demo-locked and real paid/seat states need a staging licence or the override above.'
+  status: confirmed
+  verdict: CONFIRMED
+  verified_by_command: sed DevAuth.kt:45-70; sed SemperApi.kt:64-69; sed app/build.gradle.kts:45-56
+  verified_observation: install() always seeds APPROVED, MODE_LICENSED, plan 'professional', cloudBackupEnabled=true. SemperApi.enabled
+    is false while DevAuth.active, and the bypass is on unless SEMPER_DEV_AUTH_BYPASS=false. So demo-locked and offline states
+    cannot be captured under the bypass; capturing them needs staging or Admin.
+  verifier_note: The gap is confirmed in code. Capturing the demo-locked, paid-seat and offline states is still NEEDS_ADMIN
+    (staging licence or a debug override).
   severity_final: observation
 - id: MT-TE3-001
   axis: technical
