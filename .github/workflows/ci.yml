@@ -1176,7 +1176,8 @@ jobs:
             "${{ needs.tier4-backend.result }}" \
             "${{ needs.firestore-rules.result }}" \
             "${{ needs.tier5-signed-release.result }}" \
-            "${{ needs.tier-benchmark.result }}"             "${{ needs.engine-host-sanitized.result }}"; do
+            "${{ needs.tier-benchmark.result }}" \
+            "${{ needs.engine-host-sanitized.result }}"; do
             case "$result" in
               success|skipped) ;;
               *) echo "FAILED: $result"; exit 1 ;;

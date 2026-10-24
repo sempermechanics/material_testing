@@ -27,6 +27,7 @@ REQUIRED = (
     "Secret scan (full history)",
     "Legal pages match their source",
     "Console pages",
+    "Console accessibility",
     "Engine pin is a tagged release",
     "Engine host tests (ASan+UBSan)",
     "Tier 1 — App fast",
