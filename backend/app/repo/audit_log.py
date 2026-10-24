@@ -58,29 +58,28 @@ def list_license_device_history(license_id: str, *, limit: int = 50) -> list[dic
     # Over-fetch a little so seat prefix rows and IT patches that are not
     # device clears can be filtered without a second round trip.
     fetch = min(limit * 4, 400)
+    # No catch: a failed read is an error the caller sees (503
+    # firestore_unreachable at the edge for an outage, else 500), never an
+    # empty history that reads as "no device moves" (readiness TE3-008).
     rows: list[dict] = []
-    try:
-        exact = _stream(
-            db().collection("audit_logs")
-            .where("target.id", "==", license_id)
-            .limit(fetch)
-        )
-        for snap in exact:
-            rows.append(_public_audit(snap.id, snap.to_dict() or {}))
-        # Seat targets are `{licenseId}/{uid}`. A range on the string is enough
-        # for the automatic single-field index; filter actions below.
-        prefix = f"{license_id}/"
-        seats = _stream(
-            db().collection("audit_logs")
-            .where("target.id", ">=", prefix)
-            .where("target.id", "<", prefix + "\uffff")
-            .limit(fetch)
-        )
-        for snap in seats:
-            rows.append(_public_audit(snap.id, snap.to_dict() or {}))
-    except Exception as e:  # noqa: BLE001
-        log.warning("audit history read failed: %s", e)
-        return []
+    exact = _stream(
+        db().collection("audit_logs")
+        .where("target.id", "==", license_id)
+        .limit(fetch)
+    )
+    for snap in exact:
+        rows.append(_public_audit(snap.id, snap.to_dict() or {}))
+    # Seat targets are `{licenseId}/{uid}`. A range on the string is enough
+    # for the automatic single-field index; filter actions below.
+    prefix = f"{license_id}/"
+    seats = _stream(
+        db().collection("audit_logs")
+        .where("target.id", ">=", prefix)
+        .where("target.id", "<", prefix + "\uffff")
+        .limit(fetch)
+    )
+    for snap in seats:
+        rows.append(_public_audit(snap.id, snap.to_dict() or {}))
 
     filtered = [
         r for r in rows
