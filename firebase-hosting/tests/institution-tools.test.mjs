@@ -266,17 +266,14 @@ test("a refused import is explained", async () => {
   }
 });
 
-test("a whole-file refusal names its line when the backend gives one (AE2-008)", async () => {
+test("a whole-file refusal names its line, and an oversized file is too large (AE2-008)", async () => {
+  // The backend's shapes (backend/app/roster_io.py): the line after the
+  // code, as device_change_too_soon carries its instant; a 413 code for a
+  // file over 512,000 characters.
   const cases = [
-    // The line after the code, as device_change_too_soon carries its instant…
     [() => json(400, { detail: "roster_import_malformed: line 3" }), "Line 3 could not be read as CSV — check its quotes."],
-    // …or as a field of its own beside the code.
-    [() => json(400, { detail: "roster_import_malformed", line: 7 }), "Line 7 could not be read as CSV — check its quotes."],
-    [() => json(400, { detail: { code: "roster_import_malformed", line: 2 } }), "Line 2 could not be read as CSV — check its quotes."],
-    [() => json(400, { detail: "roster_import_no_email_column", line: 1 }),
-      "Line 1 looks like a header but has no “email” column."],
-    // A file over the body limit is a validation 422, not a code.
-    [() => json(422, { detail: [{ msg: "String should have at most 512000 characters", loc: ["body", "csv"] }] }),
+    [() => json(400, { detail: "roster_import_malformed: line 12" }), "Line 12 could not be read as CSV — check its quotes."],
+    [() => json(413, { detail: "roster_import_too_large" }),
       "That file is too large to import at once. Split it into parts of at most 500 rows."],
   ];
   for (const [reply, sentence] of cases) {

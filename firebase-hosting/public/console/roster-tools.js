@@ -91,11 +91,11 @@ export function rowResult({ outcome, error }) {
 }
 
 /**
- * The line a whole-file refusal names: the backend's `line`, or a
- * `<code>: line <n>` suffix. null when it names none (an older backend).
+ * The line a whole-file refusal names: the backend sends
+ * `roster_import_malformed: line <n>` (the line the bad record starts on).
+ * null when it names none (a backend before 2026-10-24).
  */
 export function refusedLine(e) {
-  if (e && Number.isInteger(e.line)) return e.line;
   const m = /^line (\d+)$/i.exec(String((e && e.rest) || "").trim());
   return m ? Number(m[1]) : null;
 }
@@ -103,13 +103,14 @@ export function refusedLine(e) {
 /** What a refusal naming line `n` says, by the code that refused the file. */
 const IMPORT_LINE_ERRORS = {
   roster_import_malformed: (n) => `Line ${n} could not be read as CSV — check its quotes.`,
-  roster_import_no_email_column: (n) => `Line ${n} looks like a header but has no “email” column.`,
 };
 
 /** What a refused import says, by the code that refused the whole file. */
 const IMPORT_ERRORS = {
   roster_import_empty: "There are no addresses to import.",
   roster_import_too_many_rows: `That is more than ${MAX_IMPORT_ROWS} rows. Split the file and import each part.`,
+  // 413 over 512,000 characters, before any row is read.
+  roster_import_too_large: `That file is too large to import at once. Split it into parts of at most ${MAX_IMPORT_ROWS} rows.`,
   roster_import_malformed: "That file could not be read as CSV — check its quotes.",
   roster_import_no_email_column: "The first line looks like a header but has no “email” column.",
 };
@@ -176,9 +177,7 @@ export function wireImport({ text, file, preview, submit, summary, results, rows
       const line = refusedLine(e);
       const atLine = line != null && IMPORT_LINE_ERRORS[e.code];
       report(atLine ? atLine(line)
-        // A file over the body limit is refused by validation (a 422), not a code.
-        : e && e.status === 422 ? `That file is too large to import at once. Split it into parts of at most ${MAX_IMPORT_ROWS} rows.`
-          : explain(e, IMPORT_ERRORS, (msg) => `Could not import: ${msg}`), true);
+        : explain(e, IMPORT_ERRORS, (msg) => `Could not import: ${msg}`), true);
     } finally {
       update();
     }

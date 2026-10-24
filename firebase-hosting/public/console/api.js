@@ -14,18 +14,15 @@ import { errorDetail } from "./util.js";
  * `device_change_too_soon`, rest the instant). `message` is the whole detail,
  * as every page has always shown it; `status` is the HTTP status. A gateway
  * refusal is not JSON, and then the status is all there is: `http_<status>`.
- * `line` is the line of an uploaded file a refusal names (a roster import
- * the CSV reader stopped on), when the backend gives one, else null.
  */
 export class ApiError extends Error {
-  constructor(status, detail, line = null) {
+  constructor(status, detail) {
     super(detail || `http_${status}`);
     this.name = "ApiError";
     this.status = status;
     const { code, rest } = errorDetail(this.message);
     this.code = code;
     this.rest = rest;
-    this.line = Number.isInteger(line) ? line : null;
   }
 }
 
@@ -41,24 +38,13 @@ function validationDetail(detail) {
     .join("; ");
 }
 
-/**
- * The detail of a failed response ("" when its body is not JSON) and the
- * file line it names, if any: `{"detail": "<code>", "line": 3}`, or a detail
- * that is itself `{code, line}`.
- */
+/** The detail of a failed response, or "" when its body is not JSON. */
 async function failureDetail(resp) {
   try {
     const text = await resp.text();
-    const body = text ? JSON.parse(text) : {};
-    let detail = body.detail ?? "";
-    let line = body.line;
-    if (detail && typeof detail === "object" && !Array.isArray(detail)) {
-      line = detail.line ?? line;
-      detail = detail.code ?? "";
-    }
-    return { detail: validationDetail(detail) || "", line };
+    return validationDetail(text ? JSON.parse(text).detail : "") || "";
   } catch {
-    return { detail: "" };
+    return "";
   }
 }
 
@@ -84,10 +70,7 @@ async function request(path, options, read, { allowStepUp = true, json = true } 
         ...(options.headers || {}),
       },
     });
-    if (!resp.ok) {
-      const { detail, line } = await failureDetail(resp);
-      throw new ApiError(resp.status, detail, line);
-    }
+    if (!resp.ok) throw new ApiError(resp.status, await failureDetail(resp));
     return read(resp);
   };
 
