@@ -102,6 +102,15 @@ class MetadataSendFailureRuleTest {
     }
 
     @Test
+    fun `a paused backup is a pause, not a failure, and the change stays marked`() {
+        // PUT /metadata answers 503 feature_paused while upload or backup is
+        // switched off (TE4-004): wait and send it when the switch lifts.
+        val paused = ApiException(503, """{"detail":"feature_paused"}""")
+        assertEquals(Outcome.PAUSED, sendFailing(paused))
+        assertTrue(SessionStore.get(context, "s1")!!.metadataStale)
+    }
+
+    @Test
     fun `isRetryable is not the send's rule`() {
         val differ = cases.filter { HttpFailure.classify(it.error).isRetryable != (it.outcome == Outcome.RETRY) }
         assertEquals(
