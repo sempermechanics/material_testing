@@ -13,6 +13,7 @@ import androidx.annotation.MainThread
 import androidx.annotation.StringRes
 import androidx.annotation.WorkerThread
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.doOnLayout
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.session.CacheJanitor
@@ -25,6 +26,7 @@ import com.sempermechanics.semper.field.getRoiEditorImageSize
 import com.sempermechanics.semper.field.putRoiEdges
 import com.sempermechanics.semper.field.putRoiExtras
 import com.sempermechanics.semper.navigation.IntentKeys
+import com.sempermechanics.semper.ui.analysis.roi.RoiHud
 import com.sempermechanics.semper.ui.analysis.roi.StudioOverlayMaskEncoder
 import com.sempermechanics.semper.ui.analysis.roi.StudioOverlayView
 import com.sempermechanics.semper.ui.analysis.wizard.ReferencePreviewLoader
@@ -82,6 +84,8 @@ class RoiDrawActivity : AppCompatActivity() {
         // reachable; the canvas shrinks and the overlay remaps the crop onto the
         // smaller image (StudioOverlayView.updateImageBounds).
         Insets.padBottomAboveIme(binding.bottomToolbar)
+        // The info pill wraps but keeps one height, so the canvas never resizes as it changes.
+        binding.root.doOnLayout { RoiHud.reserveLines(binding.tvHud, RoiHud.texts(this)) }
 
         setImageSize(intent.getRoiEditorImageSize())
         pendingSelection = savedInstanceState?.let(RoiSelection::from)

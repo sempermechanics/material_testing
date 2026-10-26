@@ -171,8 +171,9 @@
             android:layout_height="match_parent" />
     </FrameLayout>
 
-    <!-- One line, ellipsized: a second line would resize the canvas mid-drag. The
-         whole text stays the view's text, so TalkBack reads it in full. -->
+    <!-- Above the canvas, wrapping so its whole text shows; RoiHud reserves the lines
+         its longest text needs, so a change of text never resizes the canvas mid-drag
+         (readiness AE1V-023). -->
     <TextView
         android:id="@+id/tvHud"
         android:layout_width="wrap_content"
@@ -181,8 +182,6 @@
         android:layout_marginTop="8dp"
         android:layout_marginEnd="12dp"
         android:background="@drawable/bg_viewer_panel"
-        android:ellipsize="end"
-        android:maxLines="1"
         android:paddingHorizontal="12dp"
         android:paddingVertical="6dp"
         android:text="@string/roi_hud_select_tool"

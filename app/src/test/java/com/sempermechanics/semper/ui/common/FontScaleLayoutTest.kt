@@ -15,6 +15,7 @@ import androidx.appcompat.view.ContextThemeWrapper
 import androidx.core.widget.NestedScrollView
 import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.R
+import com.sempermechanics.semper.ui.analysis.roi.RoiHud
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -290,28 +291,42 @@ class FontScaleLayoutTest {
     /**
      * The ROI studio's info pill (tvHud) sits above the canvas, never on it: at font
      * scale 2 its two lines covered the crop's top edge and corner handles (readiness
-     * AE1V-023). It keeps to one line, so the canvas does not resize while the numbers
-     * change mid-drag, and its whole text stays the view's text for TalkBack.
+     * AE1V-023), and cut to one line it hid the position ("Pos…"). It wraps, so every
+     * text it shows is visible in full, and [RoiHud] reserves the lines the longest
+     * needs, so the canvas keeps its place whatever the pill says (no resize mid-drag).
      */
     @Test
-    fun `the ROI studio's info pill never covers the canvas at font scale 2`() {
+    fun `the ROI studio's info pill shows its whole text and never covers the canvas at font scale 2`() {
         val ctx = context(2f)
-        val full = ctx.getString(R.string.roi_hud_dimensions_fmt, 6000, 4000, 1234, 5678)
-        prepare = { it.findViewById<TextView>(R.id.tvHud).text = full }
-        val root = LayoutInflater.from(ctx).inflate(R.layout.activity_roi_draw, LinearLayout(ctx), false).apply {
-            prepare(this)
+        val root = LayoutInflater.from(ctx).inflate(R.layout.activity_roi_draw, LinearLayout(ctx), false)
+        val hud = root.findViewById<TextView>(R.id.tvHud)
+        val canvas = root.findViewById<View>(R.id.canvasFrame)
+        fun layOut() = root.apply {
             measure(
                 View.MeasureSpec.makeMeasureSpec(ctx.px(PHONE_DP), View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(ctx.px(PHONE_HEIGHT_DP), View.MeasureSpec.EXACTLY),
             )
             layout(0, 0, measuredWidth, measuredHeight)
         }
-        val hud = root.findViewById<TextView>(R.id.tvHud)
-        val canvas = root.findViewById<View>(R.id.canvasFrame)
-        assertTrue("the pill ends at ${hud.bottom}px, the canvas starts at ${canvas.top}px", hud.bottom <= canvas.top)
+        val texts = RoiHud.texts(ctx)
+        layOut()
+        // What RoiDrawActivity does once the screen is laid out.
+        RoiHud.reserveLines(hud, texts)
+        val tops = mutableSetOf<Int>()
+        for (text in texts + ctx.getString(R.string.roi_hud_dimensions_fmt, 6000, 4000, 1234, 5678)) {
+            hud.text = text
+            layOut()
+            val layout = requireNotNull(hud.layout)
+            val cut = (0 until layout.lineCount).sumOf { layout.getEllipsisCount(it) }
+            assertEquals("'$text' is cut", 0, cut)
+            assertEquals("'$text' shows in full", text, layout.text.toString())
+            assertTrue("'$text' needs more lines than the pill has", hud.height >= layout.height)
+            val overlap = "the pill ends at ${hud.bottom}px, the canvas starts at ${canvas.top}px"
+            assertTrue(overlap, hud.bottom <= canvas.top)
+            tops += canvas.top
+        }
+        assertEquals("the canvas moved as the pill's text changed: $tops", 1, tops.size)
         assertTrue("the canvas keeps room to draw (${canvas.height}px)", canvas.height > 0)
-        assertEquals("one line", 1, hud.lineCount)
-        assertEquals("TalkBack reads it whole", full, hud.text.toString())
     }
 
     private companion object {
