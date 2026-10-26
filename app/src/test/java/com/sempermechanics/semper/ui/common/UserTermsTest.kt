@@ -61,6 +61,20 @@ class UserTermsTest {
     }
 
     @Test
+    fun `the beta notice states the same data use as the Terms box and Settings`() {
+        // It said analysis data "will be collected" while the Terms box and
+        // Settings call improvement use optional, untickable and withdrawable
+        // (readiness AE1V-016).
+        val notice = strings.getValue("beta_notice_body")
+        assertTrue(notice, "will be collected" !in notice)
+        assertTrue(notice, "untick" in notice)
+        assertTrue(notice, "Settings \\u2192 Your data" in notice)
+        assertTrue(notice, "within 30 days" in notice && "within 30 days" in strings.getValue("settings_improve_summary"))
+        assertTrue(notice, "images, results and reports you back up" in notice)
+        assertTrue("images, results and reports you back up" in strings.getValue("terms_checkbox_improve_hint"))
+    }
+
+    @Test
     fun `spelling is British`() {
         assertEquals(emptyList<String>(), offenders("""organiz|initializ"""))
     }

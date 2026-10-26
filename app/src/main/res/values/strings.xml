@@ -991,7 +991,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
 
     <!-- First-login beta / data-use declaration (shown once per account on Home) -->
     <string name="beta_notice_title">Beta notice</string>
-    <string name="beta_notice_body">Analysis data generated while using the app will be collected for enhancing performance, reliability, and features of the app. \n\nThe user has the right to access, update, or delete their data at any time.</string>
+    <!-- Says what terms_checkbox_improve_hint and settings_improve_summary say: optional,
+         ticked at the Terms with the choice to untick, withdrawable (readiness AE1V-016). -->
+    <string name="beta_notice_body">Semper is in beta. \"Use data to improve Semper\" was ticked when you accepted the Terms, and you could untick it. While it is on, the images, results and reports you back up may be used to test and tune the engine.\n\nYou can turn it off any time in Settings \u2192 Your data: that stops future use and removes your data from improvement datasets within 30 days. Crash reports and usage data are sent only if you agree to them. You can access, update or delete your data at any time.</string>
     <string name="beta_notice_ack">I understand</string>
 
     <!-- Session/analysis quota limit screen -->
