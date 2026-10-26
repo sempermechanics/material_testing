@@ -234,7 +234,7 @@ pre-launch report and staged rollout need a track. Counsel review of the Terms
       with the release SHA-1 (`app/google-services.json`, 2026-10-26); add the
       SHA-256 there too, and its App Check (Play Integrity) registration is still an
       ADR-030 action item.
-- [ ] **Reviewer access (TD-331).** A new account starts PENDING unless
+- [ ] **Reviewer access (TD-334).** A new account starts PENDING unless
       auto-approved (`backend/app/repo/users.py:65-79`, `:267`), so a reviewer's
       fresh sign-up can stall. App access gets a pre-approved
       [ADR-027](../adr/ADR-027-test-accounts.md) test account, already past the

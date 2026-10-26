@@ -156,7 +156,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   wizard state is `WizardInputs.lab`, changed through `edit {}`, and a run's result reads
   the lab test from its saved row (`ViewerArgs.of`). Metadata schema `/7` here (ours past
   `/3` are not the parent's numbers). Lab inputs ride its seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` (ADR-003),
-  `WizardDraft` (ADR-005). ADR and TD numbers are shared; TD-319–TD-329 are reserved by the readiness PR, TD-330 is the rename, TD-318 and TD-331 the Play listing.
+  `WizardDraft` (ADR-005). ADR and TD numbers are shared; TD-319–TD-329 are reserved by the readiness PR, TD-330 is the rename, TD-318 and TD-334 the Play listing, TD-331–TD-333 the example data.
 - **#140 merged 2026-10-20** (`a66606d9`, the 2026-10-19 review; not released): load logs
   in kgf/tf, decimal commas and the delimiter read after a long preamble, logged time units;
   photo times matched within 1 s when any lacks EXIF sub-seconds; E refitted over 10–40 % of
@@ -186,12 +186,17 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   §5.1a with a load log, a phone MP4 and a UTM clip; Semper Classroom beside Semper (§3b),
   ADR-022's screenshots; the synced tip cards, summary pill and Re-run (3.11a–3.11m); Pixel 6
   references (TD-135). Owner decision: Terms §1.2 and §1.3 against a student audience.
+- **Example data in the app ([ADR-031](docs/adr/ADR-031-bundled-example-data.md)), branch
+  `claude/semper-classroom-app`, not merged:** steel, PMMA, concrete (CC BY 4.0) and two DICe
+  pairs (BSD-3) in `app/src/main/assets/examples/` (~80 MB), with ground truth and credits;
+  Try it / Save to phone / Credits & licences. Owed: the Terms §4.6 clause (semperdic-app
+  first), the website's Examples page, the device pass §3c, TD-331–TD-333.
 - **Rename to Semper Classroom ([ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md)):** branch
   `claude/semper-classroom-app`, waits on the upstream PR, its deploy and the owner's Firebase app registration.
 - **Play submission ([gate](docs/ops/PRODUCTION_READINESS_GATE.md#google-play-submission-semper-classroom)):**
   branch `claude/play-readiness-checks`. The release check now fails
   a targetSdk below 36 or a native library off 16 KB pages; the rest is the operator's
-  (signing key TD-318, reviewer access TD-331, TD-36, TD-229–TD-232).
+  (signing key TD-318, reviewer access TD-334, TD-36, TD-229–TD-232).
 - **Faster CI ([CI.md](docs/ops/CI.md)):** branch `claude/ci-faster-benchmarks`, stacked on
   the Play branch. The `benchmark` build type is R8-minified and the benchmark job
   cold-starts it first (`scripts/launch_smoke.py`), the only R8 run in CI; Macrobenchmarks

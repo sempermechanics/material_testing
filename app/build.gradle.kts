@@ -315,6 +315,13 @@ android {
         }
     }
 
+    // The bundled example sets (assets/examples, ADR-031) are served by
+    // ExampleAssetProvider as file descriptors into the APK, which needs them
+    // stored uncompressed. PNG and JPEG already are; these are the rest.
+    androidResources {
+        noCompress += listOf("tif", "tiff", "csv", "txt", "md", "json", "DICe")
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -517,7 +524,8 @@ kover {
             // build/reports/kover/report.xml) and raises both to measured − 2;
             // never lower them. Semper Classroom, 2026-10-26 (the sync of
             // semperdic-app 25334af1 and the rename): lines 77.10 %, branches
-            // 61.70 %, so 75 / 59 here; the lab code is less covered than
+            // 61.70 %, so 75 / 59 here (with the example data, ADR-031: 77.51 / 61.61,
+            // still 75 / 59); the lab code is less covered than
             // Semper's, whose floors are 78 / 60. 2026-10-14 (as material_testing,
             // the sync of 8ba7081): lines 73.93 %, branches 59.40 %.
             // 2026-10-10: lines 77.12 %, branches 59.99 %.

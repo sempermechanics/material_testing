@@ -5,6 +5,8 @@ import android.view.View
 import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.R
+import com.sempermechanics.semper.ui.examples.ExamplesActivity
+import com.sempermechanics.semper.ui.examples.LicencesActivity
 import com.sempermechanics.semper.ui.settings.SettingsActivity
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -170,5 +172,16 @@ class HelpSupportSectionTest {
             "expected the unknown-account fallback:\n$body",
             body.contains("Account: " + activity.getString(R.string.pending_unknown_account)),
         )
+    }
+
+    @Test
+    fun `example data and credits open their screens`() {
+        val activity = settings()
+
+        activity.findViewById<View>(R.id.btnExamples).performClick()
+        assertEquals(ExamplesActivity::class.java.name, shadowOf(activity).nextStartedActivity.component?.className)
+
+        activity.findViewById<View>(R.id.btnLicences).performClick()
+        assertEquals(LicencesActivity::class.java.name, shadowOf(activity).nextStartedActivity.component?.className)
     }
 }

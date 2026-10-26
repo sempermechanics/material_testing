@@ -169,6 +169,13 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/share_paths" />
         </provider>
+        <!-- The bundled example sets, read only, for the wizard's Try it (ADR-031). -->
+        <provider
+            android:name=".data.examples.ExampleAssetProvider"
+            android:authorities="${applicationId}.examples"
+            android:exported="false" />
+        <activity android:name=".ui.examples.ExamplesActivity" android:exported="false" />
+        <activity android:name=".ui.examples.LicencesActivity" android:exported="false" />
         <activity android:name=".ui.auth.PendingApprovalActivity" android:exported="false" />
         <activity android:name=".ui.auth.TermsActivity" android:exported="false" />
         <activity

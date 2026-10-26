@@ -1,0 +1,13 @@
+Steel strip in tension: credit and licence
+
+Source:    Sanjeev Koirala, "Tensile test of steel specimen using digital image correlation", Zenodo, 2026.
+DOI:       10.5281/zenodo.18311953 (https://doi.org/10.5281/zenodo.18311953)
+Licence:   CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+
+Changes made by Semper Mechanics:
+  Camera 1 of the stereo pair only. 41 of the 751 load steps kept (0, 3–30, 35, 40, 45, 55, 80, 130, 205, 305, 405, 509, 605, 705). Each photo cropped to the specimen band, (0, 780)–(2000, 1215), and saved as 8-bit PNG. The force at those steps written to steel_loads.csv (kN), and the gauge points' strain to truth_gauge_strain.csv.
+
+These files keep their own licence. You may copy, share and adapt them under
+CC BY 4.0; the Semper Classroom terms place no further limit on them.
+No endorsement of Semper Classroom or Semper Mechanics by the authors is implied.
+The files are provided as is, without warranty of any kind.

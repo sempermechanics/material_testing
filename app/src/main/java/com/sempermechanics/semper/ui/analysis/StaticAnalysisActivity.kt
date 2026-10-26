@@ -407,6 +407,7 @@ class StaticAnalysisActivity :
     }
 
     private fun consumePickerHandOff() {
+        consumeExampleExtras()
         intent.getStringExtra(IntentKeys.PICKED_REF_URI)?.let {
             intent.removeExtra(IntentKeys.PICKED_REF_URI)
             reference.load(it.toUri())

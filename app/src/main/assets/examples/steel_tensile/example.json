@@ -1,0 +1,102 @@
+{
+  "schema": 1,
+  "id": "steel_tensile",
+  "order": 1,
+  "title": "Steel strip in tension",
+  "summary": "Real photos of a stainless-steel strip pulled to failure, with the machine's force at each photo. Gives a stress–strain curve and Young's modulus.",
+  "test_type": "tensile",
+  "outcome": "works",
+  "folder_name": "Steel tensile",
+  "image_size": [
+    2000,
+    435
+  ],
+  "reference": "steel_00.png",
+  "deformed": [
+    "steel_01.png",
+    "steel_02.png",
+    "steel_03.png",
+    "steel_04.png",
+    "steel_05.png",
+    "steel_06.png",
+    "steel_07.png",
+    "steel_08.png",
+    "steel_09.png",
+    "steel_10.png",
+    "steel_11.png",
+    "steel_12.png",
+    "steel_13.png",
+    "steel_14.png",
+    "steel_15.png",
+    "steel_16.png",
+    "steel_17.png",
+    "steel_18.png",
+    "steel_19.png",
+    "steel_20.png",
+    "steel_21.png",
+    "steel_22.png",
+    "steel_23.png",
+    "steel_24.png",
+    "steel_25.png",
+    "steel_26.png",
+    "steel_27.png",
+    "steel_28.png",
+    "steel_29.png",
+    "steel_30.png",
+    "steel_31.png",
+    "steel_32.png",
+    "steel_33.png",
+    "steel_34.png",
+    "steel_35.png",
+    "steel_36.png",
+    "steel_37.png",
+    "steel_38.png",
+    "steel_39.png",
+    "steel_40.png"
+  ],
+  "roi": [
+    20,
+    69,
+    1960,
+    297
+  ],
+  "load_log": {
+    "file": "steel_loads.csv",
+    "unit": "kN"
+  },
+  "specimen": {
+    "cross_section_mm2": 12.5,
+    "load_axis": "x"
+  },
+  "expected": [
+    {
+      "label": "E, frames 1–26",
+      "value": "157.5 GPa",
+      "source": "dataset",
+      "note": "Two gauge points 60 mm apart, tracked in 3D by the authors"
+    },
+    {
+      "label": "E, frames 1–26",
+      "value": "149.6 GPa",
+      "source": "app",
+      "note": "An earlier run of this app, one camera"
+    },
+    {
+      "label": "Peak stress",
+      "value": "435.5 MPa at frame 38",
+      "source": "dataset"
+    }
+  ],
+  "truth_file": "truth_gauge_strain.csv",
+  "credit": {
+    "creators": "Sanjeev Koirala",
+    "title": "Tensile test of steel specimen using digital image correlation",
+    "year": 2026,
+    "publisher": "Zenodo",
+    "doi": "10.5281/zenodo.18311953",
+    "url": "https://doi.org/10.5281/zenodo.18311953",
+    "licence": "CC BY 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by/4.0/",
+    "changes": "Camera 1 of the stereo pair only. 41 of the 751 load steps kept (0, 3–30, 35, 40, 45, 55, 80, 130, 205, 305, 405, 509, 605, 705). Each photo cropped to the specimen band, (0, 780)–(2000, 1215), and saved as 8-bit PNG. The force at those steps written to steel_loads.csv (kN), and the gauge points' strain to truth_gauge_strain.csv."
+  }
+}

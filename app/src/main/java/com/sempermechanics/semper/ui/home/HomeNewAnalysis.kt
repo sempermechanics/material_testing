@@ -21,6 +21,7 @@ import com.sempermechanics.semper.ui.common.TestTypeSheet
 import com.sempermechanics.semper.ui.common.dialog.Dialogs
 import com.sempermechanics.semper.ui.common.media.MediaPickerSheet
 import com.sempermechanics.semper.ui.common.media.MediaSourceChooser
+import com.sempermechanics.semper.ui.examples.ExamplesActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -73,7 +74,8 @@ internal class HomeNewAnalysis(
      */
     fun start() {
         if (!mayStart()) return
-        TestTypeSheet.show(activity) { type ->
+        val examples = { activity.startActivity(ExamplesActivity.intent(activity)) }
+        TestTypeSheet.show(activity, onExamples = examples) { type ->
             pendingTestType = type
             showSourceChooser()
         }
