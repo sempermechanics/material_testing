@@ -1,6 +1,6 @@
 # Semper — Terms of Service
 
-**Last updated:** 2026-10-22  
+**Last updated:** 2026-10-26  
 **Version:** 2026-09-15  
 **Product:** Semper (IndicVision DIC) — Android application, optional cloud services, and web console  
 **Operator:** [OPERATOR LEGAL NAME], [REGISTERED ADDRESS], Chennai, Tamil Nadu, India ("**we**", "**us**", "**IndicVision**")
@@ -110,6 +110,16 @@ without obligation to you.
 confusingly similar mark, without our prior written permission, including in
 product names, domain names, or marketing.
 
+**4.6 Example data.** Example images, videos, measurement files, and related
+data that we ship in the App or offer through it so you can try it
+("**Example Data**") keep the licences their authors released them under, as
+named for each example in the App's **Credits & licences** screen: the
+Creative Commons Attribution 4.0 International licence or the BSD 3-Clause
+licence. That licence, not these Terms, governs what you may do with that
+Example Data, and nothing in sections 4.1, 4.2, or 5 restricts any right it
+grants you. We claim no ownership of Example Data, and its authors and
+publishers do not endorse the App, the Service, or us.
+
 ## 5. Acceptable use
 
 You must not, and must not permit or assist anyone else to:
@@ -145,6 +155,9 @@ You must not, and must not permit or assist anyone else to:
 
 We may investigate any suspected violation, remove content, restrict features,
 and cooperate with law enforcement and rights holders.
+
+Nothing in this section 5 restricts what the licence of any Example Data
+allows you to do with that Example Data (section 4.6).
 
 ## 6. Fees, plans, and refunds
 
