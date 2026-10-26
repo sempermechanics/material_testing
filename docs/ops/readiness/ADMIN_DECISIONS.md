@@ -81,7 +81,7 @@ VERIFIED, 10 REOPENED, 6 NEEDS_ADMIN, 2 NEEDS_DEVICE. Answers verbatim.
 | The 84 VERIFIED fixes | VERIFIED | "Accept all 84 (Recommended)" |
 | AE3-002, AE1-004, AE1-007, AE1-009, AE1V-021, TE1-006 | REOPENED (small, in repo) | "Rework now (Recommended)" |
 | AE1-011, AE1-010, TE2-002, TE2-004 | REOPENED (partial; the rest is large or in the engine repo) | "Accept partial + TD rows (Recommended)": AE1-011 → TD-345; AE1-010: the PDF report is English-only by decision; TE2-002 → TD-346; TE2-004 → TD-347 and TD-326 |
-| New in the after screenshots: the ROI info pill covers the top handles at font scale 2.0; Save graph looks enabled on the lattice's empty state | — | "Fix in the rework batch (Recommended)": new P3 findings AE1V-022, AE1V-023 |
+| New in the after screenshots: the ROI info pill covers the top handles at font scale 2.0; Save graph looks enabled on the lattice's empty state | — | "Fix in the rework batch (Recommended)": new P3 findings AE1V-023, AE1V-024 |
 
 Not asked at this checkpoint: NEEDS_ADMIN items wait on owner decisions or Admin actions.
 - AE3-003 → TD-340/TD-341.

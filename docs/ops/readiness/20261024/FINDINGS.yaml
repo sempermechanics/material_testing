@@ -4656,6 +4656,38 @@
   verifier_note: The gap is confirmed in code. Capturing the demo-locked, paid-seat and offline states is still NEEDS_ADMIN
     (staging licence or a debug override).
   severity_final: observation
+- id: AE1V-023
+  axis: aesthetic
+  gate: G4
+  title: The ROI info pill wraps to two lines at font scale 2.0 and covers the ROI's top edge and corner handles
+  type: defect
+  severity: P3
+  criterion: 'AE-1: at font scale 2.0 no control or handle on a primary screen is covered by another element.'
+  evidence:
+  - docs/ops/readiness/20261024/screens/after/roi_360_dark_fs2_drawn.png
+  reproduce: Open the ROI step at 360 dp, font scale 2.0, draw an ROI near the top; the info pill hides the top handles.
+  status: confirmed
+  verdict: CONFIRMED
+  verified_by_command: Phase 5 re-verify (G1, AE1V-003), Read after/roi_360_dark_fs2_drawn.png
+  verified_observation: New in the after shot; found while re-verifying AE1V-003.
+  severity_final: P3
+  admin_decision: '"Fix in the rework batch (Recommended)" (Checkpoint 2, 2026-10-26)'
+- id: AE1V-024
+  axis: aesthetic
+  gate: G4
+  title: Save graph looks enabled on the lattice's empty state while View is disabled
+  type: defect
+  severity: P3
+  criterion: 'AE-1: a control that cannot act in the current state is shown disabled.'
+  evidence:
+  - docs/ops/readiness/20261024/screens/after/vsglattice_360_light_fs1_nosession.png
+  reproduce: Open the VSG lattice with no session; Save graph is styled as enabled.
+  status: confirmed
+  verdict: CONFIRMED
+  verified_by_command: Phase 5 re-verify (G1, AE1V-020), Read after/vsglattice_360_light_fs1_nosession.png
+  verified_observation: New in the after shot; found while re-verifying AE1V-020.
+  severity_final: P3
+  admin_decision: '"Fix in the rework batch (Recommended)" (Checkpoint 2, 2026-10-26)'
 - id: MT-TE3-001
   axis: technical
   gate: G3
