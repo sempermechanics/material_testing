@@ -36,14 +36,33 @@ import kotlinx.coroutines.withContext
  * tap did nothing. A multi-row erase did the same part-way through, with no
  * toast. Both run on [viewModelScope] here, and what each came to is handed
  * out once ([restoreOutcomes], [eraseOutcomes]) to whichever Home is current.
+ *
+ * The licence state Home shows ([HomeEntitlements]) is read with the list, on
+ * [io]: it reaches EntitlementStore, whose first read opens the Keystore and
+ * verifies the token and whose clock re-seal is a Keystore HMAC, so it never
+ * runs on the main thread (readiness TE1-006).
  */
 @MainThread
 class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
-    /** One read of the phone's list: its rows and which of them have no frames here. */
+    /** What Home shows of the account's licence, read off the main thread ([readEntitlements]). */
+    data class HomeEntitlements(
+        /** Any cloud state at all: badges, bars, toasts and backup offers. False on Demo. */
+        val cloudState: Boolean,
+        /** Whether a backup may be pulled down now (`LicenseEntitlements.restoreEnabled`). */
+        val restoreEnabled: Boolean,
+    ) {
+        companion object {
+            /** Before the first read: Home's neutral state, no cloud state and no restore. */
+            val NONE = HomeEntitlements(cloudState = false, restoreEnabled = false)
+        }
+    }
+
+    /** One read of the phone's list: its rows, which of them have no frames here, and the licence state. */
     data class HomeList(
         val sessions: List<SessionRecord>,
         val withoutLocalData: Set<String>,
+        val entitlements: HomeEntitlements,
         /** Counts reads, so a read equal to the last one is still shown (the cards re-read too). */
         val generation: Long,
     )
@@ -61,6 +80,10 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The latest list read; null before the first. */
     val list: StateFlow<HomeList?> = _list.asStateFlow()
+
+    /** The licence state of the latest list read; [HomeEntitlements.NONE] before the first. */
+    val entitlements: HomeEntitlements
+        get() = _list.value?.entitlements ?: HomeEntitlements.NONE
 
     /** Rows just queued for deletion, hidden until WorkManager lists their job or it ends. */
     private val justQueuedDeletes = mutableSetOf<String>()
@@ -82,6 +105,15 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     /** Where the disk reads run; tests hold them. */
     @VisibleForTesting
     internal var io: CoroutineDispatcher = Dispatchers.IO
+
+    /** Reads the licence state; runs on [io] only. Tests stand in for it. */
+    @VisibleForTesting
+    internal var readEntitlements: (Application) -> HomeEntitlements = { app ->
+        HomeEntitlements(
+            cloudState = LicenseEntitlements.cloudBackupEnabled(app),
+            restoreEnabled = LicenseEntitlements.restoreEnabled(app),
+        )
+    }
 
     /** How a batch of restores is asked for; tests stand in for it. */
     @VisibleForTesting
@@ -131,8 +163,9 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
      */
     suspend fun offeredBackups(): List<CloudBackupListing.Backup> {
         val app = getApplication<Application>()
-        if (!LicenseEntitlements.cloudBackupEnabled(app)) return emptyList()
-        return withContext(io) { CloudBackupListing.offered(app) }
+        return withContext(io) {
+            if (readEntitlements(app).cloudState) CloudBackupListing.offered(app) else emptyList()
+        }
     }
 
     /** Restores [records] into their own rows, each looked up in the cloud first when it has no link. */
@@ -187,7 +220,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             val sessions = SessionStore.list(app).filterNot { it.id in hidden }
             // Read here, so binding, selecting and opening a row never touch the disk.
             val withoutLocalData = sessions.filterNot { it.hasLocalData() }.map { it.id }.toSet()
-            HomeList(sessions, withoutLocalData, generation = 0L)
+            HomeList(sessions, withoutLocalData, readEntitlements(app), generation = 0L)
         }
     }
 
