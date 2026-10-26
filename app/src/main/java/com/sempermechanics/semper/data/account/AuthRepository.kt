@@ -33,24 +33,6 @@ import timber.log.Timber
 import java.io.IOException
 
 /**
- * How a sign-in started, as the `method` of its `sign_in` / `sign_in_failed`
- * analytics events. [analyticsName] is what dashboards already group by.
- */
-internal enum class SignInMethod(val analyticsName: String) {
-    GOOGLE("google"),
-    PASSWORD("password"),
-    PASSWORD_SIGN_UP("password_signup"),
-    TOTP("totp"),
-    EMAIL_LINK("email_link"),
-    ;
-
-    /** What a rejected credential means for this method. */
-    @get:StringRes
-    val wrongCredentials: Int
-        get() = if (this == TOTP) R.string.auth_wrong_totp_code else R.string.auth_wrong_credentials
-}
-
-/**
  * A failure whose message is the app's own text for the user, from a string
  * resource: never an exception's or a server's words (ADR-018, readiness
  * AE1-009). A screen shows the message of one of these, and its own fallback
