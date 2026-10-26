@@ -192,6 +192,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   branch `claude/play-readiness-checks`, stacked on the rename. The release check now fails
   a targetSdk below 36 or a native library off 16 KB pages; the rest is the operator's
   (signing key TD-318, reviewer access TD-331, TD-36, TD-229–TD-232).
+- **Faster CI ([CI.md](docs/ops/CI.md)):** branch `claude/ci-faster-benchmarks`, stacked on
+  the Play branch. The `benchmark` build type is R8-minified and the benchmark job
+  cold-starts it first (`scripts/launch_smoke.py`), the only R8 run in CI; Macrobenchmarks
+  dry-run on PRs; heavy tiers wait for `tier1-static` only. Two unit-test workers reproduce TD-312, so it stays one.
 - **Look it up; this list rots.** `gh pr list --state open`; history in
   [CHANGELOG.md](docs/ops/CHANGELOG.md); proposals in [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
