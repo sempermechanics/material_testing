@@ -10,9 +10,12 @@ import com.sempermechanics.semper.diagnostics.SemperAnalytics
 import com.sempermechanics.semper.ui.common.auth.ExternalLinks
 import com.sempermechanics.semper.ui.common.auth.SupportMail
 import com.sempermechanics.semper.ui.common.auth.contextLines
+import com.sempermechanics.semper.ui.examples.ExamplesActivity
+import com.sempermechanics.semper.ui.examples.LicencesActivity
 
 /**
- * Help & support: public docs, feedback mail, and the support address.
+ * Help & support: public docs, the bundled example data and its credits,
+ * feedback mail, and the support address.
  */
 class SettingsHelpSupportSection(
     private val activity: SettingsActivity,
@@ -20,6 +23,8 @@ class SettingsHelpSupportSection(
 ) {
     fun wire() {
         views.btnOpenManual.setOnClickListener { openUrl(R.string.url_manual) }
+        views.btnExamples.setOnClickListener { activity.startActivity(ExamplesActivity.intent(activity)) }
+        views.btnLicences.setOnClickListener { activity.startActivity(LicencesActivity.intent(activity)) }
         views.btnReportBug.setOnClickListener { openUrl(R.string.url_report_bug) }
         views.btnRequestFeature.setOnClickListener { openUrl(R.string.url_request_feature) }
         views.btnSendFeedback.setOnClickListener { sendFeedback() }

@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "id": "dice_translation",
+  "order": 5,
+  "title": "Sub-pixel shift",
+  "summary": "A speckle image and a copy shifted by 0.4 px, from DICe's test data. 2D DIC only. The known answer is u = v = 0.4 px everywhere.",
+  "test_type": "dic2d",
+  "outcome": "works",
+  "folder_name": "DICe translation",
+  "image_size": [
+    512,
+    512
+  ],
+  "reference": "ref.tif",
+  "deformed": [
+    "def.tif"
+  ],
+  "roi": [
+    64,
+    64,
+    384,
+    384
+  ],
+  "expected": [
+    {
+      "label": "u and v",
+      "value": "0.4 px everywhere",
+      "source": "dataset",
+      "note": "DICe checks |u − 0.4| ≤ 0.1 px"
+    }
+  ],
+  "credit": {
+    "creators": "Digital Image Correlation Engine (DICe), Sandia National Laboratories",
+    "title": "DICe custom_app test images ref.tif and def.tif",
+    "year": 2015,
+    "publisher": "github.com/dicengine/dice",
+    "url": "https://github.com/dicengine/dice",
+    "licence": "BSD-3-Clause",
+    "licence_url": "https://opensource.org/license/bsd-3-clause",
+    "licence_file": "LICENSE.DICe",
+    "changes": "None. Copyright 2015 National Technology & Engineering Solutions of Sandia, LLC (NTESS)."
+  }
+}

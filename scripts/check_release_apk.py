@@ -25,6 +25,11 @@ Checks (FAIL exits 1; WARN is reported and does not fail):
                     `a -> b` lines (evidence R8 ran)
   cert-pins         WARN when no `sha256/<base64>` pin string is in the dex,
                     i.e. SEMPER_API_CERT_PINS (BuildConfig) was empty at build
+  example-assets    every file each assets/examples/*/example.json lists is in
+                    the APK (ADR-031), and the ones the wizard opens through
+                    ExampleAssetProvider (photos, load log) are stored
+                    uncompressed, as openFd needs
+  apk-size          the APK is at most APK_BUDGET_MB (the examples are ~80 MB)
 
 aapt2 comes from --aapt2, $AAPT2, PATH, or the newest
 $ANDROID_HOME/build-tools/*/aapt2 (the same lookup the workflows use for
@@ -38,6 +43,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import shutil
@@ -53,6 +59,8 @@ ANDROID_NS = "http://schemas.android.com/apk/res/android"
 COMPONENT_TAGS = ("activity", "activity-alias", "provider", "receiver", "service")
 DEBUG_APPCHECK = b"DebugAppCheckProviderFactory"
 PIN_RE = re.compile(rb"sha256/[A-Za-z0-9+/]{43}=")
+EXAMPLES = "assets/examples/"
+APK_BUDGET_MB = 150
 
 
 # --- aapt2 output parsers ----------------------------------------------------
@@ -259,6 +267,19 @@ class ApkFacts:
     entries: list[str]
     nsc_tree: Element | None = None
     nsc_note: str = ""
+    size: int = 0
+    # Set id -> (every file its example.json lists, the ones the wizard opens); None when not read.
+    examples: dict[str, tuple[list[str], list[str]]] | None = None
+    stored: set[str] = field(default_factory=set)
+
+
+def example_files(doc: dict) -> tuple[list[str], list[str]]:
+    """Every file an example.json lists (as `ExampleManifest.files`), and those Try it opens."""
+    opened = [doc["reference"], *doc["deformed"]] + ([doc["load_log"]["file"]] if doc.get("load_log") else [])
+    listed = ["README.md", "CREDIT.txt"]
+    listed += [f for f in (doc.get("credit", {}).get("licence_file"), doc.get("truth_file")) if f]
+    listed += opened + doc.get("extra_files", []) + ["example.json"]
+    return list(dict.fromkeys(listed)), opened
 
 
 def evaluate(facts: ApkFacts, *, expected_min_sdk: int | None, debug_names: set[str],
@@ -375,6 +396,37 @@ def evaluate(facts: ApkFacts, *, expected_min_sdk: int | None, debug_names: set[
         results.append(Result("cert-pins", "WARN",
                               "no sha256/ pin in the dex: SEMPER_API_CERT_PINS was empty at build "
                               "(system trust store only)"))
+
+    # bundled example sets (ADR-031)
+    if facts.examples is None:
+        results.append(Result("example-assets", "SKIP", "examples not read"))
+    elif not facts.examples:
+        results.append(Result("example-assets", "FAIL", f"no {EXAMPLES}*/example.json in the APK"))
+    else:
+        entries = set(facts.entries)
+        missing, compressed, total = [], [], 0
+        for set_id, (listed, opened) in sorted(facts.examples.items()):
+            total += len(listed)
+            missing += [f"{set_id}/{f}" for f in listed if f"{EXAMPLES}{set_id}/{f}" not in entries]
+            compressed += [f"{set_id}/{f}" for f in opened
+                           if f"{EXAMPLES}{set_id}/{f}" in entries and f"{EXAMPLES}{set_id}/{f}" not in facts.stored]
+        if missing or compressed:
+            detail = []
+            if missing:
+                detail.append(f"missing: {', '.join(missing[:8])}")
+            if compressed:
+                detail.append(f"compressed (noCompress?): {', '.join(compressed[:8])}")
+            results.append(Result("example-assets", "FAIL", "; ".join(detail)))
+        else:
+            results.append(Result("example-assets", "PASS", f"{len(facts.examples)} sets, {total} files"))
+
+    # size
+    if not facts.size:
+        results.append(Result("apk-size", "SKIP", "size not read"))
+    else:
+        mb = facts.size / 1_000_000
+        status = "FAIL" if mb > APK_BUDGET_MB else "PASS"
+        results.append(Result("apk-size", status, f"{mb:.1f} MB (budget {APK_BUDGET_MB} MB)"))
     return results
 
 
@@ -416,7 +468,13 @@ def gather(apk: Path, aapt2: str) -> ApkFacts:
     with zipfile.ZipFile(apk) as zf:
         entries = zf.namelist()
         dex = {n: zf.read(n) for n in entries if re.fullmatch(r"classes\d*\.dex", n)}
-    facts = ApkFacts(manifest=manifest, badging=badging, dex=dex, entries=entries)
+        examples = {
+            n[len(EXAMPLES):].split("/")[0]: example_files(json.loads(zf.read(n)))
+            for n in entries if re.fullmatch(re.escape(EXAMPLES) + r"[^/]+/example\.json", n)
+        }
+        stored = {i.filename for i in zf.infolist() if i.compress_type == zipfile.ZIP_STORED}
+    facts = ApkFacts(manifest=manifest, badging=badging, dex=dex, entries=entries,
+                     size=apk.stat().st_size, examples=examples, stored=stored)
     app = manifest.find("application")
     ref = app.attrs.get("android:networkSecurityConfig") if app else None
     if ref:

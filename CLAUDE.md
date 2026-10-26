@@ -11,7 +11,7 @@ Windows: `gradlew.bat`. Quote `-Pandroid.testInstrumentationRunnerArguments…` 
 |---------|------|
 | `./gradlew ciReleaseGate` | Spotless, detekt, lintDebug, unit tests, R8, assembleRelease |
 | `./gradlew :app:testDebugUnitTest spotlessCheck :app:detekt :app:lintDebug` | Tier 1 without R8 |
-| `./gradlew :app:koverLog :app:koverVerify` | Coverage log + floors (lines 75, branches 59; measured 77.10 / 61.70 % on 2026-10-26 with Activities and Dialogs counted; Semper's are 78 / 60; CI tier 1, `ciReleaseGate`, release). Every test PR raises them to measured − 2: [TESTING.md](docs/app/TESTING.md#coverage-floors) |
+| `./gradlew :app:koverLog :app:koverVerify` | Coverage log + floors (lines 75, branches 59; measured 77.51 / 61.61 % on 2026-10-26 with the example data and Activities and Dialogs counted; Semper's are 78 / 60; CI tier 1, `ciReleaseGate`, release). Every test PR raises them to measured − 2: [TESTING.md](docs/app/TESTING.md#coverage-floors) |
 | `./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64 "-Pandroid.testInstrumentationRunnerArguments.notPackage=com.sempermechanics.semper.benchmark"` | Emulator instrumented; exclude benchmark package on debug |
 | `cd backend && python -m pytest tests/ -q --cov=app --cov-fail-under=93` | Backend (install lock + `requirements-test.txt`) |
 | `python scripts/render_legal_pages.py --check` | Hosted legal pages match `docs/legal/` |

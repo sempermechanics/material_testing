@@ -49,4 +49,26 @@ class TestTypeSheetTest {
             assertEquals(listOf(TestType.DIC_2D), picked)
         }
     }
+
+    @Test
+    fun `the example row shows only with a handler, and opens the examples`() {
+        val controller = Robolectric.buildActivity(AppCompatActivity::class.java)
+        controller.get().setTheme(R.style.Theme_Semper)
+        controller.setup().use {
+            val activity = controller.get()
+            TestTypeSheet.show(activity) { }
+            val plain = ShadowDialog.getLatestDialog() as BottomSheetDialog
+            assertEquals(View.GONE, plain.findViewById<View>(R.id.btnTryExample)!!.visibility)
+            plain.dismiss()
+
+            var opened = 0
+            TestTypeSheet.show(activity, onExamples = { opened++ }) { }
+            val sheet = ShadowDialog.getLatestDialog() as BottomSheetDialog
+            val row = sheet.findViewById<View>(R.id.btnTryExample)!!
+            assertEquals(View.VISIBLE, row.visibility)
+            row.performClick()
+            assertEquals(1, opened)
+            assertEquals(false, sheet.isShowing)
+        }
+    }
 }

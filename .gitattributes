@@ -17,6 +17,10 @@ gradlew text eol=lf
 *.keystore binary
 *.so binary
 *.tiff binary
+*.tif binary
+*.jpeg binary
+*.JPG binary
+*.TIF binary
 *.pdf binary
 
 # Golden oracles are compared byte for byte; never convert them.

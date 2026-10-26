@@ -1,0 +1,13 @@
+PMMA beam in 3-point bending: credit and licence
+
+Source:    R. Delorme, I. Tabiai, P. Diehl, L. Laberge Lebel, M. Lévesque, "PMMA 3 point bending test until failure loaded in displacement", Zenodo, 2018.
+DOI:       10.5281/zenodo.1172068 (https://doi.org/10.5281/zenodo.1172068)
+Licence:   CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+
+Changes made by Semper Mechanics:
+  Camera 0 of the stereo pair only. Image 32 (the reference) and every second image from 33 to 97 kept. Each cropped to (40, 820)–(2420, 2048) and saved as 8-bit PNG. The load cell's force at those images written to pmma_loads.csv (N); frame_index.csv maps each file to its original image; truth_deflection.csv is the authors' deflection at the load point, averaged over the probe circle the app uses.
+
+These files keep their own licence. You may copy, share and adapt them under
+CC BY 4.0; the Semper Classroom terms place no further limit on them.
+No endorsement of Semper Classroom or Semper Mechanics by the authors is implied.
+The files are provided as is, without warranty of any kind.

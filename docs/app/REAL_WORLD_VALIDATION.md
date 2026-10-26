@@ -30,9 +30,13 @@ measures when nothing moves, see
 
 Sanjeev Koirala, *Tensile test of steel specimen using digital image
 correlation*, Zenodo, 2026, [doi:10.5281/zenodo.18311953](https://doi.org/10.5281/zenodo.18311953).
-Licence CC BY 4.0. Nothing from the dataset is committed here; the test fixture
-in `RealSteelModulusTest` holds the app's own strain and stress per frame, not
-the dataset's files.
+Licence CC BY 4.0. The prepared frames, load log and the gauge points' strain
+per frame (`truth_gauge_strain.csv`, from `real_data_steel_tensile.py truth`)
+ship in the app as the `steel_tensile` example
+(`app/src/main/assets/examples/steel_tensile/`,
+[ADR-031](../adr/ADR-031-bundled-example-data.md)), with their credit. The test
+fixture in `RealSteelModulusTest` holds the app's own strain and stress per
+frame.
 
 | | |
 |---|---|
@@ -256,8 +260,12 @@ window that moves them further than that deserves a look before it merges.
 R. Delorme, I. Tabiai, P. Diehl, L. Laberge Lebel, M. Lévesque, *PMMA 3 point
 bending test until failure loaded in displacement*, Zenodo, 2018,
 [doi:10.5281/zenodo.1172068](https://doi.org/10.5281/zenodo.1172068). Licence
-CC BY 4.0. Nothing from the dataset is committed here; `RealPmmaBendingTest`
-holds the app's own deflection per frame, not the dataset's files.
+CC BY 4.0. The prepared frames, load log, `frame_index.csv` and the authors'
+deflection per frame (`truth_deflection.csv`, from
+`real_data_pmma_bending.py truth`: E from the graph 1.982 GPa, average 2.085 GPa,
+1.395 mm at the peak) ship in the app as the `pmma_bending` example
+([ADR-031](../adr/ADR-031-bundled-example-data.md)). `RealPmmaBendingTest`
+holds the app's own deflection per frame.
 
 | | |
 |---|---|
@@ -467,8 +475,9 @@ displacement and strain RMSEs. `--windows` adds the plane-fit recompute.
 On 2026-09-26, cases 1 and 2 were run again on a phone, plus a third set that the app cannot
 analyse. Pixel 6 (`oriole`), Android 17, debug build (arm64) of `3f50d0e7`,
 the TD-92 fix merged in #51. Cases 1 and 2 use the `prep` output above. Each
-set ships with a README (outside the repo) that gives its settings, and each
-run used them.
+set has a README that gives its settings, and each run used them; the sets and
+their READMEs now ship in the app (`app/src/main/assets/examples/`, ADR-031),
+where Try it sets those settings itself, all but the bending taps.
 
 | Set | Settings | Frames | Solve, Pixel 6 | Solve, emulator | Result |
 |---|---|---|---:|---:|---|
@@ -694,7 +703,13 @@ real images. A future case should still record:
 
 ## Adding a case
 
-- Use openly licensed data and cite it. Keep the images out of the repo.
+- Use openly licensed data and cite it. A set that should reach students goes
+  in `app/src/main/assets/examples/<id>/` with `example.json`, `README.md`,
+  `CREDIT.txt` (creators, title, DOI, licence and its link, what was changed,
+  no endorsement) and the licence text when the licence asks for it
+  ([ADR-031](../adr/ADR-031-bundled-example-data.md)); `ExampleCatalogTest`
+  fails without them. Check the licence allows commercial redistribution:
+  CC BY and BSD do, CC BY-NC does not.
 - Write down the frames, the crop, and every wizard setting, so the run can be
   repeated.
 - Compare with the dataset's own measurement, not only a handbook value.

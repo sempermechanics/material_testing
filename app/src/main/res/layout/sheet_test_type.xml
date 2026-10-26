@@ -75,4 +75,20 @@
                 android:text="@string/test_type_sub_flexural" />
         </LinearLayout>
     </LinearLayout>
+
+    <!-- No photos yet: a bundled example set instead (ADR-031). Hidden when
+         the caller passes no handler. -->
+    <TextView
+        android:id="@+id/btnTryExample"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:background="?attr/selectableItemBackground"
+        android:minHeight="48dp"
+        android:gravity="center_vertical"
+        android:text="@string/examples_try_from_sheet"
+        android:textColor="@color/sky_primary"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
 </LinearLayout>
