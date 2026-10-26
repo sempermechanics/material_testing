@@ -69,7 +69,7 @@ class ExampleDatasetsDeviceTest {
         val points = SemperNativeLib.computeFullFieldDirect(
             ref, def, ByteArray(0),
             roi.x, roi.y, roi.w, roi.h,
-            step, subset, STRAIN_WINDOW,
+            step, subset, (STRAIN_POINTS - 1) * step + 1,
             false,
             buffer, callback, metrics,
         )
@@ -111,7 +111,9 @@ class ExampleDatasetsDeviceTest {
 
     private companion object {
         const val METRICS = 17
-        const val STRAIN_WINDOW = 15
+
+        // The window is in pixels, (points − 1) × step + 1 as the app sizes it: the VSG fit needs 3 nodes in it.
+        const val STRAIN_POINTS = 5
         const val MIN_ACCEPTED = 0.5f
         const val SHIFT_PX = 0.4f
         const val SHIFT_TOL_PX = 0.1f
