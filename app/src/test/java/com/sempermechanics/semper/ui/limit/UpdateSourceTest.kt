@@ -6,7 +6,7 @@ import org.junit.Test
 /** TD-268: a Play install updates from Play; anything else from the release page. */
 class UpdateSourceTest {
 
-    private val id = "com.sempermechanics.materialtesting"
+    private val id = "com.sempermechanics.semperclassroom"
 
     @Test
     fun `a build Play installed opens its listing, then the listing's web page`() {
@@ -18,7 +18,7 @@ class UpdateSourceTest {
 
     @Test
     fun `a sideloaded build opens the release download page`() {
-        val releases = listOf("https://github.com/sempermechanics/material_testing/releases")
+        val releases = listOf("https://github.com/sempermechanics/semper_classroom/releases")
         assertEquals("the package installer", releases, UpdateSource.urls(id, "com.google.android.packageinstaller"))
         assertEquals("adb, or the platform does not say", releases, UpdateSource.urls(id, null))
         assertEquals("another store", releases, UpdateSource.urls(id, "com.sec.android.app.samsungapps"))

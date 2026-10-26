@@ -232,11 +232,11 @@ downloaded.
 5. Pull the session's results:
 
 ```bash
-adb shell run-as com.sempermechanics.materialtesting ls files/sessions
+adb shell run-as com.sempermechanics.semperclassroom ls files/sessions
 ```
 
 Copy each `files/sessions/<session>/frame_NNNN.dat` out with
-`adb exec-out run-as com.sempermechanics.materialtesting cat …`, then:
+`adb exec-out run-as com.sempermechanics.semperclassroom cat …`, then:
 
 ```bash
 python scripts/real_data_steel_tensile.py compare --data <zenodo folder> --dat <dat folder>

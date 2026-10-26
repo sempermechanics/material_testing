@@ -1,6 +1,6 @@
 # Google Play Data safety — answers to submit (2026-10-22)
 
-Material Testing's listing (`com.sempermechanics.materialtesting`). The answers for
+Semper Classroom's listing (`com.sempermechanics.semperclassroom`). The answers for
 Play Console → **App content → Data safety**, in the form's own order, for readiness
 item 8.4 ([READINESS_FRAMEWORK_2026-10.md](../ops/READINESS_FRAMEWORK_2026-10.md)).
 Every answer is checked against the code, the merged release manifest, the SDK
@@ -42,7 +42,7 @@ is ready to copy. This file is **not rendered** to Hosting
 | `com.google.android.providers.gsf.permission.READ_GSERVICES` | `recaptcha` 18.6.1 (via `firebase-auth`) | kept |
 | `com.google.android.gms.permission.AD_ID` | `play-services-measurement-impl` | **removed** |
 | `ACCESS_ADSERVICES_AD_ID`, `ACCESS_ADSERVICES_ATTRIBUTION` | `play-services-measurement-api` | **removed** |
-| `com.sempermechanics.materialtesting.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | `androidx.core` | kept (signature permission of the app itself) |
+| `com.sempermechanics.semperclassroom.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | `androidx.core` | kept (signature permission of the app itself) |
 
 No location, contacts, camera, microphone, phone-state or account permissions.
 The merged release manifest

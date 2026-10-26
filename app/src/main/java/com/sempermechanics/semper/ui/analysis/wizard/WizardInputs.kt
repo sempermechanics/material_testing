@@ -57,7 +57,7 @@ import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
  *   clears it: a saved analysis is never written over (owner decision,
  *   2026-10-15). New inputs clear it too
  *   ([AnalysisViewModel.clearPreviousResults]).
- * @property lab the lab test's inputs (material_testing): the test type, the
+ * @property lab the lab test's inputs (Semper Classroom): the test type, the
  *   specimen and the machine loads ([LabWizardState]); its logic is in LabInputs.kt
  */
 data class WizardInputs(

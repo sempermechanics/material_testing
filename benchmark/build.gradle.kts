@@ -6,7 +6,7 @@ plugins {
 
 // The app these benchmarks drive is :app's applicationId, read from :app's build
 // instead of written here, so the benchmark sources run unchanged in
-// material_testing, which has its own id (its ADR-009). The code reads it as
+// Semper Classroom, which has its own id (its ADR-009). The code reads it as
 // BuildConfig.TARGET_PACKAGE, the manifest's <queries> as ${targetPackage}.
 evaluationDependsOn(":app")
 val targetPackage: String =

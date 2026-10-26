@@ -133,11 +133,11 @@ Tier 3, which an engine bump or JNI change now triggers.
 `analysis/WizardStateTest` covers the wizard's process-death restore on the
 JVM, `ui/analysis/wizard/WizardDraftRestoreTest` covers it through a real Parcel on a
 device, and neither can kill the process. The kill is a scripted pass: take
-the wizard to step 2, press Home, run `adb shell am kill com.sempermechanics.materialtesting`
-(if `pidof` still shows the process, `adb shell run-as com.sempermechanics.materialtesting
+the wizard to step 2, press Home, run `adb shell am kill com.sempermechanics.semperclassroom`
+(if `pidof` still shows the process, `adb shell run-as com.sempermechanics.semperclassroom
 kill -9 <pid>`), then reopen from Recents. Step, sliders, ROI and both slots
 must come back. Run it once more with `run-as … rm -rf cache/temp_deformed`
-before reopening: expect an empty step 1 and the "cleared while Semper was in
+before reopening: expect an empty step 1 and the "cleared while Semper Classroom was in
 the background" snackbar ([ADR-005](../adr/ADR-005-wizard-process-death.md)).
 
 `session/LocalStorageFootprintTest` pins the rule that only cloud-backed
@@ -166,7 +166,7 @@ fixed, so a change in allocations is caused by the code and nothing else.
 ./gradlew :app:installDebug :app:installDebugAndroidTest
 adb shell am instrument -w -e class com.sempermechanics.semper.benchmark.HotPathMicroBenchmark \
   -e androidx.benchmark.suppressErrors EMULATOR,DEBUGGABLE,LOW-BATTERY,UNLOCKED,ACTIVITY-MISSING,NOT-AOT-COMPILED \
-  com.sempermechanics.materialtesting.test/androidx.test.runner.AndroidJUnitRunner
+  com.sempermechanics.semperclassroom.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
 Emulators on API 34 and 37 both raise `ACTIVITY-MISSING` and `NOT-AOT-COMPILED`
@@ -227,7 +227,7 @@ Four things that will otherwise cost you an afternoon:
 
 - **The connected task installs over whatever is on the phone, then uninstalls it.**
   `:benchmark:connectedBenchmarkAndroidTest` installs the `benchmark` build over an
-  existing `com.sempermechanics.materialtesting` (same debug key), keeping its data, and uninstalls
+  existing `com.sempermechanics.semperclassroom` (same debug key), keeping its data, and uninstalls
   the app when it finishes, taking that data with it. Back up anything you need first.
   A signed-in session left over from a debug install also changes the launch route
   (Splash → Home rather than sign-in); before TD-90 that crashed both `StartupBenchmark`
@@ -239,7 +239,7 @@ comparison is in [../perf/round2-main-vs-branch.md](../perf/round2-main-vs-branc
 
 The benchmarks drive `:app`'s `applicationId`: `benchmark/build.gradle.kts` reads it
 from `:app`'s build into `BuildConfig.TARGET_PACKAGE` and the manifest's `<queries>`,
-so the same sources run in material_testing under its own id. CI's micro step and
+so the same sources run in this fork under its own id. CI's micro step and
 `scripts/startup_ab.py` read the same `applicationId` line of `app/build.gradle.kts`.
 
 ### Pixel 6 against the CI emulator (2026-09-25)
@@ -396,8 +396,8 @@ Three suites are gated on coverage, each two points under what it measured:
 
 | Suite | Measured (2026-10-08) | Floor | Where |
 |---|---|---|---|
-| App JVM (Kover, lines) | 73.93 % (2026-10-14; Semper 80.51 % on 2026-10-22) | 71 (Semper 78) | `app/build.gradle.kts` `kover.verify` |
-| App JVM (Kover, branches) | 59.40 % (2026-10-14; Semper 62.69 % on 2026-10-22) | 57 (Semper 60) | same |
+| App JVM (Kover, lines) | 77.10 % (2026-10-26; Semper 80.51 % on 2026-10-22) | 75 (Semper 78) | `app/build.gradle.kts` `kover.verify` |
+| App JVM (Kover, branches) | 61.70 % (2026-10-26; Semper 62.69 % on 2026-10-22) | 59 (Semper 60) | same |
 | Backend (pytest-cov, lines) | 95.47 % | 93 | `.github/actions/backend-gate/action.yml` |
 | Backend + Firestore emulator tier | 95.54 % | 93 | `ci.yml` tier 4, `--cov-append` |
 | Console JS (`scripts/console_coverage.mjs`, lines merged by file) | 98.30 % | 96 | `ci.yml` `console-pages` |
