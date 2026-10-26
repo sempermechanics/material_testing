@@ -47,7 +47,7 @@ repository root. Evidence is at the branch `claude/new-session-jhfhj9` as of
 
 | Control | Status | Evidence |
 |---|---|---|
-| PLATFORM-1: IPC used securely | Met | Exported components are the launcher and the verified App Link handlers (`app/src/main/AndroidManifest.xml:72-158`); every other activity and the `FileProvider` are `exported="false"` (`:141-217`). Managed configuration is read through `RestrictionsManager`, never from intents (`data/policy/ManagedConfigReader.kt:48-70`) |
+| PLATFORM-1: IPC used securely | Met | Exported components are the launcher and the verified App Link handlers (`app/src/main/AndroidManifest.xml:72-158`); every other activity and the `FileProvider` are `exported="false"` (`:141-217`). The sign-in screen shows a routing message only when it carries this process's random token, so another app cannot put its own text on it (`ui/common/auth/AuthRoute.kt` `messageOf`, `AuthRoutingMessageTest`). Managed configuration is read through `RestrictionsManager`, never from intents (`data/policy/ManagedConfigReader.kt:48-70`) |
 | PLATFORM-2: WebViews used securely | N-A | The app has no WebView (no use in `app/src/main/java`) |
 | PLATFORM-3: user interface used securely | Partial | No sensitive values are shown beyond the account's own email and licence prefix. `FLAG_SECURE` is not set on any screen; analyses are not secret by product decision |
 

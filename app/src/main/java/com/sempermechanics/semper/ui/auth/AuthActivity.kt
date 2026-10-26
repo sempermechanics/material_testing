@@ -23,8 +23,8 @@ import com.sempermechanics.semper.data.account.AuthRepository
 import com.sempermechanics.semper.data.account.isTrustedAuthLink
 import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.databinding.ActivityAuthBinding
-import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.common.Insets
+import com.sempermechanics.semper.ui.common.auth.AuthRoute
 import com.sempermechanics.semper.ui.common.auth.SignOutRun
 import com.sempermechanics.semper.ui.common.dialog.CrispToast
 import com.sempermechanics.semper.ui.common.setBusy
@@ -102,7 +102,7 @@ class AuthActivity : AppCompatActivity() {
         if (savedInstanceState == null) {
             maybeCompleteEmailLink(intent)
             passwordReset.handleLink(intent)
-            intent.getStringExtra(IntentKeys.ROUTING_ERROR)?.let { showMessage(it) }
+            AuthRoute.messageOf(intent)?.let { showMessage(it) }
         }
     }
 

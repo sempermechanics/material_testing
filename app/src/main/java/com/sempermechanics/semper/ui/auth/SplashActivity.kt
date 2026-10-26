@@ -16,7 +16,7 @@ import com.sempermechanics.semper.data.account.AccessStatus
 import com.sempermechanics.semper.data.account.AuthRepository
 import com.sempermechanics.semper.data.account.DevAuth
 import com.sempermechanics.semper.databinding.ActivitySplashBinding
-import com.sempermechanics.semper.navigation.IntentKeys
+import com.sempermechanics.semper.ui.common.auth.AuthRoute
 import com.sempermechanics.semper.ui.common.auth.SignOutRun
 import com.sempermechanics.semper.ui.common.dialog.Feedback
 import com.sempermechanics.semper.ui.home.HomeActivity
@@ -179,7 +179,7 @@ class SplashActivity : AppCompatActivity() {
         // If an error occurred, package it up and send it to AuthActivity
         // so we can display it nicely in the UI.
         if (errorMessage != null) {
-            intent.putExtra(IntentKeys.ROUTING_ERROR, errorMessage)
+            AuthRoute.putMessage(intent, errorMessage)
         }
 
         startActivity(intent)

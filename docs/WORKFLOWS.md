@@ -72,7 +72,7 @@ SplashActivity ─ session restore ─┬─ no session ────────
 | Entry | `ui/auth/SplashActivity` |
 | Chain | `data/account/AuthRepository` → `data/net/SemperApi.me` (with `getConfig` in parallel, fetched again once if its `mode` disagrees with `me.license.mode`, as when the invite claim landed between the two) → `ui/auth/AccessRouter` (+ `data/account/AccessStatus`), `data/account/DevAuth` for the emulator bypass. A device approved and bound last time opens Home without waiting; `ui/auth/StatusRecheck` runs the same check behind it and moves the user only on PENDING or a refused sign-in (`AuthRepository.AccessLostException`), never on a timeout or 5xx |
 | Writes | `data/net/AccountCache` cached uid / email / status / role |
-| Fails as | Routing error passed on as `IntentKeys.ROUTING_ERROR`, shown by A1 as a red pill |
+| Fails as | Routing error passed on as `IntentKeys.ROUTING_ERROR` with the process's `ROUTING_TOKEN` (`AuthRoute.putMessage`), shown by A1 as a red pill; a message without the token (another app's start) is ignored |
 | Tests | `auth/AccessRouterTest`, `auth/StatusRecheckTest` |
 
 The quota check is **not** here — it runs in `HomeActivity.onCreate` (A3), which
