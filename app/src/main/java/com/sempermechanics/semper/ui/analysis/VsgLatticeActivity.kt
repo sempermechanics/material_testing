@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
+import androidx.activity.viewModels
 import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -23,11 +24,12 @@ import com.sempermechanics.semper.ui.analysis.sweep.StrainProfiles
 import com.sempermechanics.semper.ui.analysis.sweep.SweepGraphExport
 import com.sempermechanics.semper.ui.analysis.sweep.SweepLatticeView
 import com.sempermechanics.semper.ui.analysis.sweep.SweepPlotView
+import com.sempermechanics.semper.ui.analysis.sweep.SweepProfilesModel
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.sweep.animateCopyConfirmation
 import com.sempermechanics.semper.ui.analysis.sweep.bindCopyGestures
 import com.sempermechanics.semper.ui.analysis.sweep.latticeSummary
-import com.sempermechanics.semper.ui.analysis.sweep.readSweepFrameProfiles
+
 import com.sempermechanics.semper.ui.analysis.sweep.scrubReadout
 import com.sempermechanics.semper.ui.analysis.sweep.skippedLatticeNodes
 import com.sempermechanics.semper.ui.analysis.sweep.solvedLatticeNodes
@@ -66,6 +68,9 @@ class VsgLatticeActivity : AppCompatActivity() {
     private companion object {
         /** Every combination of a sweep solves the same one deformed image. */
         const val SWEEP_DEFORMED_IMAGES = 1
+
+        /** The solved combination selected, kept across a rotation (TE1-005). */
+        const val STATE_FOCUSED_FRAME = "lattice_focused_frame"
 
         val STRAIN_OPTIONS = listOf(
             R.string.field_exx to DicResult.IDX_EXX,
@@ -121,6 +126,9 @@ class VsgLatticeActivity : AppCompatActivity() {
 
     private val graphExport = SweepGraphExport(this)
 
+    /** The line-cut profiles, read once and kept across a rotation (TE1-005). */
+    private val profiles: SweepProfilesModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityVsgLatticeBinding.inflate(layoutInflater)
@@ -159,7 +167,10 @@ class VsgLatticeActivity : AppCompatActivity() {
         bindStrainControls()
 
         if (solvedNodes.isNotEmpty()) {
-            selectFocus(solvedNodes.first().frameIndex)
+            // The combination picked before a rotation, while it is still one of these.
+            val kept = savedInstanceState?.getInt(STATE_FOCUSED_FRAME, -1)
+                ?.takeIf { frame -> solvedNodes.any { it.frameIndex == frame } }
+            selectFocus(kept ?: solvedNodes.first().frameIndex)
         } else {
             binding.stepperRow.visibility = View.GONE
             binding.btnView.isEnabled = false
@@ -168,6 +179,11 @@ class VsgLatticeActivity : AppCompatActivity() {
 
         loadStrainProfiles()
         maybeCoachTheGraph()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt(STATE_FOCUSED_FRAME, focusedFrameIndex)
     }
 
     /** Binds the strain-plot section views and wires their listeners. */
@@ -287,9 +303,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         val components = SweepStudy.STRAIN_COMPONENTS.toIntArray()
 
         lifecycleScope.launch {
-            val loaded = withContext(Dispatchers.IO) {
-                readSweepFrameProfiles(File(batchDirPath), steps, baseStep, components, line)
-            }
+            val loaded = profiles.load(File(batchDirPath), steps, baseStep, components, line).await()
             if (loaded.isEmpty()) return@launch
             frameProfiles = loaded
             redrawStrainPlot()
