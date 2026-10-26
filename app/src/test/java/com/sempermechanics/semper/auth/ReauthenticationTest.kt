@@ -1,6 +1,8 @@
 package com.sempermechanics.semper.auth
 
+import android.content.Context
 import android.os.Parcel
+import androidx.test.core.app.ApplicationProvider
 import com.google.android.gms.tasks.Task
 import com.google.firebase.auth.AuthResult
 import com.google.firebase.auth.EmailAuthProvider
@@ -33,6 +35,8 @@ import java.io.IOException
 @RunWith(RobolectricTestRunner::class)
 class ReauthenticationTest {
 
+    private val context: Context = ApplicationProvider.getApplicationContext()
+
     @Test
     fun `an emailed link is presented as an email-link credential, not as a password`() {
         val link = "https://app.sempermechanics.com/auth/finishSignIn?apiKey=k&oobCode=c&mode=signIn&lang=en"
@@ -58,7 +62,7 @@ class ReauthenticationTest {
     fun `a second factor demanded during re-auth becomes the authenticator challenge`() {
         val demand = FirebaseAuthMultiFactorException("mfa", "second factor", Resolver(listOf(Totp("enroll-1"))))
 
-        val error = reauthFailure(demand)?.exceptionOrNull()
+        val error = reauthFailure(context, demand)?.exceptionOrNull()
 
         assertTrue("got $error", error is AuthRepository.MfaTotpRequired)
         assertEquals("enroll-1", (error as AuthRepository.MfaTotpRequired).enrollmentId)
@@ -68,7 +72,7 @@ class ReauthenticationTest {
     fun `a second factor the phone cannot answer says where to enrol one`() {
         val demand = FirebaseAuthMultiFactorException("mfa", "second factor", Resolver(emptyList()))
 
-        val error = reauthFailure(demand)?.exceptionOrNull()
+        val error = reauthFailure(context, demand)?.exceptionOrNull()
 
         assertTrue(error?.message.orEmpty(), error?.message.orEmpty().contains("authenticator app"))
     }
@@ -77,9 +81,12 @@ class ReauthenticationTest {
     fun `a wrong password is named only where a password was asked for`() {
         val refused = FirebaseAuthInvalidCredentialsException("bad", "refused")
 
-        assertEquals("Incorrect password.", reauthFailure(refused, "Incorrect password.")?.exceptionOrNull()?.message)
-        assertNull("no password, nothing to call wrong", reauthFailure(refused))
-        assertNull("anything else is the generic failure", reauthFailure(IOException("offline")))
+        assertEquals(
+            "Incorrect password.",
+            reauthFailure(context, refused, "Incorrect password.")?.exceptionOrNull()?.message,
+        )
+        assertNull("no password, nothing to call wrong", reauthFailure(context, refused))
+        assertNull("anything else is the generic failure", reauthFailure(context, IOException("offline")))
     }
 
     private class Totp(private val id: String) : MultiFactorInfo() {

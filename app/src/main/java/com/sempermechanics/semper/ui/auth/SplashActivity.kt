@@ -15,6 +15,7 @@ import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.AccessStatus
 import com.sempermechanics.semper.data.account.AuthRepository
 import com.sempermechanics.semper.data.account.DevAuth
+import com.sempermechanics.semper.data.account.userMessageOr
 import com.sempermechanics.semper.databinding.ActivitySplashBinding
 import com.sempermechanics.semper.ui.common.auth.AuthRoute
 import com.sempermechanics.semper.ui.common.auth.SignOutRun
@@ -114,7 +115,7 @@ class SplashActivity : AppCompatActivity() {
                 }
             },
             onFailure = { exception ->
-                val message = exception.message ?: getString(R.string.error_verify_failed)
+                val message = exception.userMessageOr(getString(R.string.error_verify_failed))
                 navigateTo(AuthActivity::class.java, message)
             },
         )

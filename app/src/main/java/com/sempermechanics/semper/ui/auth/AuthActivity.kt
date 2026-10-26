@@ -21,6 +21,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.AuthRepository
 import com.sempermechanics.semper.data.account.isTrustedAuthLink
+import com.sempermechanics.semper.data.account.userMessageOr
 import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.databinding.ActivityAuthBinding
 import com.sempermechanics.semper.ui.common.Insets
@@ -246,8 +247,10 @@ class AuthActivity : AppCompatActivity() {
                 viewModel.setBusy(false)
                 throw e
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                // Credential Manager's own text is for the log (AE1-009).
+                Timber.w(e, "Google sign-in failed")
                 viewModel.setBusy(false)
-                showMessage(e.message ?: getString(R.string.auth_google_failed))
+                showMessage(getString(R.string.auth_google_failed))
             }
         }
     }
@@ -316,7 +319,7 @@ class AuthActivity : AppCompatActivity() {
         binding.etConfirmPassword.setText("")
         // Not an error: what they asked for happened, and the next step is theirs.
         // Held to the short 2000ms duration, not the default long 3500ms.
-        showMessage(error.message ?: getString(R.string.auth_verify_first), long = false)
+        showMessage(error.userMessageOr(getString(R.string.auth_verify_first)), long = false)
     }
 
     /** The bound is part of the message for the length rules, so they format it in. */

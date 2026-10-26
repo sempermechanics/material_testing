@@ -57,6 +57,18 @@ the user is told and to whether to retry, in one `when`.
 - A scope that is never cancelled may use `runCatching` and must say so
   (`ui/settings/AccountDeletionRun.kt:110-115`, `ui/common/auth/SignOutRun.kt:77-80`).
 
+**User-facing text (2026-10-26, readiness AE1-009).** What a screen says is a
+string resource chosen at this boundary, never an exception's message, a
+server's `detail` or an HTTP status. `HttpFailure.userMessage(fallback)` names
+offline, a cloud that is not answering (5xx, 429) and a lapsed session (401) and
+gives `fallback` for the rest (`data/net/HttpFailure.kt`); a Firebase failure no
+caller named is offline, too many attempts, or the caller's fallback
+(`firebaseFailureText`, `data/account/FirebaseOp.kt`). A failure that already
+carries the app's own words is a `UserMessageException`
+(`data/account/AuthRepository.kt`), and a screen shows a thrown failure only as
+`error.userMessageOr(fallback)`. The cause, the server's hint and the status go
+to Timber.
+
 **Rule for new code.** A new backend call goes through `authed` and maps the
 `Authed` outcome where it is used; a new failure domain gets a sealed type (or
 an enum) with the user message and the retry decision decided once, next to

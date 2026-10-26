@@ -49,7 +49,9 @@ class UserTermsTest {
 
     @Test
     fun `removing local copies is freeing them up, not releasing them`() {
-        assertEquals(emptyList<String>(), offenders("""\breleased\b|removed from this phone"""))
+        // Staff releasing a phone from an account is the seat/binding sense, not local copies.
+        val phoneBinding = { name: String, _: String -> name == "auth_phone_released" }
+        assertEquals(emptyList<String>(), offenders("""\breleased\b|removed from this phone""", phoneBinding))
     }
 
     @Test

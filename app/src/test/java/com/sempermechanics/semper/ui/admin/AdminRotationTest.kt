@@ -114,7 +114,8 @@ class AdminRotationTest {
         idle()
 
         assertEquals(
-            controller.get().getString(R.string.admin_action_error_fmt, "offline"),
+            // What the failure means, not the exception's text (readiness AE1-009).
+            controller.get().run { getString(R.string.admin_action_error_fmt, getString(R.string.error_offline)) },
             ShadowToast.getTextOfLatestToast(),
         )
 

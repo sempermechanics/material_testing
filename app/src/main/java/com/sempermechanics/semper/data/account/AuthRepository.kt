@@ -1,6 +1,7 @@
 package com.sempermechanics.semper.data.account
 
 import android.content.Context
+import androidx.annotation.StringRes
 import androidx.annotation.VisibleForTesting
 import com.google.firebase.auth.AuthCredential
 import com.google.firebase.auth.EmailAuthProvider
@@ -14,6 +15,7 @@ import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.MultiFactorResolver
 import com.google.firebase.auth.TotpMultiFactorGenerator
+import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.LicenseConfigWorker
 import com.sempermechanics.semper.data.cloud.CloudBackupListing
 import com.sempermechanics.semper.data.net.AccountCache
@@ -43,11 +45,21 @@ internal enum class SignInMethod(val analyticsName: String) {
     ;
 
     /** What a rejected credential means for this method. */
-    val wrongCredentialsMessage: String
-        get() = if (this == TOTP) WRONG_TOTP_CODE else "Incorrect email or password."
+    @get:StringRes
+    val wrongCredentials: Int
+        get() = if (this == TOTP) R.string.auth_wrong_totp_code else R.string.auth_wrong_credentials
 }
 
-private const val WRONG_TOTP_CODE = "Incorrect authenticator code."
+/**
+ * A failure whose message is the app's own text for the user, from a string
+ * resource: never an exception's or a server's words (ADR-018, readiness
+ * AE1-009). A screen shows the message of one of these, and its own fallback
+ * for anything else ([userMessageOr]).
+ */
+open class UserMessageException(message: String, cause: Throwable? = null) : Exception(message, cause)
+
+/** What to tell the user about this failure: its own text if it is a [UserMessageException], else [fallback]. */
+fun Throwable.userMessageOr(fallback: String): String = (this as? UserMessageException)?.message ?: fallback
 
 /**
  * Authentication + access-gate.
@@ -87,6 +99,8 @@ class AuthRepository(
     private val access = AccessStatusResolver(appContext, api, tokens)
 
     val cloudConfigured: Boolean get() = api.enabled
+
+    private fun text(@StringRes id: Int): String = appContext.getString(id)
 
     // ------------------------------------------------------------ sign-in
 
@@ -138,7 +152,12 @@ class AuthRepository(
         enrollmentId: String,
         code: String,
     ): Result<Unit> =
-        firebaseOp("TOTP challenge failed", WRONG_TOTP_CODE, known = { wrongSecret(it, WRONG_TOTP_CODE) }) {
+        firebaseOp(
+            appContext,
+            "TOTP challenge failed",
+            R.string.auth_wrong_totp_code,
+            known = { wrongSecret(it, text(R.string.auth_wrong_totp_code)) },
+        ) {
             resolveTotpAssertion(resolver, enrollmentId, code)
         }
 
@@ -160,13 +179,16 @@ class AuthRepository(
      * requires this within minutes of the action for [deleteIdentity].
      */
     suspend fun reauthenticateWithPassword(password: String): Result<Unit> =
-        reauthenticate("Re-authentication failed", { reauthFailure(it, wrongPassword = "Incorrect password.") }) {
+        reauthenticate(
+            "Re-authentication failed",
+            { reauthFailure(appContext, it, wrongPassword = text(R.string.auth_wrong_password)) },
+        ) {
             it.email?.let { email -> ReauthCredentials.password(email, password) }
         }
 
     /** As [reauthenticateWithPassword], for accounts that sign in with Google. */
     suspend fun reauthenticateWithGoogle(googleIdToken: String): Result<Unit> =
-        reauthenticate("Google re-authentication failed", { reauthFailure(it) }) {
+        reauthenticate("Google re-authentication failed", { reauthFailure(appContext, it) }) {
             ReauthCredentials.google(googleIdToken)
         }
 
@@ -176,7 +198,7 @@ class AuthRepository(
      * it has no password to type and no Google credential to present.
      */
     suspend fun reauthenticateWithEmailLink(link: String): Result<Unit> =
-        reauthenticate("Email-link re-authentication failed", { reauthFailure(it) }) {
+        reauthenticate("Email-link re-authentication failed", { reauthFailure(appContext, it) }) {
             it.email?.let { email -> ReauthCredentials.emailLink(email, link) }
         }
 
@@ -192,9 +214,9 @@ class AuthRepository(
         val user = auth.currentUser
         val credential = user?.let(credentialFor)
         return when {
-            user == null -> Result.failure(Exception("Not signed in."))
-            credential == null -> Result.failure(Exception("This account has no email."))
-            else -> firebaseOp(failureLog, "Could not verify your identity.", known) {
+            user == null -> Result.failure(UserMessageException(text(R.string.auth_not_signed_in)))
+            credential == null -> Result.failure(UserMessageException(text(R.string.auth_no_email)))
+            else -> firebaseOp(appContext, failureLog, R.string.auth_verify_identity_failed, known) {
                 user.reauthenticate(credential).await()
             }
         }
@@ -206,7 +228,7 @@ class AuthRepository(
      */
     suspend fun deleteIdentity(): Result<Unit> {
         val user = auth.currentUser ?: return Result.success(Unit)
-        return firebaseOp("Firebase identity delete failed", "Could not delete the sign-in identity.") {
+        return firebaseOp(appContext, "Firebase identity delete failed", R.string.auth_delete_identity_failed) {
             user.delete().await()
         }
     }
@@ -239,7 +261,7 @@ class AuthRepository(
 
     /** Re-check the account status for the currently signed-in Firebase user. */
     suspend fun refreshStatus(): Result<String> = withContext(Dispatchers.IO) {
-        if (signedIn()) access.resolve() else Result.failure(Exception("Not signed in."))
+        if (signedIn()) access.resolve() else Result.failure(UserMessageException(text(R.string.auth_not_signed_in)))
     }
 
     /**
@@ -367,10 +389,11 @@ class AuthRepository(
         signIn: suspend () -> Any?,
     ): Result<String> = withContext(Dispatchers.IO) {
         if (!api.enabled) {
+            // SEMPER_API_BASE_URL is unset in this build.
             return@withContext signInFailed(
                 method,
                 "api_off",
-                Exception("Cloud backend is not configured (SEMPER_API_BASE_URL)."),
+                UserMessageException(text(R.string.auth_cloud_not_configured)),
             )
         }
         try {
@@ -380,7 +403,11 @@ class AuthRepository(
             return@withContext firstFactorFailed(method, e)
         }
         val user = auth.currentUser
-            ?: return@withContext signInFailed(method, "incomplete", Exception("Sign-in did not complete."))
+            ?: return@withContext signInFailed(
+                method,
+                "incomplete",
+                UserMessageException(text(R.string.auth_sign_in_incomplete)),
+            )
         unverifiedEmailError(user)?.let { return@withContext signInFailed(method, "unverified_email", it) }
         AccountCache.saveIdentity(appContext, user.uid, user.email)
         access.resolve()
@@ -392,21 +419,19 @@ class AuthRepository(
 
     /** What Firebase refusing the first factor means, by the exception it threw. */
     private fun firstFactorFailed(method: SignInMethod, e: Exception): Result<String> = when (e) {
-        is FirebaseAuthMultiFactorException -> signInFailed(method, "mfa_required", mfaRequired(e))
+        is FirebaseAuthMultiFactorException -> signInFailed(method, "mfa_required", mfaRequired(appContext, e))
         is FirebaseAuthWeakPasswordException ->
-            signInFailed(method, "weak_password", Exception("Password is too weak (min 6 characters).", e))
-        is FirebaseAuthUserCollisionException -> signInFailed(
-            method,
-            "collision",
-            Exception("An account already exists for this email. Sign in instead.", e),
-        )
+            signInFailed(method, "weak_password", UserMessageException(text(R.string.auth_weak_password), e))
+        is FirebaseAuthUserCollisionException ->
+            signInFailed(method, "collision", UserMessageException(text(R.string.auth_account_exists), e))
         is FirebaseAuthInvalidUserException ->
-            signInFailed(method, "unknown_user", Exception("No account for this email.", e))
+            signInFailed(method, "unknown_user", UserMessageException(text(R.string.auth_no_account), e))
         is FirebaseAuthInvalidCredentialsException ->
-            signInFailed(method, "bad_credentials", Exception(method.wrongCredentialsMessage, e))
+            signInFailed(method, "bad_credentials", UserMessageException(text(method.wrongCredentials), e))
         else -> {
             Timber.w(e, "Firebase sign-in failed")
-            signInFailed(method, "other", Exception(e.message ?: "Sign-in failed.", e))
+            val shown = firebaseFailureText(appContext, e, R.string.auth_sign_in_failed)
+            signInFailed(method, "other", UserMessageException(shown, e))
         }
     }
 
@@ -440,7 +465,7 @@ class AuthRepository(
         }
         val email = user.email.orEmpty()
         signOut()
-        return EmailVerificationRequired(email)
+        return EmailVerificationRequired(email, appContext.getString(R.string.auth_verify_email_first_fmt, email))
     }
 
     /** True when this account signs in with a password and has not confirmed its address. */
@@ -460,10 +485,7 @@ class AuthRepository(
      * back out of "create account" mode on this outcome, and deciding that by
      * matching an error string would break the first time the wording changed.
      */
-    class EmailVerificationRequired(val email: String) :
-        Exception(
-            "Verify your email first. We've sent a link to $email — open it, then sign in again.",
-        )
+    class EmailVerificationRequired(val email: String, message: String) : UserMessageException(message)
 
     /**
      * First factor succeeded; the account needs the authenticator code before a
@@ -473,12 +495,13 @@ class AuthRepository(
     class MfaTotpRequired(
         val resolver: MultiFactorResolver,
         val enrollmentId: String,
-    ) : Exception("Enter the code from your authenticator app.")
+        message: String,
+    ) : UserMessageException(message)
 
     /**
      * The server definitively refused this sign-in (401, or the device binding
      * belongs elsewhere). Distinct from a 5xx or no network, which must not
      * throw someone already in the app back to the sign-in screen.
      */
-    class AccessLostException(message: String, cause: Throwable? = null) : Exception(message, cause)
+    class AccessLostException(message: String, cause: Throwable? = null) : UserMessageException(message, cause)
 }

@@ -96,9 +96,8 @@
 A large region at a small step can exhaust memory — try a coarser step or a smaller ROI. If it repeats on the same images, send them to support.</string>
     <string name="video_read_failed">Could not read this video.</string>
     <string name="video_extract_insufficient">Could not extract enough frames from this segment.</string>
-    <string name="video_read_error_fmt">Failed to read video: %1$s</string>
     <string name="video_codec_unsupported_fmt">This AVI holds %1$s video, which this phone has no decoder for. Re-save it as MP4 (H.264), or export the frames as PNG and import them as images.</string>
-    <string name="error_loading_images_fmt">Error loading images: %1$s</string>
+    <string name="error_loading_images">Couldn\'t load these images. Check that this phone can open them, then try again.</string>
     
 
     <!-- Result viewer -->
@@ -431,7 +430,6 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="your_data_delete_hint">Delete analyses from Home</string>
     <string name="restore_need_sign_in">Sign in to see cloud backups.</string>
     <string name="restore_api_off">Cloud backup is not configured on this build.</string>
-    <string name="restore_failed_fmt">Restore failed. %1$s</string>
     <string name="restore_failed_generic">This backup couldn\'t be restored.</string>
     <string name="restore_backup_gone">This backup\'s files are no longer in cloud storage. Back the analysis up again from a phone that still has it.</string>
     <string name="restore_device_mismatch">This phone is not the one bound to the licence yet. Sign in, wait a moment for the phone to bind, then try restore again — or move the licence from the Semper account page first.</string>
@@ -933,9 +931,14 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="action_request_access">Request access</string>
     <string name="error_generic">Something went wrong. Please try again.</string>
     
-    <string name="cloud_check_failed_fmt">Couldn\'t check your cloud backups (%1$s). Backup status shown may be out of date.</string>
+    <!-- A failed Home cloud check, by kind (readiness AE1-009): no HTTP status or exception text. -->
+    <string name="cloud_check_not_approved">Couldn\'t check your cloud backups: your account isn\'t approved for cloud backup.</string>
+    <string name="cloud_check_server">The cloud isn\'t answering, so the backup status shown may be out of date.</string>
+    <string name="cloud_check_failed">Couldn\'t check your cloud backups. The backup status shown may be out of date.</string>
     <string name="restore_action">Restore</string>
-    <string name="restore_load_error_fmt">Couldn\'t load backups: %1$s</string>
+    <!-- The Settings backups list when it could not be read (AE1-009). -->
+    <string name="restore_list_offline">You\'re offline. Showing what\'s on this phone.</string>
+    <string name="restore_list_failed">Couldn\'t load your backups. Try again later.</string>
     <string name="restore_background_note">Restore continues even if you leave this screen.</string>
     <string name="download_background_note">Download continues even if you leave this screen.</string>
     <string name="admin_pending_requests">Pending access requests</string>
@@ -1095,6 +1098,35 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="status_still_pending">Account is still pending approval.</string>
     <string name="status_changed_relogin">Your access status has changed. Please log in again.</string>
     <string name="error_network_retry">Network error. Try again.</string>
+
+    <!-- Failure text by kind (ADR-018, readiness AE1-009): what a screen says
+         instead of an exception's or the server's own words. -->
+    <string name="error_offline">You\'re offline. Check your connection and try again.</string>
+    <string name="error_cloud_unavailable">The cloud isn\'t answering. Try again later.</string>
+    <string name="error_session_expired">Session expired. Please sign in again.</string>
+    <string name="auth_too_many_requests">Too many attempts from this phone. Wait a few minutes, then try again.</string>
+
+    <!-- Auth failures (readiness AE1-010): were literals in AuthRepository,
+         AuthLinks, AccessStatusResolver and ReauthCredentials. -->
+    <string name="auth_wrong_credentials">Incorrect email or password.</string>
+    <string name="auth_wrong_totp_code">Incorrect authenticator code.</string>
+    <string name="auth_wrong_password">Incorrect password.</string>
+    <string name="auth_not_signed_in">Not signed in.</string>
+    <string name="auth_no_email">This account has no email.</string>
+    <string name="auth_verify_identity_failed">Could not verify your identity.</string>
+    <string name="auth_delete_identity_failed">Could not delete the sign-in identity.</string>
+    <string name="auth_cloud_not_configured">Sign-in isn\'t available on this build: it has no cloud backend.</string>
+    <string name="auth_sign_in_incomplete">Sign-in did not complete.</string>
+    <string name="auth_weak_password">Password is too weak (min 6 characters).</string>
+    <string name="auth_account_exists">An account already exists for this email. Sign in instead.</string>
+    <string name="auth_no_account">No account for this email.</string>
+    <string name="auth_verify_email_first_fmt">Verify your email first. We\'ve sent a link to %1$s — open it, then sign in again.</string>
+    <string name="auth_totp_needs_enrolment">This account needs an authenticator app. Open the Semper website, enrol one, then try again on the phone.</string>
+    <string name="auth_reset_confirm_failed">Could not reset the password.</string>
+    <string name="auth_account_check_failed">Could not verify your account. Try again later.</string>
+    <string name="auth_account_check_offline">Could not verify account. Check your connection and sign in again.</string>
+    <string name="auth_phone_released">Staff released this phone from this account, so it cannot be used with it again. Sign in with another account, or use another phone.</string>
+    <string name="auth_phone_linked_elsewhere">This phone is already linked to another account, or this account to another phone. Sign in with that account, or ask an admin to reset the binding.</string>
 
     <!-- Sign out confirmation -->
     <string name="sign_out_confirm_title">Sign out of this phone?</string>
