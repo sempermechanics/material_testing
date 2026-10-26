@@ -26,10 +26,8 @@ Usage:
   python scripts/micro_ab.py --a base-apks/ --b pr-apks/ --out micro-ab [--serial S] [--rounds 1] [--package ID]
   python scripts/micro_ab.py --analyse micro-ab [--advisory]
 Each APK folder holds app-debug.apk and app-debug-androidTest.apk, and may hold
-``app-id``, the build's applicationId: a PR that changes the id (the Semper
-Classroom rename, ADR-030) is compared with a base still on the old one, so
-each round installs, runs and pulls under its own build's id. ``--package`` is
-the id of a folder without one.
+app-id.txt: that build's app id, which wins over --package. CI writes it for each
+build, so a PR that changes the app id (ADR-030) runs its base under the old one.
 """
 
 from __future__ import annotations
@@ -47,7 +45,7 @@ ROOT = Path(__file__).resolve().parent.parent
 FALLBACK_APP = "com.sempermechanics.semper"
 BENCHMARK_CLASS = "com.sempermechanics.semper.benchmark.HotPathMicroBenchmark"
 APKS = ("app-debug.apk", "app-debug-androidTest.apk")
-APP_ID_FILE = "app-id"
+APP_ID_FILE = "app-id.txt"
 # A debug build on an emulator: every warning androidx.benchmark raises there.
 SUPPRESS = "EMULATOR,DEBUGGABLE,LOW-BATTERY,UNLOCKED,ACTIVITY-MISSING,NOT-AOT-COMPILED"
 METRIC = "timeNs"
@@ -66,13 +64,13 @@ def default_app_id(build_file: Path = ROOT / "app" / "build.gradle.kts") -> str:
     return ids[0] if len(ids) == 1 else FALLBACK_APP
 
 
-def build_package(apk_dir: Path, default: str) -> str:
-    """The app id an APK folder names in ``app-id``, else ``default``."""
+def build_app_id(apk_dir: Path, fallback: str) -> str:
+    """The app id in ``apk_dir``'s app-id.txt, or ``fallback`` when it has no single one."""
     try:
-        named = (apk_dir / APP_ID_FILE).read_text(encoding="utf-8").strip()
+        ids = (apk_dir / APP_ID_FILE).read_text(encoding="utf-8").split()
     except OSError:
-        named = ""
-    return named or default
+        ids = []
+    return ids[0] if len(ids) == 1 else fallback
 
 
 def abba(rounds: int) -> list[str]:
@@ -198,7 +196,7 @@ def run(args: argparse.Namespace) -> None:
             raise RuntimeError(f"{build_dir} is missing {', '.join(missing)}")
     args.out.mkdir(parents=True, exist_ok=True)
     dirs = {"A": args.a, "B": args.b}
-    packages = {build: build_package(folder, args.package) for build, folder in dirs.items()}
+    packages = {build: build_app_id(folder, args.package) for build, folder in dirs.items()}
     for number, build in enumerate(abba(args.rounds), start=1):
         run_round(prefix, number, build, dirs[build], packages[build], args.out, tuple(packages.values()))
 
