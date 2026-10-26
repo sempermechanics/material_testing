@@ -14,7 +14,6 @@ import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.BakedHeatmap
 import com.sempermechanics.semper.report.HeatmapRequest
-import com.sempermechanics.semper.report.ReportBuilder
 import com.sempermechanics.semper.report.VisualizationEngine
 import com.sempermechanics.semper.ui.common.SerialJob
 import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
@@ -218,8 +217,8 @@ internal class ViewerScaleController(
             // not the field's true extrema -- the ⓘ details sheet shows those,
             // via DicResult.fieldStats. Same wording as the summary-mode scale
             // (ViewerSummaryController) so the two paths agree.
-            val minText = ReportBuilder.formatMetric(heatmap.min * multiplier)
-            val maxText = ReportBuilder.formatMetric(heatmap.max * multiplier)
+            val minText = ScaleEndLabel.format(heatmap.min * multiplier)
+            val maxText = ScaleEndLabel.format(heatmap.max * multiplier)
             binding.tvScaleMin.text = activity.getString(R.string.scale_min_fmt, minText, unit)
             binding.tvScaleMax.text = activity.getString(R.string.scale_max_fmt, maxText, unit)
         }

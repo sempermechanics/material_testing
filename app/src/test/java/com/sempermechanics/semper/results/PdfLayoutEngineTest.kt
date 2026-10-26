@@ -61,7 +61,7 @@ class PdfLayoutEngineTest {
 
     @Test
     fun `drawTitle advances past the rule beneath it`() {
-        engine.drawTitle("Semper Metrology Report")
+        engine.drawTitle("Semper Analysis Report")
         // 120f for the title block, then 60f clearance under the rule.
         assertEquals(180f, engine.cursorY, 0.001f)
     }

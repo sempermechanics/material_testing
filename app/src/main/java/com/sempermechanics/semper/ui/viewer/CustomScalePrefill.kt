@@ -5,8 +5,9 @@ import com.sempermechanics.semper.report.ReportBuilder
 
 /**
  * What the custom colour-scale dialog opens with: the field's custom bounds when
- * it has some, otherwise the auto bounds the scale bar is showing, written the
- * way the bar writes them, so Apply with no edits keeps the scale as it is.
+ * it has some, otherwise the auto bounds the scale bar is showing, written to
+ * five decimals (the bar rounds its labels to three significant figures, see
+ * [ScaleEndLabel]), so Apply with no edits keeps the scale as it is.
  */
 internal object CustomScalePrefill {
 

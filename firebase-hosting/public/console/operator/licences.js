@@ -8,6 +8,7 @@ import {
   esc, day, licenceStatePill, licenceListPath, licenceSearchBody, searchableLicenceText, upsertLicence,
   placeholderRows, retryRow,
 } from "../util.js";
+import { explain } from "../messages.js";
 import { $, desk, demoCapNote } from "./state.js";
 
 // Whoever shows something derived from one licence, told when it is re-read.
@@ -96,7 +97,7 @@ export async function loadLicences(started) {
     if (ticket !== licenceLoad) return;
     const message = e.code === "not_admin"
       ? "That account is not a Semper operator."
-      : `Could not load licences: ${e.message}`;
+      : `Could not load licences: ${explain(e)}`;
     setStatus(message, true);
     $("licenceRows").innerHTML = retryRow(COLUMNS, message);
   } finally {
@@ -113,7 +114,9 @@ export async function refreshLicence(id) {
   try {
     showLicence(await api(`/v1/admin/licenses/${encodeURIComponent(id)}`));
   } catch (e) {
-    setStatus(`Changed, but the row could not be re-read: ${e.message}. Refresh to see it.`, true);
+    const why = explain(e);
+    setStatus(`Changed, but the row could not be re-read: ${why}${/[.!?]$/.test(why) ? "" : "."} ` +
+      "Refresh to see it.", true);
   }
 }
 
@@ -172,7 +175,7 @@ export async function searchLicences() {
     desk.searchHits = hits;
     renderLicences();
   } catch (e) {
-    setStatus(`Could not search: ${e.message}`, true);
+    setStatus(`Could not search: ${explain(e)}`, true);
   }
 }
 
@@ -192,7 +195,7 @@ async function loadMoreLicences() {
     desk.licencePage = data.page || {};
     renderLicences();
   } catch (e) {
-    setStatus(`Could not load more licences: ${e.message}`, true);
+    setStatus(`Could not load more licences: ${explain(e)}`, true);
   } finally {
     $("loadMore").disabled = false;
   }
@@ -206,6 +209,7 @@ async function loadMoreLicences() {
 // backend leaves both out of the list; a row revoked since it loaded is left
 // out here.
 export function renderLicences() {
+  const focus = focusedAction();
   const q = $("filter").value.trim().toLowerCase();
   const showRevoked = $("showRevoked").checked;
   const showDemo = $("showDemo").checked;
@@ -227,6 +231,44 @@ export function renderLicences() {
     ? `Newest ${desk.licences.length} shown${note}; more exist.`
     : `${desk.licences.length} licence(s)${note}.`;
   $("loadMore").hidden = !desk.licencePage.hasMore;
+  // What a Demo row's "demo (25)" means, under the table while one is shown:
+  // it was a hover-only title, out of reach from a keyboard or a finger.
+  $("demoNote").hidden = !rows.some((l) => l.mode === "demo");
+  $("demoNote").textContent = $("demoNote").hidden ? "" : demoCapNote();
+  refocus(focus);
+}
+
+/**
+ * Which row button has focus, as { key, id } (its data key and licence id;
+ * key "" for a row's More menu), or null. The table is rebuilt on every
+ * change, which drops focus to the top of the page; `refocus` puts it back.
+ */
+function focusedAction() {
+  const at = document.activeElement;
+  const row = at && at.closest && at.closest("tr");
+  if (!row || row.parentNode !== $("licenceRows")) return null;
+  const button = at.localName === "button" ? at : row.querySelector("button");
+  const key = button && Object.keys(button.dataset).find((k) => k !== "retry");
+  if (!key) return null;
+  return { key: at.localName === "summary" ? "" : key, id: button.dataset[key] };
+}
+
+/**
+ * Focus the same button on the licence's new row; when it sits in the More
+ * menu (hidden once the menu closes), or the action is gone, the row's menu,
+ * else its first button. Nothing when the row has gone.
+ */
+function refocus(focus) {
+  if (!focus) return;
+  const buttons = Array.from($("licenceRows").querySelectorAll("button"));
+  const same = focus.key && buttons.find((b) => b.dataset[focus.key] === focus.id);
+  if (same && !same.closest("details")) {
+    same.focus();
+    return;
+  }
+  const mine = same || buttons.find((b) => Object.values(b.dataset).includes(focus.id));
+  if (!mine) return;
+  (mine.closest("tr").querySelector("summary") || mine).focus();
 }
 
 /** What an empty table says, with what to try next. */
@@ -263,7 +305,7 @@ function verifiedNote(id) {
   if (!report) return "";
   const outstanding = report.counts.revokedStillRunning;
   return outstanding
-    ? ` · <span class="err">${outstanding} revoke${outstanding === 1 ? "" : "s"}` +
+    ? ` · <span class="err">${outstanding} removal${outstanding === 1 ? "" : "s"}` +
       ` not landed</span>`
     : ` · <span class="ok">${report.entitled} verified</span>`;
 }
@@ -279,7 +321,7 @@ function licenceRow(lic) {
   // shows the demo allowance instead: a number stored on one never applied.
   const demo = lic.mode === "demo";
   const cap = demo
-    ? `<span class="muted" title="${esc(demoCapNote())}">demo${desk.demoAllowance == null ? "" : ` (${esc(desk.demoAllowance)})`}</span>`
+    ? `<span class="muted">demo${desk.demoAllowance == null ? "" : ` (${esc(desk.demoAllowance)})`}</span>`
     : lic.maxAnalyses == null ? '<span class="muted">default</span>' : esc(lic.maxAnalyses);
   // An individual licensed key can become an institution one; a Demo key is
   // not a licence anyone bought, so there is nothing to carry over.
@@ -303,9 +345,9 @@ function licenceRow(lic) {
       <div class="menu">
         ${lic.kind === "institution"
           ? `<button class="secondary" data-verify="${esc(lic.id)}">Verify</button>`
-          : `<button class="secondary" data-device="${esc(lic.id)}">New device</button>`}
+          : `<button class="secondary" data-device="${esc(lic.id)}">New phone</button>`}
         ${convertButton}
-        <button class="secondary" data-history="${esc(lic.id)}">Devices</button>
+        <button class="secondary" data-history="${esc(lic.id)}">Phone history</button>
         <button class="danger" data-revoke="${esc(lic.id)}">Revoke</button>
         ${deleteButton}
       </div>

@@ -2,8 +2,10 @@ package com.sempermechanics.semper.auth
 
 import android.app.Activity
 import android.content.Intent
+import android.os.Build
 import android.view.View
 import androidx.test.core.app.ApplicationProvider
+import com.sempermechanics.semper.BuildConfig
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.DeviceKeys
 import com.sempermechanics.semper.data.net.AccountCache
@@ -48,6 +50,17 @@ class SupportMailBodiesTest {
         val activity = controller.get()
         activity.findViewById<View>(button).performClick()
         return shadowOf(activity).nextStartedActivity
+    }
+
+    @Test
+    fun `the last lines name the app and the phone`() {
+        // A handset is a phone in what the user reads, their own mail draft included
+        // (readiness AE3-002); "device" stays only in the Device ID line.
+        assertEquals(
+            "App: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})\n" +
+                "Phone: ${Build.MANUFACTURER} ${Build.MODEL} — Android ${Build.VERSION.RELEASE}",
+            SupportMail.deviceLines(),
+        )
     }
 
     @Test

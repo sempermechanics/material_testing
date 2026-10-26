@@ -57,6 +57,7 @@
                 android:id="@+id/contentColumn"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginHorizontal="@dimen/content_side_inset"
                 android:orientation="vertical"
                 android:padding="14dp">
 
@@ -105,7 +106,7 @@
                         android:layout_height="wrap_content"
                         android:visibility="gone"
                         app:cardBackgroundColor="@android:color/transparent"
-                        app:strokeColor="@color/viewer_glass_stroke">
+                        app:strokeColor="@color/surface_outline">
 
                         <LinearLayout
                             android:layout_width="match_parent"
@@ -117,6 +118,7 @@
                                 android:id="@+id/imgRefThumb"
                                 android:layout_width="46dp"
                                 android:layout_height="46dp"
+                                android:forceDarkAllowed="false"
                                 android:background="@color/viewer_canvas"
                                 android:contentDescription="@string/reference_image_preview"
                                 android:scaleType="centerCrop" />
@@ -144,14 +146,17 @@
                                     android:layout_height="wrap_content"
                                     android:textColor="@color/viewer_chrome_muted"
                                     android:textSize="12sp" />
-                            </LinearLayout>
 
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/btnRefChange"
-                                style="@style/Widget.MaterialComponents.Button.TextButton"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/action_change" />
+                                <!-- Under the name, not beside it: beside it, a large font
+                                     scale left the name a few letters wide (AE1V-001). -->
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/btnRefChange"
+                                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="-8dp"
+                                    android:text="@string/action_change" />
+                            </LinearLayout>
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
 
@@ -245,7 +250,7 @@
                         android:layout_height="wrap_content"
                         android:visibility="gone"
                         app:cardBackgroundColor="@android:color/transparent"
-                        app:strokeColor="@color/viewer_glass_stroke">
+                        app:strokeColor="@color/surface_outline">
 
                         <LinearLayout
                             android:layout_width="match_parent"
@@ -289,26 +294,25 @@
                                         android:id="@+id/tvDefMeta"
                                         android:layout_width="match_parent"
                                         android:layout_height="wrap_content"
-                                        android:ellipsize="middle"
-                                        android:maxLines="1"
                                         android:textColor="@color/viewer_chrome_muted"
                                         android:textSize="12sp" />
-                                </LinearLayout>
 
-                                <com.google.android.material.button.MaterialButton
-                                    android:id="@+id/btnDefChange"
-                                    style="@style/Widget.MaterialComponents.Button.TextButton"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="@string/action_change" />
+                                    <com.google.android.material.button.MaterialButton
+                                        android:id="@+id/btnDefChange"
+                                        style="@style/Widget.MaterialComponents.Button.TextButton"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="-8dp"
+                                        android:text="@string/action_change" />
+                                </LinearLayout>
 
                                 <ImageButton
                                     android:id="@+id/btnFrameOrderSort"
-                                    android:layout_width="40dp"
-                                    android:layout_height="40dp"
+                                    android:layout_width="48dp"
+                                    android:layout_height="48dp"
                                     android:background="?attr/selectableItemBackgroundBorderless"
                                     android:contentDescription="@string/frame_order_label"
-                                    android:padding="8dp"
+                                    android:padding="12dp"
                                     android:src="@drawable/ic_sort"
                                     android:visibility="gone"
                                     app:tint="@color/viewer_chrome_muted" />
@@ -403,12 +407,13 @@
             android:id="@+id/btnBack"
             style="@style/Widget.Semper.Button.Outlined"
             android:layout_width="0dp"
-            android:layout_height="48dp"
+            android:layout_height="match_parent"
             android:layout_marginEnd="6dp"
             android:layout_weight="1"
             android:insetTop="0dp"
             android:insetBottom="0dp"
             android:minHeight="48dp"
+            android:paddingHorizontal="8dp"
             android:paddingTop="0dp"
             android:paddingBottom="0dp"
             android:text="@string/back"
@@ -417,60 +422,54 @@
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnCalculateFullField"
             style="@style/Widget.Semper.Button.Cta"
-            android:maxLines="1"
-            app:autoSizeMaxTextSize="16sp"
-            app:autoSizeMinTextSize="12sp"
-            app:autoSizeTextType="uniform"
+            android:maxLines="3"
             android:layout_width="0dp"
-            android:layout_height="48dp"
+            android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
             android:layout_weight="1"
             android:enabled="false"
             android:insetTop="0dp"
             android:insetBottom="0dp"
             android:minHeight="48dp"
-            android:paddingTop="0dp"
-            android:paddingBottom="0dp"
+            android:paddingHorizontal="8dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
             android:text="@string/run_analysis"
             android:visibility="gone" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnRunSweep"
             style="@style/Widget.Semper.Button.Cta"
-            android:maxLines="1"
-            app:autoSizeMaxTextSize="16sp"
-            app:autoSizeMinTextSize="12sp"
-            app:autoSizeTextType="uniform"
+            android:maxLines="3"
             android:layout_width="0dp"
-            android:layout_height="48dp"
+            android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
             android:layout_weight="1"
             android:enabled="false"
             android:insetTop="0dp"
             android:insetBottom="0dp"
             android:minHeight="48dp"
-            android:paddingTop="0dp"
-            android:paddingBottom="0dp"
+            android:paddingHorizontal="8dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
             android:text="@string/run_analysis"
             android:visibility="gone" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnNext"
             style="@style/Widget.Semper.Button.Cta"
-            android:maxLines="1"
-            app:autoSizeMaxTextSize="16sp"
-            app:autoSizeMinTextSize="12sp"
-            app:autoSizeTextType="uniform"
+            android:maxLines="3"
             android:layout_width="0dp"
-            android:layout_height="48dp"
+            android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
             android:layout_weight="1"
             android:enabled="false"
             android:insetTop="0dp"
             android:insetBottom="0dp"
             android:minHeight="48dp"
-            android:paddingTop="0dp"
-            android:paddingBottom="0dp"
+            android:paddingHorizontal="8dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
             android:text="@string/action_next" />
     </LinearLayout>
   </LinearLayout>
@@ -636,7 +635,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="@dimen/space_8"
-                    android:textColor="@color/semantic_warning"
+                    android:textColor="@color/semantic_warning_ink"
                     android:textSize="12sp"
                     android:visibility="gone"
                     tools:text="Frame 24: 41% converged. One more low frame stops the run."

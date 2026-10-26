@@ -106,7 +106,7 @@ class ReauthFlowTest {
         // The outcome Firebase produces once the verification mail is away. Driven
         // directly: the Activity builds its own AuthRepository, so there is no
         // seam to fake the network at.
-        activity.onVerificationPending(AuthRepository.EmailVerificationRequired("new@example.com"))
+        activity.onVerificationPending(AuthRepository.EmailVerificationRequired("new@example.com", "Verify it."))
 
         assertEquals(
             activity.getString(R.string.auth_sign_in),

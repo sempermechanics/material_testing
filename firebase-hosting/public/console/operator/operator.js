@@ -6,6 +6,7 @@ import { requireSignIn } from "../auth.js";
 import { api } from "../api.js";
 import { setStatus, whileWaiting } from "../status.js";
 import { unfinishedStepUpText } from "../util.js";
+import { explain } from "../messages.js";
 import { mountSwitcher } from "../switcher.js";
 import { licencesAdministered } from "../roles.js";
 import { $, labelOf } from "./state.js";
@@ -69,7 +70,7 @@ async function operatorMe(user, role) {
     me = await role;
   } catch (e) {
     $("app").hidden = true;
-    setStatus(`Could not check whether ${user.email} is an operator: ${e.message}`, true);
+    setStatus(`Could not check whether ${user.email} is an operator: ${explain(e)}`, true);
     return null;
   }
   if (me.role === "admin") return me;

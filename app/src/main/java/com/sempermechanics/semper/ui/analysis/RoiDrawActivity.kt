@@ -7,12 +7,12 @@ import android.app.Activity
 import android.content.Intent
 import android.graphics.RectF
 import android.os.Bundle
-import android.view.View
 import android.widget.EditText
 import androidx.annotation.MainThread
 import androidx.annotation.StringRes
 import androidx.annotation.WorkerThread
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.doOnLayout
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.session.CacheJanitor
@@ -25,6 +25,7 @@ import com.sempermechanics.semper.field.getRoiEditorImageSize
 import com.sempermechanics.semper.field.putRoiEdges
 import com.sempermechanics.semper.field.putRoiExtras
 import com.sempermechanics.semper.navigation.IntentKeys
+import com.sempermechanics.semper.ui.analysis.roi.RoiHud
 import com.sempermechanics.semper.ui.analysis.roi.StudioOverlayMaskEncoder
 import com.sempermechanics.semper.ui.analysis.roi.StudioOverlayView
 import com.sempermechanics.semper.ui.analysis.wizard.ReferencePreviewLoader
@@ -59,6 +60,13 @@ class RoiDrawActivity : AppCompatActivity() {
     /** True while syncing manual fields from the overlay — skip apply-on-change loops. */
     private var syncingManualFields = false
 
+    /**
+     * The crop and erase rects a recreate handed over, until the overlay has
+     * them: the reference decodes first, so a second recreate before that must
+     * save these, not the empty overlay (AE1V-005). Null once applied.
+     */
+    private var pendingSelection: RoiSelection? = null
+
     /** True from a Save until the editor finishes: the mask is still being written. */
     private var saving = false
 
@@ -75,9 +83,13 @@ class RoiDrawActivity : AppCompatActivity() {
         // reachable; the canvas shrinks and the overlay remaps the crop onto the
         // smaller image (StudioOverlayView.updateImageBounds).
         Insets.padBottomAboveIme(binding.bottomToolbar)
+        // The info pill wraps, keeping one height within a mode, so the canvas never
+        // resizes mid-drag; it is sized for the current mode once the screen is laid out.
+        binding.root.doOnLayout { showMode() }
 
         setImageSize(intent.getRoiEditorImageSize())
-        intent.getStringExtra(IntentKeys.IMAGE_FILE_PATH)?.let { loadReference(File(it), savedInstanceState) }
+        pendingSelection = savedInstanceState?.let(RoiSelection::from)
+        intent.getStringExtra(IntentKeys.IMAGE_FILE_PATH)?.let { loadReference(File(it)) }
 
         wireModeToggles()
         if (savedInstanceState != null) {
@@ -92,9 +104,10 @@ class RoiDrawActivity : AppCompatActivity() {
 
     /**
      * Decodes [file] for the canvas, then hands it to the overlay with the
-     * selection [savedInstanceState] kept, if any. A missing file closes the editor.
+     * selection a recreate kept ([pendingSelection]), if any. A missing file
+     * closes the editor.
      */
-    private fun loadReference(file: File, savedInstanceState: Bundle?) {
+    private fun loadReference(file: File) {
         // Twice the screen, as the beam-edge editor, so a zoomed-in
         // crop edge still lands on visible speckle.
         val screen = resources.displayMetrics
@@ -121,10 +134,14 @@ class RoiDrawActivity : AppCompatActivity() {
             binding.imgRoiCanvas.setImageBitmap(bitmap)
             binding.imgRoiCanvas.post {
                 binding.overlayRoi.imageView = binding.imgRoiCanvas
-                savedInstanceState?.getRoiEdges()?.let { saved ->
-                    binding.overlayRoi.restoreRelativeRoi(saved)
-                    shownRoi(binding.overlayRoi.getRelativeRoi(), crop = true)?.let(::fillManualFields)
+                pendingSelection?.let { saved ->
+                    saved.edges?.let { edges ->
+                        binding.overlayRoi.restoreRelativeRoi(edges)
+                        shownRoi(binding.overlayRoi.getRelativeRoi(), crop = true)?.let(::fillManualFields)
+                    }
+                    binding.overlayRoi.restoreRelativeHoles(saved.holes)
                 }
+                pendingSelection = null
             }
         }
     }
@@ -143,6 +160,7 @@ class RoiDrawActivity : AppCompatActivity() {
             val erase = checkedId == R.id.rbErase
             binding.overlayRoi.isSubtractMode = erase
             binding.tvHud.text = getString(if (erase) R.string.roi_hud_mode_erase else R.string.roi_hud_mode_crop)
+            showMode()
             syncManualFieldsForMode()
         }
 
@@ -210,14 +228,20 @@ class RoiDrawActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * The dock's tools and the pill's reserved lines for the current mode. The canvas
+     * may resize on a change of mode, never within one (readiness AE1V-023).
+     */
+    private fun showMode() {
+        val manual = binding.rgEditMode.checkedButtonId == R.id.rbModeManual
+        RoiHud.show(RoiHud.Mode.of(manual, erasing), binding.drawTools, binding.manualTools, binding.tvHud)
+    }
+
     private fun setEditMode(manual: Boolean) {
-        // INVISIBLE (not GONE) keeps bottomToolbar height stable so the
-        // fitCenter image does not jump when switching Draw ↔ Manual.
-        binding.drawTools.visibility = if (manual) View.INVISIBLE else View.VISIBLE
-        binding.manualTools.visibility = if (manual) View.VISIBLE else View.INVISIBLE
-        if (!manual) hideSoftKeyboard()
         // Crop/Erase stays visible and keeps its selection in both modes.
         val erase = erasing
+        RoiHud.show(RoiHud.Mode.of(manual, erase), binding.drawTools, binding.manualTools, binding.tvHud)
+        if (!manual) hideSoftKeyboard()
         binding.overlayRoi.isSubtractMode = erase
         if (manual) syncManualFieldsForMode()
         @StringRes val cropHud = if (manual) R.string.roi_hud_mode_manual else R.string.roi_hud_mode_crop
@@ -352,9 +376,11 @@ class RoiDrawActivity : AppCompatActivity() {
         outState.putBoolean(STATE_MANUAL, binding.rgEditMode.checkedButtonId == R.id.rbModeManual)
         outState.putBoolean(STATE_ERASE, erasing)
 
-        if (binding.overlayRoi.hasValidRoi) {
-            outState.putRoiEdges(binding.overlayRoi.getRelativeRoi())
-        }
+        // Not yet handed to the overlay: keep what the last recreate saved.
+        val overlay = binding.overlayRoi
+        val selection = pendingSelection
+            ?: RoiSelection(overlay.getRelativeRoi().takeIf { overlay.hasValidRoi }, overlay.relativeHoles())
+        selection.writeTo(outState)
     }
 
     private companion object {
@@ -387,4 +413,40 @@ private fun writeMask(file: File, bytes: ByteArray): Boolean = try {
 } catch (e: IOException) {
     Timber.e(e, "Could not write the ROI mask")
     false
+}
+
+/**
+ * The editor's selection in image pixels: the crop's edges (null for none) and
+ * the erase rects, as a recreate keeps them (readiness AE1V-004, AE1V-005).
+ */
+private class RoiSelection(val edges: RectF?, val holes: List<StudioOverlayView.Hole>) {
+
+    fun writeTo(state: Bundle) {
+        edges?.let(state::putRoiEdges)
+        state.putFloatArray(
+            STATE_HOLE_RECTS,
+            holes.flatMap { listOf(it.rect.left, it.rect.top, it.rect.right, it.rect.bottom) }.toFloatArray(),
+        )
+        state.putIntArray(STATE_HOLE_MODES, holes.map { it.mode.ordinal }.toIntArray())
+    }
+
+    companion object {
+        private const val STATE_HOLE_RECTS = "roi_edit_hole_rects"
+        private const val STATE_HOLE_MODES = "roi_edit_hole_modes"
+        private const val EDGES_PER_RECT = 4
+
+        fun from(state: Bundle): RoiSelection {
+            val rects = state.getFloatArray(STATE_HOLE_RECTS) ?: FloatArray(0)
+            val modes = state.getIntArray(STATE_HOLE_MODES) ?: IntArray(0)
+            val tools = StudioOverlayView.RoiMode.entries
+            val holes = modes.indices.filter { (it + 1) * EDGES_PER_RECT <= rects.size }.map { i ->
+                val edges = rects.copyOfRange(i * EDGES_PER_RECT, (i + 1) * EDGES_PER_RECT)
+                StudioOverlayView.Hole(
+                    tools.getOrElse(modes[i]) { StudioOverlayView.RoiMode.RECTANGLE },
+                    RectF(edges.component1(), edges.component2(), edges.component3(), edges.component4()),
+                )
+            }
+            return RoiSelection(state.getRoiEdges(), holes)
+        }
+    }
 }

@@ -2,8 +2,11 @@ package com.sempermechanics.semper.ui.common.dialog
 
 import android.content.Context
 import android.view.View
+import androidx.core.view.ViewCompat
 import androidx.core.view.isVisible
 import com.sempermechanics.semper.R
+import com.sempermechanics.semper.data.account.LicenseEntitlements
+import com.sempermechanics.semper.data.policy.FeatureAccess
 
 /**
  * Locked, not hidden (`FeatureLocks`): a feature the account's licence does
@@ -32,5 +35,18 @@ object LicenseLock {
             control.isLongClickable = false
         }
         area.setOnClickListener { explain(it.context) }
+    }
+
+    /**
+     * Marks one control that stays tappable so its tap can explain (a viewer
+     * or sweep export): greyed unless [access] is open, and announced
+     * "Locked", as a locked Settings section's lock icon is, when the licence
+     * is what keeps it shut (readiness AE1-015). Paused by the kill switch is
+     * greyed only: no licence unlocks it.
+     */
+    fun mark(control: View, access: FeatureAccess) {
+        control.alpha = if (access == FeatureAccess.OPEN) 1f else LicenseEntitlements.BLOCKED_ALPHA
+        val state = if (access == FeatureAccess.LOCKED) control.context.getString(R.string.license_locked) else null
+        ViewCompat.setStateDescription(control, state)
     }
 }

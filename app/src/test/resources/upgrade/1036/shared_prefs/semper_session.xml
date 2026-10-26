@@ -1,0 +1,14 @@
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <string name="uid">u-1036</string>
+    <string name="email">qa@example.com</string>
+    <string name="last_status">APPROVED</string>
+    <string name="role">user</string>
+    <boolean name="device_registered" value="true" />
+    <int name="quota_used" value="4" />
+    <int name="quota_local_count" value="4" />
+    <string name="terms_required_version">2026-09-01</string>
+    <string name="terms_accepted_version">2026-09-01</string>
+    <boolean name="terms_accepted_synced" value="true" />
+    <string name="improvement_consent">true</string>
+</map>

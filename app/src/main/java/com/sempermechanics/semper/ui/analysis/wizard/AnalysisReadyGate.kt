@@ -56,10 +56,12 @@ class AnalysisReadyGate(
     }
 
     /**
-     * "1100 × 800 px · 8,800 points" on the ROI row, and "Compute · about
-     * 1 min" on the button. Runs on every step or region change, so the count
-     * follows both. The time comes from this phone's past runs; without any,
-     * the button says Compute alone.
+     * "1100 × 800 px · 8,800 points" on the ROI row, and "Compute · 1 min"
+     * on the button, spoken "Compute, about 1 minute" (the half-width button
+     * has the sweep's Run button's short form; "about" did not fit at font
+     * scale 2). Runs on every step or region change, so the count follows
+     * both. The time comes from this phone's past runs; without any, the
+     * button says Compute alone.
      */
     private fun showEstimate() {
         val subset = settings.sliderSubsetSize.value.toInt()
@@ -72,9 +74,12 @@ class AnalysisReadyGate(
         val rate = AppSettings.runPointsPerSecond(binding.root.context)
         val seconds = RunEstimate.seconds(points, inputs.deformedFrames.size, rate)
         binding.btnCalculateFullField.text = if (seconds != null) {
-            res.getString(R.string.run_compute_eta_fmt, RunEstimate.duration(res, seconds))
+            res.getString(R.string.run_compute_eta_fmt, RunEstimate.shortDuration(res, seconds))
         } else {
             res.getString(R.string.run_analysis)
+        }
+        binding.btnCalculateFullField.contentDescription = seconds?.let {
+            res.getString(R.string.run_compute_eta_spoken_fmt, RunEstimate.spokenDuration(res, it))
         }
     }
 

@@ -76,7 +76,7 @@ internal class HomeCloudCheck(
                 }
             }
             is CloudSync.Outcome.Failed -> if (showsCloudState()) {
-                val text = activity.getString(R.string.cloud_check_failed_fmt, outcome.reason)
+                val text = activity.getString(outcome.message)
                 Feedback.toast(activity, text, long = true)
             }
             // Normal for an offline-first app — don't nag. Skipped = checked

@@ -86,7 +86,7 @@ test("a failed licence lookup is reported as uncertainty, not routed on", async 
   assert.deepEqual(location.replaced, []);
   assert.deepEqual(offered(), ["operator/", "institution/", "account/"]);
   assert.equal($("status").textContent,
-    "Could not check whether you administer an institution licence (http_500).");
+    "Could not check whether you administer an institution licence: Something went wrong on the server. Try again; if it keeps happening, tell Semper support.");
   assert.equal($("status").className, "muted err");
 });
 

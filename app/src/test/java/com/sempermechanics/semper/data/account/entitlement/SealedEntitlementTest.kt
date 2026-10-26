@@ -65,8 +65,44 @@ class SealedEntitlementTest {
         listOf("", ".", "abc", "abc.def", "!!.!!").forEach {
             assertEquals(it, SealedEntitlement.Unsealed.Tampered, SealedEntitlement.unseal(it, tagger))
         }
-        val junk = "{\"v\":2}".toByteArray()
-        val tagged = Base64Url.encode(junk) + "." + Base64Url.encode(tagger.tag(junk))
-        assertEquals(SealedEntitlement.Unsealed.Tampered, SealedEntitlement.unseal(tagged, tagger))
+        listOf("{\"v\":1}", "{\"v\":0}", "{\"token\":\"h.p.s\"}").forEach {
+            val junk = it.toByteArray()
+            val tagged = Base64Url.encode(junk) + "." + Base64Url.encode(tagger.tag(junk))
+            assertEquals(it, SealedEntitlement.Unsealed.Tampered, SealedEntitlement.unseal(tagged, tagger))
+        }
+    }
+
+    /**
+     * A v1 record as phones store it (readiness TE1-004). The fixture was
+     * computed outside this code, in Python, from the format the seal writes:
+     * the JSON body `{"v":1,"token":"h.p.s","ls":…,"rb":false}` with this
+     * file's [record], base64url without padding, ".", and its HMAC-SHA256
+     * under the key "device-key". A VERSION bump must keep this test passing:
+     * a phone upgraded past it still holds a v1 record.
+     */
+    private val sealedV1: String by lazy {
+        checkNotNull(javaClass.getResource("/entitlement/sealed_v1.txt")).readText().trim()
+    }
+
+    @Test
+    fun `a stored v1 record still unseals`() {
+        assertEquals(SealedEntitlement.Unsealed.Ok(record), SealedEntitlement.unseal(sealedV1, tagger))
+    }
+
+    @Test
+    fun `this build writes v1 byte for byte`() {
+        assertEquals(sealedV1, SealedEntitlement.seal(record, tagger))
+    }
+
+    @Test
+    fun `a well-tagged record from a newer build is not tampering`() {
+        // A phone that ran a newer build and went back to this one: the MAC
+        // is this phone's, so nothing was edited; this build just cannot read it.
+        val newer = "{\"v\":2,\"token\":\"h.p.s\"}".toByteArray()
+        val tagged = Base64Url.encode(newer) + "." + Base64Url.encode(tagger.tag(newer))
+        assertEquals(SealedEntitlement.Unsealed.Newer, SealedEntitlement.unseal(tagged, tagger))
+        // Untagged, the same body is still tampering.
+        val forged = Base64Url.encode(newer) + "." + Base64Url.encode(hmac("attacker").tag(newer))
+        assertEquals(SealedEntitlement.Unsealed.Tampered, SealedEntitlement.unseal(forged, tagger))
     }
 }

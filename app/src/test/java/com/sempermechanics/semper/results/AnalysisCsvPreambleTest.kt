@@ -57,15 +57,17 @@ class AnalysisCsvPreambleTest {
         )
         AnalysisCsvWriter.write(out, sweep = false, frames, metadata)
         val text = out.readText()
-        assertTrue(text.contains("# semper_csv_version,1\n"))
+        assertTrue(text.contains("# semper_csv_version,2\n"))
         assertTrue(text.contains("# reference,ref.jpg\n"))
         assertTrue(text.contains("# roi_x,10\n"))
         assertTrue(!text.contains("noise_floor"))
         assertTrue(text.contains("# field_stats\n"))
+        // One name per quantity: the stats rows call the VSG what the sweep rows do (AE1-018).
+        assertTrue(text.contains("# image,subset_px,step_px,vsg_px,field,max,min,mean,unit\n"))
         assertTrue(text.contains("# frame_a.jpg,41,5,15,U,"))
         assertTrue(
             text.contains(
-                "\nimage,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd," +
+                "\nimage,x_px,y_px,u_px,v_px,exx_strain,eyy_strain,exy_strain,znssd," +
                     "shift_u_px,shift_v_px,shift_rot_deg\n",
             ),
         )
@@ -100,7 +102,7 @@ class AnalysisCsvPreambleTest {
         val text = out.readText()
         assertTrue(
             text.contains(
-                "\nimage,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd," +
+                "\nimage,x_px,y_px,u_px,v_px,exx_strain,eyy_strain,exy_strain,znssd," +
                     "shift_u_px,shift_v_px,shift_rot_deg\n",
             ),
         )
@@ -176,5 +178,27 @@ class AnalysisCsvPreambleTest {
     @Test
     fun `every point row has as many fields as the sweep header`() {
         assertFieldCountParity(sweep = true)
+    }
+
+    /**
+     * Version 2 (readiness AE1-016): the stats rows give strain in mε with a unit
+     * column, the point rows raw strain; the point columns say so in their names,
+     * and the values themselves are unchanged from version 1.
+     */
+    @Test
+    fun `point strain columns name their unit and keep the raw values`() {
+        val out = File.createTempFile("semper_csv_unit", ".csv")
+        out.deleteOnExit()
+        val data = translatedGrid()
+        val frames = listOf(AnalysisCsvWriter.Frame("frame_a.jpg", 41, 5, 15, { data }))
+        val metadata = AnalysisCsvWriter.Metadata("ref.jpg", "VSG", 640, 480, 0, 0, 640, 480)
+        AnalysisCsvWriter.write(out, sweep = false, frames, metadata)
+        val lines = out.readLines()
+
+        assertTrue(lines.contains("# frame_a.jpg,41,5,15,Exx,0.10000,0.10000,0.10000,mε"))
+        val header = lines.first { it.startsWith("image,") }.split(',')
+        assertEquals(listOf("exx_strain", "eyy_strain", "exy_strain"), header.subList(5, 8))
+        val row = lines.first { it.startsWith("frame_a.jpg,") }.split(',')
+        assertEquals(listOf("1E-4", "1E-4", "1E-4"), row.subList(5, 8))
     }
 }

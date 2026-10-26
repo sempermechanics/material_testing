@@ -82,8 +82,8 @@ function typeImport(value, id = "rosterImportText") {
 test("the roster card shows the seat counts from the staff route", async () => {
   await openCard();
   assert.deepEqual(tiles(), [
-    ["4 assigned", false], ["2 active in the last 7 days", false], ["1 on hold", false],
-    ["2 invited", false], ["1 removed, device not told yet", true], ["3 seats ending within 30 days", true],
+    ["4 assigned", false], ["2 active in the last 7 days", false], ["1 paused", false],
+    ["2 invited", false], ["1 removed, phone not told yet", true], ["3 seats ending within 30 days", true],
   ]);
   assert.deepEqual(sent(/summary/), [`GET ${STAFF}/summary`]);
 });
@@ -179,7 +179,9 @@ test("an import previews its rows, posts to the staff route, answers every row a
     `GET ${STAFF}/seats`, `GET ${STAFF}/summary`, `GET ${STAFF}`,
   ]);
   assert.equal(rows().find((r) => r[0] === "SEMP-UNI1")[3], "1/5 in use · 5 on roster", "the licence row re-read");
-  assert.deepEqual(hint(), ["", "muted"]);
+  // The card's own message line, live, says the outcome too (AE2-009).
+  assert.deepEqual(hint(), ["1 added, 1 already on the roster, 1 not added.", "muted"]);
+  assert.equal($("rosterHint").getAttribute("aria-live"), "polite");
 });
 
 test("a chosen file fills the import; a refused one is said in the card", async () => {
@@ -231,7 +233,10 @@ const events = [
 ];
 
 test("the audit log reads the staff route on demand, by date, a page at a time", async () => {
-  const query = "since=2026-10-01&until=2026-10-02&page_size=50";
+  // From / To are local days: local midnights, the To day included.
+  const query = `${new URLSearchParams({
+    since: new Date(2026, 9, 1).toISOString(), until: new Date(2026, 9, 3).toISOString(),
+  })}&page_size=50`;
   await openCard({
     [`GET ${STAFF}/audit?${query}`]: () => json(200, { events, page: { nextPageToken: "e1" } }),
     [`GET ${STAFF}/audit?${query}&page_token=e1`]: () => json(200, {
@@ -301,6 +306,24 @@ test("another licence opened resets the audit log", async () => {
   assert.equal(text($("rosterAuditRows")), "Choose dates, or none for everything, and press Show.");
 });
 
+test("the desk's roster filters, sorts and counts as the institution page's does", async () => {
+  await openCard();
+  assert.equal($("rosterCount").textContent, "Showing 2 of 2");
+  $("rosterFilter").value = "ben";
+  $("rosterFilter").dispatch("input");
+  assert.deepEqual(tableRows("rosterRows").map((r) => r[0]), ["ben@uni.edu"]);
+  $("rosterFilter").value = "";
+  $("rosterFilter").dispatch("input");
+  $("rosterHead").querySelector('button[data-sort="member"]').click();
+  $("rosterHead").querySelector('button[data-sort="member"]').click();
+  assert.deepEqual(tableRows("rosterRows").map((r) => r[0]), ["ben@uni.edu", "ana@uni.edu"]);
+  // Another licence's roster starts unfiltered and unsorted.
+  $("rosterFilter").value = "ana";
+  await click(rowButton("roster", UNI2.id));
+  assert.equal($("rosterFilter").value, "");
+  assert.equal($("rosterHead").querySelector("th").getAttribute("aria-sort"), "none");
+});
+
 /* --------------------------------------------------------------- parity */
 
 test("the desk's tools draw exactly what the institution page draws for the same answers", async () => {
@@ -348,7 +371,7 @@ test("the desk's tools draw exactly what the institution page draws for the same
   const staffSent = sent(/lic-uni-1/).map((line) => line.replace(STAFF, "{root}"))
     .filter((line) => line !== "GET {root}");
 
-  assert.match(institution[0], /removed, device not told yet/);
+  assert.match(institution[0], /removed, phone not told yet/);
   assert.match(institution[2], /no seats left on this licence/);
   assert.match(institution[3], /INSTITUTION_SEAT_PATCH/);
   assert.deepEqual(desk, institution);

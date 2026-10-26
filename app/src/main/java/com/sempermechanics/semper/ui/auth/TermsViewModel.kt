@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.AuthRepository
+import com.sempermechanics.semper.data.account.userMessageOr
 import com.sempermechanics.semper.data.net.TermsVersionMismatchException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -72,7 +73,7 @@ class TermsViewModel(app: Application) : AndroidViewModel(app) {
                         if (error is TermsVersionMismatchException) {
                             app.getString(R.string.terms_error_update_app)
                         } else {
-                            error.message ?: app.getString(R.string.terms_error_generic)
+                            error.userMessageOr(app.getString(R.string.terms_error_generic))
                         },
                     )
                 },

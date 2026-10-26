@@ -85,15 +85,21 @@ _WRITE_RETRY = retries.Retry(
     predicate=retries.if_exception_type(ResourceExhausted, ServiceUnavailable),
     initial=0.1, maximum=2.0, multiplier=1.3, timeout=_WRITE_TIMEOUT_S,
 )
+#: The readiness probe's one read (`ping`): a single short attempt, no retry
+#: window behind it. `/readyz` has to answer inside the uptime check's 10 s,
+#: and a slow Firestore is exactly what it should report (readiness TE3-010).
+PING_TIMEOUT_S = 3.0
+_PING_RETRY = retries.Retry(predicate=lambda _exc: False, timeout=PING_TIMEOUT_S)
 
 
-def _get(ref, transaction=None):
+def _get(ref, transaction=None, *, retry=_READ_RETRY, timeout=_GET_TIMEOUT_S):
     """`ref.get()` under the read deadline, inside `transaction` when given.
 
     A transaction's own begin and commit take no timeout in the client's
-    public API; they keep its 60 s default.
+    public API; they keep its 60 s default. Only `ping` passes its own
+    `retry` / `timeout`.
     """
-    return ref.get(transaction=transaction, retry=_READ_RETRY, timeout=_GET_TIMEOUT_S)
+    return ref.get(transaction=transaction, retry=retry, timeout=timeout)
 
 
 def _stream(query) -> list:
@@ -202,7 +208,8 @@ def ping() -> None:
         # A missing document is still a successful round-trip.
         # Doc ids matching __.*__ are reserved by Firestore and raise locally
         # (misreported as unreachable); use a plain probe id.
-        _get(db().collection("users").document("readyz_ping"))
+        _get(db().collection("users").document("readyz_ping"),
+             retry=_PING_RETRY, timeout=PING_TIMEOUT_S)
     except Exception as e:  # noqa: BLE001
         log.exception("firestore ping failed: %s", e)
         raise DependencyError(errors.FIRESTORE_UNREACHABLE, "firestore") from e

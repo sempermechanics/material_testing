@@ -18,7 +18,7 @@ chunk own?" here.
 | **cloud** | Upload, API, restore, quota, account deletion | `cloud/ApiDtosContractTest`, `ApiErrorMappingTest`, `UploadResumableTest`, `DicUploadWorkerOutcomesTest`, `RestoreAndImportSafetyTest`, `RestoreStartTest`, `CloudBackupListingTest`, `QuotaGateTest`, `AccountDeletionTest`, `SessionEverythingExporterTest`, `data/cloud/SessionUploadBundlerTest` | `data/cloud/SessionUploadBundlerDeviceTest` |
 | **settings** | Settings sections, contacting support, account deletion | `settings/AnalysisEntriesTest`, `HelpSupportSectionTest`, `DeleteAccountReauthTest`, `AccountDeletionDeathTest`, `AppSettingsMigrateTest` | — |
 | **analytics** | Consent-gated Firebase Analytics events | `diagnostics/SemperAnalyticsTest` | — |
-| **upgrade** | Prefs / session index forward compatibility | (covered in settings + session) | `upgrade/PrefsUpgradeSmokeTest` |
+| **upgrade** | Prefs / session index forward compatibility | `upgrade/UpgradeFrom1036Test`: v1.2-beta.4's index and preference files (fixtures derived from its source at 33dce87d by `src/test/resources/upgrade/1036/make_fixture.py`, not captured from a device) | `upgrade/PrefsUpgradeSmokeTest` |
 | **e2e** | Wizard chrome smoke (Next + toolbar; Back / Compute / instruction GONE on step 1) | — | `AnalysisWizardSmokeTest` |
 | **pipeline** | JNI + native runtime | — | `pipeline/EnginePipelineSmokeTest` |
 | **benchmark** | Startup / screen / viewer-scrub Macrobenchmarks; hot-path microbenchmarks | — | `:app` androidTest `benchmark/HotPathMicroBenchmark`, `:benchmark` module (both in CI's `tier-benchmark`: label `benchmark` / workflow_dispatch / a PR touching a hot path) |
@@ -53,6 +53,14 @@ A backend response that grows a field fails the backend test until the fixture
 has it. A field removed or renamed on either side fails one of the two suites;
 change the client first, since installed builds keep reading the old name. The
 `app` and `backend` CI filters both include `contracts/**`.
+
+The backend's whole request surface is pinned too, in
+`backend/contracts/app-openapi.json` ([ADR-029](../adr/ADR-029-api-contract-snapshot.md)):
+`backend/tests/test_openapi_snapshot.py` fails, printing the diff, when the app's
+OpenAPI document changes. After a deliberate change, rewrite it with
+`UPDATE_OPENAPI_SNAPSHOT=1 python -m pytest tests/test_openapi_snapshot.py` (from
+`backend/`) and review the diff in the PR. No route declares a response model, so
+responses are pinned only by the fixtures above.
 
 ## Shared fixtures
 
@@ -402,6 +410,7 @@ python scripts/check_kotlin_file_size.py                   # ADR-015's 500-line 
 python scripts/check_activity_scope_work.py                # ADR-016 rule 1 on screens' lifecycleScope (TD-291)
 python scripts/check_swallowed_cancellation.py            # ADR-018: cancellation rethrown around suspend calls (TD-171)
 python -m unittest discover -s scripts/tests -p "test_*.py"
+python scripts/check_engine_pin.py                         # its own always-on job, engine-pin (TE2-006)
 ```
 
 `check_kotlin_file_size.py` does not count the fused hot-loop functions
@@ -435,7 +444,8 @@ in `scripts/tests/fixtures/cancellation/`.
 ## What not to test here
 
 - Algorithm accuracy → the engine's own suite, which lives in the `engine/`
-  submodule and runs in the engine repo's CI, not here
+  submodule and runs in the engine repo's CI (this repo's `engine-host-sanitized`
+  job reruns its host suite under ASan+UBSan at the pin)
   ([docs/engine/TESTING.md](../engine/TESTING.md))
 - Backend API → backend pytest (`backend/tests/`)
 - Real Firebase Auth → `auth/FirebaseAuthIntegrationTest`: email/password

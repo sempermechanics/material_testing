@@ -28,6 +28,9 @@ internal interface FrameLoaderHost {
 
     /** Puts frame [index], decoded as [data], on screen. Main thread. */
     fun applyLoadedFrame(index: Int, data: FloatArray)
+
+    /** Frame [index]'s `.dat` could not be read: say so, and keep the frame on screen. Main thread. */
+    fun onFrameUnreadable(index: Int)
 }
 
 /**
@@ -92,7 +95,7 @@ internal class ViewerFrameLoader(
                 val data = readFrameDat(index)
                 if (data == null) {
                     // Nothing to draw: the opening pill must not wait on it.
-                    withContext(Dispatchers.Main) { captions.openingDone() }
+                    withContext(Dispatchers.Main) { unreadable(index) }
                     return@launch
                 }
                 scrubCache.putData(index, data)
@@ -118,9 +121,15 @@ internal class ViewerFrameLoader(
                 }
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 Timber.e(e, "Failed to load frame $index")
-                withContext(Dispatchers.Main) { captions.openingDone() }
+                withContext(Dispatchers.Main) { unreadable(index) }
             }
         }
+    }
+
+    /** Drops the opening pill and tells the viewer, if [index] is still the frame asked for (readiness AE1-013). */
+    private fun unreadable(index: Int) {
+        captions.openingDone()
+        if (host.viewModel.currentFrameIndex == index) host.onFrameUnreadable(index)
     }
 
     /**

@@ -22,8 +22,8 @@ object LicenseErrors {
                 context.getString(R.string.restore_paused)
             ApiErrors.hasCode(detail, ApiErrors.DRIVE_FILE_GONE) ->
                 context.getString(R.string.restore_backup_gone)
-            detail.isBlank() -> context.getString(R.string.restore_failed_generic)
-            else -> context.getString(R.string.restore_failed_fmt, detail)
+            // An unknown code is the generic message, never the code (AE1-009).
+            else -> context.getString(R.string.restore_failed_generic)
         }
     }
 

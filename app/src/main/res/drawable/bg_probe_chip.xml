@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="#B8121212" />
+    <solid android:color="@color/viewer_probe_fill" />
     <!-- Own rim token, not viewer_glass_stroke: this chip is dark in BOTH themes, so
          its rim must stay light even where the glass rim goes dark for a light canvas. -->
     <stroke

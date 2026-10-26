@@ -56,6 +56,14 @@ on:
           - dry-run
           - apply
         default: dry-run
+      rollback_drill:
+        description: >
+          Staging only. Fail the post-promote health check on purpose, so the
+          rollback step routes traffic back to the previous revision (the D5
+          revision-rollback drill, TD-220). Ignored for production.
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -385,7 +393,13 @@ jobs:
           token_format: id_token
           id_token_audience: ${{ steps.service_url.outputs.url }}
 
-      - name: Post-deploy smoke (/readyz on candidate)
+      # /readyz proves the container answers and reaches Firestore and Drive;
+      # GET /v1/config proves the routers and the auth stack loaded. Its
+      # X-Forwarded-Authorization is not a Bearer, so the app answers its own
+      # JSON 401 missing_bearer without verifying a token or writing an audit
+      # row (the ID token above only gets the call past Cloud Run's IAM, which
+      # answers HTML; a missing route is 404) (TE6-004).
+      - name: Post-deploy smoke (/readyz and /v1/config on candidate)
         id: smoke
         env:
           # Tag URL from deploy (cand-…---semper-api-….run.app); aud is service URL.
@@ -394,19 +408,33 @@ jobs:
         run: |
           set -euo pipefail
           echo "Smoking candidate ${URL}/readyz"
+          ready=""
           for i in 1 2 3 4 5; do
             CODE=$(curl -sS -o /tmp/readyz.json -w '%{http_code}' --max-time 15 \
               -H "Authorization: Bearer ${ID_TOKEN}" "${URL}/readyz" || echo 000)
             if [ "$CODE" = "200" ]; then
               echo "readyz ok"
               cat /tmp/readyz.json
-              exit 0
+              ready=1
+              break
             fi
             echo "readyz attempt $i → HTTP $CODE"
             sleep 5
           done
-          echo "Smoke failed"
-          cat /tmp/readyz.json || true
+          if [ -z "$ready" ]; then
+            echo "Smoke failed"
+            cat /tmp/readyz.json || true
+            exit 1
+          fi
+          CODE=$(curl -sS -o /tmp/config.json -w '%{http_code}' --max-time 15 \
+            -H "Authorization: Bearer ${ID_TOKEN}" -H "X-Forwarded-Authorization: smoke" \
+            "${URL}/v1/config" || echo 000)
+          if [ "$CODE" = "401" ] && jq -e '.detail == "missing_bearer"' /tmp/config.json >/dev/null 2>&1; then
+            echo "/v1/config ok: the app's own 401 missing_bearer"
+            exit 0
+          fi
+          echo "Smoke failed: /v1/config → HTTP $CODE, expected the app's JSON 401 missing_bearer"
+          head -c 500 /tmp/config.json || true
           exit 1
 
       # Only reached when smoke passed — live traffic stays on PREV until here.
@@ -437,6 +465,43 @@ jobs:
           gcloud run services update-traffic "$SERVICE" --to-latest \
             ${TAGS:+--remove-tags="$TAGS"} \
             --project "$PROJECT" --region "$REGION"
+
+      # The live service, through its own URL, after the promote: the same two
+      # probes as the candidate smoke, a few times. Before this step nothing
+      # after the promote called the service, so the rollback below could fire
+      # only when a gcloud describe failed (TE6-004). It asserts status and JSON
+      # shape only, so a healthy revision is not rolled back for a slow answer:
+      # three tries, 10 s apart. rollback_drill (staging only) fails it on
+      # purpose for the TD-220 revision-rollback drill.
+      - id: post_promote_health
+        name: Post-promote health (live service)
+        env:
+          URL: ${{ steps.service_url.outputs.url }}
+          ID_TOKEN: ${{ steps.smoke_token.outputs.id_token }}
+          DRILL: ${{ github.event.inputs.rollback_drill }}
+          ENVIRONMENT: ${{ github.event.inputs.environment }}
+        run: |
+          set -euo pipefail
+          if [ "$DRILL" = "true" ] && [ "$ENVIRONMENT" = "staging" ]; then
+            echo "::warning::rollback_drill: failing the post-promote check on purpose"
+            exit 1
+          fi
+          for i in 1 2 3; do
+            READY=$(curl -sS -o /tmp/live-readyz.json -w '%{http_code}' --max-time 15 \
+              -H "Authorization: Bearer ${ID_TOKEN}" "${URL}/readyz" || echo 000)
+            CONFIG=$(curl -sS -o /tmp/live-config.json -w '%{http_code}' --max-time 15 \
+              -H "Authorization: Bearer ${ID_TOKEN}" -H "X-Forwarded-Authorization: smoke" \
+              "${URL}/v1/config" || echo 000)
+            if [ "$READY" = "200" ] && [ "$CONFIG" = "401" ] \
+                && jq -e '.detail == "missing_bearer"' /tmp/live-config.json >/dev/null 2>&1; then
+              echo "live service healthy: /readyz 200, /v1/config 401 missing_bearer"
+              exit 0
+            fi
+            echo "post-promote attempt $i: /readyz → $READY, /v1/config → $CONFIG"
+            sleep 10
+          done
+          echo "::error::the promoted revision failed its health check; rolling back"
+          exit 1
 
       # Deliberately AFTER the smoke + promote gate.
       # A missing release-train label only warns: this runs after the promote,

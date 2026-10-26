@@ -107,7 +107,7 @@
             <input id="emailLock" type="email" placeholder="person@lab.org" />
             <span class="hint">
               The licence attaches when this address signs in, and binds to the
-              first device it signs in on. Nothing to send, nothing to type.
+              first phone it signs in on. Nothing to send, nothing to type.
             </span>
           </label>
         </div>
@@ -200,6 +200,7 @@
             <tbody id="licenceRows"></tbody>
           </table>
         </div>
+        <p id="demoNote" class="hint" hidden></p>
         <div class="row table-foot">
           <button id="loadMore" class="secondary" hidden>Load more</button>
         </div>
@@ -277,7 +278,7 @@
           <p class="muted">
             Issues an institution key with this licence's term, grace, support
             date and analyses limit. The holder moves onto its roster on the
-            same device; this licence is then revoked. One licence per person
+            same phone; this licence is then revoked. One licence per person
             holds throughout.
           </p>
           <div id="convertFields" class="grid">
@@ -324,12 +325,22 @@
         <div class="row toolbar">
           <input id="memberEmail" type="email" placeholder="person@university.edu" aria-label="Member's email" />
           <button id="addMember">Add to roster</button>
-          <span id="rosterHint" class="muted"></span>
+          <span id="rosterHint" class="muted" aria-live="polite"></span>
+        </div>
+        <!-- Narrows, sorts and pages the rows already read (../roster.js). -->
+        <div class="row toolbar">
+          <input id="rosterFilter" type="search" placeholder="Filter by address, status or phone"
+                 aria-label="Filter the roster" autocomplete="off" />
+          <span id="rosterCount" class="muted" aria-live="polite"></span>
         </div>
         <div class="wrap">
           <table>
-            <thead>
-              <tr><th>Member</th><th>Status</th><th>Seat</th><th>Device</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr>
+            <thead id="rosterHead">
+              <tr>
+                <th aria-sort="none"><button type="button" class="sort" data-sort="member">Member</button></th>
+                <th aria-sort="none"><button type="button" class="sort" data-sort="status">Status</button></th>
+                <th>Seat</th><th>Phone</th><th class="actions"><span class="visually-hidden">Actions</span></th>
+              </tr>
             </thead>
             <tbody id="rosterRows"></tbody>
           </table>
@@ -346,11 +357,13 @@
             as it is. Up to 500 rows at a time. Anyone already on the roster
             is left as they are, so importing a file twice is harmless.
           </p>
+          <label for="rosterImportText" class="visually-hidden">Addresses to import</label>
           <textarea id="rosterImportText" rows="5" spellcheck="false" autocomplete="off"
                     placeholder="email&#10;ana@institution.edu&#10;ben@institution.edu"></textarea>
           <div class="row">
+            <label for="rosterImportFile" class="visually-hidden">CSV file</label>
             <input id="rosterImportFile" type="file" accept=".csv,text/csv,text/plain" />
-            <span class="muted" id="rosterImportPreview"></span>
+            <span class="muted" id="rosterImportPreview" aria-live="polite"></span>
             <span class="spacer"></span>
             <button id="rosterImportSubmit" disabled>Import</button>
           </div>
@@ -370,7 +383,7 @@
           <h3>Audit log</h3>
           <p class="muted">
             Who changed what on this licence — its members, invitations and
-            devices — newest first. Exports hold up to 5,000 events; narrow the
+            phones — newest first. Exports hold up to 5,000 events; narrow the
             dates for more.
           </p>
           <div class="row">
@@ -431,7 +444,7 @@
           <div class="wrap">
             <table>
               <thead>
-                <tr><th>Account</th><th>Name</th><th>Device</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr>
+                <tr><th>Account</th><th>Name</th><th>Phone</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr>
               </thead>
               <tbody id="userRows"></tbody>
             </table>
@@ -445,7 +458,7 @@
           <p class="muted">
             When a Demo account asks to move to a new phone. Its old phone is signed
             out and held off for 24 hours; the new one can then sign in. For a
-            licensed account use <b>New device</b> on the licence instead.
+            licensed account use <b>New phone</b> on the licence instead.
           </p>
           <div class="row toolbar">
             <input id="releaseEmail" type="email" placeholder="person@lab.org" aria-label="Demo account's email" />

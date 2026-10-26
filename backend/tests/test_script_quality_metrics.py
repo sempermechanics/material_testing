@@ -196,7 +196,7 @@ def report(tmp_path):
     _write(root / "app/src/main/res/layout/b.xml", "<b/>\n")
     _write(root / "app/src/main/res/layout/c.txt", "x\n")
     out = tmp_path / "metrics"
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603 - argv is sys.executable and this repo's own script, no shell
         [sys.executable, str(_SCRIPT), str(root), str(out)],
         capture_output=True, text=True, encoding="utf-8",
     )
@@ -298,6 +298,6 @@ def test_empty_file_has_zero_lines(tmp_path):
     _write(root / _PKG / "Empty.kt", "")
     _write(root / _PKG / "One.kt", "val a = 1\n")
     out = tmp_path / "m"
-    subprocess.run([sys.executable, str(_SCRIPT), str(root), str(out)], check=True, capture_output=True)
+    subprocess.run([sys.executable, str(_SCRIPT), str(root), str(out)], check=True, capture_output=True)  # noqa: S603 - argv is sys.executable and this repo's own script, no shell
     main = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))["main"]
     assert main["kotlin_lines"] == 1

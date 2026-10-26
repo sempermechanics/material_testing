@@ -77,7 +77,7 @@ test("a delete the network lost keeps the row and says why", async () => {
   confirms.answer(true);
   prompts.answer("SEMP-IND1");
   await click(rowButton("delete", IND.id));
-  assert.deepEqual(status(), ["Could not delete: Failed to fetch", "muted err"]);
+  assert.deepEqual(status(), ["Could not delete: The server could not be reached — check your connection and try again.", "muted err"]);
   assert.deepEqual(labels(), ["SEMP-IND1", "SEMP-UNI1"]);
 });
 
@@ -123,7 +123,7 @@ test("with Show revoked ticked, a revoked row stays, offering only Delete, and n
   await click(rowButton("revoke", IND.id));
   assert.deepEqual(status(), ["SEMP-IND1 revoked — its holder is on demo from their next request.", "muted"]);
   assert.deepEqual(rows().map((r) => [r[0], r[6], r[8]]), [["SEMP-IND1", "revoked", "Delete"], ["SEMP-UNI1", "redeemed",
-    "Edit Roster More Verify Devices Revoke Delete"]]);
+    "Edit Roster More Verify Phone history Revoke Delete"]]);
 });
 
 test("revoking the licence whose roster is open closes the roster; another licence leaves it", async () => {
@@ -149,7 +149,7 @@ test("a revoke the network lost says why and keeps the row", async () => {
   confirms.answer(true);
   prompts.answer("SEMP-IND1");
   await click(rowButton("revoke", IND.id));
-  assert.deepEqual(status(), ["Could not revoke: Failed to fetch", "muted err"]);
+  assert.deepEqual(status(), ["Could not revoke: The server could not be reached — check your connection and try again.", "muted err"]);
   assert.deepEqual(labels(), ["SEMP-IND1", "SEMP-UNI1"]);
 });
 
@@ -253,7 +253,7 @@ test("a refused restore is explained, and Restore can be pressed again", async (
     [() => json(404, { detail: "deleted_license_not_found" }), "Already restored or purged."],
     [() => json(409, { detail: "license_exists" }), "A licence with that key exists again."],
     [() => json(409, { detail: "odd" }), "Could not restore: odd"],
-    [offline, "Could not restore: Failed to fetch"],
+    [offline, "Could not restore: The server could not be reached — check your connection and try again."],
   ]) {
     reset();
     await openDesk({ routes: {

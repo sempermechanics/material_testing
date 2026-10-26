@@ -14,7 +14,10 @@ Two different jobs:
    bypassed. These tests turn that off.
 """
 import base64
+import copy
 import hashlib
+import re
+import time
 
 import fake_firestore
 import pytest
@@ -50,7 +53,7 @@ TASK = "cloud-task"
 # A verified ID token and nothing more: no profile is read or created. Only the
 # erasure check, which must ask about an erased account without re-creating it
 # (TD-206), and which answers about the caller's own device alone.
-TOKEN_ONLY = "token-only"
+TOKEN_ONLY = "token-only"  # noqa: S105 - an auth tier name
 # Institution IT self-service: membership in adminEmails plus dashboard MFA
 # (institution_admin_stepup). Membership is checked before MFA so a foreign
 # licence still 404s. Deliberately distinct from ADMIN/DEVICE_ADMIN.
@@ -278,8 +281,10 @@ def test_every_route_has_the_expected_auth_tier():
 def test_only_health_probes_are_unauthenticated():
     """Stated separately so the intent survives an edit to the table above.
 
-    The Cloud Tasks callback is deliberately not in this set: it has no *user*
-    dependency, but it is authenticated — see test_task_route_rejects_users.
+    The Cloud Tasks callbacks are deliberately not in this set: they have no
+    *user* dependency, but they are authenticated — see
+    test_async_provisioning.py::test_task_route_is_unreachable_with_a_user_token
+    (every TASK route) and test_every_authenticated_route_refuses_an_anonymous_request.
     """
     unauth = {k for k, v in _actual_routes().items() if v == NONE}
     assert unauth == {("GET", "/healthz"), ("GET", "/readyz")}
@@ -379,29 +384,182 @@ async def test_attested_user_cannot_complete_another_users_file(attacker, client
     assert attacker._data["sessions"]["s-victim"]["completedCount"] == 0
 
 
-@pytest.mark.parametrize("method,path", [
-    ("GET", "/v1/admin/users"),
-    ("POST", "/v1/admin/users/victim-uid/approve"),
-    ("POST", "/v1/admin/users/victim-uid/revoke"),
-    ("PATCH", "/v1/admin/users/victim-uid/config"),
-    ("GET", "/v1/admin/licenses"),
-    ("POST", "/v1/admin/licenses/search"),
-    ("GET", "/v1/admin/licenses/abc"),
-    ("POST", "/v1/admin/licenses"),
-    ("POST", "/v1/admin/licenses/abc/revoke"),
-    ("POST", "/v1/admin/licenses/abc/convert"),
-    ("DELETE", "/v1/admin/licenses/abc"),
-    ("GET", "/v1/admin/deleted-licenses"),
-    ("POST", "/v1/admin/deleted-licenses/abc/restore"),
-    ("GET", "/v1/admin/licenses/abc/reconcile"),
-])
-async def test_non_admin_is_refused_every_admin_route(attacker, client, method, path):
+#: Values for path parameters in the sweeps below. The victim's uid where a
+#: route names a user, so "nothing changed" is checked on a real document.
+_PATH_VALUES = {"uid": VICTIM, "sid": "s-victim", "file_id": "f-victim",
+                "license_id": "abc", "invite_key": "k", "device_id": "d"}
+
+
+def _fill(path: str) -> str:
+    return re.sub(r"\{(\w+)\}", lambda m: _PATH_VALUES.get(m.group(1), "x"), path)
+
+
+#: Every staff route, from the table, so a new one is covered by being listed
+#: there (readiness TE3-002: 13 of 33 had no live non-staff refusal).
+_STAFF_TIERS = {ADMIN, ADMIN_STEPUP, ADMIN_STEPUP_FRESH, DEVICE_ADMIN}
+STAFF_ROUTES = sorted((m, p) for (m, p), tier in EXPECTED.items() if tier in _STAFF_TIERS)
+
+
+@pytest.mark.parametrize("method,template", STAFF_ROUTES, ids=lambda v: v)
+async def test_non_admin_is_refused_every_admin_route(attacker, client, method, template):
+    path = _fill(template)
     attacker._data["users"] = {VICTIM: {"email": "v@e.com", "access_status": "PENDING"}}
+    before = copy.deepcopy(attacker._data)
     body = b'{"maxSessions":9999}' if method == "PATCH" else b""
     r = await client.request(method, path, headers=attacker.signed(method, path, body), content=body)
     assert r.status_code == 403, r.text
     assert r.json()["detail"] == "not_admin"
     assert attacker._data["users"][VICTIM]["access_status"] == "PENDING"
+    assert attacker._data == before, f"{method} {path} wrote before refusing"
+
+
+def test_the_staff_sweep_covers_every_staff_route():
+    assert len(STAFF_ROUTES) >= 33
+    assert ("POST", "/v1/admin/device-releases") in STAFF_ROUTES
+    assert ("DELETE", "/v1/admin/test-accounts/{uid}") in STAFF_ROUTES
+
+
+# ------------------------------------------------------------ anonymous sweep
+
+@pytest.mark.parametrize("method,template",
+                         sorted(k for k, tier in EXPECTED.items() if tier != NONE),
+                         ids=lambda v: v)
+async def test_every_authenticated_route_refuses_an_anonymous_request(store, client, monkeypatch,
+                                                                     method, template):
+    """No Authorization header at all, on every route but the two probes: 401
+    missing_bearer before anything is read or written (readiness TE3-003)."""
+    monkeypatch.setattr(settings, "DEV_INSECURE_AUTH", False)
+
+    def no_token_check(*_a, **_k):
+        raise AssertionError("an anonymous request reached token verification")
+
+    monkeypatch.setattr(deps, "verify_id_token", no_token_check)
+    before = copy.deepcopy(store._data)
+    r = await client.request(method, _fill(template))
+    assert r.status_code == 401, f"{method} {template} -> {r.status_code} {r.text}"
+    assert r.json()["detail"] == "missing_bearer"
+    assert store._data == before
+
+
+# ------------------------------------------------------- suspended account
+#
+# deps._authenticate is the one gate: any status but APPROVED (PENDING only on
+# the Terms routes) is 403 not_approved. These send a SUSPENDED account through
+# the real auth path, on one route per tier, with everything else in order: a
+# valid token with a fresh second factor, an ACTIVE device with a valid
+# signature, staff role and institution IT membership (readiness TE3-001).
+
+SUSPENDED_UID = "suspended-uid"
+_SUSPENDED_INSTITUTION = "license-suspended-it"
+
+
+@pytest.fixture
+def suspended(monkeypatch):
+    store = fake_firestore.install(monkeypatch)
+    monkeypatch.setattr(settings, "DEV_INSECURE_AUTH", False)
+    monkeypatch.setattr(settings, "ADMIN_WEB_MFA_ENABLED", True)
+    monkeypatch.setattr(audit, "record", lambda *a, **k: None)
+    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    monkeypatch.setattr(drive, "access_token", lambda: "tok")
+    repo.patch(monkeypatch, "consume_nonce", lambda *a, **k: True)
+
+    priv = ec.generate_private_key(ec.SECP256R1())
+    pem = priv.public_key().public_bytes(
+        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo,
+    ).decode()
+    monkeypatch.setattr(deps, "verify_id_token", lambda _t, **_k: {
+        "sub": SUSPENDED_UID, "email": "staff@university.edu", "email_verified": True,
+        "firebase": {"sign_in_second_factor": "totp"}, "auth_time": time.time() - 60,
+    })
+    store._data["users"] = {SUSPENDED_UID: {
+        "email": "staff@university.edu", "emailVerified": True, "role": "admin",
+        "access_status": "SUSPENDED", "activeDeviceId": "sus-device",
+    }}
+    store._data["devices"] = {"sus-device": {
+        "uid": SUSPENDED_UID, "status": "ACTIVE", "publicKeyPem": pem,
+    }}
+    store._data["licenses"] = {_SUSPENDED_INSTITUTION: {
+        "kind": "institution", "plan": "professional", "status": "active",
+        "domainLock": "university.edu", "adminEmails": ["staff@university.edu"],
+        "keyPrefix": "SEMP-SSSS", "seatsUsed": 0,
+    }}
+    store._data["sessions"] = {"s-own": {
+        "uid": SUSPENDED_UID, "status": "COMPLETED", "localSessionId": "l",
+        "driveFolderId": "own-folder", "fileCount": 1, "completedCount": 1,
+    }}
+    store._data["files"] = {"f-own": {
+        "uid": SUSPENDED_UID, "sessionId": "s-own", "driveFileId": "own-drive-file",
+        "name": "a.zip", "sizeBytes": 10, "status": "COMPLETED",
+    }}
+
+    def signed(method, path, body=b""):
+        return {
+            "Authorization": "Bearer ok", "X-Device-Id": "sus-device", "X-Nonce": "n-sus",
+            "X-Signature": _sign(priv, "n-sus", method, path, body),
+            "Content-Type": "application/json",
+        }
+
+    store.signed = signed
+    return store
+
+
+_CREATE_BODY = (b'{"specimen":"s","files":[{"name":"a.zip","role":"bundle","bytes":10,"sha256":"'
+                + b"a" * 64 + b'"}]}')
+
+
+@pytest.mark.parametrize("method,template,body", [
+    ("GET", "/v1/me", b""),
+    ("GET", "/v1/config", b""),
+    ("GET", "/v1/sessions", b""),
+    ("POST", "/v1/sessions", _CREATE_BODY),
+    ("GET", "/v1/files/{file_id}/content", b""),
+    ("DELETE", "/v1/sessions/{sid}", b""),
+    ("GET", "/v1/sessions/{sid}/bundle", b""),
+    ("GET", "/v1/admin/users", b""),
+    ("POST", "/v1/admin/users/{uid}/approve", b""),
+    ("GET", "/v1/institutions/licenses/{license_id}/seats", b""),
+], ids=lambda v: v if isinstance(v, str) and v.startswith("/") else None)
+async def test_a_suspended_account_is_refused_on_every_tier(suspended, client, method,
+                                                             template, body):
+    """One route per tier: USER, DEVICE, USER_STEPUP, ADMIN, ADMIN_STEPUP,
+    INSTITUTION_STEPUP. 403 not_approved, and nothing changed."""
+    assert EXPECTED[(method, template)] in {USER, DEVICE, USER_STEPUP, ADMIN, ADMIN_STEPUP,
+                                            INSTITUTION_STEPUP}
+    path = template.format(file_id="f-own", sid="s-own", uid=SUSPENDED_UID,
+                           license_id=_SUSPENDED_INSTITUTION)
+    before = copy.deepcopy(suspended._data)
+    r = await client.request(method, path, headers=suspended.signed(method, path, body),
+                             content=body)
+    assert r.status_code == 403, f"{method} {path} -> {r.status_code} {r.text}"
+    assert r.json()["detail"] == "not_approved"
+    assert suspended._data["users"][SUSPENDED_UID]["access_status"] == "SUSPENDED"
+    for collection in ("sessions", "files", "licenses", "devices"):
+        assert suspended._data[collection] == before[collection], collection
+    assert not suspended._data.get(f"licenses/{_SUSPENDED_INSTITUTION}/seats")
+
+
+async def test_a_revoked_licence_is_refused_through_the_real_auth_path(suspended, client):
+    """The revoked-licence check end to end, with no dev bypass: the licence
+    ended (its fan-out to the account not yet run), the account still reads
+    licensed, and the device-lock revalidation on the signed request drops it
+    to Demo, so the restore is 403 feature_not_licensed (readiness TE3-001)."""
+    from refusals import attempt
+
+    store = suspended
+    store._data["users"][SUSPENDED_UID]["access_status"] = "APPROVED"
+    minted = repo.create_individual_license(
+        email_lock="staff@university.edu", device_id_lock="sus-device", created_by_uid="admin")
+    err, _ = attempt(repo.activate_license, SUSPENDED_UID, "staff@university.edu", "sus-device",
+                     minted["key"])
+    assert err == ""
+    assert repo.effective_mode({**store._data["users"][SUSPENDED_UID], "uid": SUSPENDED_UID})         == "licensed"
+    store._data["licenses"][minted["license"]["id"]]["status"] = "revoked"
+
+    path = "/v1/files/f-own/content"
+    r = await client.get(path, headers=store.signed("GET", path))
+    assert r.status_code == 403, r.text
+    assert r.json()["detail"].startswith("feature_not_licensed")
+    assert repo.effective_mode({**store._data["users"][SUSPENDED_UID], "uid": SUSPENDED_UID})         == "demo"
 
 
 # ---------------------------------------------------------- institution IT routes

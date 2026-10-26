@@ -19,6 +19,9 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
+        <!-- Cancel and Save share the first row; Draw/Manual gets a row of its own
+             and the Crop/Erase row scrolls sideways if it must, so no label is cut
+             at a large font scale (readiness AE1V-003, AE1V-014). -->
         <LinearLayout
             android:id="@+id/topBar"
             android:layout_width="match_parent"
@@ -36,33 +39,10 @@
                 android:layout_height="wrap_content"
                 android:text="@string/cancel" />
 
-            <com.google.android.material.button.MaterialButtonToggleGroup
-                android:id="@+id/rgEditMode"
+            <View
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginHorizontal="8dp"
-                android:layout_weight="1"
-                android:gravity="center"
-                app:checkedButton="@+id/rbModeDraw"
-                app:selectionRequired="true"
-                app:singleSelection="true">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/rbModeDraw"
-                    style="@style/Widget.Semper.SegmentedButton.Dark"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/roi_mode_draw" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/rbModeManual"
-                    style="@style/Widget.Semper.SegmentedButton.Dark"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/roi_mode_manual" />
-            </com.google.android.material.button.MaterialButtonToggleGroup>
+                android:layout_height="0dp"
+                android:layout_weight="1" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnSaveRoi"
@@ -72,13 +52,56 @@
                 android:text="@string/save_roi" />
         </LinearLayout>
 
-        <LinearLayout
+        <com.google.android.material.button.MaterialButtonToggleGroup
+            android:id="@+id/rgEditMode"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
+            android:paddingHorizontal="12dp"
+            app:checkedButton="@+id/rbModeDraw"
+            app:selectionRequired="true"
+            app:singleSelection="true">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/rbModeDraw"
+                style="@style/Widget.Semper.SegmentedButton.Dark"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/roi_mode_draw" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/rbModeManual"
+                style="@style/Widget.Semper.SegmentedButton.Dark"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/roi_mode_manual" />
+        </com.google.android.material.button.MaterialButtonToggleGroup>
+
+        <!-- "Use full image" left, Crop / Erase right; at a large font scale
+             Crop / Erase wraps under the chip instead of running off the edge
+             (readiness AE1V-003). -->
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
             android:paddingHorizontal="12dp"
             android:paddingBottom="8dp">
+
+            <androidx.constraintlayout.helper.widget.Flow
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                app:constraint_referenced_ids="btnFullImageRoi,rgCropErase"
+                app:flow_horizontalBias="0"
+                app:flow_horizontalGap="8dp"
+                app:flow_horizontalStyle="spread_inside"
+                app:flow_lastHorizontalBias="1"
+                app:flow_lastHorizontalStyle="spread_inside"
+                app:flow_verticalAlign="center"
+                app:flow_verticalGap="4dp"
+                app:flow_wrapMode="chain"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
 
             <com.google.android.material.chip.Chip
                 android:id="@+id/btnFullImageRoi"
@@ -92,11 +115,6 @@
                 app:chipStrokeColor="@color/surface_outline"
                 app:chipStrokeWidth="1dp"
                 app:ensureMinTouchTargetSize="false" />
-
-            <View
-                android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:layout_weight="1" />
 
             <com.google.android.material.button.MaterialButtonToggleGroup
                 android:id="@+id/rgCropErase"
@@ -122,19 +140,22 @@
                     android:minWidth="0dp"
                     android:text="@string/roi_mode_erase" />
             </com.google.android.material.button.MaterialButtonToggleGroup>
-        </LinearLayout>
+        </androidx.constraintlayout.widget.ConstraintLayout>
     </LinearLayout>
 
-    <!-- forceDarkAllowed=false: specimen image and ROI strokes keep exact colors. -->
+    <!-- forceDarkAllowed=false: specimen image and ROI strokes keep exact colors.
+         Below the info pill, not under it: on the canvas the pill covered the crop's
+         top edge and handles (readiness AE1V-023). -->
     <FrameLayout
         android:id="@+id/canvasFrame"
         android:layout_width="0dp"
         android:layout_height="0dp"
+        android:layout_marginTop="8dp"
         android:forceDarkAllowed="false"
         app:layout_constraintBottom_toTopOf="@id/bottomToolbar"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/headerChrome">
+        app:layout_constraintTop_toBottomOf="@id/tvHud">
 
         <ImageView
             android:id="@+id/imgRoiCanvas"
@@ -150,12 +171,16 @@
             android:layout_height="match_parent" />
     </FrameLayout>
 
+    <!-- Above the canvas, wrapping so its whole text shows; RoiHud reserves the lines
+         the current mode's longest text needs, so a change of text never resizes the
+         canvas mid-drag (readiness AE1V-023). -->
     <TextView
         android:id="@+id/tvHud"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="12dp"
         android:layout_marginTop="8dp"
+        android:layout_marginEnd="12dp"
         android:background="@drawable/bg_viewer_panel"
         android:paddingHorizontal="12dp"
         android:paddingVertical="6dp"
@@ -164,6 +189,9 @@
         android:textColor="@color/viewer_on_dark"
         android:textSize="13sp"
         android:textStyle="bold"
+        app:layout_constrainedWidth="true"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/headerChrome"
         tools:text="ROI: 1530 × 1530 px" />
@@ -222,17 +250,18 @@
                 android:layout_marginStart="12dp"
                 android:text="@string/reset"
                 android:textColor="@color/viewer_on_dark"
-                app:strokeColor="#55FFFFFF" />
+                app:strokeColor="@color/outline_strong" />
         </LinearLayout>
 
-        <!-- Invisible (not gone) so bottomToolbar height stays fixed when
-             switching Draw ↔ Manual — otherwise fitCenter recenters the image. -->
+        <!-- Gone in Draw, so Draw's dock is one row and the canvas keeps its room;
+             the canvas resizes on Draw ↔ Manual, never within a mode (RoiHud.show,
+             readiness AE1V-023). -->
         <LinearLayout
             android:id="@+id/manualTools"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:visibility="invisible">
+            android:visibility="gone">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -247,7 +276,7 @@
                     android:layout_marginEnd="6dp"
                     android:layout_weight="1"
                     android:hint="@string/roi_hint_x"
-                    app:boxStrokeColor="@color/sky_bright"
+                    app:boxStrokeColor="@color/input_box_stroke"
                     app:hintTextColor="@color/viewer_on_dark">
 
                     <com.google.android.material.textfield.TextInputEditText
@@ -266,7 +295,7 @@
                     android:layout_marginStart="6dp"
                     android:layout_weight="1"
                     android:hint="@string/roi_hint_y"
-                    app:boxStrokeColor="@color/sky_bright"
+                    app:boxStrokeColor="@color/input_box_stroke"
                     app:hintTextColor="@color/viewer_on_dark">
 
                     <com.google.android.material.textfield.TextInputEditText
@@ -292,7 +321,7 @@
                     android:layout_marginEnd="6dp"
                     android:layout_weight="1"
                     android:hint="@string/roi_hint_w"
-                    app:boxStrokeColor="@color/sky_bright"
+                    app:boxStrokeColor="@color/input_box_stroke"
                     app:hintTextColor="@color/viewer_on_dark">
 
                     <com.google.android.material.textfield.TextInputEditText
@@ -311,7 +340,7 @@
                     android:layout_marginStart="6dp"
                     android:layout_weight="1"
                     android:hint="@string/roi_hint_h"
-                    app:boxStrokeColor="@color/sky_bright"
+                    app:boxStrokeColor="@color/input_box_stroke"
                     app:hintTextColor="@color/viewer_on_dark">
 
                     <com.google.android.material.textfield.TextInputEditText
@@ -338,7 +367,7 @@
                     android:layout_weight="1"
                     android:text="@string/reset"
                     android:textColor="@color/viewer_on_dark"
-                    app:strokeColor="#55FFFFFF" />
+                    app:strokeColor="@color/outline_strong" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnApplyManualRoi"
@@ -349,7 +378,7 @@
                     android:layout_weight="1"
                     android:text="@string/roi_apply_manual"
                     android:textColor="@color/viewer_on_dark"
-                    app:strokeColor="#55FFFFFF" />
+                    app:strokeColor="@color/outline_strong" />
             </LinearLayout>
         </LinearLayout>
     </FrameLayout>

@@ -9,6 +9,7 @@ import com.sempermechanics.semper.report.AnalysisCsvWriter
 import com.sempermechanics.semper.report.FieldRangesStore
 import com.sempermechanics.semper.report.PdfReportGenerator
 import com.sempermechanics.semper.report.PdfReportGenerator.Stage
+import com.sempermechanics.semper.report.ReportBuilder
 import com.sempermechanics.semper.report.ReportImageNames
 import com.sempermechanics.semper.ui.viewer.summary.SummaryAnimation
 import java.io.File
@@ -172,9 +173,9 @@ internal class DataExport(
     private fun frameTitle(index: Int): String {
         val name = s.nameAt(index)
         return if (name == null) {
-            "DIC Analysis Report — Frame ${s.plannedAt(index) + 1}"
+            "${ReportBuilder.REPORT_NAME} — Frame ${s.plannedAt(index) + 1}"
         } else {
-            "DIC Analysis Report — $name"
+            "${ReportBuilder.REPORT_NAME} — $name"
         }
     }
 

@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
+import androidx.annotation.ColorInt
 import androidx.annotation.WorkerThread
 import androidx.core.graphics.createBitmap
 import com.sempermechanics.semper.data.session.SessionPaths
@@ -35,14 +36,20 @@ import java.util.concurrent.Executors
  * [SessionPaths.resultThumb], which a later bind reads instead of rendering.
  *
  * @param edgePx the cached render's edge, about twice the row's thumb view in px.
+ * @param holeColor the render's margin where no point was accepted (R.color.thumb_hole).
  */
 internal class SessionThumbs(
     private val edgePx: Int,
+    @param:ColorInt private val holeColor: Int,
     referenceExecutor: Executor = referenceThread,
     resultExecutor: Executor = resultThread,
 ) {
     private val references = ThumbnailLoader(CACHE_MAX, referenceExecutor, ::decodeReference)
-    private val results = ThumbnailLoader(CACHE_MAX, resultExecutor, { key: ResultKey -> decodeResult(key, edgePx) })
+    private val results = ThumbnailLoader(
+        CACHE_MAX,
+        resultExecutor,
+        { key: ResultKey -> decodeResult(key, edgePx, holeColor) },
+    )
 
     /** A row's reference image, with the raw dimensions a TIFF/RAW sniff needs. */
     data class ReferenceKey(val path: String, val rawWidth: Int, val rawHeight: Int)
@@ -105,7 +112,7 @@ internal class SessionThumbs(
          * nothing: [ThumbnailLoader.Decoded.Undecodable], so the reference stays.
          */
         @WorkerThread
-        fun decodeResult(key: ResultKey, edgePx: Int): ThumbnailLoader.Decoded {
+        fun decodeResult(key: ResultKey, edgePx: Int, @ColorInt holeColor: Int): ThumbnailLoader.Decoded {
             val dir = File(key.sessionDir)
             val frames = dir.listFiles { f -> f.extension == "dat" }?.sortedBy { it.name }.orEmpty()
             val last = frames.lastOrNull() ?: return ThumbnailLoader.Decoded.Missing
@@ -113,7 +120,8 @@ internal class SessionThumbs(
             val cached = if (ResultThumbnail.isFresh(cache, frames)) BitmapFactory.decodeFile(cache.path) else null
             // Sweep steps are aligned with the solved frames, as the viewer reads them.
             val step = key.sweepSteps.getOrElse(frames.lastIndex) { key.step }
-            val bitmap = cached ?: ResultThumbnail.render(last, step, edgePx)?.also { ResultThumbnail.write(it, cache) }
+            val bitmap = cached
+                ?: ResultThumbnail.render(last, step, edgePx, holeColor)?.also { ResultThumbnail.write(it, cache) }
             return if (bitmap != null) ThumbnailLoader.Decoded.Loaded(bitmap) else ThumbnailLoader.Decoded.Undecodable
         }
     }
@@ -122,8 +130,6 @@ internal class SessionThumbs(
 /** The U-displacement heatmap of one frame as a square thumbnail, and its on-disk cache. */
 internal object ResultThumbnail {
 
-    /** Where no point was accepted inside the field: a quiet grey rather than the row behind it. */
-    private const val HOLE_COLOR = 0xFFE3E8EC.toInt()
     private const val PNG_QUALITY = 100
 
     /** The heatmap is rendered at up to this many [edgePx][render] on its long edge before the crop. */
@@ -138,14 +144,15 @@ internal object ResultThumbnail {
     /**
      * [dat]'s U field over the box its accepted points span, centre-cropped to
      * an [edgePx] square; null when the file does not decode or no point was
-     * accepted. Reads [dat] only.
+     * accepted. Reads [dat] only. [holeColor] fills where no point was accepted
+     * inside the square: a quiet grey rather than the row behind it.
      */
     @WorkerThread
-    fun render(dat: File, step: Int, edgePx: Int): Bitmap? =
-        DicResult.decodeDatFile(dat)?.let { renderField(it, step, edgePx) }
+    fun render(dat: File, step: Int, edgePx: Int, @ColorInt holeColor: Int): Bitmap? =
+        DicResult.decodeDatFile(dat)?.let { renderField(it, step, edgePx, holeColor) }
 
     /** [render] of decoded [data], which it shifts in place. */
-    private fun renderField(data: FloatArray, step: Int, edgePx: Int): Bitmap? {
+    private fun renderField(data: FloatArray, step: Int, edgePx: Int, @ColorInt holeColor: Int): Bitmap? {
         val box = acceptedBox(data) ?: return null
         // The decoded array is this call's own copy: shift it into the box's frame
         // so the render covers the field rather than the whole photo.
@@ -162,7 +169,7 @@ internal object ResultThumbnail {
                 maxLongEdge = edgePx * RENDER_OVERSAMPLE,
             ),
         ).bitmap
-        return squareCrop(heatmap, edgePx).also { heatmap.recycle() }
+        return squareCrop(heatmap, edgePx, holeColor).also { heatmap.recycle() }
     }
 
     /** Writes [bitmap] to [dest] through a part file; a failure only skips the cache. */
@@ -196,10 +203,10 @@ internal object ResultThumbnail {
         return if (minX > maxX) null else Box(minX, minY, maxX - minX + 1, maxY - minY + 1)
     }
 
-    private fun squareCrop(source: Bitmap, edge: Int): Bitmap {
+    private fun squareCrop(source: Bitmap, edge: Int, @ColorInt holeColor: Int): Bitmap {
         val out = createBitmap(edge, edge)
         val canvas = Canvas(out)
-        canvas.drawColor(HOLE_COLOR)
+        canvas.drawColor(holeColor)
         val scale = maxOf(edge.toFloat() / source.width, edge.toFloat() / source.height)
         val matrix = Matrix().apply {
             setScale(scale, scale)

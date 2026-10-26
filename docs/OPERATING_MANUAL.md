@@ -606,8 +606,11 @@ field change. Double-tap zooms or resets. A horizontal fling while fit-to-screen
 steps frames. Chrome auto-hides after a short idle; pan or scrub brings it back,
 and so does a tap in the middle of the screen or a downward swipe. The figure
 itself runs edge to edge, under the system bars. The ⓘ sheet holds the specimen
-name, max / min (with coordinates), mean, a histogram of this frame's accepted
-values, and the settings used for this analysis. The looping summary has no
+name, the raw max / min (with coordinates) and the signed mean, each with its
+unit, a histogram of this frame's accepted values, and the settings used for
+this analysis. The PDF's field table differs on purpose: its max / min are the
+98th / 2nd percentile points and a strain's mean averages |value|; each label
+says which. The looping summary has no
 mean and no histogram — its ⓘ sheet quotes only the GIF colour-bar ends.
 
 **Colour scale.** Default on a **single frame** is a **clamp at this frame's 2nd and 98th percentiles**,
@@ -705,8 +708,8 @@ a strip at the top, with the same progress and a Cancel.
 | This field | One PNG: current field and frame, annotated, composited to a 1280 px long edge |
 | All fields | Five PNGs for this frame, zipped; each stamp names the source image |
 | Animations | Single-setting only: five looping field GIFs on one whole-sequence scale, zipped |
-| Report | One PDF: every frame, plus a telemetry page |
-| Data | One CSV: `image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd` — a sweep adds `subset_px, step_px, strain_window, vsg_px` |
+| Report | One PDF: every frame, plus an Engine details page (how the solver reached the results) |
+| Data | One CSV (version 2): `image,x_px,y_px,u_px,v_px,exx_strain,eyy_strain,exy_strain,znssd` (raw strain; the `#` stats rows give mε) — a sweep adds `subset_px, step_px, strain_window, vsg_px` |
 | Everything | One ZIP: raw photos + all fields + CSV + PDF; single-setting also includes the field GIFs |
 
 On a single-setting analysis the field GIFs are shared as a set, not one at a
@@ -1037,7 +1040,7 @@ approves/revokes accounts):
   mint. A revoked licence, one past its grace, and the Demo key do not count.
   The same rule refuses a claim code (`409 already_licensed`) and an
   IT roster add (`409 member_already_licensed`). To change the person's
-  device, use **New device** on their licence — never a second licence.
+  device, use **New phone** on their licence — never a second licence.
   `backend/scripts/find_duplicate_licences.py --project <id>` lists anyone
   who got two before the rule existed. Nothing is sent to them and nothing is typed. `deviceIdLock` is
   still accepted for the rare case where the device is known up front, but
@@ -1339,8 +1342,8 @@ empty the device lock:
 | Who | How |
 |---|---|
 | The holder | **Use Semper on a different device** on their own `/account` page — `POST /v1/licenses/unbind`. Needs a second factor and a sign-in from the last 15 minutes, and is allowed once every `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` (default 30). |
-| Institution IT | `PATCH /v1/institutions/licenses/{id}/seats/{uid}` `{"clearDeviceLock": true}`, or **New device** on the seat in `/console/institution`. |
-| Semper staff | **New device** on the licence row (individual) or on the seat in the roster (institution) in `/console/operator`. |
+| Institution IT | `PATCH /v1/institutions/licenses/{id}/seats/{uid}` `{"clearDeviceLock": true}`, or **New phone** on the seat in `/console/institution`. |
+| Semper staff | **New phone** on the licence row (individual) or on the seat in the roster (institution) in `/console/operator`. |
 
 Clearing the lock **is** the change: it releases the account's old phone, and
 the licence binds to the phone that registers next. Only the account's
@@ -1348,7 +1351,7 @@ registered phone can take the lock, so a phone refused at sign-in cannot.
 
 **Semper and Semper Classroom each hold their own phone** (ADR-010). One
 person can use both apps on one phone, or each on a different phone, on one
-licence. Staff and IT **New device**, and the staff phone release below,
+licence. Staff and IT **New phone**, and the staff phone release below,
 move both apps at once. The holder moves one app at a time: **Use Semper on
 a different device** or **Use Semper Classroom on a different device** on
 `/account`, or the same from inside that app, each with its own 30-day
@@ -1359,9 +1362,9 @@ app to the account, and shares its phone and cooldown.
 
 **Demo on the phone they use.** An account whose lock was taken by another
 device before 2026-09-27 reads Demo on the phone it is registered on. One
-**New device** gives the licence back to that phone and does not sign it out
+**New phone** gives the licence back to that phone and does not sign it out
 (the clear's detail names no released device). If they really are moving, a
-second **New device** then releases it. Nothing is re-issued, nothing is typed, and nothing is revoked
+second **New phone** then releases it. Nothing is re-issued, nothing is typed, and nothing is revoked
 — entitlement, seat, lease and every stored analysis stay as they are. Trying
 the new phone first no longer demotes the account; a holder demoted that way
 before 2026-09-28 gets their mode back as part of the clear.
@@ -1371,7 +1374,7 @@ The old phone is then refused for 24 hours (`DEVICE_RELEASE_HOLD_HOURS`): it sho
 phone signs in. Signing in on the new phone ends that at once. If the holder
 cleared by mistake and never moves, the old phone works again after 24 hours.
 
-**New device** on a seat that is on hold or revoked, or on a revoked licence,
+**New phone** on a seat that is on hold or revoked, or on a revoked licence,
 empties the lock but leaves the account's phone where it is: that holder is on
 Demo, and a Demo account changes phone only as below. Resume the seat first if the
 member is really moving.
@@ -1381,9 +1384,9 @@ asks (usually by email: the app tells a refused phone to ask an admin), and
 staff release the old phone under **Release a Demo account's phone** in
 `/console/operator`, by the account's email (`POST /v1/admin/device-releases`).
 The old phone is signed out and held off for 24 hours, the same as after
-**New device**, and the new one can sign in. There is no self-service path for
+**New phone**, and the new one can sign in. There is no self-service path for
 Demo (decided 2026-09-26). A licensed account is refused there: use
-**New device** on its licence.
+**New phone** on its licence.
 
 Only the holder's own change waits out a cooldown; a support request never
 does, so a lost phone is fixed the same day. `429 device_change_too_soon`

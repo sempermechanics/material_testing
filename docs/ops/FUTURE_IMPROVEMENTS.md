@@ -191,7 +191,7 @@ shipped):
   once in `session_provision.py:51` and again by `list_pending_uploads` in
   `services/sessions.py:116` — not twice inside `session_provision` as previously
   written. Each page also costs one extra document read to resolve its cursor
-  (`backend/app/repo/_base.py:227-228`, `_cursor_page`).
+  (`backend/app/repo/_base.py:485-486`, `_cursor_page`).
 
 ---
 
@@ -238,12 +238,12 @@ Workspace IdPs."
 **Framework** 5.7; Part C "Provisioning" (phase 2).
 
 **Now.** Phase 1 of Part C is built: bulk CSV import of up to 500 rows
-(`backend/app/routers/roster.py:170`) and CSV export (`:243`), the export a valid
+(`backend/app/routers/roster.py:172`) and CSV export (`:243`), the export a valid
 import file. There is no SCIM endpoint, and Identity Platform documents none.
 
 **Proposal.** `/scim/v2/Users` and `/scim/v2/Groups` per institution licence,
 authenticated by a machine token (FI-20), mapping a user's `active=false` to the
-seat revoke (`DELETE …/seats/{uid}`, `roster.py:368`) plus refresh-token revocation
+seat revoke (`DELETE …/seats/{uid}`, `roster.py:369`) plus refresh-token revocation
 (`backend/app/google_auth.py:104`), and group membership to the seat.
 
 **Acceptance (framework 5.7 Verify).** "Doc review. API contract tests."
@@ -253,10 +253,10 @@ seat revoke (`DELETE …/seats/{uid}`, `roster.py:368`) plus refresh-token revoc
 **Framework** 5.2; Part C "Console essentials" (role management).
 
 **Now.** Two roles, each all-or-nothing. Semper staff are `role: admin` or listed
-in `ADMIN_EMAILS` (`backend/app/deps.py:333-344`). Institution IT is any verified
+in `ADMIN_EMAILS` (`backend/app/deps.py:339-350`). Institution IT is any verified
 address in the licence's `adminEmails` (`backend/app/routers/institutions.py:53`),
 and every such address may read, add, hold, remove, import and export
-(`backend/app/routers/roster.py:104-382`, mounted for IT at
+(`backend/app/routers/roster.py:106-383`, mounted for IT at
 `backend/app/routers/institutions.py:100-106`). There is no read-only auditor and no split between licence and user administration.
 
 **Proposal.** Org Owner, License Admin, User Admin and Read-only Auditor as a map
@@ -292,10 +292,10 @@ written to `audit_logs` with the token's id. A separate route tier in
 **Framework** 5.5; Part C "Provisioning" (IdP deactivation).
 
 **Now.** Deprovisioning is manual. IT removes or holds a seat
-(`roster.py:334`, `:368`); staff suspend an account, which also revokes its
+(`roster.py:335`, `:369`); staff suspend an account, which also revokes its
 refresh tokens (`backend/app/routers/admin.py:70-87`), best-effort until TD-214's
 IAM grant. A device that is offline keeps its signed entitlement until its
-`graceUntil` (`backend/app/entitlement_token.py:193-207`).
+`graceUntil` (`backend/app/entitlement_token.py:201-215`).
 
 **Proposal.** SCIM `active=false` (FI-18) or an IdP event webhook triggers the
 same seat revoke plus `revoke_sessions`. The documented SLA is the framework's:

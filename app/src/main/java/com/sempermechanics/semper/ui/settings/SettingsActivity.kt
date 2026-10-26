@@ -80,6 +80,9 @@ class SettingsActivity : AppCompatActivity() {
     /** Stashed while the SAF save-as picker is open. */
     private var pendingDownload: PendingBundleDownload? = null
 
+    /** Sections the user opened, by title, kept across a rebuild (a theme or font change). */
+    private val openSections = mutableSetOf<Int>()
+
     /** Restores and the consent change, kept across a rotation (ADR-016). */
     internal val viewModel: SettingsViewModel by viewModels()
 
@@ -96,6 +99,7 @@ class SettingsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         pendingDownload = PendingBundleDownload.fromBundle(savedInstanceState)
+        savedInstanceState?.getIntArray(STATE_OPEN_SECTIONS)?.let { openSections += it.toList() }
         binding = ActivitySettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
         views = binding.settingsSections.sections
@@ -170,10 +174,12 @@ class SettingsActivity : AppCompatActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         pendingDownload?.writeTo(outState)
+        outState.putIntArray(STATE_OPEN_SECTIONS, openSections.toIntArray())
     }
 
     /**
-     * Titles [header] and makes it open and close [body], starting closed.
+     * Titles [header] and makes it open and close [body], starting closed unless
+     * it was open before the screen was rebuilt (readiness AE1V-021).
      * The chevron is the header's own, never one looked up across the screen.
      */
     private fun wireCollapsible(header: ViewSettingsSectionHeaderBinding, @StringRes title: Int, body: View) {
@@ -182,8 +188,9 @@ class SettingsActivity : AppCompatActivity() {
         fun apply(expanded: Boolean) {
             body.isVisible = expanded
             chevron.rotation = if (expanded) CHEVRON_EXPANDED_DEG else 0f
+            if (expanded) openSections += title else openSections -= title
         }
-        apply(false)
+        apply(title in openSections)
         header.root.setOnClickListener {
             Motion.animateExpandCollapse(binding.settingsSections)
             apply(!body.isVisible)
@@ -446,6 +453,7 @@ class SettingsActivity : AppCompatActivity() {
         private const val STATE_DL_CLOUD = "pending_dl_cloud"
         private const val STATE_DL_NAME = "pending_dl_name"
         private const val STATE_DL_LOCAL = "pending_dl_local"
+        private const val STATE_OPEN_SECTIONS = "open_sections"
 
         const val CHEVRON_EXPANDED_DEG = 180f
         const val ZIP_MIME = "application/zip"
