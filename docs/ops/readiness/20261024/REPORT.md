@@ -9,7 +9,7 @@ kept outside the repository, in the session scratchpad, like the baseline's logs
 
 | Tree | Start | Readiness head |
 |---|---|---|
-| S | `875e2334` (engine `f072da0`, v0.6.1) | `claude/readiness-20261024` at `FINAL-HEAD`. It merges the backend, ops and console branches (`0fd3aaa9`), `main`'s #484 (`69b72eb6`) and #486 (`1bdbe880`). Not pushed, not merged, not deployed |
+| S | `875e2334` (engine `f072da0`, v0.6.1) | `claude/readiness-20261024`: last app code commit `47fef6b4`, last console commit `27ced315`, later commits docs only. It merges the backend, ops and console branches (`0fd3aaa9`), `main`'s #484 (`69b72eb6`) and #486 (`1bdbe880`). Not pushed, not merged, not deployed |
 | M | `839d4285` (engine `1284edf`, v0.2.3) | The engine-pin fix `fb436770` merged as material_testing#145 into fork `main` `6e42ed00`, CI fully green. The fork's sync of S `25334af1` merged as material_testing#146 (`035f5095`). The Semper Classroom rename, material_testing#147, is open |
 
 Re-verify (ADMIN_DECISIONS, Checkpoint 2):
@@ -22,8 +22,10 @@ Re-verify (ADMIN_DECISIONS, Checkpoint 2):
 - **Round 3, at `2363b12b`.** AE1V-023 and AE1V-025 VERIFIED. TE1-006 passes its code
   criterion for Home; the rest is TD-338, whose list of the calls left on main was
   corrected in `111f8060`.
-- **Still open.** AE3-002 (P2) is in rework round 4 (two support-mail strings) and is
-  **PENDING-REVERIFY-4** below.
+- **Rounds 4–5, at `47fef6b4` and `b0f614ca`.** TE1-006 VERIFIED; TD-338 names every
+  EntitlementStore call left on main. AE3-002 VERIFIED at `b0f614ca`, after round 4
+  (support and feedback mails say Phone) and the lead's fix to the email-link landing page
+  (`27ced315`, with the terminology test widened to the hosted landing pages).
 
 ## 1. Summary and go/no-go
 
@@ -42,7 +44,7 @@ Re-verify (ADMIN_DECISIONS, Checkpoint 2):
    there.
 
 TE5-002 (pre-ticked consent) does not block: it was rejected ("Product decision stands").
-Neither does AE3-002 (P2, PENDING-REVERIFY-4). Observations are reported only. Every P1
+Observations are reported only. Every P1
 re-verified this run is VERIFIED, AE1-009 included.
 
 ### Scorecard
@@ -51,7 +53,7 @@ Counts use `severity_final`. FINDINGS.yaml gives each finding the axis `technica
 `aesthetic` only. The **Objective** rows are therefore a cut, not a third axis: gate G1
 (native code and measurement output), whose findings are also counted under Technical or
 Aesthetic. *Open* means not settled in the repository: NEEDS_ADMIN / NEEDS_DEVICE /
-still in rework (AE3-002, PENDING-REVERIFY-4). *Deferred* includes the five blocking P1s and the seven
+still in rework (none at close-out). *Deferred* includes the five blocking P1s and the seven
 material_testing findings left for Phase 8.
 
 | Axis | Severity | Found | Fixed + verified | Accepted partial | Deferred | Rejected | Open (Admin / device / rework) | Duplicate | Observation |
@@ -63,20 +65,20 @@ material_testing findings left for Phase 8.
 | Technical | observation | 9 | 0 | 0 | 0 | 0 | 0 | 0 | 9 |
 | **Technical** | **all** | 78 | 49 | 3 | 8 | 1 | 6 (4 / 2 / 0) | 2 | 9 |
 | Aesthetic | P1 | 13 | 12 | 0 | 0 | 0 | 0 | 1 | 0 |
-| Aesthetic | P2 | 32 | 22 | 0 | 4 | 0 | 3 (2 / 0 / 1) | 3 | 0 |
+| Aesthetic | P2 | 32 | 23 | 0 | 4 | 0 | 2 (2 / 0 / 0) | 3 | 0 |
 | Aesthetic | P3 | 11 | 9 | 1 | 1 | 0 | 0 | 0 | 0 |
 | Aesthetic | observation | 5 | 0 | 0 | 0 | 0 | 0 | 0 | 5 |
-| **Aesthetic** | **all** | 61 | 43 | 1 | 5 | 0 | 3 (2 / 0 / 1) | 4 | 5 |
+| **Aesthetic** | **all** | 61 | 44 | 1 | 5 | 0 | 2 (2 / 0 / 0) | 4 | 5 |
 | Objective (G1) | P0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | Objective (G1) | P1 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | Objective (G1) | P2 | 6 | 1 | 2 | 0 | 0 | 3 (2 / 1 / 0) | 0 | 0 |
 | Objective (G1) | P3 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | Objective (G1) | observation | 2 | 0 | 0 | 0 | 0 | 0 | 0 | 2 |
 | **Objective (G1)** | **all** | 11 | 4 | 2 | 0 | 0 | 3 (2 / 1 / 0) | 0 | 2 |
-| **All findings** | **all** | 139 | 92 | 4 | 13 | 1 | 9 (6 / 2 / 1) | 6 | 14 |
+| **All findings** | **all** | 139 | 93 | 4 | 13 | 1 | 8 (6 / 2 / 0) | 6 | 14 |
 | All | P0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | All | P1 | 30 | 21 | 0 | 5 | 1 | 0 | 3 | 0 |
-| All | P2 | 70 | 48 | 3 | 7 | 0 | 9 (6 / 2 / 1) | 3 | 0 |
+| All | P2 | 70 | 49 | 3 | 7 | 0 | 8 (6 / 2 / 0) | 3 | 0 |
 | All | P3 | 24 | 22 | 1 | 1 | 0 | 0 | 0 | 0 |
 | All | observation | 14 | 0 | 0 | 0 | 0 | 0 | 0 | 14 |
 
@@ -93,7 +95,7 @@ backend contract/ops, G4 licensing, G5 Android, G6 release, UX (aesthetic).
 | G4 | 14 | 11 | — | **Go with conditions** | The entitlement key, TD-215 (A7), before offline licensing is enforced |
 | G5 | 4 | 3 | — | **Go with conditions** | The 1036 install-over smoke, TD-344 (A13); TE1-006's other screens, TD-338 |
 | G6 | 14 | 11 | TE1-001 (deferred) | **No-go** | Certificate pins chosen (A8) or TE1-001 signed (A10); the PR's first `CI OK` with the new release checks (A1) |
-| UX | 62 | 44 | — (AE1-009 VERIFIED in round 2) | **Go with conditions** | AE3-002 (P2) through rework round 4 (PENDING-REVERIFY-4); owner decisions TD-340, TD-341 and TD-343 (A12) |
+| UX | 62 | 45 | — (AE1-009 VERIFIED in round 2) | **Go with conditions** | Owner decisions TD-340, TD-341 and TD-343 (A12) |
 
 ## 2. Gate statuses
 
@@ -111,18 +113,18 @@ Numbers are from the lead's runs on the heads below. Logs are in the session scr
 | Firestore rules | `firebase emulators:exec --only firestore "node --test"` in `firestore-rules-tests/` | 61 pass |
 | Script checks | `check_doc_paths`, `check_framework_coverage`, `render_legal_pages --check`, `check_console`, `check_engine_pin`, `unittest discover scripts/tests` and the others | all pass |
 
-**Last full Android gate, at `0513a772`** (later commits change screenshots, docs and
-the round-4 AE3-002 strings; `FINAL-HEAD` is the branch head):
+**Last full Android gate, at `47fef6b4`** (the last code commit; later commits change only docs):
 
 | Gate | Command | Result |
 |---|---|---|
-| Android tier 1 + release | `gradlew.bat ciReleaseGate :app:koverLog :app:koverVerify :app:compileDebugAndroidTestKotlin` | BUILD SUCCESSFUL: 2850 unit tests, 0 failed, 5 skipped (pre-existing); spotless, detekt, lint clean, no baseline entry; R8, `assembleRelease` |
+| Android tier 1 + release | `gradlew.bat ciReleaseGate :app:koverLog :app:koverVerify :app:compileDebugAndroidTestKotlin` | BUILD SUCCESSFUL: 2852 unit tests, 0 failed, 5 skipped (pre-existing); spotless, detekt, lint clean, no baseline entry; R8, `assembleRelease` |
 | Oracles | `DatFieldOracleTest`, `SummaryGifOracleTest` (in the run above) | pass; `app/src/test/resources/oracles/` unchanged |
-| Kover | `:app:koverLog :app:koverVerify` | lines **82.22 %**, branches **63.44 %** (floors 78 / 60) |
+| Kover | `:app:koverLog :app:koverVerify` | lines **82.22 %**, branches **63.45 %** (floors 78 / 60) |
 
-**Console after the rework.** The rework changed console code (`e570834e`, AE3-002). The
-second and third re-verifies ran `node --test` (444/444) and `check_console.py` (OK) on
-`6324ea7f` and `2363b12b`. The backend numbers at `2ebe7a2a` stand: no backend code changed
+**Console after the rework.** The rework changed console code (`e570834e`, `27ced315`,
+AE3-002). At `27ced315` the lead ran CI's console step: `node --test` 445/445, coverage
+**98.76 %** (floor 96), `check_console.py` OK; the fifth re-verify ran `node --test` again
+on `b0f614ca` (445/445). The backend numbers at `2ebe7a2a` stand: no backend code changed
 after it.
 
 **GCP posture**, run 2026-10-24 with `scripts/check_gcp_posture.sh` (read-only; flags as
@@ -208,7 +210,7 @@ means the commit only filed the TECH_DEBT row.
 | AE2V-002 | A | UX | P2 | Duplicate; earlier decision applies | duplicate→AE2-006 | — |
 | AE2V-003 | A | UX | P2 | Duplicate; earlier decision applies | duplicate→AE2-007 | — |
 | AE3-001 | A | UX | P2 | Fix all now | VERIFIED | `dc9dcffb`, `ffd468fd`, `ad5059d4` |
-| AE3-002 | A | UX | P2 | Fix all now; rework now (CP2); keep 'device' for the key (CP2 round 2) | PENDING-REVERIFY-4 | `dc9dcffb`, `ad5059d4`, `e570834e`, `19bc78d3` |
+| AE3-002 | A | UX | P2 | Fix all now; rework now (CP2); keep 'device' for the key (CP2 round 2) | VERIFIED (re-verify 5, `b0f614ca`) | `dc9dcffb`, `ad5059d4`, `e570834e`, `19bc78d3`, `22725410`, `47fef6b4`, `27ced315` |
 | AE3-003 | A | UX | P2 | Fix all now | NEEDS_ADMIN→TD-340, TD-341 | `dc9dcffb`, `ad5059d4` |
 | AE3-004 | A | UX | P2 | Fix all now | VERIFIED | `ad5059d4` |
 | AE3-005 | A | UX | P2 | Fix all now | VERIFIED | `dc9dcffb`, `ad5059d4` |
@@ -386,5 +388,8 @@ Still open:
 - Two fixes have no finding record: TE6-017 (`e0b32dee`, posture script under Git Bash;
   TD-325 cites it) and BASELINE-APK-UTF8 (`b33370fa`).
 - At `57e799b8` the rework log gave Kover lines as 81.96 % (19116 / 23323), while the gate
-  printed 81.9721 %. This report uses the later full gate at `0513a772`: 82.22 %, as
+  printed 81.9721 %. This report uses the last full gate at `47fef6b4`: 82.22 %, as
   printed.
+- Guard gap, not a defect: `UserTermsTest` reads `<string>` entries only, not `<plurals>`
+  items, so a "device" put back into a plural would not be caught (none does today;
+  re-verify 5).

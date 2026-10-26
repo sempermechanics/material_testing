@@ -528,7 +528,7 @@ merged nor deployed.
     `engine-host-sanitized`;
   - the backend is deployed from that `main`.
 - **Re-verify.** Every P1 re-verified this run is VERIFIED, AE1-009 included (round 2, at
-  `6324ea7f`). AE3-002 (P2) is still in rework round 4 and does not block.
+  `6324ea7f`). AE3-002 (P2) was VERIFIED at `b0f614ca` after rework round 4.
 - **Posture.** Re-run 2026-10-24: 17 FAIL, 0 UNKNOWN (see Launch blockers above).
 - **Cross-check.** Rows 1.5, 2.1, 3.4, 3.7, 4.1, 4.3, 6.4, 6.5, 7.2, 7.3 and D3 now cite
   the branch. No status moved.
