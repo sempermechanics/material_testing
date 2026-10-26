@@ -140,3 +140,28 @@ test("the consoles use one word per concept", () => {
   }
   assert.deepEqual(found, []);
 });
+
+// The hosted pages outside the consoles that an account holder lands on (the
+// email-link sign-in, the password reset, the 404) follow the same rules.
+// /privacy and /terms are legal text, held for counsel (TD-277), so not here.
+const PUBLIC = fileURLToPath(new URL("../public/", import.meta.url));
+const LANDING = ["404.html", "finishSignIn", "finishReset"];
+
+test("the hosted landing pages use the consoles' words", () => {
+  const found = [];
+  for (const entry of LANDING) {
+    const root = join(PUBLIC, entry);
+    for (const path of statSync(root).isDirectory() ? files(root) : [root]) {
+      const name = relative(PUBLIC, path).replace(/\\/g, "/");
+      const source = readFileSync(path, "utf8");
+      for (const [pattern, want, applies, read] of RULES) {
+        if (!applies(name)) continue;
+        for (const snippet of read ? read(path, source) : visibleText(path, source)) {
+          const m = pattern.exec(snippet);
+          if (m) found.push(`${name}: "${m[0]}" (${want}) in: ${snippet.slice(0, 90)}`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(found, []);
+});
