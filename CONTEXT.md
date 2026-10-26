@@ -116,59 +116,42 @@ emulator (`scripts/micro_ab.py`, [TESTING.md](docs/app/TESTING.md)); the phone-r
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-24)
+## Current state (2026-10-26)
 
-- **Deployed.** Backend from `187f4870` (2026-10-24; #482 on top of #466–#468): Cloud Run
-  `semper-api` (`semper-api-40063322039-1`, gateway config `v202610230501-112`) and staging
-  `semper-api-staging` (`semper-api-staging-39948110403-1`, `v202610221243-110`)
-  ([CHANGELOG](docs/ops/CHANGELOG.md)). Hosting is from `000575b0` (2026-10-23, the operator desk
-  redesign, #478) with `/privacy` and `/terms` held at `b940cc29`. Live: licensing
-  ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)), device binding per app
-  ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md)), sessions tagged by app
-  ([ADR-014](docs/adr/ADR-014-session-app-tag.md)), consoles on `app.sempermechanics.com`
-  ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md)), test accounts for `qa.sempermechanics.com`
-  ([ADR-027](docs/adr/ADR-027-test-accounts.md)), `CHECK_REVOKED_ON_STEP_UP` (TD-214, acceptance
-  owed). Project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
-- **Legal pages held:** #474's text (the demo-upload sentences in Privacy §2.3 and Terms
-  §6.1, retention values) waits on counsel (TD-277). A Hosting deploy from `main` publishes
-  it, so until counsel signs off, deploy Hosting from a worktree with those two pages taken
-  from `b940cc29` ([checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md) §4).
-- **[Checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md) still open:** monitoring `--apply` (§5;
-  no notification channel exists yet); staff/IT phones re-registering with TOTP, the 24 h log
-  watch, ending the staging QC test account, and the erasure check (§6; the audit backfill, the
-  `expireAt` TTL and the locked `audit-trail` log bucket went in 2026-10-23). The posture check's FAILs (18 on
-  2026-10-22; 17 once 3.4's `CHECK_REVOKED_ON_STEP_UP` went live 2026-10-23, not re-run;
-  [gate](docs/ops/PRODUCTION_READINESS_GATE.md)) are console or `gcloud` changes. Optional and
-  unset: TD-215 (entitlement key), TD-309. Every Admin action is one table:
-  [gate § Admin actions](docs/ops/PRODUCTION_READINESS_GATE.md#admin-actions-external).
+- **Deployed.** Backend and Hosting from `46ac8b5e` (2026-10-26; #484, the Semper Classroom
+  rename, on top of #482): `semper-api-40300681201-1`, staging `semper-api-staging-40299991596-1`,
+  gateway configs unchanged (`v202610230501-112`, `v202610221243-110`); recorded on `main` by
+  #486 ([CHANGELOG](docs/ops/CHANGELOG.md)). Project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
+- **Legal pages held:** #474's text (Privacy §2.3, Terms §6.1, retention values) waits on counsel
+  (TD-277). Deploy Hosting from a worktree with `/privacy` and `/terms` taken from `b940cc29`
+  ([checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md) §4) and compare the live pages after; a
+  plain-`main` deploy on 2026-10-26 published them until the same day's redeploy.
+- **Readiness run 2026-10-24:** `claude/readiness-20261024`, not merged or deployed; verdict
+  **No-go** ([report](docs/ops/readiness/20261024/REPORT.md); its rows TD-318–TD-347, except TD-330).
+  Its backend changes need a deploy: lock bump, kill switches on `GET …/uploads` and
+  `PUT …/metadata`, the `/readyz` budget, `--no-access-log`, roster codes, quota wording.
+- **Admin actions** are one table, [gate § Admin actions](docs/ops/PRODUCTION_READINESS_GATE.md#admin-actions-external):
+  monitoring `--apply` (no notification channel yet), the posture FAILs (17 on 2026-10-24),
+  TD-215, the checklist's §6; the readiness report's §4 adds that run's one-off actions.
 - **App** `com.sempermechanics.semper` ([ADR-019](docs/adr/ADR-019-sempermechanics-app-id.md)).
-  Latest release `v1.2-beta.4` (versionCode 1036, `33dce87d`, 2026-10-17, engine 0.4.2).
-  On `main` since: **minSdk 30**, version gate, EMM config, AAB
-  ([ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md)); #453, #457–#462; #464 (Tier 3
-  signs in to staging); #469 (`SessionRecord.extras`, ADR-025's first step, TD-298); #470
-  (engine `f072da0`, v0.6.1); #471 (tamper-evident records, ADR-028; review findings in its
-  comments, the `field_ranges.bin` one first); #475 (AD_ID and the Privacy Sandbox permissions
-  removed, TD-232).
-- **Release blockers:** TD-229 (Play account; TD-226 App Check and TD-230/TD-231 follow it),
-  TD-232 (Data safety answers ready; two owner decisions, then submit), TD-219's device checks,
-  counsel on the Terms (TD-277).
-- **Semper Classroom** (`material_testing`; Material Testing until [ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md),
-  renamed by #484 2026-10-26, not deployed; old names aliased until TD-330) merges this `main` (last
-  `968637cb`, material_testing#144, 2026-10-22; [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); it released `v1.4-beta.2` 2026-10-17 as Material Testing.
-- **Readiness run 2026-10-24:** `claude/readiness-20261024` holds its fixes, not merged or
-  deployed ([docs/ops/readiness/20261024/](docs/ops/readiness/20261024/BASELINE.md); open: TD-331–TD-344).
-  Its backend changes need a deploy (the Admin's): lock bump, kill switches on `GET …/uploads` and
-  `PUT …/metadata`, audit outage as 503, `/readyz`, `--no-access-log`, roster codes, quota wording.
-- **CI.** Tiers follow the diff, coverage floors rise with every test PR
-  ([TESTING.md](docs/app/TESTING.md#coverage-floors)), and `main` requires `CI OK`. Tier 3 signs
-  in to live staging, so a staging backend behind `main` fails it. Always-on gates now include
-  `engine-pin` and `console-a11y` (axe + Playwright); `engine-host-sanitized` follows Tier 3.
-  The backend's OpenAPI snapshot is rewritten with `UPDATE_OPENAPI_SNAPSHOT=1` ([ADR-029](docs/adr/ADR-029-api-contract-snapshot.md)).
+  Latest release `v1.2-beta.4` (versionCode 1036, `33dce87d`, 2026-10-17, engine 0.4.2). On
+  `main` since: **minSdk 30**, version gate, EMM config, AAB ([ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md));
+  #453, #457–#462, #464, #469 (TD-298); engine `f072da0` v0.6.1 (#470); tamper-evident records
+  ([ADR-028](docs/adr/ADR-028-tamper-evident-records.md), #471, review findings in its comments);
+  AD_ID removed (#475, TD-232).
+- **Release blockers:** TD-229 (Play account; TD-226, TD-230, TD-231 follow it), TD-232 (two
+  owner decisions, then submit), TD-219's device checks, counsel on the Terms (TD-277).
+- **Semper Classroom** (`material_testing`; [ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md),
+  old names aliased until TD-330) merges this `main` (last `968637cb`, material_testing#144,
+  2026-10-22; [FORK_SYNC.md](docs/ops/FORK_SYNC.md)). Owed before its release: its engine-pin
+  fix merged (readiness MT-TE2-001), its Firebase app, the sync, then `rename_classroom_app.py`.
+- **CI.** Tiers follow the diff, floors rise with every test PR ([TESTING.md](docs/app/TESTING.md#coverage-floors)),
+  `main` requires `CI OK`, and Tier 3 signs in to live staging, so a staging backend behind
+  `main` fails it. Always-on: `engine-pin`, `console-a11y`; `engine-host-sanitized` follows
+  Tier 3. The OpenAPI snapshot is rewritten with `UPDATE_OPENAPI_SNAPSHOT=1` ([ADR-029](docs/adr/ADR-029-api-contract-snapshot.md)).
 - **Owed.** A device smoke of the next release ([RELEASING.md](docs/ops/RELEASING.md) step 5);
-  the on-device characterization at the 0.6.1 pin (TD-212); Pixel 6 benchmarks for #435;
-  ADR-015's queued-work upgrade check; transfer notifications and AVI import on a device
-  ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a); Semper Classroom beside Semper on one phone;
-  the legal pages' operator values (TD-36).
+  TD-212 at the 0.6.1 pin; Pixel 6 benchmarks for #435; ADR-015's queued-work upgrade check;
+  [WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a on a device; both apps on one phone; TD-36.
 - **Look it up; this list rots.** `gh pr list --state open`, [CHANGELOG.md](docs/ops/CHANGELOG.md), [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
 ## Traps
