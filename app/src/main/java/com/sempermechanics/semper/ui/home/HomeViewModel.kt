@@ -51,6 +51,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         val cloudState: Boolean,
         /** Whether a backup may be pulled down now (`LicenseEntitlements.restoreEnabled`). */
         val restoreEnabled: Boolean,
+        /** The quota and licence lines' licence half ([HomeQuotaCard.Lines]). */
+        val lines: HomeQuotaCard.Lines = HomeQuotaCard.Lines.NONE,
     ) {
         companion object {
             /** Before the first read: Home's neutral state, no cloud state and no restore. */
@@ -112,6 +114,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         HomeEntitlements(
             cloudState = LicenseEntitlements.cloudBackupEnabled(app),
             restoreEnabled = LicenseEntitlements.restoreEnabled(app),
+            lines = HomeQuotaCard.Lines.read(app),
         )
     }
 

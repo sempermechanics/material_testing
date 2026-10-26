@@ -15,7 +15,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.snackbar.Snackbar
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.account.entitlement.EntitlementStore
 import com.sempermechanics.semper.data.cloud.CloudBackupListing
 import com.sempermechanics.semper.data.cloud.SessionDeletes
 import com.sempermechanics.semper.data.net.AccountCache
@@ -244,9 +243,6 @@ class HomeActivity : AppCompatActivity() {
     private fun openLimitScreenIfFull() {
         lifecycleScope.launch {
             val localCount = withContext(Dispatchers.IO) {
-                // The limit check below reads the entitlement; its first read in a
-                // process opens the Keystore, so it is made here (readiness TE1-006).
-                EntitlementStore.status(this@HomeActivity)
                 SessionStore.list(this@HomeActivity).size
             }
             AccountCache.refreshSessionLimit(this@HomeActivity, localCount)
@@ -307,7 +303,7 @@ class HomeActivity : AppCompatActivity() {
         adapter.setSyncVisible(showsCloudState())
         binding.emptyState.isVisible = list.sessions.isEmpty()
         updateCloudBackups()
-        quotaCard.render(list.sessions.size)
+        quotaCard.render(list.sessions.size, list.entitlements.lines)
         // A refresh can drop rows out from under a selection.
         selection.updateSelectionBar()
         // No quota count stored from here: these rows leave out the ones a
@@ -350,7 +346,9 @@ class HomeActivity : AppCompatActivity() {
      * `RestoreStart.request` Settings uses, so a rotation does not lose them.
      */
     private fun startRestore(records: List<SessionRecord>) {
-        if (records.isEmpty() || !RestoreRequest.allowedOrSay(this)) return
+        if (records.isEmpty()) return
+        // The licence as Home's last list read it, off the main thread (TE1-006).
+        if (!viewModel.entitlements.restoreEnabled) return RestoreRequest.sayPaused(this)
         selection.clearSelection()
         viewModel.restoreRows(records)
     }

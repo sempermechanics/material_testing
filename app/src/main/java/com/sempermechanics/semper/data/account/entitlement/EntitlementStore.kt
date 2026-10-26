@@ -6,6 +6,7 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import androidx.annotation.VisibleForTesting
 import com.sempermechanics.semper.BuildConfig
 import com.sempermechanics.semper.data.account.DeviceKeys
 import com.sempermechanics.semper.data.prefs.PrefFiles
@@ -75,11 +76,21 @@ object EntitlementStore {
     /** `elapsedRealtime` of the last write; starts a full interval back so the first one is due. */
     private var lastPersistElapsed = -PERSIST_EVERY_MS
 
+    /**
+     * Called first by every public entry ([status], [refreshDue], [accept], [clear]), before
+     * the no-pins return: tests see which thread a caller reads on, even in a build without
+     * pins (readiness TE1-006). Null in the app.
+     */
+    @VisibleForTesting
+    @Volatile
+    internal var onCall: (() -> Unit)? = null
+
     /** The token's status, and the device's best estimate of the server's clock, at one reading. */
     private class Reading(val status: TokenStatus, val effectiveNowMs: Long)
 
     /** The stored token's status now. */
     fun status(context: Context): TokenStatus {
+        onCall?.invoke()
         if (pins.isEmpty) return TokenStatus.NotUsed
         return read(context.applicationContext).status
     }
@@ -90,6 +101,7 @@ object EntitlementStore {
      * lapsed ([EntitlementRefresh.refreshDue]). False with no token in play.
      */
     fun refreshDue(context: Context): Boolean {
+        onCall?.invoke()
         if (pins.isEmpty) return false
         val reading = read(context.applicationContext)
         return EntitlementRefresh.refreshDue(reading.status, reading.effectiveNowMs)
@@ -120,6 +132,7 @@ object EntitlementStore {
      * when known; the token's `iat` is used too, whichever is later.
      */
     fun accept(context: Context, token: String?, authoritative: Boolean, serverNowMs: Long?) {
+        onCall?.invoke()
         val appContext = context.applicationContext
         when (EntitlementPolicy.intake(!pins.isEmpty, token, authoritative)) {
             TokenIntake.IGNORE, TokenIntake.KEEP -> Unit
@@ -130,6 +143,7 @@ object EntitlementStore {
 
     /** Forget the token, its clock and its key (sign-out, or a backend that sends none). */
     fun clear(context: Context) {
+        onCall?.invoke()
         if (pins.isEmpty) return
         synchronized(lock) {
             runCatching { SealedRecordStore.clear(PhoneDisk(context)) }
