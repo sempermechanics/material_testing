@@ -210,6 +210,20 @@ class FontScaleLayoutTest {
     }
 
     @Test
+    fun `the ROI studio keeps Use full image left and Crop-Erase right when they wrap`() {
+        val ctx = context(2f)
+        prepare = {}
+        val root = laidOut(ctx, R.layout.activity_roi_draw, merge = false, widthDp = PHONE_DP)
+        val chip = root.findViewById<View>(R.id.btnFullImageRoi)
+        val group = root.findViewById<View>(R.id.rgCropErase)
+        assertTrue("two rows at font scale 2", group.top >= chip.bottom)
+        val chipLeft = chip.rightIn(root) - chip.width
+        assertTrue("Use full image starts at ${chipLeft}px", chipLeft <= ctx.px(EDGE_DP))
+        val groupRight = group.rightIn(root)
+        assertTrue("Crop/Erase ends at ${groupRight}px of ${root.width}", groupRight >= root.width - ctx.px(EDGE_DP))
+    }
+
+    @Test
     fun `the deformed frames' range names both files in full at font scale 1`() = assertRangeInFull(1f)
 
     @Test

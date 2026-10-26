@@ -91,6 +91,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 app:constraint_referenced_ids="btnFullImageRoi,rgCropErase"
+                app:flow_horizontalBias="0"
                 app:flow_horizontalGap="8dp"
                 app:flow_horizontalStyle="spread_inside"
                 app:flow_lastHorizontalBias="1"
