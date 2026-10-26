@@ -67,7 +67,7 @@ available.
   tap-to-probe instead of the icon beneath the cursor. Worth a retry on a
   different AVD or with a physical device.
 
-## Material Testing: the lab tests
+## Semper Classroom: the lab tests
 
 Taken on this fork's own builds (2026-09-23/25, API 36 emulator) with the
 validation's inputs: the tensile 40-frame steel set, 12.5 mm², ROI 1960 × 297 at

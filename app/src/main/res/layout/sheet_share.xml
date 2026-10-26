@@ -125,7 +125,7 @@
                 android:text="@string/share_type_pdf" />
         </LinearLayout>
 
-        <!-- Material Testing: a tensile or bending test with loads (ShareCenter). -->
+        <!-- Semper Classroom: a tensile or bending test with loads (ShareCenter). -->
         <LinearLayout
             android:id="@+id/rowShareLabReport"
             style="@style/Widget.Semper.ShareRow"

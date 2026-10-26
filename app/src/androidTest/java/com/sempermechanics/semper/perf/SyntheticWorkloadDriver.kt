@@ -63,7 +63,7 @@ import kotlin.random.Random
  * adb shell am instrument -w \
  *   -e class com.sempermechanics.semper.perf.SyntheticWorkloadDriver#run \
  *   -e op analysis -e scale large \
- *   com.sempermechanics.materialtesting.test/androidx.test.runner.AndroidJUnitRunner
+ *   com.sempermechanics.semperclassroom.test/androidx.test.runner.AndroidJUnitRunner
  * ```
  * `op` ∈ {screen, analysis, backup, restore}; `scale` ∈ {light, large}; `cloudId` (restore
  * only) overrides auto-discovery of the most recently uploaded session.

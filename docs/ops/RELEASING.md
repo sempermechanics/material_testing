@@ -4,8 +4,9 @@ How a build goes from **`main`** to testers. Written for maintainers; nothing
 here is needed for day-to-day contributions. Secrets/vars layout:
 [ENVIRONMENTS.md](ENVIRONMENTS.md).
 
-This repo releases **Material Testing** (`com.sempermechanics.materialtesting`, [ADR-019](../adr/ADR-019-sempermechanics-app-id.md)),
-not Semper: its signing secrets hold Material Testing's own key, and
+This repo releases **Semper Classroom** (`com.sempermechanics.semperclassroom`, [ADR-030](../adr/ADR-030-semper-classroom-app-identity.md);
+Material Testing, `com.sempermechanics.materialtesting`, before), not Semper: its signing secrets
+hold the fork's own key (alias `materialtesting`, unchanged by the rename), and
 `SEMPER_API_BASE_URL` (or the older `INDIC_API_BASE_URL` var) is Semper's gateway, since both apps share one backend
 ([ADR-009](../adr/ADR-009-material-testing-app-identity.md)). The Asset Links
 check greps the whole file for the key's SHA-256, so add it to
@@ -80,8 +81,9 @@ Check the R8 mapping reached Crashlytics (the release build uploads it); the wor
    repository is public, so that Release is downloadable by anyone, and it is
    where a sideloaded build's **Update** button goes: below the minimum version,
    a build not installed by Play opens
-   `https://github.com/sempermechanics/material_testing/releases` (the list, since
-   `/latest` skips pre-releases; `ui/limit/UpdateSource.kt:19`), and a Play
+   this repository's Releases list (`/latest` skips pre-releases; `ui/limit/UpdateSource.kt:19`
+   names `sempermechanics/semper_classroom/releases`; an old Material Testing build names
+   `material_testing/releases`, which GitHub redirects once the repository is renamed), and a Play
    install opens its Play listing. Attach the APK to every release. Customer
    distribution is separate:
    - Upload the APK (GitHub Release on
@@ -97,8 +99,7 @@ Check the R8 mapping reached Crashlytics (the release build uploads it); the wor
 every customer-visible backend change it depends on. The first release built
 after 2026-10-18 must say that **Android 11 (API 30) is now the minimum**: phones
 on Android 7–10 cannot install or update it, and keep the version they have,
-which the backend may later gate (for this app, `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING`,
-which the backend now reads as the fallback for its `_SEMPER_CLASSROOM` pair, [ADR-030](../adr/ADR-030-semper-classroom-app-identity.md);
+which the backend may later gate (for this app, `MIN_SUPPORTED_VERSION_CODE_SEMPER_CLASSROOM`;
 `MIN_SUPPORTED_VERSION_CODE` is Semper's).
 
 ## Staged rollout on Google Play
@@ -146,7 +147,7 @@ Play cannot recall a build. In order of speed:
 | Lever | Effect | How |
 |---|---|---|
 | `KILL_SWITCHES` | Switches off `backup`, `share`, `restore` or `upload` without a release. The backend refuses the guarded routes itself (503 `feature_paused`, `Retry-After: 300`; `backend/app/deps.py:295-330`), so it holds for every build, old ones included, which retry the 503; current builds also show the feature as paused. `share` has no route, so only builds that read `/v1/config` obey it | Repo variable, space-separated, then `deploy-backend.yml` ([ENVIRONMENTS.md](ENVIRONMENTS.md)); watch `event="feature_paused"` in the logs to see what it holds back |
-| `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` | Material Testing builds below it keep their analyses, viewer and exports, and cannot start an analysis, upload or restore until updated. `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING` only nudges. Since ADR-030 the backend reads the pair as `MIN_SUPPORTED_VERSION_CODE_SEMPER_CLASSROOM` / `RECOMMENDED_VERSION_CODE_SEMPER_CLASSROOM` and falls back to these `_MATERIAL_TESTING` names when those are unset ([ADR-030](../adr/ADR-030-semper-classroom-app-identity.md)); either pair gates this app's builds. Semper has its own pair, `MIN_SUPPORTED_VERSION_CODE` / `RECOMMENDED_VERSION_CODE`, because each app's versionCodes come from its own release counter (`settings.release_gate(app)`, `backend/app/config.py:308-335`) | Repo variable, redeploy. Raise the recommended one a release ahead. A local debug build at versionCode 1 is never gated |
+| `MIN_SUPPORTED_VERSION_CODE_SEMPER_CLASSROOM` | Semper Classroom builds below it keep their analyses, viewer and exports, and cannot start an analysis, upload or restore until updated. `RECOMMENDED_VERSION_CODE_SEMPER_CLASSROOM` only nudges. The old `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` / `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING` are still read when the new ones are unset (ADR-030). Semper has its own pair, `MIN_SUPPORTED_VERSION_CODE` / `RECOMMENDED_VERSION_CODE`, because each app's versionCodes come from its own release counter (`settings.release_gate(app)`, `backend/app/config.py:314`) | Repo variable, redeploy. Raise the recommended one a release ahead. A local debug build at versionCode 1 is never gated |
 | `ENTITLEMENT_OFFLINE_GRACE_DAYS` | How long newly issued entitlement tokens hold offline; the fail-open / fail-closed lever for licensing. Tokens already issued keep theirs | Repo variable, redeploy ([ADR-023](../adr/ADR-023-signed-offline-entitlement.md)) |
 | `APP_CHECK_MODE` | `enforce` back to `monitor` or `off` | [INCIDENT_RESPONSE.md](INCIDENT_RESPONSE.md) |
 | Backend revision | Traffic back to the previous revision | `gcloud run services update-traffic semper-api --to-revisions=<previous>=100 --region asia-south1`; the image is kept as `rollback-prev` ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A7). Firestore is never rolled back by a deploy |

@@ -124,7 +124,7 @@ class PdfLayoutEngine(
         }
         rule(pageHeight - margin, colorBorder, 2f)
         canvas?.drawText(
-            "Semper Metrology Report • Page $pageNumber",
+            "Semper Classroom Metrology Report • Page $pageNumber",
             pageWidth / 2f,
             pageHeight - (margin / 2f),
             footerPaint,

@@ -76,7 +76,7 @@ internal interface SummaryHost : ViewerViews {
  * Its passes run in [activity]'s scope. Constructed before onCreate; reads
  * [ViewerViews.binding] lazily, and [wire] once the views are there.
  *
- * @param labResults the lab test's Results (material_testing), read when the
+ * @param labResults the lab test's Results (Semper Classroom), read when the
  *   slot is shown; null, the default, for a viewer that has none
  */
 internal class ViewerSummaryController(

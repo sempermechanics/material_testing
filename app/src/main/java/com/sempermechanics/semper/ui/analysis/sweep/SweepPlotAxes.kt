@@ -121,7 +121,7 @@ internal class SweepPlotAxes(private val plot: View, private val text: Paint) {
 
         /**
          * The text beside the scrub dot: the curve's y, as Semper's sweep
-         * plots read it, or with [showsPoint] (Material Testing's Results
+         * plots read it, or with [showsPoint] (Semper Classroom's Results
          * curves) both coordinates ([scrubLabel]).
          */
         fun scrubText(showsPoint: Boolean, x: Float, y: Float, xUnit: String, yUnit: String): String =

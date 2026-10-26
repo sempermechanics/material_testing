@@ -29,7 +29,7 @@ import kotlinx.coroutines.withContext
  * Home's two ways into a new analysis: the + button's source chooser (a
  * photo or a video, from the gallery sheet or the Files picker) and an older
  * analysis's Re-run. It registers Activity Result launchers, so Home builds
- * it as a property, before the screen starts. In material_testing the +
+ * it as a property, before the screen starts. In Semper Classroom the +
  * button asks **Which test?** first ([TestTypeSheet]), and the type rides
  * the hand-off to the wizard; a Re-run carries its record's lab test
  * ([LabRerun]).

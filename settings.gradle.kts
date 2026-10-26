@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "MaterialTesting"
+rootProject.name = "SemperClassroom"
 include(":app")
 include(":benchmark")

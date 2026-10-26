@@ -1,5 +1,7 @@
 # ADR-019: The app is `com.sempermechanics.semper`; "indic" leaves the code
 
+> **This fork's app is now Semper Classroom** (`com.sempermechanics.semperclassroom`, [ADR-030](ADR-030-semper-classroom-app-identity.md)); `com.sempermechanics.materialtesting` below is its id before that.
+
 **Status:** Accepted, released (Semper `v1.2-beta.4`, Material Testing `v1.4-beta.2`, 2026-10-17)
 **Date:** 2026-10-03
 **Deciders:** app owner

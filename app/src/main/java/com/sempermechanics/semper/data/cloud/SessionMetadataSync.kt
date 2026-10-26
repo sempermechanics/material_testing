@@ -23,7 +23,7 @@ import timber.log.Timber
  * Re-sends a backed-up session's metadata.json after a change made here since
  * the backup, so a restore brings the change back (ADR-013). [SessionStore]
  * marks [SessionRecord.metadataStale] for each such change: a rename and, in
- * material_testing, bending's deflection and the tensile curve corrections.
+ * Semper Classroom, bending's deflection and the tensile curve corrections.
  *
  * The metadata is rebuilt from the row as the upload builds it
  * ([SessionUploadMetadata.buildMetadataJson]) and replaces the cloud copy's

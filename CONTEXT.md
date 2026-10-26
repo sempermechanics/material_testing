@@ -165,8 +165,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   Home's Re-run copies a tensile or bending test (TD-280). Left: TD-300.
 - **Readiness port, merged 2026-10-19, not deployed** (#137, #138: semperdic-app's
   #448/#449; TD-214–TD-279, FI-17–FI-24): **minSdk 30**, the signed offline entitlement
-  ([ADR-023](docs/adr/ADR-023-signed-offline-entitlement.md); tokens name `materialtesting`),
-  its own `*_MATERIAL_TESTING` version gate, kill switches, EMM config, account-anchored
+  ([ADR-023](docs/adr/ADR-023-signed-offline-entitlement.md); tokens name `semperclassroom`,
+  `materialtesting` before and still read), its own `*_SEMPER_CLASSROOM` version gate
+  (`*_MATERIAL_TESTING` still read), kill switches, EMM config, account-anchored
   entitlements ([ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md)). The backend,
   consoles, indexes and dashboards deploy only from semperdic-app; never deploy Hosting from
   here. Owed: TD-214–TD-217, TD-219, TD-226, TD-229–TD-232, TD-277; for a release, this
@@ -175,15 +176,18 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   a lab report. Bending: beam-edge taps, δ, E = WL³/(48δI), loads in kg, a deflection
   correction (ADR-013), a lab report. Checked against published steel and PMMA data
   ([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)); re-run owed (TD-300).
-- **Releases.** `com.sempermechanics.materialtesting` (ADR-009, ADR-019) beside Semper, on
-  its backend; last `v1.4-beta.2` (`d08aae07`, 2026-10-17, versionCode 1006), not yet
+- **Releases.** Semper Classroom, `com.sempermechanics.semperclassroom` (ADR-009, ADR-030),
+  beside Semper, on its backend; last `v1.4-beta.2` as Material Testing
+  (`com.sempermechanics.materialtesting`, `d08aae07`, 2026-10-17, versionCode 1006), not yet
   smoked on a phone. Never hand out `main`'s CI APK (TD-148). App Check waits for Play.
 - **Owed by hand** ([WORKFLOWS.md](docs/app/WORKFLOWS.md)): after the 2026-10-21 sync,
   `LabWorkflowDeviceTest` and `WizardDraftRestoreTest` on a device, and #458's incremental
   reference on a lab clip; ROI zoom and pan (§6.21–6.25);
-  §5.1a with a load log, a phone MP4 and a UTM clip; Material Testing beside Semper (§3b),
+  §5.1a with a load log, a phone MP4 and a UTM clip; Semper Classroom beside Semper (§3b),
   ADR-022's screenshots; the synced tip cards, summary pill and Re-run (3.11a–3.11m); Pixel 6
   references (TD-135). Owner decision: Terms §1.2 and §1.3 against a student audience.
+- **Rename to Semper Classroom ([ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md)):** branch
+  `claude/semper-classroom-app`, waits on the upstream PR, its deploy and the owner's Firebase app registration.
 - **Look it up; this list rots.** `gh pr list --state open`; history in
   [CHANGELOG.md](docs/ops/CHANGELOG.md); proposals in [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 

@@ -15,7 +15,7 @@ private const val NANOS_PER_MS = 1_000_000L
  * The backend keeps one key per device id (`devices/{deviceId}`), and Android
  * gives every app signed with one key the same `ANDROID_ID`, so another app on
  * this phone that registers (a retired `com.indicvision.*` build, a debug build
- * of Material Testing) replaces our key. Every signed call then fails
+ * of Semper Classroom) replaces our key. Every signed call then fails
  * `bad_signature`, and the `device_registered` flag kept sign-in from ever
  * registering again (TD-209).
  *

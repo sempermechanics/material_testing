@@ -1,5 +1,7 @@
 # ADR-009: Material Testing is its own Android app on Semper's backend
 
+> **Now Semper Classroom** (`com.sempermechanics.semperclassroom`): renamed by semperdic-app's [ADR-030](ADR-030-semper-classroom-app-identity.md); same key, same backend.
+
 **Status:** Accepted, built (App Check owed). The package in point 1 is now
 `com.sempermechanics.materialtesting` and `namespace` `com.sempermechanics.semper`
 ([ADR-019](ADR-019-sempermechanics-app-id.md)); the rest stands.

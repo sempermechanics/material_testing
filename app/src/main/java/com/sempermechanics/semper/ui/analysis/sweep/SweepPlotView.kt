@@ -156,7 +156,7 @@ class SweepPlotView @JvmOverloads constructor(
 
     /**
      * When true, the scrub label reads the point, "(1.94 mε, 263 MPa)", not
-     * just its y: Material Testing's stress–strain and load–deflection
+     * just its y: Semper Classroom's stress–strain and load–deflection
      * curves set it. The sweep plots leave it false.
      */
     var scrubShowsPoint: Boolean = false

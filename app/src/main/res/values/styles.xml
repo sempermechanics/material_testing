@@ -110,7 +110,7 @@
         <item name="android:textSize">15sp</item>
     </style>
 
-    <!-- Material Testing's "Which test?" rows (sheet_test_type.xml): a share
+    <!-- Semper Classroom's "Which test?" rows (sheet_test_type.xml): a share
          row's title, with a line under it saying what the test gives. -->
     <style name="Widget.Semper.TestTypeTitle">
         <item name="android:layout_width">match_parent</item>
