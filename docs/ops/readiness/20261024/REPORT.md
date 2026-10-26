@@ -9,15 +9,21 @@ kept outside the repository, in the session scratchpad, like the baseline's logs
 
 | Tree | Start | Readiness head |
 |---|---|---|
-| S | `875e2334` (engine `f072da0`, v0.6.1) | `claude/readiness-20261024` at `6324ea7f` (code head `57e799b8`; `6324ea7f` adds only screenshots). It merges the backend, ops and console branches (`0fd3aaa9`) and `main`'s #484 (`69b72eb6`). Not pushed, not merged, not deployed |
-| M | `839d4285` (engine `1284edf`, v0.2.3) | `claude/readiness-20261024-engine-pin` at `fb436770`. Not pushed |
+| S | `875e2334` (engine `f072da0`, v0.6.1) | `claude/readiness-20261024` at `FINAL-HEAD`. It merges the backend, ops and console branches (`0fd3aaa9`), `main`'s #484 (`69b72eb6`) and #486 (`1bdbe880`). Not pushed, not merged, not deployed |
+| M | `839d4285` (engine `1284edf`, v0.2.3) | The engine-pin fix `fb436770` merged as material_testing#145 into fork `main` `6e42ed00`, CI fully green. The fork's sync of S `25334af1` merged as material_testing#146 (`035f5095`). The Semper Classroom rename, material_testing#147, is open |
 
-Re-verify: the Phase 5 re-verify ran on `2ebe7a2a` and covered 102 fix ids (84 VERIFIED,
-10 REOPENED, 6 NEEDS_ADMIN, 2 NEEDS_DEVICE; ADMIN_DECISIONS, Checkpoint 2). Six reopened
-ids were reworked, and three findings were added after it (AE1V-023 and AE1V-024 at
-Checkpoint 2, AE1V-025 in its second round). Those nine ids are **PENDING-REVERIFY-2**
-below: AE3-002, AE1-004, AE1-007, AE1-009, AE1V-021, TE1-006, AE1V-023, AE1V-024 and
-AE1V-025. Their second re-verify and the rework after it are the lead's to record here.
+Re-verify (ADMIN_DECISIONS, Checkpoint 2):
+- **Round 1.** The Phase 5 re-verify ran on `2ebe7a2a` and covered 102 fix ids: 84 VERIFIED,
+  10 REOPENED, 6 NEEDS_ADMIN, 2 NEEDS_DEVICE. Six reopened ids were reworked; three findings
+  were added (AE1V-023, AE1V-024, then AE1V-025).
+- **Round 2, at `6324ea7f`.** AE1-004, AE1-007, AE1-009, AE1V-021 and AE1V-024 VERIFIED.
+  AE1-007's colour guard exempts the files that write output (`*Export.kt`, `*Encoder.kt`),
+  an exemption the verifier judged sound.
+- **Round 3, at `2363b12b`.** AE1V-023 and AE1V-025 VERIFIED. TE1-006 passes its code
+  criterion for Home; the rest is TD-338, whose list of the calls left on main was
+  corrected in `111f8060`.
+- **Still open.** AE3-002 (P2) is in rework round 4 (two support-mail strings) and is
+  **PENDING-REVERIFY-4** below.
 
 ## 1. Summary and go/no-go
 
@@ -28,17 +34,16 @@ AE1V-025. Their second re-verify and the rework after it are the lead's to recor
    Checkpoint 1). Their rows are in the gate's
    [Risk acceptance](../../PRODUCTION_READINESS_GATE.md#risk-acceptance) table, unsigned and
    marked "Admin to sign" (A10).
-2. **The second re-verify is in.** It must return VERIFIED for AE1-009, the one P1 among the
-   PENDING-REVERIFY-2 ids. It must also settle the other eight.
-3. **The branch is merged to `main` through a PR whose `CI OK` passes** (A1, A2). That run
+2. **The branch is merged to `main` through a PR whose `CI OK` passes** (A1, A2). That run
    is the first in CI for `engine-pin` and `engine-host-sanitized`, and the first in
    GitHub Actions for `console-a11y`. It also runs gitleaks, which was not run locally.
-4. **The backend is deployed from that `main`** (A4). Until then, production runs the lock
+3. **The backend is deployed from that `main`** (A4). Until then, production runs the lock
    that TE5-001 found holding 19 known advisories, and TE4-004's switches do not exist
    there.
 
 TE5-002 (pre-ticked consent) does not block: it was rejected ("Product decision stands").
-Observations are reported only.
+Neither does AE3-002 (P2, PENDING-REVERIFY-4). Observations are reported only. Every P1
+re-verified this run is VERIFIED, AE1-009 included.
 
 ### Scorecard
 
@@ -46,33 +51,33 @@ Counts use `severity_final`. FINDINGS.yaml gives each finding the axis `technica
 `aesthetic` only. The **Objective** rows are therefore a cut, not a third axis: gate G1
 (native code and measurement output), whose findings are also counted under Technical or
 Aesthetic. *Open* means not settled in the repository: NEEDS_ADMIN / NEEDS_DEVICE /
-PENDING-REVERIFY-2. *Deferred* includes the five blocking P1s and the seven
+still in rework (AE3-002, PENDING-REVERIFY-4). *Deferred* includes the five blocking P1s and the seven
 material_testing findings left for Phase 8.
 
-| Axis | Severity | Found | Fixed + verified | Accepted partial | Deferred | Rejected | Open (Admin / device / re-verify 2) | Duplicate | Observation |
+| Axis | Severity | Found | Fixed + verified | Accepted partial | Deferred | Rejected | Open (Admin / device / rework) | Duplicate | Observation |
 |---|---|---:|---:|---:|---:|---:|---|---:|---:|
 | Technical | P0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
-| Technical | P1 | 17 | 8 | 0 | 5 | 1 | 1 (0 / 0 / 1) | 2 | 0 |
-| Technical | P2 | 38 | 25 | 3 | 3 | 0 | 7 (4 / 2 / 1) | 0 | 0 |
+| Technical | P1 | 17 | 9 | 0 | 5 | 1 | 0 | 2 | 0 |
+| Technical | P2 | 38 | 26 | 3 | 3 | 0 | 6 (4 / 2 / 0) | 0 | 0 |
 | Technical | P3 | 13 | 13 | 0 | 0 | 0 | 0 | 0 | 0 |
 | Technical | observation | 9 | 0 | 0 | 0 | 0 | 0 | 0 | 9 |
-| **Technical** | **all** | 78 | 47 | 3 | 8 | 1 | 8 (4 / 2 / 2) | 2 | 9 |
+| **Technical** | **all** | 78 | 49 | 3 | 8 | 1 | 6 (4 / 2 / 0) | 2 | 9 |
 | Aesthetic | P1 | 13 | 12 | 0 | 0 | 0 | 0 | 1 | 0 |
-| Aesthetic | P2 | 32 | 21 | 0 | 4 | 0 | 4 (2 / 0 / 2) | 3 | 0 |
-| Aesthetic | P3 | 11 | 4 | 1 | 1 | 0 | 5 (0 / 0 / 5) | 0 | 0 |
+| Aesthetic | P2 | 32 | 22 | 0 | 4 | 0 | 3 (2 / 0 / 1) | 3 | 0 |
+| Aesthetic | P3 | 11 | 9 | 1 | 1 | 0 | 0 | 0 | 0 |
 | Aesthetic | observation | 5 | 0 | 0 | 0 | 0 | 0 | 0 | 5 |
-| **Aesthetic** | **all** | 61 | 37 | 1 | 5 | 0 | 9 (2 / 0 / 7) | 4 | 5 |
+| **Aesthetic** | **all** | 61 | 43 | 1 | 5 | 0 | 3 (2 / 0 / 1) | 4 | 5 |
 | Objective (G1) | P0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | Objective (G1) | P1 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | Objective (G1) | P2 | 6 | 1 | 2 | 0 | 0 | 3 (2 / 1 / 0) | 0 | 0 |
 | Objective (G1) | P3 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | Objective (G1) | observation | 2 | 0 | 0 | 0 | 0 | 0 | 0 | 2 |
 | **Objective (G1)** | **all** | 11 | 4 | 2 | 0 | 0 | 3 (2 / 1 / 0) | 0 | 2 |
-| **All findings** | **all** | 139 | 84 | 4 | 13 | 1 | 17 (6 / 2 / 9) | 6 | 14 |
+| **All findings** | **all** | 139 | 92 | 4 | 13 | 1 | 9 (6 / 2 / 1) | 6 | 14 |
 | All | P0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
-| All | P1 | 30 | 20 | 0 | 5 | 1 | 1 (0 / 0 / 1) | 3 | 0 |
-| All | P2 | 70 | 46 | 3 | 7 | 0 | 11 (6 / 2 / 3) | 3 | 0 |
-| All | P3 | 24 | 17 | 1 | 1 | 0 | 5 (0 / 0 / 5) | 0 | 0 |
+| All | P1 | 30 | 21 | 0 | 5 | 1 | 0 | 3 | 0 |
+| All | P2 | 70 | 48 | 3 | 7 | 0 | 9 (6 / 2 / 1) | 3 | 0 |
+| All | P3 | 24 | 22 | 1 | 1 | 0 | 0 | 0 | 0 |
 | All | observation | 14 | 0 | 0 | 0 | 0 | 0 | 0 | 14 |
 
 ### Go/no-go per gate
@@ -82,17 +87,17 @@ backend contract/ops, G4 licensing, G5 Android, G6 release, UX (aesthetic).
 
 | Gate | Findings | Verified | P0/P1 not verified | Status | What is missing |
 |---|---:|---:|---|---|---|
-| G1 | 11 | 4 | — (P0 MT-TE2-001 VERIFIED on the fork branch) | **Go with conditions** for Semper. **No-go** for a Semper Classroom release | Semper: real-data validation at the pin, TD-327 (A14); the arm64 smoke (A13); the precision decision, TD-342 (A12). Fork: `fb436770` on its `main` (A3, Phase 8) |
+| G1 | 11 | 4 | — (P0 MT-TE2-001 VERIFIED; its fix is on fork `main`, material_testing#145) | **Go with conditions** for Semper. A Semper Classroom release waits on Phase 8 | Semper: real-data validation at the pin, TD-327 (A14); the arm64 smoke (A13); the precision decision, TD-342 (A12). Fork: the pin condition is met (A3 done); Phase 8 and the Zenodo compare (A15) remain |
 | G2 | 19 | 12 | TE5-003, TE5-004 (deferred) | **No-go** | TE5-003 and TE5-004 fixed by counsel and the owner (A11) or signed (A10). TE5-001's lock is live only after A4 |
 | G3 | 15 | 7 | TE6-001, TE6-011 (deferred) | **No-go** | Monitoring applied with a channel (A6); posture FAILs fixed (A9); or both signed (A10) |
-| G4 | 14 | 8 | — | **Go with conditions** | AE1V-023, AE1V-024 and AE1V-025 (P3) re-verified. The entitlement key, TD-215 (A7), before offline licensing is enforced |
-| G5 | 4 | 2 | — | **Go with conditions** | TE1-006 re-verified; the 1036 install-over smoke, TD-344 (A13) |
+| G4 | 14 | 11 | — | **Go with conditions** | The entitlement key, TD-215 (A7), before offline licensing is enforced |
+| G5 | 4 | 3 | — | **Go with conditions** | The 1036 install-over smoke, TD-344 (A13); TE1-006's other screens, TD-338 |
 | G6 | 14 | 11 | TE1-001 (deferred) | **No-go** | Certificate pins chosen (A8) or TE1-001 signed (A10); the PR's first `CI OK` with the new release checks (A1) |
-| UX | 62 | 40 | AE1-009 (PENDING-REVERIFY-2) | **No-go until re-verified** | AE1-009 VERIFIED; AE3-002, AE1-004, AE1-007 and AE1V-021 settled; owner decisions TD-340, TD-341 and TD-343 (A12) |
+| UX | 62 | 44 | — (AE1-009 VERIFIED in round 2) | **Go with conditions** | AE3-002 (P2) through rework round 4 (PENDING-REVERIFY-4); owner decisions TD-340, TD-341 and TD-343 (A12) |
 
 ## 2. Gate statuses
 
-Numbers are from the lead's runs on the two heads below. Logs are in the session scratchpad.
+Numbers are from the lead's runs on the heads below. Logs are in the session scratchpad.
 
 **Merged head `2ebe7a2a`** (backend, ops and console merged; `main`'s #484 merged in):
 
@@ -106,14 +111,19 @@ Numbers are from the lead's runs on the two heads below. Logs are in the session
 | Firestore rules | `firebase emulators:exec --only firestore "node --test"` in `firestore-rules-tests/` | 61 pass |
 | Script checks | `check_doc_paths`, `check_framework_coverage`, `render_legal_pages --check`, `check_console`, `check_engine_pin`, `unittest discover scripts/tests` and the others | all pass |
 
-**Rework head `57e799b8`** (`6324ea7f` adds only screenshots):
+**Last full Android gate, at `0513a772`** (later commits change screenshots, docs and
+the round-4 AE3-002 strings; `FINAL-HEAD` is the branch head):
 
 | Gate | Command | Result |
 |---|---|---|
-| Android tier 1 + release | `gradlew.bat ciReleaseGate :app:koverLog :app:koverVerify :app:compileDebugAndroidTestKotlin` | BUILD SUCCESSFUL: 2843 unit tests, 0 failed; spotless, detekt, lint clean, no baseline entry; R8, `assembleRelease` |
+| Android tier 1 + release | `gradlew.bat ciReleaseGate :app:koverLog :app:koverVerify :app:compileDebugAndroidTestKotlin` | BUILD SUCCESSFUL: 2850 unit tests, 0 failed, 5 skipped (pre-existing); spotless, detekt, lint clean, no baseline entry; R8, `assembleRelease` |
 | Oracles | `DatFieldOracleTest`, `SummaryGifOracleTest` (in the run above) | pass; `app/src/test/resources/oracles/` unchanged |
-| Kover | `:app:koverLog :app:koverVerify` | lines **81.97 %** (floor 78) |
-| Console tests | as above | 444/444 |
+| Kover | `:app:koverLog :app:koverVerify` | lines **82.22 %**, branches **63.44 %** (floors 78 / 60) |
+
+**Console after the rework.** The rework changed console code (`e570834e`, AE3-002). The
+second and third re-verifies ran `node --test` (444/444) and `check_console.py` (OK) on
+`6324ea7f` and `2363b12b`. The backend numbers at `2ebe7a2a` stand: no backend code changed
+after it.
 
 **GCP posture**, run 2026-10-24 with `scripts/check_gcp_posture.sh` (read-only; flags as
 in ADMIN_DECISIONS, Scope). Output redacted: **17 FAIL, 0 UNKNOWN**. 3.4-check-revoked moved
@@ -145,7 +155,7 @@ means the commit only filed the TECH_DEBT row.
 | AE1-001 | A | UX | P1 | Fix now | VERIFIED | `e6015560`, `041fba00` |
 | AE1-002 | A | UX | P1 | Fix now | VERIFIED | `e6015560` |
 | AE1-006 | A | UX | P1 | Fix now | VERIFIED | `05cf4fa4` |
-| AE1-009 | T | UX | P1 | Fix now; rework now (CP2) | PENDING-REVERIFY-2 | `5074cf33`, `ceb263ae` |
+| AE1-009 | T | UX | P1 | Fix now; rework now (CP2) | VERIFIED (re-verify 2, `6324ea7f`) | `5074cf33`, `ceb263ae` |
 | AE1-014 | T | G4 | P1 | Fix now: gate it | VERIFIED | `92bf1383` |
 | AE1-016 | T | G1 | P1 | Fix now | VERIFIED | `b91a2fe7` |
 | AE1V-001 | A | UX | P1 | Fix now | VERIFIED | `012d1b57`, `89c80260` |
@@ -173,9 +183,9 @@ means the commit only filed the TECH_DEBT row.
 | TE6-001 | T | G3 | P1 | Defer to Admin actions | DEFERRED→TD-217 | — |
 | TE6-011 | T | G3 | P1 | Defer to Admin actions | DEFERRED→TD-221–TD-225 | — |
 | AE1-003 | A | UX | P2 | Fix all now | VERIFIED | `e6015560` |
-| AE1-004 | A | UX | P2 | Fix all now; rework now (CP2) | PENDING-REVERIFY-2 | `e6015560`, `dac42179`, `57e799b8` |
+| AE1-004 | A | UX | P2 | Fix all now; rework now (CP2) | VERIFIED (re-verify 2, `6324ea7f`) | `e6015560`, `dac42179`, `57e799b8` |
 | AE1-005 | A | UX | P2 | Fix all now | VERIFIED | `e6015560` |
-| AE1-010 | T | UX | P2 | Fix all now; accept partial (CP2) | ACCEPTED-PARTIAL (PDF English-only by decision; TD-334) | `5074cf33`, `804c7334` |
+| AE1-010 | T | UX | P2 | Fix all now; accept partial (CP2) | ACCEPTED-PARTIAL (PDF English-only by decision) | `5074cf33`, `804c7334` |
 | AE1-012 | A | UX | P2 | Fix all now | VERIFIED | `05cf4fa4` |
 | AE1-013 | T | UX | P2 | Fix all now | VERIFIED | `6707004b` |
 | AE1-015 | A | G4 | P2 | Fix all now | VERIFIED | `0718319e` |
@@ -198,7 +208,7 @@ means the commit only filed the TECH_DEBT row.
 | AE2V-002 | A | UX | P2 | Duplicate; earlier decision applies | duplicate→AE2-006 | — |
 | AE2V-003 | A | UX | P2 | Duplicate; earlier decision applies | duplicate→AE2-007 | — |
 | AE3-001 | A | UX | P2 | Fix all now | VERIFIED | `dc9dcffb`, `ffd468fd`, `ad5059d4` |
-| AE3-002 | A | UX | P2 | Fix all now; rework now (CP2); keep 'device' for the key (CP2 round 2) | PENDING-REVERIFY-2 | `dc9dcffb`, `ad5059d4`, `e570834e` |
+| AE3-002 | A | UX | P2 | Fix all now; rework now (CP2); keep 'device' for the key (CP2 round 2) | PENDING-REVERIFY-4 | `dc9dcffb`, `ad5059d4`, `e570834e`, `19bc78d3` |
 | AE3-003 | A | UX | P2 | Fix all now | NEEDS_ADMIN→TD-340, TD-341 | `dc9dcffb`, `ad5059d4` |
 | AE3-004 | A | UX | P2 | Fix all now | VERIFIED | `ad5059d4` |
 | AE3-005 | A | UX | P2 | Fix all now | VERIFIED | `dc9dcffb`, `ad5059d4` |
@@ -213,7 +223,7 @@ means the commit only filed the TECH_DEBT row.
 | TE1-003 | T | G5 | P2 | Fix all now | NEEDS_DEVICE→TD-344 | `53c09cb6` |
 | TE1-004 | T | G5 | P2 | Fix all now | VERIFIED | `0444b326` |
 | TE1-005 | T | G5 | P2 | Fix all now | VERIFIED | `40bd4811` |
-| TE1-006 | T | G5 | P2 | Fix all now; rework now (CP2); rework once more (CP2 round 2) | PENDING-REVERIFY-2 | `98f8a050`, `49c8d25e` |
+| TE1-006 | T | G5 | P2 | Fix all now; rework now (CP2); rework once more (CP2 round 2) | VERIFIED (Home, re-verify 3) → TD-338 for the other screens | `98f8a050`, `49c8d25e`, `2afe8476`, `2c17cbef` |
 | TE1-007 | T | G6 | P2 | Fix all now | VERIFIED | `1d33a1e1` |
 | TE2-002 | T | G1 | P2 | Fix all now; accept partial (CP2) | ACCEPTED-PARTIAL→TD-346 | `d5e5291a` |
 | TE2-003 | T | G1 | P2 | Fix all now | NEEDS_DEVICE→A13 (arm64 smoke) | `d8a7687e` |
@@ -231,8 +241,8 @@ means the commit only filed the TECH_DEBT row.
 | TE4-006 | T | G4 | P2 | Fix all now | VERIFIED | `7b28746f` |
 | TE5-005 | T | G2 | P2 | Fix all now | VERIFIED | `e8c74275` |
 | TE5-007 | T | G2 | P2 | Fix all now | VERIFIED | `2ca74d64` |
-| TE6-002 | T | G3 | P2 | Fix all now | NEEDS_ADMIN→TD-217 (A1) | `f2b50227` |
-| TE6-003 | T | G3 | P2 | Fix all now | NEEDS_ADMIN→TD-217 (A1) | `f2b50227` |
+| TE6-002 | T | G3 | P2 | Fix all now | NEEDS_ADMIN→TD-217 (gate A1) | `f2b50227` |
+| TE6-003 | T | G3 | P2 | Fix all now | NEEDS_ADMIN→TD-217 (gate A1) | `f2b50227` |
 | TE6-004 | T | G3 | P2 | Fix all now | VERIFIED | `8d3d77be` |
 | TE6-005 | T | G6 | P2 | Fix all now | VERIFIED | `58c368ad` |
 | TE6-006 | T | G6 | P2 | Fix all now | VERIFIED | `6bdffaae` |
@@ -242,11 +252,11 @@ means the commit only filed the TECH_DEBT row.
 | TE6-010 | T | G3 | P2 | Fix all now | VERIFIED | `a30686dd` |
 | TE6-012 | T | G6 | P2 | Fix all now | VERIFIED | `8e19ecad` |
 | TE6-015 | T | G6 | P2 | Fix all now | VERIFIED | `66c9dacc` |
-| AE1-007 | A | UX | P3 | Fix all now; rework now (CP2) | PENDING-REVERIFY-2 | `e6015560`, `e21afdb4` |
-| AE1-011 | A | UX | P3 | Fix all now; accept partial (CP2) | ACCEPTED-PARTIAL→TD-345 | `64631979` |
+| AE1-007 | A | UX | P3 | Fix all now; rework now (CP2) | VERIFIED (re-verify 2, `6324ea7f`) | `e6015560`, `e21afdb4` |
+| AE1-011 | A | UX | P3 | Fix all now; accept partial (CP2) | ACCEPTED-PARTIAL→TD-331 | `64631979` |
 | AE1-018 | T | G1 | P3 | Fix all now | VERIFIED | `b91a2fe7` |
 | AE1V-020 | A | UX | P3 | Fix all now | VERIFIED | `afdf7c3a` |
-| AE1V-021 | A | UX | P3 | Fix all now; rework now (CP2) | PENDING-REVERIFY-2 | `afdf7c3a`, `9b54bc57`, `ba1f906b` |
+| AE1V-021 | A | UX | P3 | Fix all now; rework now (CP2) | VERIFIED (re-verify 2, `6324ea7f`) | `afdf7c3a`, `9b54bc57`, `ba1f906b` |
 | AE2-008 | A | UX | P3 | Fix all now | VERIFIED | `4e791716`, `7303291a`, `fe6ad8ca` |
 | AE2-011 | A | UX | P3 | Fix all now | VERIFIED | `c4868232` |
 | AE3-008 | A | UX | P3 | Fix all now | VERIFIED | `dc9dcffb`, `ad5059d4` |
@@ -268,9 +278,9 @@ means the commit only filed the TECH_DEBT row.
 | AE1V-017 | A | UX | observation | Reported only | observation | — |
 | AE1V-019 | A | UX | observation | Reported only | observation | — |
 | AE1V-022 | A | G4 | observation | Reported only | observation | — |
-| AE1V-023 | A | G4 | P3 | Fix in the rework batch (CP2) | PENDING-REVERIFY-2 | `ca66d9c1` |
-| AE1V-024 | A | G4 | P3 | Fix in the rework batch (CP2) | PENDING-REVERIFY-2 | `224a9f7f` |
-| AE1V-025 | A | G4 | P3 | Fix in the same batch (CP2 round 2) | PENDING-REVERIFY-2 | — |
+| AE1V-023 | A | G4 | P3 | Fix in the rework batch (CP2); one more small fix (CP2 round 3) | VERIFIED (re-verify 3, `2363b12b`) | `ca66d9c1`, `91fd436c`, `0513a772` |
+| AE1V-024 | A | G4 | P3 | Fix in the rework batch (CP2) | VERIFIED (re-verify 2, `6324ea7f`) | `224a9f7f` |
+| AE1V-025 | A | G4 | P3 | Fix in the same batch (CP2 round 2) | VERIFIED (re-verify 3, `2363b12b`) | `f42e82ce`, `173db6c4` |
 | MT-TE3-001 | T | G3 | observation | Reported only | observation | — |
 | TE1-008 | T | G6 | observation | Reported only | observation | — |
 | TE2-001 | T | G1 | observation | Keep fast-math (ADDENDUM-1) | observation | — |
@@ -289,9 +299,9 @@ as "gate A-n". Order matters for A1 → A4 → A5.
 
 | # | Action | Why | Finding / TD | How to verify |
 |---|---|---|---|---|
-| A1 | Merge `origin/main` into `claude/readiness-20261024`, push it, open the PR to `main` | Nothing is pushed. `main` gained #486 (it records the #484 deploy) after this branch merged #484, so the top of CHANGELOG.md and CONTEXT's Current state conflict: keep #486's deploy entry and this branch's Current state. `engine-pin`, `engine-host-sanitized` and `console-a11y` have not run in GitHub Actions | TE2-006, TE2-004, AE2-001, TE5-001 | `CI OK` green on the PR, including those three jobs, `secret-scan` and the backend-lock Linux check |
+| A1 | Push `claude/readiness-20261024` and open the PR to `main` | Nothing is pushed (`main`'s #486 is already merged in, `1bdbe880`). `engine-pin`, `engine-host-sanitized` and `console-a11y` have not run in GitHub Actions | TE2-006, TE2-004, AE2-001, TE5-001 | `CI OK` green on the PR, including those three jobs, `secret-scan` and the backend-lock Linux check |
 | A2 | Secret scan | gitleaks was not installed here; nothing on this branch was scanned locally | — | The PR's `secret-scan` job passes; or `gitleaks detect --config .gitleaks.toml` |
-| A3 | material_testing: push `claude/readiness-20261024-engine-pin` (`fb436770`) and open its PR. Cut no release from `839d4285`, and confirm no internal build of it reached testers | `839d4285` pins engine v0.2.3; an incremental run fails with a missing JNI symbol (P0) | MT-TE2-001 | Fork `CI OK` green, including `check_jni_parity`; `git ls-tree origin/main engine` on the fork shows `f072da0` |
+| A3 | **Done.** material_testing: push `claude/readiness-20261024-engine-pin` (`fb436770`) and open its PR. Merged as material_testing#145 into fork `main` `6e42ed00`, CI fully green. Still owed: confirm that no internal build of `839d4285` reached testers | `839d4285` pins engine v0.2.3; an incremental run fails with a missing JNI symbol (P0) | MT-TE2-001 | Fork `CI OK` green, including `check_jni_parity`; `git ls-tree origin/main engine` on the fork shows `f072da0` |
 | A4 | Deploy the backend from `main` after the merge: `deploy-backend.yml`, staging then production (required reviewer) | Lock bump: pyjwt 2.15.1, urllib3 2.8.0, certifi 2026.10.23; the live lock has 19 advisories. Kill switches on `GET …/uploads` and `PUT …/metadata` (`backend/app/routers/sessions.py:140`, `:223`). `/readyz` within 8 s. uvicorn `--no-access-log`. Device history answers 503 on a Firestore outage. Roster-import line numbers and 413. Quota wording. No gateway change: `backend/gateway/` is unchanged since `46ac8b5e` | TE5-001, TE4-004, TE3-010, TE3-011, TE3-008, AE2-008, AE3-001 | `/readyz` 200 on the candidate; the gateway job reports no diff; Tier 3 on `main` green after the staging deploy; a CHANGELOG entry with both revisions |
 | A5 | Deploy Hosting after A4, from a worktree of the merged `main`. Take `firebase-hosting/public/privacy/index.html` and `firebase-hosting/public/terms/index.html` from `b940cc29`. Then run `API_BASE_URL=<INDIC_API_BASE_URL> ./scripts/deploy-console.sh` ([checklist](../../DEPLOY_CHECKLIST_2026-10.md) §4) | Ships the console fixes (AE2-001…AE2-011, AE3 wording, AE3-002's **New phone**, which OPERATING_MANUAL already names). A plain-`main` deploy publishes #474's legal text, which counsel has not cleared (TD-277); that happened on 2026-10-26 and was redeployed the same day (#486). The import messages read the new backend's codes (AE2-008) | AE2-*, AE3-*, TE5-007 | `check_live_console.py` passes; the live `/privacy` and `/terms` equal `b940cc29`'s files; the IT roster shows a **Phone** column |
 | A6 | Create a notification channel, then run `scripts/apply-monitoring.sh --project indicvision-dic-app --notification-channel <id>` (dry run), then `--apply`, then the `run.invoker` grant it prints | No alert reaches anyone (P1). The new gateway uptime checks and the five new policies exist only as code | TE6-001, TE6-002, TE6-003; TD-217; gate A1 | 13 policies, 3 uptime checks and 4 dashboards exist; a test notification reaches the channel |
@@ -333,13 +343,11 @@ as "gate A-n". Order matters for A1 → A4 → A5.
 ## 6. Phase 8 plan: port to material_testing (Semper Classroom)
 
 1. **Prerequisites.**
-   - A3: the fork's engine-pin PR merged to the fork's `main`.
+   - Done: the fork's engine-pin fix (material_testing#145) and its sync of S `25334af1`
+     (material_testing#146, `035f5095`).
    - A1: this branch merged to S `main`.
-   - The user's `google-services.json` for `com.sempermechanics.semperclassroom`, which
-     blocks the fork rename (Phase C).
-2. **Base.** Build on the fork branch `claude/semper-classroom-app` (not pushed). It is
-   fork `main` `6e42ed00` plus the sync of S `25334af1` (`48ffe3ce`), the rename, the
-   Firebase client and floors 75/59. There, `ciReleaseGate` is green at 77.10 / 61.70 %.
+   - The Semper Classroom rename, material_testing#147, merged.
+2. **Base.** Phase 8 builds on fork `main` after #147 merges, with floors 75/59.
 3. **Sync.** Sync S `main` with the readiness merge per [FORK_SYNC.md](../../FORK_SYNC.md):
    - steps 1–5, including step 5's gitlink-equals-S check and `check_jni_parity`;
    - keep the fork's CONTEXT and TECH_DEBT;
@@ -366,19 +374,17 @@ as "gate A-n". Order matters for A1 → A4 → A5.
 
 ## 7. Inconsistencies in the run's records
 
-- TD-331 and TD-345 both log AE1-011's remainder (the literal `textSize` values); one row
-  should go.
-- Two Open TD rows describe defects that the rework fixed, pending the second re-verify:
-  - TD-333 is AE1V-024's defect, fixed in `224a9f7f`;
-  - TD-335 is AE1-009's residual (`RunEnd.kt:101`), fixed in `ceb263ae`.
-  TECH_DEBT holds only unresolved debt, so remove each row once its id is VERIFIED.
-- AE1-010: Checkpoint 2 says the PDF is English-only by decision, but TD-334 (PDF labels
-  are Kotlin literals) is Open with a fix plan. Close it as decided, or record the decision
-  in it.
+Resolved during the run (`7af1d73f`):
+- TD-345 was withdrawn as a duplicate of TD-331, which AE1-011 now cites.
+- TD-333 (AE1V-024) and TD-335 (AE1-009's residual) were closed, fixed and VERIFIED.
+- TD-334 was closed by the decision that the PDF is English-only (AE1-010).
+
+Still open:
 - ADMIN_DECISIONS (Checkpoint 1) counts 11 observations. That is `type: observation`;
   `severity_final: observation` has 14, adding TE2-001, TE4-008 and AE1-020 (P2 →
   observation).
 - Two fixes have no finding record: TE6-017 (`e0b32dee`, posture script under Git Bash;
   TD-325 cites it) and BASELINE-APK-UTF8 (`b33370fa`).
-- The rework log gives Kover lines as 81.96 % (19116 / 23323). The gate printed
-  81.9721 %, which is the number used here.
+- At `57e799b8` the rework log gave Kover lines as 81.96 % (19116 / 23323), while the gate
+  printed 81.9721 %. This report uses the later full gate at `0513a772`: 82.22 %, as
+  printed.

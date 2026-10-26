@@ -524,10 +524,11 @@ merged nor deployed.
 - **Verdict: No-go** until all of the following hold:
   - the five P1s left unfixed (TE1-001, TE5-003, TE5-004, TE6-001, TE6-011) are fixed, or
     signed in [Risk acceptance](#risk-acceptance) below, where they are entered unsigned;
-  - the nine PENDING-REVERIFY-2 ids are settled, and AE1-009 (P1) is VERIFIED;
   - the branch merges with `CI OK`, including the first CI runs of `engine-pin` and
     `engine-host-sanitized`;
   - the backend is deployed from that `main`.
+- **Re-verify.** Every P1 re-verified this run is VERIFIED, AE1-009 included (round 2, at
+  `6324ea7f`). AE3-002 (P2) is still in rework round 4 and does not block.
 - **Posture.** Re-run 2026-10-24: 17 FAIL, 0 UNKNOWN (see Launch blockers above).
 - **Cross-check.** Rows 1.5, 2.1, 3.4, 3.7, 4.1, 4.3, 6.4, 6.5, 7.2, 7.3 and D3 now cite
   the branch. No status moved.
