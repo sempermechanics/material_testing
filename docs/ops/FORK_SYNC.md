@@ -30,9 +30,10 @@ apps. The deploy and Firestore workflows only run in this repo
 
 ## Syncing into material_testing
 
-**Last sync:** semperdic-app `25334af1` (its #471–#486), merged on material_testing's
-`sync/semperdic-25334af` on 2026-10-26; before it `968637cb` (material_testing #144) and
-`14b279d6` (on `ccr-603fe346-1bw2fa`, 2026-10-21).
+**Last sync:** semperdic-app `6d2bde6c` (its #487–#489, the production-readiness fixes),
+merged on material_testing's `sync/semperdic-6d2bde6` on 2026-10-26; before it `25334af1`
+(material_testing #146), `968637cb` (material_testing #144) and `14b279d6` (on
+`ccr-603fe346-1bw2fa`, 2026-10-21).
 `git log --merges --grep=semperdic-app` on the fork lists them all.
 
 1. `git fetch semperdic main` and branch `sync/semperdic-<short sha>` from its `main`.

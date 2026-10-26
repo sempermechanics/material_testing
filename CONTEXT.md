@@ -137,8 +137,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   Tensile and Bending; a fork change to a shared screen runs only for a lab test.
   semperdic-app accepted making this a product flavour of its repo on 2026-10-22 ([ADR-025](docs/adr/ADR-025-test-type-extension-points.md), mirrored).
 - **Synced with `semperdic-app`** (forked at `bfe00e5`; `git log --merges
-  --grep=semperdic-app`; rules in its `docs/ops/FORK_SYNC.md`). Last: `25334af1`, 2026-10-26,
-  on `sync/semperdic-25334af`: its #471–#486, among them tamper-evident records (#471,
+  --grep=semperdic-app`; rules in its `docs/ops/FORK_SYNC.md`). Last: `6d2bde6c`, 2026-10-26,
+  on `sync/semperdic-6d2bde6`: its #487–#489, the production-readiness fixes (the readiness
+  guards, Semper's CSV version 2, so a lab CSV is version 3; one report name, here "Semper
+  Classroom Analysis Report"). Before: `25334af1`, 2026-10-26, on `sync/semperdic-25334af`: its #471–#486, among them tamper-evident records (#471,
   [ADR-028](docs/adr/ADR-028-tamper-evident-records.md)), the Data safety fixes (#475), the
   console redesign (#478) and the Semper Classroom rename's backend and consoles (#484,
   [ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md)). Before: `968637cb`, 2026-10-22,
@@ -156,7 +158,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   wizard state is `WizardInputs.lab`, changed through `edit {}`, and a run's result reads
   the lab test from its saved row (`ViewerArgs.of`). Metadata schema `/7` here (ours past
   `/3` are not the parent's numbers). Lab inputs ride its seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` (ADR-003),
-  `WizardDraft` (ADR-005). ADR and TD numbers are shared; TD-319–TD-329 are reserved by the readiness PR, TD-330 is the rename.
+  `WizardDraft` (ADR-005). ADR and TD numbers are shared; semperdic-app took TD-318–TD-348 (TD-330 is the rename), the examples' rows here are TD-349–TD-351, next free TD-352.
 - **#140 merged 2026-10-20** (`a66606d9`, the 2026-10-19 review; not released): load logs
   in kgf/tf, decimal commas and the delimiter read after a long preamble, logged time units;
   photo times matched within 1 s when any lacks EXIF sub-seconds; E refitted over 10–40 % of
