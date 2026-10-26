@@ -2,6 +2,7 @@ package com.sempermechanics.semper.results
 
 import android.graphics.Bitmap
 import com.sempermechanics.semper.field.Roi
+import com.sempermechanics.semper.fixtures.ShadowPdfDocumentWrite
 import com.sempermechanics.semper.report.EngineStats
 import com.sempermechanics.semper.report.FieldResult
 import com.sempermechanics.semper.report.PdfReportGenerator
@@ -17,6 +18,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.io.ByteArrayOutputStream
 import java.util.Locale
 
@@ -27,10 +29,12 @@ import java.util.Locale
  *
  * Robolectric's PdfDocument has no native document (`startPage` throws
  * "document is closed"), so drawing pages is covered on a device by
- * `PdfReportDeviceTest`; these cases never start a page, and [statuses]
- * keeps what was emitted whether or not the final write then fails here.
+ * `PdfReportDeviceTest`; these cases never start a page. Its `writeTo` throws
+ * the same way, so [ShadowPdfDocumentWrite] makes the final write a no-op: a
+ * throw there could drop statuses still in the `flowOn` channel.
  */
 @RunWith(RobolectricTestRunner::class)
+@Config(shadows = [ShadowPdfDocumentWrite::class])
 class PdfReportGeneratorTest {
 
     /** What a flow emitted, and what ended it (here, normally the final write). */
@@ -71,6 +75,8 @@ class PdfReportGeneratorTest {
         )
         assertEquals(Progress.Status(Stage.FRAME, 2, frame = 1, frameCount = 4), events.first())
         assertEquals(Stage.FINISHING, events.last().stage)
+        // The shadowed write lets the flow finish, so no status can be lost to a late throw.
+        assertEquals("the flow ended with: ${collected.failureText}", null, collected.failure)
     }
 
     @Test
