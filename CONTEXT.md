@@ -154,10 +154,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   counsel on the Terms (TD-277).
 - **material_testing** merges this `main` (last `968637cb`, material_testing#144, 2026-10-22;
   [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); it released `v1.4-beta.2` 2026-10-17.
-- **Readiness run 2026-10-24** (`claude/readiness-20261024-merge`, not merged or deployed):
-  backend fixes waiting on a deploy (the lock's pyjwt/urllib3/certifi bump, kill switches on
-  `GET …/uploads` and `PUT …/metadata`, an audit-history outage as 503, the `/readyz` budget,
-  `--no-access-log`, the roster import codes, the quota wording); the deploy is the Admin's.
+- **Readiness run 2026-10-24:** `claude/readiness-20261024` holds its fixes, not merged or
+  deployed ([docs/ops/readiness/20261024/](docs/ops/readiness/20261024/BASELINE.md); open: TD-331–TD-344).
+  Its backend changes need a deploy (the Admin's): lock bump, kill switches on `GET …/uploads` and
+  `PUT …/metadata`, audit outage as 503, `/readyz`, `--no-access-log`, roster codes, quota wording.
 - **CI.** Tiers follow the diff, coverage floors rise with every test PR
   ([TESTING.md](docs/app/TESTING.md#coverage-floors)), and `main` requires `CI OK`. Tier 3 signs
   in to live staging, so a staging backend behind `main` fails it. Always-on gates now include
