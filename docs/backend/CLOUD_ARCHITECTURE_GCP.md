@@ -2717,6 +2717,7 @@ re-resolves the account (`get_or_create_user` → `ensure_entitlement`) and, wit
 |---|---|
 | `POST /v1/sessions` | kill switch `upload` / `backup`; account cap; demo device cap (§7) |
 | `POST /v1/files/{id}/complete` | kill switch `upload` / `backup` |
+| `GET /v1/sessions/{sid}/uploads`, `PUT /v1/sessions/{sid}/metadata` | kill switch `upload` / `backup` (`backend/app/routers/sessions.py:139-141`, `:222-224`) |
 | `GET /v1/files/{id}/content`, `GET /v1/sessions/{sid}/bundle` | kill switch `restore`; `403 feature_not_licensed` for demo (§20.3) |
 | `POST /v1/me/claim` | step-up, verified address, activation rate bucket, `activate_license` |
 | Share | no route: the app's licence check and the signed token |
@@ -2728,7 +2729,14 @@ parameters, so a paused request reads nothing and leaves a signed request's
 nonce unspent. The answer is `503 feature_paused` with `Retry-After: 300`, logged
 `event="feature_paused"` with `switch` and `routeTemplate`. An upload keeps
 its work and retries (`UploadErrors.Kind.PAUSED`); a restore or download ends
-saying restoring is paused, counted as no failure (`DownloadFailure.Paused`); an
+saying restoring is paused, counted as no failure (`DownloadFailure.Paused`). The
+two upload-side calls on an existing session pause too: a paused upload-state
+query keeps the session, its pointer and the staging and retries saying
+`feature_paused` (`Resume.Unreachable(paused = true)`,
+`app/src/main/java/com/sempermechanics/semper/data/UploadSessionPlanner.kt:80`, `:369-372`),
+and a paused metadata replace is `SessionMetadataSync.Outcome.PAUSED`
+(`data/cloud/SessionMetadataSync.kt:54`, `:101-103`), which `SessionMetadataWorker`
+retries however long the pause lasts, the row kept marked (`SessionMetadataWorker.kt:26`). An
 older build treats the 503 as transient and retries. `share` has no route
 and is published only. Tests `backend/tests/test_kill_switches.py`.
 
