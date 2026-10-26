@@ -33,13 +33,14 @@ class UserTermsTest {
 
     @Test
     fun `the handset is a phone`() {
-        // A record's signature names the signing device key, an identifier, as
-        // its warning goes on to say ("a device key that is not this phone's").
-        val deviceKey = { name: String, _: String -> name == "record_integrity_signed_elsewhere" }
-        assertEquals(
-            emptyList<String>(),
-            offenders("""\b(this|another|requested|the) device\b|\bto device\b|profile and device""", deviceKey),
-        )
+        // Identifiers keep "device": a Device ID, a device key. One string names the
+        // signing key by where it was used, "Signed on another device", and is exempt
+        // by name (readiness AE3-002, the Admin's "keep device for the key"); its
+        // warning names the key itself ("a device key that is not this phone's").
+        val signedElsewhere = { name: String, _: String -> name == "record_integrity_signed_elsewhere" }
+        assertEquals(emptyList<String>(), offenders("""\bdevice\b(?!\s+(key|ID)\b)""", signedElsewhere))
+        // More than one handset is always phones: no key or identifier is plural.
+        assertEquals(emptyList<String>(), offenders("""\bdevices\b"""))
     }
 
     @Test

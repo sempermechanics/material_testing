@@ -220,7 +220,7 @@ class SettingsUsedSheetTest {
         assertEquals(View.VISIBLE, warn.visibility)
         val text = warn.findViewById<TextView>(R.id.tvWarnText).text.toString()
         val short = DeviceKeyThumbprint.of(other.publicKeyDer()).take(8) + "…"
-        assertTrue(text, text.contains("(key $short)") && text.contains("registered devices"))
+        assertTrue(text, text.contains("(key $short)") && text.contains("registered phones"))
     }
 
     @Test

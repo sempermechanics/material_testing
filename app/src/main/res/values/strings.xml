@@ -311,7 +311,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="record_integrity_unsigned">Not signed</string>
     <string name="record_integrity_not_recorded">Not recorded</string>
     <string name="record_integrity_signed_elsewhere">Signed on another device</string>
-    <string name="record_integrity_signed_elsewhere_warn_fmt">Signed by a device key that is not this phone\'s (key %1$s). That is not a pass: the key has to be checked against the account\'s registered devices. A reinstall or a restore on another phone also reads this way.</string>
+    <string name="record_integrity_signed_elsewhere_warn_fmt">Signed by a device key that is not this phone\'s (key %1$s). That is not a pass: the key has to be checked against the account\'s registered phones. A reinstall or a restore on another phone also reads this way.</string>
     <string name="record_integrity_changed_warn_fmt">These files no longer match what the analysis wrote, so its results may have been edited: %1$s</string>
     <plurals name="record_integrity_more_fmt">
         <item quantity="one">%1$s and %2$d more file</item>
