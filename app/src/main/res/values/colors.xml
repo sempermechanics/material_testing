@@ -185,4 +185,12 @@
     <color name="viewer_probe_shadow">#88000000</color>
     <color name="thumb_hole">#FFE3E8EC</color>
     <color name="sweep_export_page">#FFFFFFFF</color>
+
+    <!-- The bending tap editor (BeamEdgeTapActivity), which opts out of force dark like
+         the ROI studio: its marks on the photo (BeamEdgeTapOverlay) and its Reset
+         button's rim on the dark bar. One value serves both themes. -->
+    <color name="beam_tap_mark">#FF38BDF8</color>
+    <color name="beam_tap_halo">#AA000000</color>
+    <color name="beam_tap_probe">#FFFBBF24</color>
+    <color name="beam_tap_reset_stroke">#55FFFFFF</color>
 </resources>
