@@ -83,6 +83,17 @@ VERIFIED, 10 REOPENED, 6 NEEDS_ADMIN, 2 NEEDS_DEVICE. Answers verbatim.
 | AE1-011, AE1-010, TE2-002, TE2-004 | REOPENED (partial; the rest is large or in the engine repo) | "Accept partial + TD rows (Recommended)": AE1-011 → TD-345; AE1-010: the PDF report is English-only by decision; TE2-002 → TD-346; TE2-004 → TD-347 and TD-326 |
 | New in the after screenshots: the ROI info pill covers the top handles at font scale 2.0; Save graph looks enabled on the lattice's empty state | — | "Fix in the rework batch (Recommended)": new P3 findings AE1V-023, AE1V-024 |
 
+After the rework, a second fresh re-verify at `6324ea7f` found AE1-004, AE1-007, AE1-009,
+AE1V-021, AE1V-023 and AE1V-024 VERIFIED, and AE3-002 and TE1-006 REOPENED. The verifier
+judged sound the colour guard's exemption for files that write output (`*Export.kt`,
+`*Encoder.kt`). Asked 2026-10-26; answers verbatim:
+
+| Finding(s) | Decision (verbatim) |
+|---|---|
+| AE3-002: the record-integrity strings say "device" for the signing device key | "Keep 'device' for the key": only "registered devices" becomes "registered phones" |
+| TE1-006: the quota card, the seat check and the clock re-seal still read on main | "Rework once more (Recommended)" |
+| The ROI info pill cuts its values at font scale 2.0 (follow-up to AE1V-023); the Details histogram labels are monospace (AE1V-025, P3) | "Fix in the same batch (Recommended)" |
+
 Not asked at this checkpoint: NEEDS_ADMIN items wait on owner decisions or Admin actions.
 - AE3-003 → TD-340/TD-341.
 - AE1-017 → TD-342.

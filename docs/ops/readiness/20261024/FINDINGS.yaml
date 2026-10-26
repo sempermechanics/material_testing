@@ -4688,6 +4688,22 @@
   verified_observation: New in the after shot; found while re-verifying AE1V-020.
   severity_final: P3
   admin_decision: '"Fix in the rework batch (Recommended)" (Checkpoint 2, 2026-10-26)'
+- id: AE1V-025
+  axis: aesthetic
+  gate: G4
+  title: The Details sheet's histogram labels are still monospace, off the app's type scale
+  type: defect
+  severity: P3
+  criterion: 'AE-1: text uses the app's type scale (TextAppearance.Semper.*); numbers may use tabular figures, not a monospace face.'
+  evidence:
+  - docs/ops/readiness/20261024/screens/after/sheet_settingsused_360_light_fs1.png
+  reproduce: Open a result's Details sheet and look at the histogram's axis labels.
+  status: confirmed
+  verdict: CONFIRMED
+  verified_by_command: Phase 5 second re-verify at 6324ea7f, Read after/sheet_settingsused_360_light_fs1.png
+  verified_observation: Found during the second re-verify; the stats' 5 decimals are TD-342 (owner decision), not this finding.
+  severity_final: P3
+  admin_decision: '"Fix in the same batch (Recommended)" (Checkpoint 2, 2026-10-26)'
 - id: MT-TE3-001
   axis: technical
   gate: G3
