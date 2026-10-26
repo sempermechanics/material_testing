@@ -16,10 +16,8 @@ import androidx.annotation.VisibleForTesting
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.integrity.RecordIntegrity
 import com.sempermechanics.semper.data.integrity.RecordVerifier
-import com.sempermechanics.semper.data.policy.FeatureAccess
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.databinding.ActivityResultViewerBinding
@@ -32,6 +30,7 @@ import com.sempermechanics.semper.report.ReportImageNames
 import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.dialog.CrispToast
 import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
+import com.sempermechanics.semper.ui.common.dialog.LicenseLock
 import com.sempermechanics.semper.ui.common.transfer.TransferBannerController
 import com.sempermechanics.semper.ui.home.HomeActivity
 import com.sempermechanics.semper.ui.viewer.inspect.InspectHost
@@ -262,8 +261,7 @@ class ResultViewerActivity :
 
         binding.btnViewerBack.setOnClickListener { finish() }
         // Greyed, never hidden: locked without the licence, paused by the kill switch.
-        val canShare = ShareCenter.access(this) == FeatureAccess.OPEN
-        binding.btnViewerShare.alpha = if (canShare) 1f else LicenseEntitlements.BLOCKED_ALPHA
+        LicenseLock.mark(binding.btnViewerShare, ShareCenter.access(this))
         binding.btnViewerShare.setOnClickListener {
             val blocked = ShareCenter.blockedMessage(ShareCenter.access(this))
             if (blocked != null) {

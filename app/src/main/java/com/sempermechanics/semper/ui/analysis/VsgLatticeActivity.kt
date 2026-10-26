@@ -9,8 +9,6 @@ import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.account.LicenseEntitlements
-import com.sempermechanics.semper.data.policy.FeatureAccess
 import com.sempermechanics.semper.data.prefs.CoachPrefs
 import com.sempermechanics.semper.data.prefs.ParamClipboard
 import com.sempermechanics.semper.data.session.SessionStore
@@ -38,6 +36,7 @@ import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.dialog.CrispToast
 import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
 import com.sempermechanics.semper.ui.common.dialog.Feedback
+import com.sempermechanics.semper.ui.common.dialog.LicenseLock
 import com.sempermechanics.semper.ui.common.letTitleWrap
 import com.sempermechanics.semper.ui.common.onButtonChecked
 import com.sempermechanics.semper.ui.viewer.ViewerArgs
@@ -196,8 +195,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         binding.rgPlotMode.onButtonChecked { redrawStrainPlot() }
         binding.btnView.setOnClickListener { if (focusedFrameIndex >= 0) openViewer(focusedFrameIndex) }
         // The PNG is a Share export (ADR-024): greyed, never hidden, as the viewer's Share.
-        binding.btnSaveGraph.alpha =
-            if (ShareCenter.access(this) == FeatureAccess.OPEN) 1f else LicenseEntitlements.BLOCKED_ALPHA
+        LicenseLock.mark(binding.btnSaveGraph, ShareCenter.access(this))
         binding.btnSaveGraph.setOnClickListener {
             val blocked = ShareCenter.blockedMessage(ShareCenter.access(this))
             if (blocked != null) CrispToast.show(this, getString(blocked), long = true) else saveGraph()

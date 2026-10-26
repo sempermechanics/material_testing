@@ -5,6 +5,7 @@ import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import androidx.core.view.ViewCompat
 import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.LicenseEntitlements
@@ -74,6 +75,7 @@ class VsgLatticeShareGateTest {
         val lattice = open()
         val save = lattice.findViewById<View>(R.id.btnSaveGraph)
         assertEquals(LicenseEntitlements.BLOCKED_ALPHA, save.alpha)
+        assertEquals(lattice.getString(R.string.license_locked), ViewCompat.getStateDescription(save))
 
         save.performClick()
         shadowOf(Looper.getMainLooper()).idle()
