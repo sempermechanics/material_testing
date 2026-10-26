@@ -1,15 +1,20 @@
 package com.sempermechanics.semper.ui.analysis
 
+import android.app.Activity
 import android.content.Intent
 import android.text.TextUtils
 import android.view.View
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.slider.Slider
 import com.sempermechanics.semper.R
+import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
 import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.data.session.CacheJanitor
 import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.load.AnalysisLoadCard
 import com.sempermechanics.semper.ui.analysis.rerun.LabRerun
+import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.editLab
 import com.sempermechanics.semper.ui.analysis.wizard.lab
 import com.sempermechanics.semper.ui.common.dialog.Dialogs
@@ -24,9 +29,37 @@ import java.io.IOException
 /*
  * The wizard's lab test on [StaticAnalysisActivity]: the test it opens on, the
  * machine-load card (building it), and the bending load-point editor it opens.
- * The launchers and the card itself stay on the Activity (result launchers
- * register at construction); the steps are here, as extensions.
+ * The launchers and the card itself are [WizardLabHooks], built with the
+ * Activity (result launchers register at construction); the steps are here,
+ * as extensions.
  */
+
+/**
+ * The lab test's state on [StaticAnalysisActivity]: its load card, only
+ * inflated for tests that take a load per frame ([setupLoadCard]); the two
+ * result launchers the card opens; and a Home Re-run's lab test until its
+ * photos are in.
+ */
+internal class WizardLabHooks(activity: StaticAnalysisActivity) {
+    var loadCard: AnalysisLoadCard? = null
+
+    /** A Home Re-run's lab test until its photos are in ([applyRerunLoads]); null otherwise. */
+    var rerun: LabRerun? = null
+
+    val pickLoadCsv = activity.registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) loadCard?.onCsvPicked(uri)
+    }
+    val pickLoadPoint = activity.registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        val taps = it.data?.getFloatArrayExtra(IntentKeys.BEAM_EDGE_TAPS)
+        if (it.resultCode == Activity.RESULT_OK) loadCard?.loadPoint?.onPicked(BeamEdgeTaps.fromArray(taps))
+    }
+
+    /** Typed masses onto the copied frames; step 1 when a load log must be imported again. */
+    fun applyRerunLoads(viewModel: AnalysisViewModel) {
+        rerun?.applyLoadsTo(viewModel)
+        rerun = null
+    }
+}
 
 /**
  * The lab test the wizard opens on, then its load card ([setupLoadCard]). The
@@ -34,12 +67,13 @@ import java.io.IOException
  * death re-reads it, and the view model is authoritative once set. On a
  * [firstOpen] from Home's Re-run of a lab test, its dimensions and taps go in
  * before the load card reads them (TD-280); so do a bundled example's
- * dimensions (Try it, ADR-031).
+ * dimensions (Try it, ADR-031). On a first open it sets [strainWindow] to the
+ * test's default; the slider keeps its own value across recreation.
  *
  * @return that Re-run's lab test, whose typed masses go onto the frames once
  *   they are copied ([LabRerun.applyLoadsTo]); null otherwise, an example included
  */
-internal fun StaticAnalysisActivity.openLabTest(firstOpen: Boolean): LabRerun? {
+internal fun StaticAnalysisActivity.openLabTest(firstOpen: Boolean, strainWindow: Slider): LabRerun? {
     TestType.fromWire(intent.getStringExtra(IntentKeys.TEST_TYPE))?.let { type ->
         viewModel.editLab { it.copy(testType = type) }
     }
@@ -50,6 +84,7 @@ internal fun StaticAnalysisActivity.openLabTest(firstOpen: Boolean): LabRerun? {
         null
     }
     setupLoadCard()
+    if (firstOpen) strainWindow.value = viewModel.lab.testType.defaultStrainWindow.toFloat()
     return lab.takeIf { isRerun }
 }
 
@@ -62,12 +97,12 @@ internal fun StaticAnalysisActivity.openLabTest(firstOpen: Boolean): LabRerun? {
 private fun StaticAnalysisActivity.setupLoadCard() {
     if (!viewModel.lab.testType.hasMachineLoad) return
     val root = binding.stubLoadCard.inflate()
-    loadCard = AnalysisLoadCard(
+    labHooks.loadCard = AnalysisLoadCard(
         activity = this,
         viewModel = viewModel,
         root = root,
         pickers = AnalysisLoadCard.Pickers(
-            loadCsv = { pickLoadCsv.launch(AnalysisLoadCard.CSV_MIME_TYPES) },
+            loadCsv = { labHooks.pickLoadCsv.launch(AnalysisLoadCard.CSV_MIME_TYPES) },
             loadPoint = ::openLoadPointEditor,
         ),
         onChanged = ::checkReady,
@@ -130,6 +165,6 @@ private fun StaticAnalysisActivity.openBeamEdgeTaps(bytes: ByteArray, thicknessM
             .putExtra(IntentKeys.IMAGE_HEIGHT, viewModel.inputs.value.refSize.height)
             .putExtra(IntentKeys.BEAM_THICKNESS_MM, thicknessMm)
             .putExtra(IntentKeys.BEAM_EDGE_TAPS, viewModel.lab.geometry.loadPoint.toArray())
-        pickLoadPoint.launch(intent)
+        labHooks.pickLoadPoint.launch(intent)
     }
 }
