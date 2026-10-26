@@ -29,7 +29,7 @@ delete `app/.cxx` (its CMake cache holds the old path).
 
 ```bash
 git clone <repo-url>
-cd material_testing
+cd semper_classroom
 git submodule update --init --recursive
 ```
 

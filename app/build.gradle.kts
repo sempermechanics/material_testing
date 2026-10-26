@@ -147,7 +147,7 @@ android {
     ndkVersion = "28.2.13676358"
 
     defaultConfig {
-        applicationId = "com.sempermechanics.materialtesting"
+        applicationId = "com.sempermechanics.semperclassroom"
         minSdk = 30
         targetSdk = 36
         // Overridable from the release workflow: -PversionCode / -PversionName.
@@ -339,7 +339,7 @@ android {
                 test.maxHeapSize = "2g"
                 // The exit still recurs now and then with the same message and
                 // no failing test (TD-312: firebase-bom 35 on #453, and the
-                // material_testing fork). So the worker leaves what ended it:
+                // Semper Classroom fork). So the worker leaves what ended it:
                 // a heap dump on an OutOfMemoryError, the JVM's error file on
                 // a crash, and a GC log of how full the heap ran. Tier 1 prints
                 // them on a failure (scripts/ci_test_crash_report.py) and
@@ -497,7 +497,7 @@ kover {
             // unrelated PRs while a real drop does. Every PR that adds tests
             // re-measures (`koverXmlReport`, the totals in
             // build/reports/kover/report.xml) and raises both to measured − 2;
-            // never lower them. material_testing, 2026-10-14 (the sync of
+            // never lower them. Semper Classroom (then material_testing), 2026-10-14 (the sync of
             // semperdic-app 8ba7081): lines 73.93 %, branches 59.40 %, so 71 / 57
             // here; the lab code is less covered than Semper's, whose floors
             // are 75 / 57. 2026-10-10: lines 77.12 %, branches 59.99 %.

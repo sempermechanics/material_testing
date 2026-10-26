@@ -1,9 +1,9 @@
 <p align="center">
   <img src="docs/images/semper-mark.png" width="72" alt="Semper mark">
   <br><br>
-  <strong>Material Testing</strong> — Semper DIC for tensile and bending tests
+  <strong>Semper Classroom</strong> — Semper DIC for tensile and bending tests
   <br>
-  <a href="https://github.com/sempermechanics/material_testing/actions/workflows/ci.yml"><img src="https://github.com/sempermechanics/material_testing/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/sempermechanics/semper_classroom/actions/workflows/ci.yml"><img src="https://github.com/sempermechanics/semper_classroom/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
 Phone-camera **2D digital image correlation (DIC)** for the first-semester
@@ -60,9 +60,13 @@ reports: [docs/app/REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)
 > **Lineage.** This repo holds the full history of
 > [`sempermechanics/semperdic-app`](https://github.com/sempermechanics/semperdic-app) at `bfe00e5`
 > (2026-09-21), and merges the parent's `main` back in (`git log --merges --grep=semperdic-app`).
-> - **Own app, shared backend.** It installs as `com.sempermechanics.materialtesting` (ADR-019; `com.indicvision.semper.materialtesting` before), beside
->   Semper, with its own signing key, and signs in to Semper's Firebase project and backend
->   ([ADR-009](docs/adr/ADR-009-material-testing-app-identity.md)).
+> - **Own app, shared backend.** It installs as `com.sempermechanics.semperclassroom`
+>   ([ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md); "Material Testing",
+>   `com.sempermechanics.materialtesting`, before), beside Semper, with its own signing key, and
+>   signs in to Semper's Firebase project and backend
+>   ([ADR-009](docs/adr/ADR-009-material-testing-app-identity.md)). An old Material Testing
+>   install keeps working beside it, in the same per-app device slot, but cannot register a
+>   new device.
 > - **Semper's screens.** Every screen is Semper's; the app adds the **Which test?** sheet
 >   and what Tensile and Bending bring, and nothing else
 >   ([ADR-022](docs/adr/ADR-022-semper-ui-plus-lab-tests.md)).
@@ -89,8 +93,8 @@ PRs target **`main`**. UI and docs work need no C++ toolchain. Issues tagged
 ## How — build & run
 
 ```bash
-git clone --recurse-submodules https://github.com/sempermechanics/material_testing
-cd material_testing
+git clone --recurse-submodules https://github.com/sempermechanics/semper_classroom   # the old material_testing URL redirects
+cd semper_classroom
 git submodule update --init --recursive   # engine + Eigen/OpenCV (large, one-time)
 cd native && ./scripts/sparse-opencv.sh && cd ..   # Windows: .\scripts\sparse-opencv.ps1
 ```

@@ -13,7 +13,7 @@ private const val APP_VERSION_HEADER = "X-App-Version"
 /**
  * Names this app to the Semper backend, by its `applicationId`.
  *
- * Semper and Material Testing share the backend and its accounts, but Android
+ * Semper and Semper Classroom share the backend and its accounts, but Android
  * gives each app on a phone its own `ANDROID_ID`, so the backend sees two
  * devices. It binds one phone per app (ADR-010), and this header is how it
  * knows which app's binding a request is for. A request without it is read as

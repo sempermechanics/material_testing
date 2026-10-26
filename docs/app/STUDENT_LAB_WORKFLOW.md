@@ -1,6 +1,6 @@
 # Student lab workflow: tensile and bending with a phone
 
-**Material Testing is a phone-camera 2D DIC companion for a first-semester undergraduate** doing
+**Semper Classroom is a phone-camera 2D DIC companion for a first-semester undergraduate** doing
 the two standard strength-of-materials experiments.
 - **The phone replaces the contact instrument** (extensometer, dial gauge).
 - **The app writes the lab report.**

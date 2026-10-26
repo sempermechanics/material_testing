@@ -34,9 +34,11 @@ email so the screen can't be used to probe which addresses are registered.
    and **Email link (passwordless sign-in)**.
 3. **Project settings → Your apps → Android app** with package
    `com.sempermechanics.semper` (Semper) and a second one,
-   `com.sempermechanics.materialtesting` (Material Testing, own release key —
+   `com.sempermechanics.semperclassroom` (Semper Classroom, own release key —
    [ADR-009](../adr/ADR-009-material-testing-app-identity.md); id since
-   [ADR-019](../adr/ADR-019-sempermechanics-app-id.md)). Add the **SHA-1**
+   [ADR-030](../adr/ADR-030-semper-classroom-app-identity.md)). Keep
+   `com.sempermechanics.materialtesting` (Material Testing, the same key) registered
+   for the installs that predate the rename. Add the **SHA-1**
    of every signing key you use — debug and release — under the app it signs.
    Google sign-in fails without it.
 
