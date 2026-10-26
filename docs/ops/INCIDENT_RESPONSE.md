@@ -161,7 +161,7 @@ Symptom: the `app-check-refused` alert (any `AUTH_DENIED` with
 threshold), or users of a genuine build refused with `app_check_required`.
 
 1. Set the lever variable `APP_CHECK_MODE` to `monitor` (or `off`) on the
-   `production` environment (`gh variable set APP_CHECK_MODE --env production`;
+   `production` environment (`gh variable set APP_CHECK_MODE --env production -R sempermechanics/semperdic-app`;
    [RELEASING.md](RELEASING.md), Lever variable scope) and redeploy
    (`.github/workflows/deploy-backend.yml:348`). For speed, `gcloud run services
    update semper-api --update-env-vars APP_CHECK_MODE=monitor --region asia-south1

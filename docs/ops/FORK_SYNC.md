@@ -26,7 +26,10 @@ WORKFLOWS C21) and collided TD numbers. The rules below stop that.
 
 material_testing does not edit `backend/`; the backend deployed from here serves both
 apps. The deploy and Firestore workflows only run in this repo
-(`if: github.repository == …`).
+(`if: github.repository == …`). So every backend lever, the `_SEMPER_CLASSROOM`
+pair included, is a variable here: a sync keeps material_testing's RELEASING.md
+and INCIDENT_RESPONSE.md naming this repo on each `gh variable` and
+`deploy-backend.yml` step (`-R sempermechanics/semperdic-app`; its MT-001).
 
 ## Syncing into material_testing
 

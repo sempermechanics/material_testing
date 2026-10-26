@@ -12,6 +12,16 @@ hold the fork's own key (alias `materialtesting`, unchanged by the rename), and
 check greps the whole file for the key's SHA-256, so add it to
 `assetlinks.json` in this repo and in `semperdic-app`, which deploys Hosting.
 
+The backend's levers and deploys live in `semperdic-app` too (readiness MT-001).
+This repo's copy of `deploy-backend.yml` runs nothing (its jobs are guarded by
+`github.repository == 'sempermechanics/semperdic-app'`), so every lever below,
+the `_SEMPER_CLASSROOM` pair included, is a variable on `semperdic-app`'s
+environments, applied by dispatching that repo's `deploy-backend.yml`. Name the
+repo on every `gh` command: `gh variable set NAME --env production -R
+sempermechanics/semperdic-app`, `gh workflow run deploy-backend.yml -R
+sempermechanics/semperdic-app`. Without `-R`, `gh` in this checkout acts on
+`material_testing`, where nothing reads the variable.
+
 ## Alpha (private testers)
 
 Private alpha uses the same **`beta`** Release channel — there is no separate
@@ -81,6 +91,7 @@ Check the R8 mapping reached Crashlytics (the release build uploads it); the wor
    (see Versioning). Jobs refuse to run on other refs. The workflow uses the
    `release` environment (and repo-level secrets/vars on Free orgs).
    When the release ships with a backend deploy, dispatch `deploy-backend.yml`
+   in `sempermechanics/semperdic-app` (not here; see the top of this page)
    with `release_train` set to the release tag (`v1.2-beta.5`), so the service and
    the revision carry the label `release-train=v1-2-beta-5` (lowercased, dots to
    dashes). Left empty, the deploy takes the newest `v*` tag reachable from the
@@ -192,12 +203,13 @@ should also refuse device-signed upload and restore below the minimum, by
 | Hotfix | A new build with a higher `versionCode` | The release workflow's run number makes every release higher than the last (Versioning above); roll it out with the same stages, faster soak if the fix is narrow |
 
 **Lever variable scope.** Set a lever on the GitHub environment of the service
-it is for: `gh variable set NAME --env production` (or `--env staging` for a
-drill), not on the repository. `deploy-backend.yml` runs under `environment:`,
+it is for: `gh variable set NAME --env production -R sempermechanics/semperdic-app`
+(or `--env staging` for a drill), not on the repository, and on `semperdic-app`,
+not this repo. `deploy-backend.yml` runs under `environment:`,
 whose variables win over the repository's, so a drill on staging never reaches
 production, and a repository value is ignored wherever the environment sets the
 same name. Delete the environment value when the lever is released
-(`gh variable delete NAME --env production`). On 2026-10-24 (`gh variable list`)
+(`gh variable delete NAME --env production -R sempermechanics/semperdic-app`). On 2026-10-24 (`gh variable list`)
 neither environment set any lever, and `APP_CHECK_MODE` was a repository variable,
 which an environment value overrides. [INCIDENT_RESPONSE.md](INCIDENT_RESPONSE.md)
 uses the same words.
@@ -205,8 +217,8 @@ uses the same words.
 **After a revision rollback.** `update-traffic --to-revisions=<previous>=100`
 pins traffic to that revision by name, and every lever above then has a trap:
 
-1. **Revert first.** Do not dispatch `deploy-backend.yml` for a lever until the
-   bad commit is reverted on `main` (PR, `CI OK`): the workflow builds the commit
+1. **Revert first.** Do not dispatch `semperdic-app`'s `deploy-backend.yml` for a lever until the
+   bad commit is reverted on its `main` (PR, `CI OK`): the workflow builds the commit
    it is dispatched on and promotes it `--to-latest`, which re-ships the code you
    rolled back.
 2. **An env change that cannot wait for the revert** goes on the serving image
@@ -415,7 +427,7 @@ Creates the **GitHub Release** with the APK and the AAB attached, gated on the
 
 ### Backend staging / production
 
-Use [`deploy-backend.yml`](../../.github/workflows/deploy-backend.yml): choose
+Use `semperdic-app`'s [`deploy-backend.yml`](../../.github/workflows/deploy-backend.yml) (this repo's copy runs nothing): choose
 `staging` or `production`, supply GCP project/region. Updates deploy with
 `no_traffic`, tag a candidate, smoke `/readyz` and `/v1/config` (the app's own
 401) with an ID token, then promote, then check the live service the same way
