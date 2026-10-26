@@ -8,6 +8,8 @@ import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
+import com.sempermechanics.semper.data.account.LicenseEntitlements
+import com.sempermechanics.semper.data.policy.FeatureAccess
 import com.sempermechanics.semper.data.prefs.CoachPrefs
 import com.sempermechanics.semper.data.prefs.ParamClipboard
 import com.sempermechanics.semper.data.session.SessionStore
@@ -38,6 +40,7 @@ import com.sempermechanics.semper.ui.common.dialog.Feedback
 import com.sempermechanics.semper.ui.common.letTitleWrap
 import com.sempermechanics.semper.ui.common.onButtonChecked
 import com.sempermechanics.semper.ui.viewer.ViewerArgs
+import com.sempermechanics.semper.ui.viewer.share.ShareCenter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -177,7 +180,13 @@ class VsgLatticeActivity : AppCompatActivity() {
         binding.btnNextNode.setOnClickListener { stepFocus(1) }
         binding.rgPlotMode.onButtonChecked { redrawStrainPlot() }
         binding.btnView.setOnClickListener { if (focusedFrameIndex >= 0) openViewer(focusedFrameIndex) }
-        binding.btnSaveGraph.setOnClickListener { saveGraph() }
+        // The PNG is a Share export (ADR-024): greyed, never hidden, as the viewer's Share.
+        binding.btnSaveGraph.alpha =
+            if (ShareCenter.access(this) == FeatureAccess.OPEN) 1f else LicenseEntitlements.BLOCKED_ALPHA
+        binding.btnSaveGraph.setOnClickListener {
+            val blocked = ShareCenter.blockedMessage(ShareCenter.access(this))
+            if (blocked != null) CrispToast.show(this, getString(blocked), long = true) else saveGraph()
+        }
 
         binding.plotLatticeStrain.onScrub = { x, samples ->
             binding.tvStrainPlotReadout.text = scrubReadout(this, x, samples)
