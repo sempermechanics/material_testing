@@ -273,17 +273,15 @@ class RoiDrawActivityTest {
     // ── Modes ────────────────────────────────────────────────────────────────
 
     @Test
-    fun `manual mode swaps the tool rows without collapsing the toolbar`() {
+    fun `manual mode swaps the tool rows, each mode's dock holding only its own`() {
         val activity = launch(intent(path = null)).get()
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.drawTools).visibility)
+        // Draw's dock does not keep the Manual fields' height (readiness AE1V-023).
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.manualTools).visibility)
 
         activity.check(R.id.rgEditMode, R.id.rbModeManual)
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.manualTools).visibility)
-        assertEquals(
-            "INVISIBLE keeps the height",
-            View.INVISIBLE,
-            activity.findViewById<View>(R.id.drawTools).visibility,
-        )
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.drawTools).visibility)
         assertEquals(activity.getString(R.string.roi_hud_mode_manual), activity.hud())
     }
 

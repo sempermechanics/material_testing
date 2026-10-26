@@ -7,7 +7,6 @@ import android.app.Activity
 import android.content.Intent
 import android.graphics.RectF
 import android.os.Bundle
-import android.view.View
 import android.widget.EditText
 import androidx.annotation.MainThread
 import androidx.annotation.StringRes
@@ -84,8 +83,9 @@ class RoiDrawActivity : AppCompatActivity() {
         // reachable; the canvas shrinks and the overlay remaps the crop onto the
         // smaller image (StudioOverlayView.updateImageBounds).
         Insets.padBottomAboveIme(binding.bottomToolbar)
-        // The info pill wraps but keeps one height, so the canvas never resizes as it changes.
-        binding.root.doOnLayout { RoiHud.reserveLines(binding.tvHud, RoiHud.texts(this)) }
+        // The info pill wraps, keeping one height within a mode, so the canvas never
+        // resizes mid-drag; it is sized for the current mode once the screen is laid out.
+        binding.root.doOnLayout { showMode() }
 
         setImageSize(intent.getRoiEditorImageSize())
         pendingSelection = savedInstanceState?.let(RoiSelection::from)
@@ -160,6 +160,7 @@ class RoiDrawActivity : AppCompatActivity() {
             val erase = checkedId == R.id.rbErase
             binding.overlayRoi.isSubtractMode = erase
             binding.tvHud.text = getString(if (erase) R.string.roi_hud_mode_erase else R.string.roi_hud_mode_crop)
+            showMode()
             syncManualFieldsForMode()
         }
 
@@ -227,14 +228,20 @@ class RoiDrawActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * The dock's tools and the pill's reserved lines for the current mode. The canvas
+     * may resize on a change of mode, never within one (readiness AE1V-023).
+     */
+    private fun showMode() {
+        val manual = binding.rgEditMode.checkedButtonId == R.id.rbModeManual
+        RoiHud.show(RoiHud.Mode.of(manual, erasing), binding.drawTools, binding.manualTools, binding.tvHud)
+    }
+
     private fun setEditMode(manual: Boolean) {
-        // INVISIBLE (not GONE) keeps bottomToolbar height stable so the
-        // fitCenter image does not jump when switching Draw ↔ Manual.
-        binding.drawTools.visibility = if (manual) View.INVISIBLE else View.VISIBLE
-        binding.manualTools.visibility = if (manual) View.VISIBLE else View.INVISIBLE
-        if (!manual) hideSoftKeyboard()
         // Crop/Erase stays visible and keeps its selection in both modes.
         val erase = erasing
+        RoiHud.show(RoiHud.Mode.of(manual, erase), binding.drawTools, binding.manualTools, binding.tvHud)
+        if (!manual) hideSoftKeyboard()
         binding.overlayRoi.isSubtractMode = erase
         if (manual) syncManualFieldsForMode()
         @StringRes val cropHud = if (manual) R.string.roi_hud_mode_manual else R.string.roi_hud_mode_crop

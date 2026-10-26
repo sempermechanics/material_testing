@@ -172,8 +172,8 @@
     </FrameLayout>
 
     <!-- Above the canvas, wrapping so its whole text shows; RoiHud reserves the lines
-         its longest text needs, so a change of text never resizes the canvas mid-drag
-         (readiness AE1V-023). -->
+         the current mode's longest text needs, so a change of text never resizes the
+         canvas mid-drag (readiness AE1V-023). -->
     <TextView
         android:id="@+id/tvHud"
         android:layout_width="wrap_content"
@@ -253,14 +253,15 @@
                 app:strokeColor="@color/outline_strong" />
         </LinearLayout>
 
-        <!-- Invisible (not gone) so bottomToolbar height stays fixed when
-             switching Draw ↔ Manual — otherwise fitCenter recenters the image. -->
+        <!-- Gone in Draw, so Draw's dock is one row and the canvas keeps its room;
+             the canvas resizes on Draw ↔ Manual, never within a mode (RoiHud.show,
+             readiness AE1V-023). -->
         <LinearLayout
             android:id="@+id/manualTools"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:visibility="invisible">
+            android:visibility="gone">
 
             <LinearLayout
                 android:layout_width="match_parent"

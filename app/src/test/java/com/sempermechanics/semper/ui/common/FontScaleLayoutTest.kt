@@ -288,50 +288,109 @@ class FontScaleLayoutTest {
         }
     }
 
-    /**
-     * The ROI studio's info pill (tvHud) sits above the canvas, never on it: at font
-     * scale 2 its two lines covered the crop's top edge and corner handles (readiness
-     * AE1V-023), and cut to one line it hid the position ("Pos…"). It wraps, so every
-     * text it shows is visible in full, and [RoiHud] reserves the lines the longest
-     * needs, so the canvas keeps its place whatever the pill says (no resize mid-drag).
-     */
-    @Test
-    fun `the ROI studio's info pill shows its whole text and never covers the canvas at font scale 2`() {
+    /** The ROI studio at font scale 2 in a 360 × 800 dp phone's window, laid out as RoiDrawActivity lays it out. */
+    private inner class RoiStudio {
         val ctx = context(2f)
-        val root = LayoutInflater.from(ctx).inflate(R.layout.activity_roi_draw, LinearLayout(ctx), false)
-        val hud = root.findViewById<TextView>(R.id.tvHud)
-        val canvas = root.findViewById<View>(R.id.canvasFrame)
+        val root: View = LayoutInflater.from(ctx).inflate(R.layout.activity_roi_draw, LinearLayout(ctx), false)
+        val hud: TextView = root.findViewById(R.id.tvHud)
+        val canvas: View = root.findViewById(R.id.canvasFrame)
+
         fun layOut() = root.apply {
             measure(
                 View.MeasureSpec.makeMeasureSpec(ctx.px(PHONE_DP), View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(ctx.px(PHONE_HEIGHT_DP), View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(ctx.px(ROI_PHONE_HEIGHT_DP), View.MeasureSpec.EXACTLY),
             )
             layout(0, 0, measuredWidth, measuredHeight)
         }
-        val texts = RoiHud.texts(ctx)
-        layOut()
-        // What RoiDrawActivity does once the screen is laid out.
-        RoiHud.reserveLines(hud, texts)
-        val tops = mutableSetOf<Int>()
-        for (text in texts + ctx.getString(R.string.roi_hud_dimensions_fmt, 6000, 4000, 1234, 5678)) {
+
+        /** What RoiDrawActivity does on a change of mode (and once the screen is laid out). */
+        fun show(mode: RoiHud.Mode) {
+            layOut()
+            RoiHud.show(mode, root.findViewById(R.id.drawTools), root.findViewById(R.id.manualTools), hud)
+            layOut()
+        }
+
+        fun dp(px: Int) = px / ctx.resources.displayMetrics.density
+
+        /** Shows [text] in the pill and checks it is whole, uncut, and above the canvas. */
+        fun say(text: String, mode: RoiHud.Mode) {
             hud.text = text
             layOut()
             val layout = requireNotNull(hud.layout)
             val cut = (0 until layout.lineCount).sumOf { layout.getEllipsisCount(it) }
-            assertEquals("'$text' is cut", 0, cut)
-            assertEquals("'$text' shows in full", text, layout.text.toString())
-            assertTrue("'$text' needs more lines than the pill has", hud.height >= layout.height)
-            val overlap = "the pill ends at ${hud.bottom}px, the canvas starts at ${canvas.top}px"
+            assertEquals("$mode: '$text' is cut", 0, cut)
+            assertEquals("$mode: '$text' shows in full", text, layout.text.toString())
+            assertTrue("$mode: '$text' needs more lines than the pill has", hud.height >= layout.height)
+            val overlap = "$mode: the pill ends at ${hud.bottom}px, the canvas starts at ${canvas.top}px"
             assertTrue(overlap, hud.bottom <= canvas.top)
-            tops += canvas.top
         }
-        assertEquals("the canvas moved as the pill's text changed: $tops", 1, tops.size)
-        assertTrue("the canvas keeps room to draw (${canvas.height}px)", canvas.height > 0)
+    }
+
+    /**
+     * The ROI studio's info pill (tvHud) sits above the canvas, never on it: at font
+     * scale 2 its two lines covered the crop's top edge and corner handles (readiness
+     * AE1V-023), and cut to one line it hid the position ("Pos…"). It wraps, so every
+     * text it shows in a mode is visible in full and ends above the canvas.
+     */
+    @Test
+    fun `the ROI studio's info pill shows its whole text and never covers the canvas at font scale 2`() {
+        val studio = RoiStudio()
+        for (mode in RoiHud.Mode.entries) {
+            studio.show(mode)
+            val typical = studio.ctx.getString(R.string.roi_hud_dimensions_fmt, 6000, 4000, 1234, 5678)
+            for (text in RoiHud.texts(studio.ctx, mode) + typical) studio.say(text, mode)
+        }
+    }
+
+    /**
+     * In Draw mode the canvas keeps room to draw at font scale 2 (readiness AE1V-023,
+     * the Admin's "one more small fix"): round 2 left it about 82 dp on a 360 × 800 dp
+     * phone, under a pill sized for every mode's longest text and a dock that kept the
+     * hidden Manual fields' height. [DRAW_CANVAS_FLOOR_DP] is about three times that: a
+     * 4:3 photo then shows 320 dp wide, nearly the full width.
+     */
+    @Test
+    fun `the ROI canvas keeps room to draw in Draw mode at font scale 2`() {
+        val studio = RoiStudio()
+        studio.show(RoiHud.Mode.DRAW_CROP)
+        val dp = studio.dp(studio.canvas.height)
+        assertTrue("the Draw-mode canvas is $dp dp, needs $DRAW_CANVAS_FLOOR_DP", dp >= DRAW_CANVAS_FLOOR_DP)
+    }
+
+    /**
+     * A drag (or a pinch) changes the pill's numbers within one mode; the canvas
+     * under the finger keeps its place and size the whole time. It may resize only
+     * on a change of mode.
+     */
+    @Test
+    fun `a drag within one mode never moves or resizes the ROI canvas at font scale 2`() {
+        val studio = RoiStudio()
+        val ctx = studio.ctx
+        val dragged = listOf(1, 12, 123, 1234, 12345, 88888).map { n ->
+            ctx.getString(R.string.roi_hud_dimensions_fmt, n, n, n / 2, n / 3)
+        }
+        val pinched = listOf(1.5f, 3.25f, 10f).map { ctx.getString(R.string.roi_hud_zoom_fmt, it) } +
+            ctx.getString(R.string.roi_hud_zoom_fit)
+        for (mode in RoiHud.Mode.entries) {
+            studio.show(mode)
+            val top = studio.canvas.top
+            val height = studio.canvas.height
+            for (text in dragged + pinched) {
+                studio.say(text, mode)
+                assertEquals("$mode: the canvas moved at '$text'", top, studio.canvas.top)
+                assertEquals("$mode: the canvas resized at '$text'", height, studio.canvas.height)
+            }
+        }
     }
 
     private companion object {
         const val PHONE_DP = 360
-        const val PHONE_HEIGHT_DP = 640
+
+        /** The window of a 360 × 800 dp phone between its 24 dp status bar and 48 dp navigation bar. */
+        const val ROI_PHONE_HEIGHT_DP = 800 - 24 - 48
+
+        /** About three times round 2's 82 dp: a 4:3 photo shows at 320 dp, nearly the full 360 dp width. */
+        const val DRAW_CANVAS_FLOOR_DP = 240f
         const val GOOGLE_MIN_DP = 52
         const val TILE_DP = 72
         const val UNIT_GAP_DP = 4
