@@ -141,8 +141,8 @@ internal class AccessStatusResolver(
             "Staff released this phone from this account, so it cannot be used with it " +
                 "again. Sign in with another account, or use another phone."
         } else {
-            "This device is already linked to another account, or this account to " +
-                "another device. Sign in with that account, or ask an admin to reset the binding."
+            "This phone is already linked to another account, or this account to " +
+                "another phone. Sign in with that account, or ask an admin to reset the binding."
         },
         cause,
     )
