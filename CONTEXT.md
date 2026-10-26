@@ -186,13 +186,14 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   §5.1a with a load log, a phone MP4 and a UTM clip; Semper Classroom beside Semper (§3b),
   ADR-022's screenshots; the synced tip cards, summary pill and Re-run (3.11a–3.11m); Pixel 6
   references (TD-135). Owner decision: Terms §1.2 and §1.3 against a student audience.
-- **Example data in the app ([ADR-031](docs/adr/ADR-031-bundled-example-data.md)), branch
-  `claude/semper-classroom-app`, not merged:** steel, PMMA, concrete (CC BY 4.0) and two DICe
+- **Example data in the app ([ADR-031](docs/adr/ADR-031-bundled-example-data.md)), merged
+  2026-10-26 (#149, `8b11ed8f`), not released:** steel, PMMA, concrete (CC BY 4.0) and two DICe
   pairs (BSD-3) in `app/src/main/assets/examples/` (~80 MB), with ground truth and credits;
-  Try it / Save to phone / Credits & licences. Owed: the Terms §4.6 clause (semperdic-app
-  first), the website's Examples page, the device pass §3c, TD-331–TD-333.
-- **Rename to Semper Classroom ([ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md)):** branch
-  `claude/semper-classroom-app`, waits on the upstream PR, its deploy and the owner's Firebase app registration.
+  Try it / Save to phone / Credits & licences. Terms §4.6 merged upstream (semperdic-app #487),
+  not yet synced here or deployed to Hosting; the website's Examples page merged (semper-website
+  #13). Owed: that sync and deploy, the device pass §3c, TD-331–TD-333.
+- **Rename to Semper Classroom ([ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md)):** merged
+  2026-10-26 (#147, `f25ebd01`), not released; still owed: the upstream deploy and the owner's Firebase app registration.
 - **Look it up; this list rots.** `gh pr list --state open`; history in
   [CHANGELOG.md](docs/ops/CHANGELOG.md); proposals in [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
