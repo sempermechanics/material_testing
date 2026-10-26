@@ -69,7 +69,8 @@ class UserTermsTest {
         assertTrue(notice, "will be collected" !in notice)
         assertTrue(notice, "untick" in notice)
         assertTrue(notice, "Settings \\u2192 Your data" in notice)
-        assertTrue(notice, "within 30 days" in notice && "within 30 days" in strings.getValue("settings_improve_summary"))
+        assertTrue(notice, "within 30 days" in notice)
+        assertTrue("within 30 days" in strings.getValue("settings_improve_summary"))
         assertTrue(notice, "images, results and reports you back up" in notice)
         assertTrue("images, results and reports you back up" in strings.getValue("terms_checkbox_improve_hint"))
     }
