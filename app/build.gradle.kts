@@ -104,6 +104,27 @@ listOf(
     }
 }
 
+// The engine submodule's checked-out commit, which every analysis records in its
+// record_manifest.json (ADR-028). A providers.exec value, so the configuration
+// cache tracks it. "unknown" when the submodule is not checked out (without its
+// .git, `git -C engine` would answer the superproject's HEAD) or git is missing.
+val enginePin: String =
+    rootProject
+        .file("engine")
+        .takeIf { File(it, ".git").exists() }
+        ?.let { engineDir ->
+            runCatching {
+                providers
+                    .exec {
+                        commandLine("git", "-C", engineDir.absolutePath, "rev-parse", "HEAD")
+                        isIgnoreExitValue = true
+                    }.standardOutput.asText
+                    .get()
+                    .trim()
+            }.getOrNull()
+        }?.takeIf { Regex("^[0-9a-f]{40}$").matches(it) }
+        ?: "unknown"
+
 // Release signing. The keystore and passwords come from the environment
 // (SIGNING_* — set by .github/workflows/release.yml and the tier-5 CI job),
 // never from the repo. When the keystore is absent — every local build, and
@@ -137,6 +158,7 @@ android {
         buildConfigField("String", "SEMPER_API_BASE_URL", "\"$semperApiBaseUrl\"")
         buildConfigField("String", "SEMPER_API_CERT_PINS", "\"$semperApiCertPins\"")
         buildConfigField("String", "SEMPER_ENTITLEMENT_PUBKEYS", "\"$semperEntitlementPubkeys\"")
+        buildConfigField("String", "ENGINE_PIN", "\"$enginePin\"")
         // Overridden per build type below; the default keeps the flag defined
         // for any variant that doesn't set it (androidTest, lint models).
         buildConfigField("boolean", "DEV_AUTH_BYPASS", "false")

@@ -110,7 +110,8 @@ How the backend carries them out:
   (`releasedDeviceId`, which a test account skips) and touches no session.
   Audited `test_account_device_released` with `{deviceId, app}`. The released
   phone may not take its place back: registration refuses it for the same
-  account with `device_conflict` (`repo/devices.py`, `register_device`, asking
+  account with `device_released`, which the app words as "Staff released this phone
+  from this account" (`repo/devices.py`, `register_device`, asking
   `repo/_base.py`, `staff_released_from`),
   and the router audits that DENIED with `reason: "staff_released"`. The
   licence lock (`devlock._test_lock_verdict`) gives it Demo, not the room an
@@ -223,5 +224,8 @@ How the backend carries them out:
 - [x] TD-313: Tier 3 against staging with the CI test account, and CI rotation
       (`StagingRoundTripDeviceTest` passed on an emulator against staging,
       2026-10-22; the rotation needs the backend deployed before CI runs it often).
-- [ ] TD-314: release one phone (route, registration refusal, console **Release**);
-      built, not merged or deployed. Hosting and the backend go out together.
+- [x] TD-314: release one phone (route, registration refusal, console **Release**);
+      #468, deployed 2026-10-23 (backend and Hosting). Checked on staging the same
+      day: the released phone fell back to Demo, its re-registration answered 409
+      `device_conflict` (audit DENIED `staff_released`), and a third phone
+      registered ([CHANGELOG](../ops/CHANGELOG.md) 2026-10-23).

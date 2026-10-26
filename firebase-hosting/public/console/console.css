@@ -22,6 +22,7 @@
   --accent: #d4a054;
   --accent-dim: rgba(212, 160, 84, 0.15);
   --accent-hover: #e4b46a;
+  --row-hover: #1f2837; /* opaque: the pinned first cell takes it too */
   --danger: #f2b8b5;
   --warn: #e3b341;
   --ok: #7ee2a8;
@@ -131,10 +132,23 @@ input, select, textarea {
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
 input:disabled, select:disabled { opacity: .5; }
 
+/* Tables are read down a column as often as across a row, so the heading is
+   quiet (muted, sentence case) and the values carry the weight. Tracked gold
+   capitals made every heading louder than the data under it. */
 table { width: 100%; border-collapse: collapse; }
-th, td { text-align: left; padding: .6rem .5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
-th { font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); }
+th, td { text-align: left; padding: .65rem .6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th {
+  font-size: .8rem; font-weight: 600; color: var(--muted); white-space: nowrap;
+  padding-top: .4rem; padding-bottom: .5rem; border-bottom-color: var(--line-strong);
+}
 td.actions { text-align: right; white-space: nowrap; }
+/* Row buttons are a size down from a card's own, so a row of three does not
+   outweigh the data beside it. */
+td.actions button, td.actions details.more > summary { padding: .35rem .75rem; font-size: .85rem; }
+/* The destructive button of a row stands apart from the ones that only change. */
+td.actions .secondary + .danger { margin-left: .6rem; }
+.wrap tbody tr:hover > td { background: var(--row-hover); }
+.nowrap { white-space: nowrap; }
 /* A key is read as one word; broken over two lines it was misread. */
 td.mono { white-space: nowrap; }
 .pill {
@@ -203,7 +217,7 @@ dl.facts dd { margin: 0; }
    place, under its button, so the table's own scrolling never clips it. */
 details.more { display: inline-block; vertical-align: top; text-align: left; }
 details.more > summary {
-  list-style: none; display: inline-block; cursor: pointer;
+  list-style: none; display: inline-flex; align-items: center; cursor: pointer;
   font-weight: 600; font-size: .9rem; padding: .55rem 1rem; border-radius: 8px;
   border: 1px solid var(--line-strong); color: var(--ink);
 }
@@ -212,6 +226,8 @@ details.more > summary::after { content: " ▾"; color: var(--muted); }
 details.more > summary:hover { background: rgba(255, 255, 255, 0.04); }
 details.more[open] > summary { border-color: var(--accent); }
 details.more .menu { display: flex; flex-direction: column; gap: .35rem; margin-top: .35rem; }
+/* Revoke and Delete, last in the menu, sit apart from what only looks. */
+details.more .menu .secondary + .danger { margin-top: .5rem; }
 
 /* The status line sits above the first card, and the licence table is well
    below it: a result written there while the operator worked in the table was
@@ -232,10 +248,16 @@ details.more .menu { display: flex; flex-direction: column; gap: .35rem; margin-
   display: grid; gap: .75rem 1rem; margin: .75rem 0;
   grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
 }
-.grid label, .row label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
+/* A field's name and its "(after expiry)" aside read as one line, the box
+   under them full width, any help under the box. */
+.grid label { display: block; font-size: .9rem; font-weight: 500; }
+.grid label > .muted { font-size: .8rem; font-weight: 400; }
+.grid label > input, .grid label > select { display: block; width: 100%; margin-top: .3rem; }
+.grid label > .hint { display: block; margin-top: .3rem; }
 .grid label.wide { grid-column: 1 / -1; }
-.row label { flex-direction: row; align-items: center; gap: .35rem; }
-.grid label.check { flex-direction: row; align-items: center; gap: .35rem; align-self: end; }
+.row label { display: flex; flex-direction: row; align-items: center; gap: .35rem; font-size: .9rem; }
+.grid label.check { display: flex; flex-direction: row; align-items: center; gap: .35rem; align-self: end; }
+.grid label.check > input { display: inline-block; width: auto; margin: 0; }
 
 /* The licence Edit and Convert dialogs: a card over a dimmed desk. */
 dialog {
@@ -267,12 +289,148 @@ dialog::backdrop { background: rgba(0, 0, 0, .55); }
   border: 1px solid var(--line-strong); display: inline-block; word-break: break-all;
 }
 
+/* --------------------------------------------------------- card parts */
+
+/* A card's heading row: the title, any count beside it, then the card's own
+   buttons at the far end. One rule instead of an inline margin on each h2. */
+.card-head {
+  display: flex; align-items: center; flex-wrap: wrap; gap: .5rem .6rem;
+  margin-bottom: .75rem;
+}
+.card-head h2 { margin: 0 .25rem 0 0; }
+.card-head > .muted { font-size: .85rem; }
+/* What narrows a table (search, ticks), on its own line under the heading. */
+.toolbar { margin-bottom: .75rem; gap: .5rem 1rem; }
+.toolbar > input { flex: 0 1 26rem; min-width: 12rem; }
+/* Explanations under a heading are read, not scanned: a readable measure. */
+.card > p.muted, .fold > p.muted { max-width: 46rem; }
+/* Help under a form field. */
+.hint { color: var(--muted); font-size: .8rem; line-height: 1.45; }
+.form-actions { margin-top: .25rem; }
+/* A card opened from a row or a button (Issue, Roster, Verified seats):
+   edged in the accent so it reads as the thing just opened. */
+.form-card { border-color: rgba(212, 160, 84, 0.45); }
+/* Load more: no room taken while there is nothing more. */
+.table-foot { margin-top: .75rem; }
+.table-foot:not(:has(> :not([hidden]))) { display: none; }
+/* Two choices drawn as one control (Individual | Institution). */
+.segmented { gap: 0; margin-bottom: .25rem; }
+.segmented label {
+  border: 1px solid var(--line-strong); padding: .4rem .9rem; cursor: pointer;
+  font-weight: 600; font-size: .9rem;
+}
+.segmented label:first-child { border-radius: 8px 0 0 8px; }
+.segmented label:last-child { border-radius: 0 8px 8px 0; border-left: 0; }
+.segmented label:has(input:checked) {
+  color: var(--accent); background: var(--accent-dim); border-color: var(--accent);
+}
+.segmented input { accent-color: var(--accent); }
+/* For a heading a screen reader needs and a reader can see without. */
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+
+/* A form folded behind its own name (Create a test account): the list under
+   it is what most visits want. */
+details.fold { margin: .75rem 0 1rem; }
+details.fold > summary {
+  list-style: none; display: inline-flex; align-items: center; gap: .45rem; cursor: pointer;
+  font-weight: 600; font-size: .9rem; padding: .5rem 1rem; border-radius: 8px;
+  border: 1px solid var(--line-strong);
+}
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary::before { content: "+"; color: var(--accent); font-weight: 700; }
+details.fold[open] > summary::before { content: "−"; }
+details.fold > summary:hover { background: rgba(255, 255, 255, 0.04); }
+details.fold[open] {
+  padding: 1rem; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-elevated);
+}
+details.fold[open] > summary { border-color: var(--accent); }
+
+/* -------------------------------------------------------- the desk */
+
+/* The operator page is a working surface with a nine-column table: it takes
+   more of a laptop's width than the reading pages do. */
+body.desk { --max-width: 1400px; }
+
+/* The desk's section index, pinned while the page scrolls. The one gold
+   number on it is the approvals queue, shown only when someone waits. */
+.desk-nav {
+  position: sticky; top: 0; z-index: 6;
+  display: flex; gap: .25rem; overflow-x: auto; scrollbar-width: none;
+  margin: -.75rem 0 1.25rem; padding: .6rem 0;
+  background: var(--bg); border-bottom: 1px solid var(--line);
+}
+.desk-nav a {
+  display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap;
+  padding: .35rem .75rem; border-radius: 8px;
+  font-size: .88rem; font-weight: 600; color: var(--muted);
+}
+.desk-nav a:hover { color: var(--ink); background: rgba(255, 255, 255, 0.04); }
+.count {
+  display: inline-block; min-width: 1.4rem; padding: 0 .4rem; border-radius: 999px;
+  background: var(--accent); color: var(--bg); text-align: center;
+  font-size: .75rem; font-weight: 700; line-height: 1.4rem;
+}
+/* A jump lands the card's heading below the pinned index, not under it. */
+.desk #app .card { scroll-margin-top: 4.5rem; }
+/* With the index pinned at the top, a message on the status line pins
+   under it rather than over it. */
+.desk main:has(#app:not([hidden])) #status:not(:empty) { top: 3.6rem; }
+
+/* Approvals and the Demo phone release: two small account jobs, side by
+   side where there is room, the queue the wider of the two. */
+.desk-pair { margin-bottom: 1.25rem; }
+.desk-pair > .card { margin-bottom: 1.25rem; }
+@media (min-width: 1025px) {
+  .desk-pair {
+    display: grid; gap: 1.25rem; align-items: start;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+  .desk-pair > .card { margin-bottom: 0; }
+}
+
+/* The licence table, column by column: the term and the counts stay on one
+   line; the kind's "replaced by…" note is a smaller second line; the mode,
+   nearly always "licensed", recedes. */
+table.licences td:nth-child(2) { min-width: 7.5rem; }
+table.licences td:nth-child(2) .muted { font-size: .8rem; line-height: 1.35; }
+table.licences td:nth-child(3) { color: var(--muted); }
+table.licences td:nth-child(4) { min-width: 8.5rem; }
+table.licences td:nth-child(5), table.licences td:nth-child(6) { white-space: nowrap; }
+table.licences td:nth-child(8) { overflow-wrap: break-word; min-width: 10rem; }
+
+/* Test accounts: the address on one line where it fits, and each phone on
+   a line of its own with its Release at the end of that line. */
+table.test-accounts td.account { min-width: 16rem; overflow-wrap: break-word; }
+.phone-list {
+  list-style: none; margin: .45rem 0 0; padding: 0;
+  display: grid; gap: .35rem; min-width: 16rem;
+}
+.phone-list li {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .35rem .4rem .35rem .65rem; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg-elevated);
+}
+.phone-name { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.35; }
+.phone-model { display: flex; align-items: center; flex-wrap: wrap; gap: .2rem .45rem; font-weight: 500; }
+.phone-name .mono { color: var(--muted); font-size: .78rem; font-weight: 400; overflow-wrap: break-word; }
+.phone-model .mono { color: var(--ink); font-size: .85rem; }
+.phone-list button { padding: .25rem .65rem; font-size: .8rem; }
+.tag {
+  display: inline-block; white-space: nowrap; padding: 0 .5rem; border-radius: 999px;
+  border: 1px solid var(--line-strong); color: var(--muted); font-size: .75rem; line-height: 1.5;
+}
+
 /* Tablet and up: a table wider than its card scrolls sideways inside it, and
    its first column (the key, the member, the analysis) stays in view. */
 @media (min-width: 601px) {
   .wrap th:first-child, .wrap td:first-child {
     position: sticky; left: 0; z-index: 1; background: var(--card);
   }
+  /* An address broken at its hyphen read as two addresses. */
+  table.test-accounts td.account, table.licences td:nth-child(8) { white-space: nowrap; }
 }
 
 /* Phone. The header keeps to two rows: the brand, the page, who is signed in
@@ -314,13 +472,21 @@ dialog::backdrop { background: rgba(0, 0, 0, .55); }
   .wrap td { display: flex; gap: .75rem; border: 0; padding: .2rem 0; }
   .wrap td[data-label]::before {
     content: attr(data-label); flex: 0 0 6.5rem; color: var(--muted);
-    font-size: .72rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
-    padding-top: .2rem;
+    font-size: .8rem; font-weight: 500; padding-top: .1rem;
   }
+  .wrap tbody tr:hover > td { background: none; }
   .wrap td:first-child:not([colspan]) { font-weight: 600; font-size: 1rem; }
   .wrap td:first-child::before, .wrap td.actions::before { content: none; }
-  .wrap td.actions { flex-wrap: wrap; align-items: flex-start; white-space: normal; padding-top: .5rem; }
+  .wrap td.actions { flex-wrap: wrap; align-items: flex-start; white-space: normal; padding-top: .5rem; gap: .5rem; }
+  .wrap td.actions .secondary + .danger { margin-left: 0; }
   .wrap td[colspan] { display: block; }
+  /* The count, then the phones under it at the card's full width. */
+  .wrap td.phones { flex-wrap: wrap; }
+  .phone-list { flex-basis: 100%; min-width: 0; }
+  .card-head h2 { flex: 1 1 100%; }
+  .card-head > .muted { flex-basis: 100%; }
+  .toolbar > input { flex: 1 1 100%; }
+  .desk-nav { margin: -.5rem -1rem 1rem; padding: .5rem 1rem; }
 }
 
 /* The narrowest phones: a long page name ("Institution seats") takes two

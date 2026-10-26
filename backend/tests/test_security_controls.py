@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -121,6 +122,38 @@ def test_firestore_indexes_declare_ttl_policies():
     assert set(others) == {("seats", "uid"), ("deleted_seats", "uid")}
     for field in others.values():
         assert _modes(field) == sorted([*defaults, ("ASCENDING", "COLLECTION_GROUP")])
+
+
+def test_firestore_index_deploy_pins_a_cli_that_matches_the_live_indexes():
+    # TD-316: Firestore stores every composite with `density: SPARSE_ALL` and a
+    # trailing `__name__` in the direction of its last field. The file leaves
+    # both implicit, a form 13.x and 15.x both match against the live indexes,
+    # and 14.11.0 matches against none, so it re-created `sessions` and stopped
+    # on a 409. The script runs one pinned 15.x CLI, never PATH's `firebase`.
+    script = (ROOT / "scripts" / "deploy-firestore.sh").read_text(encoding="utf-8")
+    pinned = re.search(r'^FIREBASE_TOOLS_VERSION="(\d+)\.(\d+)\.(\d+)"$', script, re.M)
+    assert pinned, "deploy-firestore.sh must pin an exact firebase-tools version"
+    assert int(pinned.group(1)) >= 15, "only 15.x is verified against the live indexes"
+    code = [
+        line
+        for line in script.replace("\\\n", " ").splitlines()
+        if not line.lstrip().startswith("#")
+    ]
+    assert any(
+        re.search(r'npx --yes "firebase-tools@\$\{FIREBASE_TOOLS_VERSION\}"\s+deploy --only ', line)
+        for line in code
+    )
+    assert not any(re.search(r"(^|[;&(|]\s*)firebase\s", line) for line in code), (
+        "run the pinned CLI through npx, not PATH's firebase"
+    )
+    assert not any("--force" in line for line in code), "--force deletes live TTL policies"
+
+    spec = json.loads(
+        (ROOT / "backend" / "firestore.indexes.json").read_text(encoding="utf-8")
+    )
+    for index in spec["indexes"]:
+        assert "density" not in index, index
+        assert all(field["fieldPath"] != "__name__" for field in index["fields"]), index
 
 
 def _modes(field: dict) -> list[tuple[str, str]]:

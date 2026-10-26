@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.sempermechanics.semper.data.cloud.SessionMetadataSync
+import com.sempermechanics.semper.data.integrity.RecordIntegrity
 import com.sempermechanics.semper.data.mechanical.CurveCorrection
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.field.DicResult
@@ -74,15 +75,24 @@ class ResultViewerViewModel(
     /**
      * Lists the batch with [read] on [dispatcher], once per view model: a
      * viewer rebuilt by a rotation finds [ViewerState.frameSet] already there
-     * (or the listing still running) and starts none of its own. [read] must
-     * hold plain data only, never the viewer that asked.
+     * (or the listing still running) and starts none of its own. Then, once
+     * the first frame can start, checks the record with [check] on the same
+     * dispatcher into [ViewerState.integrity]: it hashes every frame, so it
+     * never holds the first one up (ADR-028). [read] and [check] must hold
+     * plain data only, never the viewer that asked.
      */
-    internal fun listFrames(dispatcher: CoroutineDispatcher, read: () -> ViewerFrameLoader.FrameSet) {
+    internal fun listFrames(
+        dispatcher: CoroutineDispatcher,
+        check: () -> RecordIntegrity = { RecordIntegrity.NotRecorded },
+        read: () -> ViewerFrameLoader.FrameSet,
+    ) {
         if (mutableState.value.frameSet != null || listing?.isActive == true) return
         listing = viewModelScope.launch {
             val set = withContext(dispatcher) { read() }
             useFrameListing(set.batchFiles)
             mutableState.update { it.copy(frameSet = set) }
+            val integrity = withContext(dispatcher) { check() }
+            mutableState.update { it.copy(integrity = integrity) }
         }
     }
 
@@ -242,10 +252,12 @@ class ResultViewerViewModel(
 
 /**
  * The result viewer's state, one value ([ResultViewerViewModel.state]):
- * [frameSet] is null until the batch is listed.
+ * [frameSet] is null until the batch is listed, [integrity] until its record
+ * is checked against its manifest.
  */
 internal data class ViewerState(
     val frameSet: ViewerFrameLoader.FrameSet? = null,
+    val integrity: RecordIntegrity? = null,
     val frameIndex: Int = 0,
     val field: FieldKind = FieldKind.U,
 )

@@ -21,7 +21,7 @@ def register_device(body: DeviceReg, request: Request, user=Depends(current_user
                      detail={"reason": "app_retired", "app": app})
         raise HTTPException(410, errors.APP_RETIRED)
     rate_limit.enforce(rate_limit.device_register_bucket, user["uid"])
-    active = user.get(apps.field("activeDeviceId", app))
+    active = apps.read_field(user, "activeDeviceId", app)
     tag = repo.test_account_of(user)  # Several phones, no hold and no mail (ADR-027).
     # A device-lock clear just released THIS phone for a new one; its upload
     # worker re-registers on `device_not_active`, which would hand the account
@@ -40,12 +40,12 @@ def register_device(body: DeviceReg, request: Request, user=Depends(current_user
     # bound to a different account (one account per device: `device_in_use`)
     # are checked inside the registration's transaction, so two phones
     # registering at once cannot both end up ACTIVE. Each app has its own
-    # binding (ADR-010): Material Testing on the phone Semper is registered on
+    # binding (ADR-010): Semper Classroom on the phone Semper is registered on
     # reports its own device id, and is not a conflict.
     try:
         registered = repo.register_device(user["uid"], body, app, step_up_eligible=eligible)
     except errors.Refusal as refusal:
-        _audit_refused(user["uid"], refusal.code, body.deviceId, app, tag)
+        _audit_refused(user["uid"], refusal.code, body.deviceId, app)
         raise
     _audit_rotated(user["uid"], registered.get("rotated"), app, body.deviceId)
     audit.record(user["uid"], body.deviceId, action="DEVICE_REBIND" if healed else "DEVICE_REGISTER",
@@ -56,15 +56,14 @@ def register_device(body: DeviceReg, request: Request, user=Depends(current_user
     return {"deviceId": body.deviceId, "healed": healed}
 
 
-def _audit_refused(uid: str, code: str, device_id: str, app: str, tag) -> None:
+def _audit_refused(uid: str, code: str, device_id: str, app: str) -> None:
     """The DENIED row for a refused registration: the phone bound to another
     account (`device_in_use`, naming it), or a phone staff released from
     this test account (TD-314), which may not take its place back."""
     if code == errors.DEVICE_IN_USE:
         audit.record(uid, device_id, action="DEVICE_IN_USE", outcome="DENIED",
                      detail={"owner": (repo.get_device(device_id) or {}).get("uid")})
-    elif (code == errors.DEVICE_CONFLICT and tag is not None
-          and repo.staff_released_from(repo.get_device(device_id), uid)):
+    elif code == errors.DEVICE_RELEASED:
         audit.record(uid, device_id, action="DEVICE_REGISTER", outcome="DENIED",
                      detail={"reason": "staff_released", "app": app, "testAccount": True})
 

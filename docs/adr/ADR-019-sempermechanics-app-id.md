@@ -4,6 +4,8 @@
 **Date:** 2026-10-03
 **Deciders:** app owner
 
+[2026-10-26: `com.sempermechanics.materialtesting` is succeeded by `com.sempermechanics.semperclassroom` (Semper Classroom) and joins `apps.RETIRED`; see [ADR-030](ADR-030-semper-classroom-app-identity.md).]
+
 ## Context
 
 The app shipped as `com.indicvision.semper`, the Kotlin package had the same

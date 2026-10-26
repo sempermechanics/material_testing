@@ -10,6 +10,7 @@ import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.sempermechanics.semper.R
+import com.sempermechanics.semper.data.integrity.RecordIntegrity
 import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.databinding.SheetSettingsUsedBinding
 import com.sempermechanics.semper.field.DicResult
@@ -20,6 +21,8 @@ import com.sempermechanics.semper.ui.analysis.run.EngineFailure
 import com.sempermechanics.semper.ui.analysis.sweep.SweepPlotView
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.common.TestTypeSheet
+import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
+import com.sempermechanics.semper.ui.common.dialog.WarnChip
 import com.sempermechanics.semper.ui.common.dialog.inflateSheet
 import com.sempermechanics.semper.ui.viewer.mechanical.ViewerFrameRows
 import kotlin.math.roundToInt
@@ -28,7 +31,8 @@ import kotlin.math.roundToInt
  * Peek sheet for a result. On a still frame: true max / min (with coordinates) /
  * mean, then a histogram of accepted values. On the summary GIF: the sequence
  * colour-bar ends only — no mean, no histogram. Then the parameter rows that
- * produced the result (and the sweep line-cut).
+ * produced the result, the record's integrity (ADR-028) with a warning when
+ * it changed, and the sweep line-cut.
  */
 object SettingsUsedSheet {
 
@@ -90,6 +94,7 @@ object SettingsUsedSheet {
                 host.getString(R.string.settings_used_strain_method) to
                     args.strainMethod,
             )
+            add(host.getString(R.string.param_reference) to referenceText(host, args.refUpdateInterval))
             addAll(ViewerFrameRows.of(host))
             addAll(stopRows(host))
             // ROI is only meaningful when one was actually recorded.
@@ -104,6 +109,7 @@ object SettingsUsedSheet {
                     args.imgH,
                 ),
             )
+            add(host.getString(R.string.settings_used_integrity) to integrityText(host, integrityOf(host)))
         }
     }
 
@@ -126,6 +132,10 @@ object SettingsUsedSheet {
             if (index > 0) view.settingsUsedRows.addView(settingsDivider(host))
             view.settingsUsedRows.addView(settingsRow(host, label, value))
         }
+        WarnChip(view.integrityWarnRow.root) { url -> FaqRedirect.confirm(host, url) }.showOrHide(
+            integrityWarning(host, integrityOf(host)),
+            host.getString(R.string.url_faq_record_integrity),
+        )
         if (host.isSweep) populateLineCut(host, view)
         host.stressStrain.populate(view)
 
@@ -308,3 +318,59 @@ object SettingsUsedSheet {
         setBackgroundColor(host.getColor(R.color.surface_outline))
     }
 }
+
+/*
+ * The Details sheet's text for the reference row and the record's integrity
+ * (ADR-028), outside the object so it stays a handful of view builders.
+ */
+
+/**
+ * Which image each frame was solved against, in the wizard's own words
+ * (`ReferenceDropdown`): the first image, or one that moved every
+ * [interval] frames. A video's interval is stored in frames too.
+ */
+internal fun referenceText(host: ResultViewerActivity, interval: Int): String = when {
+    interval <= 0 -> host.getString(R.string.reference_fixed)
+    interval == 1 -> host.getString(R.string.reference_every_frame)
+    else -> host.resources.getQuantityString(R.plurals.reference_every_n_frames, interval, interval)
+}
+
+/** The record's check against its manifest (ADR-028); null while it runs. */
+internal fun integrityOf(host: ResultViewerActivity): RecordIntegrity? = host.viewModel.state.value.integrity
+
+/** The "Record integrity" row's value for [integrity]. */
+internal fun integrityText(host: ResultViewerActivity, integrity: RecordIntegrity?): String = host.getString(
+    when (integrity) {
+        null -> R.string.record_integrity_checking
+        is RecordIntegrity.Verified -> R.string.record_integrity_verified
+        is RecordIntegrity.Changed -> R.string.record_integrity_changed
+        is RecordIntegrity.Unsigned -> R.string.record_integrity_unsigned
+        is RecordIntegrity.SignedElsewhere -> R.string.record_integrity_signed_elsewhere
+        RecordIntegrity.NotRecorded -> R.string.record_integrity_not_recorded
+    },
+)
+
+/**
+ * The warning under the rows: when the record has [RecordIntegrity.Changed],
+ * which files, the first [MAX_NAMED_FILES] by name; when another device's key
+ * signed it ([RecordIntegrity.SignedElsewhere]), that key and that it is not
+ * a pass. Null otherwise.
+ */
+internal fun integrityWarning(host: ResultViewerActivity, integrity: RecordIntegrity?): String? = when (integrity) {
+    is RecordIntegrity.SignedElsewhere ->
+        host.getString(R.string.record_integrity_signed_elsewhere_warn_fmt, integrity.shortThumbprint)
+    is RecordIntegrity.Changed ->
+        host.getString(R.string.record_integrity_changed_warn_fmt, changedFiles(host, integrity.files))
+    else -> null
+}
+
+/** [changed] by name, the first [MAX_NAMED_FILES], then a count of the rest. */
+private fun changedFiles(host: ResultViewerActivity, changed: List<String>): String {
+    val named = changed.take(MAX_NAMED_FILES).joinToString()
+    if (changed.size <= MAX_NAMED_FILES) return named
+    val more = changed.size - MAX_NAMED_FILES
+    return host.resources.getQuantityString(R.plurals.record_integrity_more_fmt, more, named, more)
+}
+
+/** Changed files the warning names before it counts the rest. */
+private const val MAX_NAMED_FILES = 3

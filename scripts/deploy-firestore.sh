@@ -9,8 +9,21 @@
 # Optional: PROJECT=<id> (default indicvision-dic-app, the backend project that
 # holds Firestore; not firebase-hosting/'s default, the Auth project).
 #
-# Needs a Firebase CLI running on Node >= 20. From PowerShell, `bash` may
-# resolve to WSL (Node 12 there); run this from Git Bash instead.
+# Runs a pinned Firebase CLI through npx (FIREBASE_TOOLS_VERSION below), never
+# whichever `firebase` is first on PATH: needs Node >= 20 and npm. From
+# PowerShell, `bash` may resolve to WSL (Node 12 there); run this from Git Bash.
+#
+# Why pinned (TD-316): every live composite index is stored with
+# `density: SPARSE_ALL` and a trailing `__name__` field in the direction of its
+# last field, which the indexes file leaves implicit. The CLI must normalise one
+# side to the other. 13.x drops the live `__name__`; 15.x keeps it and appends
+# the implicit one to each file entry (and defaults density to SPARSE_ALL); 14.11.0
+# keeps the live `__name__` without appending it, so it matches none of them,
+# calls them "not present in your firestore indexes file" and re-creates the
+# first (`sessions`), which Firestore refuses with HTTP 409 (2026-10-22). Before
+# changing the version, list the live indexes with it (read-only) and check the
+# file still matches:
+#   npx --yes firebase-tools@<ver> firestore:indexes --project indicvision-dic-app --database '(default)'
 #
 # The Firebase CLI refuses any file outside the directory holding its
 # firebase.json, and neither file lives under one, so both are staged in a
@@ -26,6 +39,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+FIREBASE_TOOLS_VERSION="15.33.0"
 PROJECT="${PROJECT:-indicvision-dic-app}"
 case "${1:-all}" in
   rules) ONLY="firestore:rules" ;;
@@ -49,4 +63,6 @@ printf '{"firestore":{"rules":"firestore.rules","indexes":"firestore.indexes.jso
   > "${STAGE}/firebase.json"
 
 echo "Deploying ${ONLY} to ${PROJECT}"
-(cd "${STAGE}" && firebase deploy --only "${ONLY}" --project "${PROJECT}" --non-interactive)
+echo "Firebase CLI: firebase-tools@${FIREBASE_TOOLS_VERSION}"
+(cd "${STAGE}" && npx --yes "firebase-tools@${FIREBASE_TOOLS_VERSION}" \
+  deploy --only "${ONLY}" --project "${PROJECT}" --non-interactive)

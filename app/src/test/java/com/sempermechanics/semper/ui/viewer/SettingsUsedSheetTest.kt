@@ -6,10 +6,19 @@ import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.sempermechanics.semper.R
+import com.sempermechanics.semper.data.account.entitlement.DeviceKeyThumbprint
+import com.sempermechanics.semper.data.integrity.LocalRecordKey
+import com.sempermechanics.semper.data.integrity.RecordIntegrity
+import com.sempermechanics.semper.data.integrity.RecordManifestWriter
+import com.sempermechanics.semper.data.integrity.RecordSigner
+import com.sempermechanics.semper.data.session.SessionRecordSettings
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.fixtures.SoftwareRecordSigner
 import com.sempermechanics.semper.fixtures.idleUntil
 import com.sempermechanics.semper.fixtures.launchViewer
+import com.sempermechanics.semper.fixtures.sessionRecord
 import com.sempermechanics.semper.fixtures.viewerArgs
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -37,6 +46,9 @@ class SettingsUsedSheetTest {
 
     private lateinit var batchDir: File
 
+    /** This phone's device key, as the viewer's check reads it (Robolectric has no Keystore). */
+    private val phoneKey = SoftwareRecordSigner()
+
     private companion object {
         const val FRAMES = 3
         const val GRID = 4
@@ -45,6 +57,7 @@ class SettingsUsedSheetTest {
 
     @Before
     fun writeBatch() {
+        LocalRecordKey.useForTest { DeviceKeyThumbprint.of(phoneKey.publicKeyDer()) }
         batchDir = temp.newFolder("batch")
         for (f in 0 until FRAMES) {
             val points = GRID * GRID
@@ -60,12 +73,16 @@ class SettingsUsedSheetTest {
         }
     }
 
+    @After
+    fun forgetPhoneKey() = LocalRecordKey.useForTest()
+
     /** A plain three-frame run over the whole 16×16 image, opened on frame 1. */
     private fun baseArgs() = viewerArgs(batchDir, GRID, STEP).copy(strainWindow = 25, refName = "Dogbone A")
 
     private fun viewer(args: ViewerArgs = baseArgs()): ResultViewerActivity {
         val activity = launchViewer(args)
         idleUntil("the viewer") { activity.rawData != null }
+        idleUntil("the record check") { activity.viewModel.state.value.integrity != null }
         return activity
     }
 
@@ -83,8 +100,11 @@ class SettingsUsedSheetTest {
                 // VSG 25 px at step 4 is a 7-point window.
                 host.getString(R.string.settings_used_strain_window) to "7-point window · VSG 25 px",
                 host.getString(R.string.settings_used_strain_method) to "VSG",
+                host.getString(R.string.param_reference) to "First image",
                 host.getString(R.string.settings_used_roi) to "16 × 16 at (0, 0)",
                 host.getString(R.string.settings_used_image_size) to "16 × 16 px",
+                // No record_manifest.json beside these frames (ADR-028).
+                host.getString(R.string.settings_used_integrity) to "Not recorded",
             ),
             entries,
         )
@@ -110,8 +130,8 @@ class SettingsUsedSheetTest {
         )
         assertEquals("3 of 5 frames", rows[host.getString(R.string.settings_used_frames_solved)])
         assertEquals(
-            "stop rows sit between the method and the ROI",
-            labels.indexOf(host.getString(R.string.settings_used_strain_method)) + 1,
+            "stop rows sit between the settings and the ROI",
+            labels.indexOf(host.getString(R.string.param_reference)) + 1,
             labels.indexOf(host.getString(R.string.settings_used_stopped_early)),
         )
     }
@@ -129,6 +149,90 @@ class SettingsUsedSheetTest {
     fun `a finished run has no stop rows`() {
         val rows = viewer().rows()
         assertTrue(rows.keys.none { it == "Stopped early" || it == "Frames solved" })
+    }
+
+    @Test
+    fun `the reference row says which image each frame was solved against, in the wizard's words`() {
+        val label = { host: ResultViewerActivity -> host.getString(R.string.param_reference) }
+
+        val fixed = viewer(baseArgs().copy(refUpdateInterval = 0))
+        assertEquals("First image", fixed.rows()[label(fixed)])
+        val everyFrame = viewer(baseArgs().copy(refUpdateInterval = 1))
+        assertEquals("Every frame", everyFrame.rows()[label(everyFrame)])
+        val everyTwo = viewer(baseArgs().copy(refUpdateInterval = 2))
+        assertEquals("Every 2 frames", everyTwo.rows()[label(everyTwo)])
+        assertEquals(
+            "a row's interval reaches the sheet",
+            "Every 5 frames",
+            referenceText(everyTwo, ViewerArgs.of(sessionRecord().copy(refUpdateInterval = 5)).refUpdateInterval),
+        )
+    }
+
+    private fun integrityRow(host: ResultViewerActivity) = host.rows()[host.getString(R.string.settings_used_integrity)]
+
+    private fun writeManifest(signer: RecordSigner?) {
+        val settings = SessionRecordSettings(41, STEP, 25, 0, 0, GRID * STEP, GRID * STEP, false)
+        RecordManifestWriter.write(batchDir, settings, signer)
+    }
+
+    @Test
+    fun `a record this phone's key signed reads Verified, with no warning`() {
+        writeManifest(phoneKey)
+        val host = viewer()
+
+        assertEquals("Verified", integrityRow(host))
+        SettingsUsedSheet.show(host)
+        val sheet = ShadowDialog.getLatestDialog()
+        assertEquals(View.GONE, sheet.findViewById<View>(R.id.integrityWarnRow).visibility)
+    }
+
+    @Test
+    fun `an unsigned manifest reads Not signed`() {
+        writeManifest(signer = null)
+
+        assertEquals("Not signed", integrityRow(viewer()))
+    }
+
+    @Test
+    fun `an edited frame reads Changed since analysis and the warning names it`() {
+        writeManifest(phoneKey)
+        File(batchDir, "frame_001.dat").appendBytes(ByteArray(DicResult.BYTES_PER_POINT))
+        val host = viewer()
+
+        assertEquals("Changed since analysis", integrityRow(host))
+        SettingsUsedSheet.show(host)
+        val sheet = ShadowDialog.getLatestDialog()
+        val warn = sheet.findViewById<View>(R.id.integrityWarnRow)
+        assertEquals(View.VISIBLE, warn.visibility)
+        val text = warn.findViewById<TextView>(R.id.tvWarnText).text.toString()
+        assertTrue(text, text.endsWith(": frame_001.dat"))
+    }
+
+    @Test
+    fun `a record another device's key signed reads Signed on another device, never Verified`() {
+        val other = SoftwareRecordSigner()
+        writeManifest(other)
+        val host = viewer()
+
+        assertEquals("Signed on another device", integrityRow(host))
+        SettingsUsedSheet.show(host)
+        val warn = ShadowDialog.getLatestDialog().findViewById<View>(R.id.integrityWarnRow)
+        assertEquals(View.VISIBLE, warn.visibility)
+        val text = warn.findViewById<TextView>(R.id.tvWarnText).text.toString()
+        val short = DeviceKeyThumbprint.of(other.publicKeyDer()).take(8) + "…"
+        assertTrue(text, text.contains("(key $short)") && text.contains("registered devices"))
+    }
+
+    @Test
+    fun `the warning names three changed files and counts the rest`() {
+        val host = viewer()
+        val changed = RecordIntegrity.Changed(listOf("a.dat", "b.dat", "c.dat", "d.dat", "e.dat"), "0123456789abcdef")
+
+        val text = checkNotNull(integrityWarning(host, changed))
+
+        assertTrue(text, text.endsWith(": a.dat, b.dat, c.dat and 2 more files"))
+        assertEquals(null, integrityWarning(host, RecordIntegrity.Unsigned("0123456789abcdef")))
+        assertEquals("Checking…", integrityText(host, null))
     }
 
     private fun sweepArgs(startFrame: Int) = baseArgs().copy(

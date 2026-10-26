@@ -669,8 +669,20 @@ bar for that bin's range and count. On the summary GIF the histogram is omitted.
 Then everything the result was computed with — and on a sweep, the
 line-cut plot. The strain-window row gives both numbers, e.g. "13-point window ·
 VSG 61 px", `(13 − 1) × 5 + 1` (the relation is in [§5](#5-parameters)). A session
-from before the window was counted in points shows "VSG 15 px" alone. A run that stopped early also
+from before the window was counted in points shows "VSG 15 px" alone. **Reference** says which
+image each frame was solved against, in the words of the Advanced → Reference choice
+("First image", "Every frame", "Every 2 frames"). A run that stopped early also
 carries **Stopped early** and **Frames solved** here.
+
+**Record integrity** checks the results against the signed record the analysis wrote
+beside them (ADR-028): **Verified** (every result file is as the analysis wrote it, and
+this phone's own key signed it), **Signed on another device** (the files match a
+signature by some other key: a restore on another phone, an analysis from before a
+reinstall, or a re-signed forgery; this phone cannot tell which, so it is not a pass and
+the key has to be checked against the account's registered devices), **Changed since analysis** (a file was
+edited, removed or added; an amber note names them), **Not signed** (the record has no
+signature, so it cannot rule out an edit) or **Not recorded** (an analysis from before
+records existed). The report's cover prints the same as **Record Fingerprint**.
 
 **Changing settings later never changes an old result.** This sheet is your
 provenance record.
@@ -1311,7 +1323,7 @@ enrol an authenticator app if there is none. A **Delete your account** card says
 where deletion happens: in the app on the phone (Settings → Your data → Delete
 account), because it needs the phone's device signature. It erases every analysis
 and cloud backup and removes the sign-in itself for both apps, Semper and
-Material Testing, which share one account; signing in again with the same address
+Semper Classroom, which share one account; signing in again with the same address
 starts a new, empty account. Point a customer here before answering "am I
 licensed?" by hand.
 
@@ -1324,7 +1336,12 @@ routes below are what it calls, and stay equally usable from a script.
 Semper staff have `/console/operator`, which now does the whole job: issue an
 individual or institution licence, extend a term, revoke a key, unbind a
 licence or a seat from the device it is on, drive any institution's roster,
-and approve accounts. **Roster** on an institution licence's row opens the same
+and approve accounts. The desk is one page in this order: **Licences** (with
+**Issue a licence** in its heading), then **Accounts awaiting approval** beside
+**Release a Demo account's phone**, **Test accounts**, and **Recently
+deleted** last. A row of links at the top jumps to each and stays in view as
+the page scrolls; the number beside **Approvals** is how many accounts are
+waiting. **Roster** on an institution licence's row opens the same
 tools IT has, on the staff routes: the seat-count tiles, add and remove members,
 **Export roster CSV**, **Import members** from a CSV (up to 500 rows, one result
 line per row), and the licence's **Audit log** by date range with **Export CSV**
@@ -1409,14 +1426,16 @@ Clearing the lock **is** the change: it releases the account's old phone, and
 the licence binds to the phone that registers next. Only the account's
 registered phone can take the lock, so a phone refused at sign-in cannot.
 
-**Semper and Material Testing each hold their own phone** (ADR-010). One
+**Semper and Semper Classroom each hold their own phone** (ADR-010). One
 person can use both apps on one phone, or each on a different phone, on one
 licence. Staff and IT **New device**, and the staff phone release below,
 move both apps at once. The holder moves one app at a time: **Use Semper on
-a different device** or **Use Material Testing on a different device** on
+a different device** or **Use Semper Classroom on a different device** on
 `/account`, or the same from inside that app, each with its own 30-day
-cooldown. Seats and the operator's user list show a Material Testing device
-as "Material Testing …" beside Semper's.
+cooldown. Seats and the operator's user list show a Semper Classroom device
+as "Semper Classroom …" beside Semper's. Semper Classroom was Material Testing
+until 2026-10 (ADR-030): a Material Testing build still installed is the same
+app to the account, and shares its phone and cooldown.
 
 **Demo on the phone they use.** An account whose lock was taken by another
 device before 2026-09-27 reads Demo on the phone it is registered on. One
@@ -1510,7 +1529,8 @@ expired accounts is a Cloud Scheduler job
 ([DEPLOY_CHECKLIST_2026-10.md](ops/DEPLOY_CHECKLIST_2026-10.md)).
 
 **Creating one** (Semper staff, the fresh step-up a licence revoke asks for):
-the operator console's test-account section, or `POST /v1/admin/test-accounts`
+**Create a test account** on the operator console's **Test accounts** card (the
+form is folded under that heading until opened), or `POST /v1/admin/test-accounts`
 with `{"email", "purpose": "qc" or "ci", "days", "maxDevices", "note"}`
 ([ADMIN_API.md](backend/ADMIN_API.md)).
 
@@ -1521,7 +1541,7 @@ with `{"email", "purpose": "qc" or "ci", "days", "maxDevices", "note"}`
 - `days` is 1 to 90 (30 when left out for QC). A CI account may leave it out
   and then never ends; give it a date anyway if it will not be needed for long.
 - `maxDevices` is how many phones per app may be signed in at once, 1 to 10
-  (default 3). Semper and Material Testing each count their own.
+  (default 3). Semper and Semper Classroom each count their own.
 - `note` says what it is for (who has it, which bench). Never put the password
   in it.
 
@@ -1560,13 +1580,16 @@ password was shared too widely.
 
 **All its phones are taken.** A phone signing in beyond `maxDevices` is refused
 as "already linked" (a CI account instead gives up its oldest phone). To free a
-place, open the account's row on the console's **Test accounts** card and press
-**Release** beside the phone to give up (fresh step-up), or call
+place, press **Show** on the console's **Test accounts** card: each active phone
+is listed on its own line in the account's **Phones** cell (model and app, its
+device id under them). Press **Release** on the line of the phone to give up
+(fresh step-up), or call
 `POST /v1/admin/test-accounts/{uid}/devices/{deviceId}/release`. The place is
 free at once, with no hold; the account, its other phones and its analyses are
 untouched, audited `test_account_device_released`. The released phone stops
-working with the account and can never register for it again (it is refused as
-"already linked"); it may still be signed in to a different account. To bring
+working with the account and can never register for it again (the app says "Staff
+released this phone from this account"; builds before that one say "already linked"); it
+may still be signed in to a different account. To bring
 that phone back to the same login, end the account and create a new one.
 
 **Ending it.** `DELETE /v1/admin/test-accounts/{uid}` ends it now: the account

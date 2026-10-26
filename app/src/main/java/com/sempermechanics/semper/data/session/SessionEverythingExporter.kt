@@ -201,6 +201,8 @@ object SessionEverythingExporter {
         session.dir.listFiles { f -> f.extension == "dat" }?.forEach { f ->
             Zips.putFileIfPresent(zipOut, "dat/${f.name}", f)
         }
+        // Their signed record (ADR-028), where a backup's Session.zip keeps it.
+        Zips.putFileIfPresent(zipOut, "dat/${SessionLayout.MANIFEST}", session.recordManifest)
     }
 
     private const val MASTER_PREFIX = "Semper_sessions_export_"

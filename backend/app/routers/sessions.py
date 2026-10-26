@@ -6,7 +6,7 @@ import requests
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
-from .. import audit, drive, errors, repo, statuses
+from .. import apps, audit, drive, errors, repo, statuses
 from .. import rate_limit
 from .. import session_provision
 from ..deps import (
@@ -67,9 +67,9 @@ def list_sessions(
     this, so a session deleted in the cloud stops showing as 'synced'.
 
     One app's analyses (ADR-014): the asking app's, by `X-App-Id`, unless
-    `?app=semper|materialtesting` names one or `?app=all` asks for the whole
-    account (the console). Each entry carries its `app`. Semper and Material
-    Testing share accounts, and each restoring the other's backups dropped
+    `?app=semper|semperclassroom` (or the old `materialtesting`) names one or
+    `?app=all` asks for the whole account (the console). Each entry carries its
+    `app`, by its name today. Semper and Semper Classroom share accounts, and each restoring the other's backups dropped
     what it did not understand.
 
     Cursor-paginated (`page_size` 1..100, `page_token`, `nextPageToken`). Quota
@@ -193,7 +193,7 @@ def list_session_files(
     """
     rate_limit.enforce(rate_limit.listing_bucket, user["uid"])
     session = _owned_session(sid, user)
-    if repo.session_app(session) != app:
+    if not apps.same_app(repo.session_app(session), app):
         raise HTTPException(404, errors.SESSION_NOT_FOUND)
     page_size = clamp_page_size(page_size, 1000)
     files, next_token = repo.list_session_files(
@@ -222,7 +222,7 @@ def replace_session_metadata(sid: SessionId, payload: dict = Body(...), ctx=Depe
     """Replace a backed-up analysis's metadata.json with the app's current one.
 
     Every other file in a session is written once. This one changes when the
-    user edits the analysis after its backup (Material Testing's bending
+    user edits the analysis after its backup (Semper Classroom's bending
     deflection correction, its TD-150), and a restore reads the correction back from it, so without a
     replace the cloud copy restores the old deflection and E (ADR-013).
 

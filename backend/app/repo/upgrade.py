@@ -105,7 +105,7 @@ def convert_to_institution(
         # app has to be signed in again on the phone it was already on.
         err = claim_seat(new_id, holder_uid, address, lic.get("deviceIdLock") or "",
                          _member_patch(new_id, get_license(new_id)),
-                         carried_locks={a: lic.get(apps.field("deviceIdLock", a)) or ""
+                         carried_locks={a: apps.read_field(lic, "deviceIdLock", a) or ""
                                         for a in apps.ALL})
         if err:
             _delete_doc(new_ref)

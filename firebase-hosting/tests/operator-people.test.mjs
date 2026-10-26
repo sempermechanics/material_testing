@@ -36,9 +36,15 @@ const HISTORY = `GET /v1/admin/licenses/${IND.id}/device-history?limit=30`;
 
 test("a device history line names what was left, signed out and bound, per app", async () => {
   await openDesk({ routes: { [HISTORY]: () => json(200, { events: [
+    // `apps.spread` records Semper Classroom's half under both names.
     { ts: "2026-10-07T11:21Z", action: "clear", uid: "staff", detail: {
-      previousDeviceId: "dev-1", releasedDeviceId: "dev-9", previousDeviceIdMaterialTesting: "mt-1",
+      previousDeviceId: "dev-1", releasedDeviceId: "dev-9", previousDeviceIdSemperClassroom: "sc-1",
+      previousDeviceIdMaterialTesting: "sc-1",
     } },
+    // A row from before ADR-030 holds only the old name, and keeps it.
+    { ts: "2026-10-06T09:00Z", action: "clear", uid: "staff", detail: { previousDeviceIdMaterialTesting: "mt-1" } },
+    // The new name alone is not read (`apps.read_field`).
+    { ts: "2026-10-05T09:00Z", action: "clear", uid: "staff", detail: { previousDeviceIdSemperClassroom: "new-1" } },
     // The registered phone is the lock's own: said once, as "left".
     { action: "clear", detail: { previousDeviceId: "dev-2", releasedDeviceId: "dev-2" } },
     { ts: "2026-10-07T11:25Z", action: "bind", uid: "u1" },
@@ -46,7 +52,9 @@ test("a device history line names what was left, signed out and bound, per app",
   await click(rowButton("history", IND.id));
   assert.deepEqual(alerts, [
     "Device history for SEMP-IND1\n\n" +
-    "2026-10-07T11:21Z  clear  by staff  left dev-1  signed out dev-9  left mt-1 (Material Testing)\n" +
+    "2026-10-07T11:21Z  clear  by staff  left dev-1  signed out dev-9  left sc-1 (Semper Classroom)\n" +
+    "2026-10-06T09:00Z  clear  by staff  left mt-1 (Semper Classroom)\n" +
+    "2026-10-05T09:00Z  clear  by staff\n" +
     "?  clear  by —  left dev-2\n" +
     "2026-10-07T11:25Z  bind  by u1",
   ]);
@@ -68,21 +76,48 @@ test("no moves recorded says so; a history that cannot be read is reported", asy
 
 const userRows = () => tableRows("userRows");
 const WAITING = [
+  // Bound by this backend: Semper Classroom's phone under both names.
   { uid: "u1", email: "a@lab.org", displayName: "Ann", activeDeviceId: "device-abcdef-123",
-    activeDeviceIdMaterialTesting: "mt-device-xyz-9" },
+    activeDeviceIdSemperClassroom: "sc-device-xyz-9", activeDeviceIdMaterialTesting: "sc-device-xyz-9" },
   { uid: "u2" },
 ];
 
 test("accounts waiting for approval are listed with their phones, or 'Nobody waiting.'", async () => {
   await openDesk({ users: WAITING });
   assert.deepEqual(userRows(), [
-    ["a@lab.org", "Ann", "device-abc…; Material Testing mt-device-…", "Approve"],
+    ["a@lab.org", "Ann", "device-abc…; Semper Classroom sc-device-…", "Approve"],
     ["u2", "—", "—", "Approve"],
   ]);
 
   reset();
   await openDesk({ users: [] });
   assert.deepEqual(userRows(), [["Nobody waiting."]]);
+});
+
+test("an account not yet migrated shows its Semper Classroom phone from the old field", async () => {
+  // ADR-030: until TD-330, an account may hold only activeDeviceIdMaterialTesting.
+  await openDesk({ users: [{ uid: "u3", email: "c@lab.org", activeDeviceIdMaterialTesting: "mt-device-xyz-9" }] });
+  assert.deepEqual(userRows(), [["c@lab.org", "—", "Semper Classroom mt-device-…", "Approve"]]);
+
+  // The new field alone is stale (H1): a backend from before the rename
+  // cleared the old one and left it.
+  reset();
+  await openDesk({ users: [{ uid: "u4", email: "d@lab.org", activeDeviceIdSemperClassroom: "stale-xyz-99" }] });
+  assert.deepEqual(userRows(), [["d@lab.org", "—", "—", "Approve"]]);
+});
+
+test("the desk's index counts who is waiting, and shows no count when nobody is", async () => {
+  const badge = () => [$("pendingCount").textContent, $("pendingCount").hidden];
+  await openDesk({ users: WAITING });
+  assert.deepEqual(badge(), ["2", false]);
+
+  reset();
+  await openDesk({ routes: { [PENDING]: () => json(200, { users: WAITING, page: { hasMore: true } }) } });
+  assert.deepEqual(badge(), ["2+", false], "a read that stopped at its page says there are more");
+
+  reset();
+  await openDesk({ users: [] });
+  assert.deepEqual(badge(), ["", true]);
 });
 
 test("a pending list that cannot be read says so in the table; Reload asks again", async () => {
@@ -153,17 +188,26 @@ test("a release names each phone it freed, per app, and clears the box", async (
   await release(" pat@lab.org ");
   assert.equal($("releasePhone").disabled, true);
   assert.deepEqual(bodyOf(net, "POST", "/v1/admin/device-releases"), { email: "pat@lab.org" });
-  answer.resolve(json(200, { email: "pat@lab.org", releasedDeviceId: "dev-1", releasedDeviceIdMaterialTesting: "mt-1" }));
+  answer.resolve(json(200, { email: "pat@lab.org", releasedDeviceId: "dev-1", releasedDeviceIdSemperClassroom: "sc-1",
+    releasedDeviceIdMaterialTesting: "sc-1" }));
   await settle();
-  assert.deepEqual(status(), ["Released dev-1 and mt-1 (Material Testing) for pat@lab.org; the new phone can sign in.", "muted"]);
+  assert.deepEqual(status(), ["Released dev-1 and sc-1 (Semper Classroom) for pat@lab.org; the new phone can sign in.", "muted"]);
   assert.equal($("releaseEmail").value, "");
   assert.equal($("releasePhone").disabled, false);
 });
 
-test("a release with only a Material Testing phone, or none, says which", async () => {
+test("a release with only a Semper Classroom phone, or none, says which", async () => {
+  // `apps.spread` answers Semper Classroom's phone under both names.
+  await openDesk({ routes: { [RELEASE]: () => json(200, { email: "pat@lab.org", releasedDeviceId: "",
+    releasedDeviceIdSemperClassroom: "sc-1", releasedDeviceIdMaterialTesting: "sc-1" }) } });
+  await release("pat@lab.org");
+  assert.deepEqual(status(), ["Released sc-1 (Semper Classroom) for pat@lab.org; the new phone can sign in.", "muted"]);
+
+  // A backend from before ADR-030 answers only the old name.
+  reset();
   await openDesk({ routes: { [RELEASE]: () => json(200, { email: "pat@lab.org", releasedDeviceIdMaterialTesting: "mt-1" }) } });
   await release("pat@lab.org");
-  assert.deepEqual(status(), ["Released mt-1 (Material Testing) for pat@lab.org; the new phone can sign in.", "muted"]);
+  assert.deepEqual(status(), ["Released mt-1 (Semper Classroom) for pat@lab.org; the new phone can sign in.", "muted"]);
 
   reset();
   await openDesk({ routes: { [RELEASE]: () => json(200, {}) } });

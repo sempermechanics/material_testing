@@ -68,7 +68,7 @@ Pick the home by how long the work must live and who must see its outcome.
   ([ADR-015](ADR-015-package-layout.md)).
 
 **The wizard is the exception, on purpose.** `StaticAnalysisActivity`
-absorbs every configuration change (`app/src/main/AndroidManifest.xml:154-158`),
+absorbs every configuration change (`app/src/main/AndroidManifest.xml:207-209`),
 so rotation never recreates it. Its batch and sweep runs sit on
 `viewModelScope` (`ui/analysis/wizard/RunChannels.kt:131`, `:198`), but
 `onDestroy` raises the run's cancel flag on every destroy
@@ -183,7 +183,7 @@ review, and two screens broke it:
   row's backup on the network (`CloudSync.resolveCloudIdFor`,
   `data/cloud/CloudSync.kt:312-324`) and then enqueues the restores
   (`RestoreStart.startAll`, `data/cloud/restore/RestoreStart.kt:34`). Home has no
-  `configChanges` (`app/src/main/AndroidManifest.xml:141`). A rotation during the
+  `configChanges` (`app/src/main/AndroidManifest.xml:209`). A rotation during the
   lookup cancels it after the selection is already gone, so nothing is queued and
   the user is not told.
 - **Sign-in.** `AuthActivity.runAuth` (`ui/auth/AuthActivity.kt:299-304`), the

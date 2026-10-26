@@ -64,7 +64,7 @@ repository before that commit existed; this repo only proves the pinned version
 still links and behaves. If the bump changes numeric results, declare it against
 the tiers in
 [docs/engine/ENGINE_APP_CONTRACT.md](docs/engine/ENGINE_APP_CONTRACT.md).
-material_testing must re-run its real-data checks after it syncs a bump
+material_testing (the Semper Classroom fork) must re-run its real-data checks after it syncs a bump
 ([docs/ops/FORK_SYNC.md](docs/ops/FORK_SYNC.md)).
 
 ### Local disk hygiene

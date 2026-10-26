@@ -205,6 +205,7 @@ class EntitlementVerifierTest {
     @Test
     fun `the short app id mirrors the backend's map`() {
         assertEquals("semper", EntitlementApp.shortId("com.sempermechanics.semper"))
+        assertEquals("semperclassroom", EntitlementApp.shortId("com.sempermechanics.semperclassroom"))
         assertEquals("materialtesting", EntitlementApp.shortId("com.sempermechanics.materialtesting"))
         assertEquals("semper", EntitlementApp.shortId("com.indicvision.semper"))
         assertEquals("com.example.other", EntitlementApp.shortId("com.example.other"))

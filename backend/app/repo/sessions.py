@@ -301,13 +301,15 @@ def set_file_upload_urls(opened: list[tuple[str, str]]) -> None:
 
 def session_app(session: dict | None) -> str:
     """The app a session was backed up from (ADR-014): `apps.SEMPER` or
-    `apps.MATERIAL_TESTING`, the vocabulary of `devices/{id}.app`.
+    `apps.SEMPER_CLASSROOM`, the vocabulary of `devices/{id}.app`, by its
+    name today (`apps.canonical`): a session tagged `materialtesting` before
+    the rename (ADR-030) is Semper Classroom's.
 
     A session written before the tag has no `app` field and reads as Semper's,
     as a request with no `X-App-Id` does; `scripts/tag_session_apps.py` stamps
-    the Material Testing ones before this is relied on.
+    the Semper Classroom ones before this is relied on.
     """
-    return (session or {}).get("app") or apps.SEMPER
+    return apps.canonical((session or {}).get("app"))
 
 
 #: The fields `_listed_session` reads, and all a listing fetches of a session
@@ -370,7 +372,7 @@ def list_user_sessions(
     scan = _scan(col, query, page_token, chunk=limit + 1)
     for d in scan:
         s = d.to_dict()
-        if session_app(s) != app:
+        if not apps.same_app(session_app(s), app):
             continue
         out.append(_listed_session(d.id, s))
         if len(out) == limit:
@@ -532,7 +534,7 @@ def create_session(sid: str, user: dict, device: dict, body: SessionCreate,
     """
     doc = {
         "uid": user["uid"],
-        "app": app,
+        "app": apps.stored_name(app),
         "deviceId": device.get("deviceId"),
         "specimen": body.specimen,
         "name": body.name.strip(),

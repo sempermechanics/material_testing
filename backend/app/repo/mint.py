@@ -66,8 +66,8 @@ def _license_public(license_id: str, data: dict) -> dict:
         "plan": legacy_plan(_license_mode(data)),
         "status": data.get("status") or "unused",
         "emailLock": data.get("emailLock") or "",
-        **{apps.field("deviceIdLock", app): data.get(apps.field("deviceIdLock", app)) or ""
-           for app in apps.ALL},
+        **apps.spread("deviceIdLock", {app: apps.read_field(data, "deviceIdLock", app)
+                                       for app in apps.ALL}),
         "domainLock": data.get("domainLock") or "",
         "adminEmails": list(data.get("adminEmails") or []),
         "maxSeats": data.get("maxSeats"),
