@@ -31,7 +31,10 @@ import javax.crypto.SecretKey
  *
  * Storage: one string in [PrefFiles.Entitlement], sealed with HMAC-SHA256
  * under a non-exportable Keystore key ([HMAC_ALIAS]), written with
- * `commit()` so it is on disk before anything relies on it. The key doubles
+ * `commit()` so it is on disk before anything relies on it; only the clock's
+ * once-a-minute write over a record already in place uses `apply()`, so a
+ * gate check on the main thread does not wait on the disk (readiness TE1-006).
+ * SemperApp reads it once off the main thread at start. The key doubles
  * as a marker: it exists only while a token is stored, so a deleted record
  * with the key still present reads as tampered, unless the first-seal mark
  * ([PrefFiles.Entitlement.SEALING]) says the process died before the record
@@ -101,7 +104,10 @@ object EntitlementStore {
             val next = StoredEntitlement.Sealed(stored.record.copy(clock = clock))
             memory = next
             val urgent = clock.rolledBack != stored.record.clock.rolledBack
-            if (urgent || now.elapsedMs - lastPersistElapsed >= PERSIST_EVERY_MS) save(appContext, next.record, now)
+            // A rollback is written durably at once; the periodic clock write is the quick one.
+            if (urgent || now.elapsedMs - lastPersistElapsed >= PERSIST_EVERY_MS) {
+                save(appContext, next.record, now, quick = !urgent)
+            }
         }
         if (status is TokenStatus.Lapsed) Timber.d("Entitlement token lapsed: %s", status.why)
         Reading(status, clock?.let { EntitlementClock.effectiveNowMs(it, now) } ?: now.wallMs)
@@ -151,8 +157,16 @@ object EntitlementStore {
             if (it == StoredEntitlement.Tampered) Timber.w("Entitlement record failed its integrity check")
         }
 
-    private fun save(context: Context, record: SealedEntitlement.Record, now: DeviceTime) {
-        runCatching { SealedRecordStore.save(PhoneDisk(context), record) }
+    /**
+     * Seals [record] to disk: durably (`commit()`), or when [quick] for the
+     * periodic clock write, over the record already in place without waiting
+     * for the disk ([SealedRecordStore.update], readiness TE1-006).
+     */
+    private fun save(context: Context, record: SealedEntitlement.Record, now: DeviceTime, quick: Boolean = false) {
+        runCatching {
+            val disk = PhoneDisk(context)
+            if (quick) true.also { SealedRecordStore.update(disk, record) } else SealedRecordStore.save(disk, record)
+        }
             .onSuccess { written ->
                 if (written) lastPersistElapsed = now.elapsedMs else Timber.w("Entitlement record not written")
             }
@@ -227,5 +241,9 @@ object EntitlementStore {
             .put(PrefFiles.Entitlement.SEALED, record)
             .remove(PrefFiles.Entitlement.SEALING)
             .commit()
+
+        override fun update(record: String) {
+            prefs.edit().put(PrefFiles.Entitlement.SEALED, record).apply()
+        }
     }
 }

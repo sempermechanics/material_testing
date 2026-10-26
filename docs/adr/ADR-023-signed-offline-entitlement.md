@@ -99,7 +99,10 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
      (`ROLLBACK_TOLERANCE_MS`, `:89`) ends grace until the next server time;
    - the token and clock state are stored together, sealed with an HMAC under a
      Keystore key (`SealedEntitlement`, `EntitlementStore`), and every write is
-     `commit()`, on disk before anything relies on it. The write order is
+     `commit()`, on disk before anything relies on it, except the clock's
+     once-a-minute write over a record already beside its key, which is
+     `apply()` so a main-thread gate check does not wait on the disk
+     (`SealedRecordStore.update`, readiness TE1-006). The write order is
      `SealedRecordStore`'s (`data/account/entitlement/SealedRecordStore.kt`): a
      first seal marks itself, makes the key, then writes the record and clears
      the mark in one commit; a clear deletes the key before the record. What

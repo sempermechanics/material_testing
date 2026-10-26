@@ -72,6 +72,15 @@ class SealedRecordStoreTest {
             mark = false
             return true
         }
+
+        /** Writes through [EntitlementDisk.update], the quick path, counted. */
+        var updates = 0
+
+        override fun update(record: String) {
+            step("update")
+            stored = record
+            updates++
+        }
     }
 
     private val record = SealedEntitlement.Record(
@@ -130,6 +139,30 @@ class SealedRecordStoreTest {
         assertFalse(SealedRecordStore.save(refusing, record))
 
         assertEquals(StoredEntitlement.Nothing, SealedRecordStore.load(fake))
+    }
+
+    @Test
+    fun `a clock update on a sealed record is a quick write, not a durable commit`() {
+        // readiness TE1-006: the once-a-minute clock persist ran commit() on
+        // the main thread. The record and key already exist, so nothing a
+        // crash could split is at stake.
+        val disk = saved()
+        val later = record.copy(clock = record.clock.copy(lastElapsedMs = record.clock.lastElapsedMs + 60_000L))
+
+        SealedRecordStore.update(disk, later)
+
+        assertEquals(1, disk.updates)
+        assertEquals(StoredEntitlement.Sealed(later), SealedRecordStore.load(disk))
+    }
+
+    @Test
+    fun `an update with no sealed record yet is a durable first seal`() {
+        val disk = FakeDisk()
+
+        SealedRecordStore.update(disk, record)
+
+        assertEquals(0, disk.updates)
+        assertEquals(StoredEntitlement.Sealed(record), SealedRecordStore.load(disk))
     }
 
     @Test
