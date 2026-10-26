@@ -12,6 +12,47 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-10-26 — Material Testing becomes Semper Classroom: backend and console (#484)
+
+The backend and Hosting from `main` at `46ac8b5e` went live, staging first. That commit
+carries #484 ([ADR-030](../adr/ADR-030-semper-classroom-app-identity.md)):
+- The backend knows `com.sempermechanics.semperclassroom` as the app `semperclassroom`. It
+  still stores and reads the old `materialtesting` tag and `*MaterialTesting` fields, and
+  dual-writes the new ones, until TD-330.
+- Each build gets the entitlement claim it pins.
+- `com.sempermechanics.materialtesting` is retired from device registration (410
+  `app_retired`); its other calls are served as before.
+- The consoles say Semper Classroom.
+- `assetlinks.json` lists the new package.
+
+No gateway change, no Firestore index, no app release. `rename_classroom_app.py` has not run.
+
+- **Staging.** Run 40299991596: `semper-api-staging-40299991596-1` at 100 % after `/readyz`
+  passed on the candidate. The gateway dry run showed only the `?app=` description change in
+  `openapi.yaml`.
+- **Production.** Run 40300681201, approved by the required reviewer (TD-228):
+  `semper-api-40300681201-1` at 100 % after `/readyz` passed on the candidate, with
+  `semper-api-40063322039-1` pinned as `rollback-prev`. The gateway job's dry run showed the
+  same description-only diff and left `v202610230501-112` serving.
+- **Hosting.**
+  - The first deploy came from a plain `main` checkout. It therefore published #474's
+    Privacy and Terms text, which counsel has not cleared (TD-277).
+  - It was redeployed the same day from a worktree of `46ac8b5e` with both legal
+    `index.html` files taken from `b940cc29`, per [the checklist](DEPLOY_CHECKLIST_2026-10.md)
+    §4. The live `/privacy` and `/terms` were then compared with `b940cc29` and match.
+  - `check_live_console.py` passed after both deploys.
+  - After the redeploy: the live `assetlinks.json` lists `com.sempermechanics.semperclassroom`,
+    and `/account` shows "Use Semper Classroom on a different device".
+- **Not checked.** The live access log and the 5xx rate after the deploy: `gcloud` needed
+  a fresh sign-in.
+- **Owed.**
+  - The Firebase Android app for `com.sempermechanics.semperclassroom`, with App Check.
+  - The repo variables `MIN_SUPPORTED_/RECOMMENDED_VERSION_CODE_SEMPER_CLASSROOM`; the gate
+    falls back to the `*_MATERIAL_TESTING` values until they are set.
+  - The fork's release.
+  - `rename_classroom_app.py`: a dry run, then `--apply` once a rollback past this release is
+    ruled out.
+
 ## 2026-10-24 — Backend: a staff-released phone is told so (#482)
 
 The backend from `main` at `187f4870` went live, staging first. It carries #482: a QC phone
