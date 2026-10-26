@@ -4,9 +4,9 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
-import android.graphics.Typeface
+import android.text.TextPaint
+import android.text.style.TextAppearanceSpan
 import android.util.AttributeSet
-import android.util.TypedValue
 import android.view.MotionEvent
 import android.view.View
 import androidx.core.content.ContextCompat
@@ -31,17 +31,16 @@ class FieldHistogramView @JvmOverloads constructor(
     private var unit: String = ""
     private var selectedBin: Int = -1
 
-    private val labelPx =
-        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, LABEL_SP, resources.displayMetrics)
-
     private val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val axisPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = dp(1f)
     }
-    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textSize = labelPx
-        typeface = Typeface.MONOSPACE
+
+    // The sheet's caption (TextAppearance.Semper.Caption), not monospace (readiness AE1V-025);
+    // its colour is the plot ink, set in onDraw.
+    private val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).also {
+        TextAppearanceSpan(context, R.style.TextAppearance_Semper_Caption).updateMeasureState(it)
     }
     private val barRect = RectF()
 
@@ -153,7 +152,6 @@ class FieldHistogramView @JvmOverloads constructor(
         private const val PAD_BOTTOM_DP = 20f
         private const val TICK_GAP_DP = 4f
         private const val TICK_BASELINE = 0.33f
-        private const val LABEL_SP = 11f
 
         /** Just short of the right edge, so a touch there selects the last bin. */
         private const val LAST_BIN_EDGE = 0.9999f
