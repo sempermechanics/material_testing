@@ -497,10 +497,12 @@ kover {
             // unrelated PRs while a real drop does. Every PR that adds tests
             // re-measures (`koverXmlReport`, the totals in
             // build/reports/kover/report.xml) and raises both to measured − 2;
-            // never lower them. Semper Classroom (then material_testing), 2026-10-14 (the sync of
-            // semperdic-app 8ba7081): lines 73.93 %, branches 59.40 %, so 71 / 57
-            // here; the lab code is less covered than Semper's, whose floors
-            // are 75 / 57. 2026-10-10: lines 77.12 %, branches 59.99 %.
+            // never lower them. Semper Classroom, 2026-10-26 (the sync of
+            // semperdic-app 25334af1 and the rename): lines 77.10 %, branches
+            // 61.70 %, so 75 / 59 here; the lab code is less covered than
+            // Semper's, whose floors are 78 / 60. 2026-10-14 (as material_testing,
+            // the sync of 8ba7081): lines 73.93 %, branches 59.40 %.
+            // 2026-10-10: lines 77.12 %, branches 59.99 %.
             // 2026-10-09: lines 76.38 %, branches 59.15 %.
             // 2026-10-08: lines 74.50 %, branches 56.41 %, the
             // first figure with the screens counted (76.84 / 60.80 % on the old,
@@ -508,10 +510,10 @@ kover {
             // measure, not lost coverage). The line floor once sat at 49 while
             // coverage climbed past 75, so a 26-point drop would have passed.
             rule("Line coverage") {
-                minBound(71)
+                minBound(75)
             }
             rule("Branch coverage") {
-                minBound(57, kotlinx.kover.gradle.plugin.dsl.CoverageUnit.BRANCH)
+                minBound(59, kotlinx.kover.gradle.plugin.dsl.CoverageUnit.BRANCH)
             }
         }
     }
