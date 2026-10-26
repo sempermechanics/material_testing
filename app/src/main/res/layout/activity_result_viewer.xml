@@ -293,11 +293,15 @@
             android:paddingTop="12dp"
             android:paddingBottom="16dp">
 
+            <!-- forceDarkAllowed=false on both frame buttons: their night tokens are
+                 already dark-tuned, as the top bar's are; darkened again, the rim
+                 vanished on the dark page (readiness AE1V-021). -->
             <ImageButton
                 android:id="@+id/btnPrevFrame"
                 android:layout_width="56dp"
                 android:layout_height="56dp"
                 android:background="@drawable/bg_chrome_ghost"
+                android:forceDarkAllowed="false"
                 android:contentDescription="@string/prev_frame"
                 android:padding="12dp"
                 android:scaleType="fitCenter"
@@ -376,6 +380,7 @@
                 android:layout_width="56dp"
                 android:layout_height="56dp"
                 android:background="@drawable/bg_chrome_ghost"
+                android:forceDarkAllowed="false"
                 android:contentDescription="@string/next_frame"
                 android:padding="12dp"
                 android:scaleType="fitCenter"

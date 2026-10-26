@@ -166,6 +166,31 @@ class ForceDarkContrastTest {
         assertEquals(emptyList<String>(), allChecks())
     }
 
+    /**
+     * The viewer's previous / next pucks (bg_chrome_ghost) sit on the page, viewerRoot's
+     * surface_muted, which force dark darkens. Their night tokens are already tuned for
+     * a dark page (a white rim), so the buttons opt out of force dark as the top bar's
+     * do; darkened a second time the rim went dark too, about 1.0:1 (readiness AE1V-021).
+     */
+    @Test
+    @Config(qualifiers = "night")
+    fun `the viewer's frame buttons keep a visible ring at night`() {
+        check(night)
+        val xml = layouts.resolve("activity_result_viewer.xml").readText()
+        val page = background(c(R.color.surface_muted))
+        for (id in listOf("btnPrevFrame", "btnNextFrame")) {
+            val tag = requireNotNull(Regex("""<ImageButton\b[^>]*android:id="@\+id/$id"[^>]*>""").find(xml)) {
+                "$id is not an ImageButton in activity_result_viewer"
+            }.value
+            check("android:background=\"@drawable/bg_chrome_ghost\"" in tag) { "$id no longer draws bg_chrome_ghost" }
+            val optedOut = "android:forceDarkAllowed=\"false\"" in tag
+            val drawn = { color: Int -> if (optedOut) color else background(color) }
+            val puck = stack(page, drawn(c(R.color.viewer_glass_fill)))
+            boundary("$id ring", stack(puck, drawn(c(R.color.viewer_glass_stroke))), page)
+        }
+        assertEquals(emptyList<String>(), failures)
+    }
+
     private companion object {
         const val NON_TEXT = 3.0
         val INPUT_TAG = Regex("""<com\.google\.android\.material\.textfield\.TextInputLayout\b[^>]*>""")
