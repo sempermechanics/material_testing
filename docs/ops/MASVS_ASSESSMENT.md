@@ -19,7 +19,7 @@ repository root. Evidence is at the branch `claude/new-session-jhfhj9` as of
 | Control | Status | Evidence |
 |---|---|---|
 | STORAGE-1: sensitive data stored securely | Met | The device signing key is a non-exportable P-256 key in the Android Keystore (`data/account/DeviceKeys.kt:75-86`). The entitlement token and its clock state are sealed with an HMAC under a Keystore key (`data/account/entitlement/SealedEntitlement.kt:37-63`, `data/account/entitlement/EntitlementStore.kt:186-226`; write order in `SealedRecordStore.kt`). Firebase Auth holds its own session. Analyses are app-private files (`SessionStore`, `SessionPaths`) |
-| STORAGE-2: no leakage of sensitive data | Met | Backup and device transfer exclude shared preferences (session, device id) and the session files (`app/src/main/res/xml/data_extraction_rules.xml`, `app/src/main/res/xml/backup_rules.xml`). Breadcrumbs and non-fatals reach Crashlytics only with diagnostics consent (`diagnostics/CrashReportingTree.kt:23-41`). Shared files go through a non-exported `FileProvider` with per-grant URIs (`app/src/main/AndroidManifest.xml:163-167`) |
+| STORAGE-2: no leakage of sensitive data | Met | Backup and device transfer exclude shared preferences (session, device id), the session files and the wizard draft (`app/src/main/res/xml/data_extraction_rules.xml`, `app/src/main/res/xml/backup_rules.xml`). Breadcrumbs and non-fatals reach Crashlytics only with diagnostics consent (`diagnostics/CrashReportingTree.kt:23-41`). Shared files go through a non-exported `FileProvider` with per-grant URIs (`app/src/main/AndroidManifest.xml:163-167`) |
 
 ## MASVS-CRYPTO
 
