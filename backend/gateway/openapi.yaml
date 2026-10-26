@@ -278,7 +278,7 @@ paths:
           in: query
           required: false
           type: string
-          description: semper, materialtesting or all.
+          description: semper, semperclassroom (or the old materialtesting) or all.
       responses:
         '200': { description: OK }
         '400': { description: unknown_app }

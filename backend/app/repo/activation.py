@@ -45,8 +45,7 @@ def _activate_individual(user: dict, uid: str, email: str, device_id: str, lic: 
         raise Refusal(errors.LICENSE_REVOKED)
     if not _emails_match(lic.get("emailLock"), email):
         raise Refusal(errors.LICENSE_EMAIL_MISMATCH)
-    lock_field = apps.field("deviceIdLock", app)
-    locked = lic.get(lock_field) or ""
+    locked = apps.read_field(lic, "deviceIdLock", app) or ""
     if not locked and device_id and _may_bind(user, device_id, app):
         # Bind-on-first-use, the same rule the request path applies. A licence
         # minted against an address alone has no lock, so a key typed here for
@@ -58,7 +57,7 @@ def _activate_individual(user: dict, uid: str, email: str, device_id: str, lic: 
         # device that may not take the lock (`_may_bind`) is answered as a
         # mismatch, as the request path leaves it unbound.
         bind_device_lock(ref, device_id, app)
-        locked = (_get(ref).to_dict() or {}).get(lock_field) or ""
+        locked = apps.read_field(_get(ref).to_dict(), "deviceIdLock", app) or ""
     # No device (a claim code from the web account page, `device_id` ""):
     # nothing to compare and nothing bound. The account takes the licence and
     # the lock stays as it is, to be checked or bound on the request path,

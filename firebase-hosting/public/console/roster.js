@@ -11,7 +11,7 @@
 import { api } from "./api.js";
 import { confirmInPage } from "./dialogs.js";
 import { explain } from "./messages.js";
-import { esc, seatCells, inviteCells } from "./util.js";
+import { esc, seatCells, inviteCells, classroomField } from "./util.js";
 
 /**
  * The roster of the licence at `base`: its summary, every seat and the
@@ -44,7 +44,7 @@ export function seatRow(seat) {
   return `
     <tr>${seatCells(seat)}
       <td class="actions">
-        ${seat.deviceIdLock || seat.deviceIdLockMaterialTesting
+        ${seat.deviceIdLock || classroomField(seat, "deviceIdLock")
           ? `<button class="secondary" data-act="clear" data-uid="${esc(seat.uid)}">New device</button>`
           : ""}
         ${seat.status === "active"

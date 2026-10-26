@@ -30,6 +30,10 @@ NONCE_INVALID_OR_REPLAYED = "nonce_invalid_or_replayed"
 # --- device binding --------------------------------------------------------
 DEVICE_CONFLICT = "device_conflict"
 DEVICE_IN_USE = "device_in_use"
+#: 409 from `POST /v1/devices/register`: staff released this phone from this
+#: test account (TD-314, ADR-027), and it may not take its place back. Builds
+#: before it read any 409 there as `device_conflict`.
+DEVICE_RELEASED = "device_released"
 DEVICE_NOT_ACTIVE = "device_not_active"
 #: 404 from a staff release of one test-account phone (ADR-027): the device
 #: is not an ACTIVE device of that account.
@@ -279,6 +283,7 @@ CLIENT_BRANCHED = frozenset(
         NOT_APPROVED,
         DEVICE_CONFLICT,
         DEVICE_IN_USE,
+        DEVICE_RELEASED,
         DEVICE_NOT_ACTIVE,
         NONCE_INVALID_OR_REPLAYED,
         BAD_SIGNATURE,
@@ -345,9 +350,11 @@ STATUS: dict[str, int] = {
     SEAT_REVOKED: 409,
     SEAT_BUSY: 409,
     # Device registration (`repo.register_device`): the account is bound to
-    # another phone for this app, or this phone is another account's.
+    # another phone for this app, or this phone is another account's, or
+    # staff released this phone from this test account.
     DEVICE_CONFLICT: 409,
     DEVICE_IN_USE: 409,
+    DEVICE_RELEASED: 409,
     DELETED_LICENSE_PURGED: 410,
     # A licence edit or conversion that is not allowed as asked.
     CONVERT_DOMAIN_MISMATCH: 422,

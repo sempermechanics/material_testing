@@ -1,6 +1,6 @@
 # Semper — Terms of Service
 
-**Last updated:** 2026-10-19  
+**Last updated:** 2026-10-22  
 **Version:** 2026-09-15  
 **Product:** Semper (IndicVision DIC) — Android application, optional cloud services, and web console  
 **Operator:** [OPERATOR LEGAL NAME], [REGISTERED ADDRESS], Chennai, Tamil Nadu, India ("**we**", "**us**", "**IndicVision**")
@@ -150,7 +150,12 @@ and cooperate with law enforcement and rights holders.
 
 **6.1 Demo plan.** Demo access is provided free of charge, may be limited in
 features, sessions, files, frames, or duration, and may be changed, suspended,
-or withdrawn at any time without liability.
+or withdrawn at any time without liability. On the Demo plan, every analysis
+you save, including its images and results, is uploaded to and stored in the
+Operator's cloud storage (section 2.2) automatically, without a separate sync
+choice, unless a device-management policy on your device has turned cloud
+backup off, and Your Content stored this way cannot be restored or downloaded
+to a device while your account is on the Demo plan.
 
 **6.2 Professional plan.** Professional access is attached to your account: by
 a seat your institution assigns to it, by a licence issued to your account's

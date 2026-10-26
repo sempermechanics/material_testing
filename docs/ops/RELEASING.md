@@ -97,7 +97,8 @@ Check the R8 mapping reached Crashlytics (the release build uploads it); the wor
 every customer-visible backend change it depends on. The first release built
 after 2026-10-18 must say that **Android 11 (API 30) is now the minimum**: phones
 on Android 7–10 cannot install or update it, and keep the version they have,
-which the backend may later gate (for this app, `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING`;
+which the backend may later gate (for this app, `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING`,
+which the backend now reads as the fallback for its `_SEMPER_CLASSROOM` pair, [ADR-030](../adr/ADR-030-semper-classroom-app-identity.md);
 `MIN_SUPPORTED_VERSION_CODE` is Semper's).
 
 ## Staged rollout on Google Play
@@ -145,7 +146,7 @@ Play cannot recall a build. In order of speed:
 | Lever | Effect | How |
 |---|---|---|
 | `KILL_SWITCHES` | Switches off `backup`, `share`, `restore` or `upload` without a release. The backend refuses the guarded routes itself (503 `feature_paused`, `Retry-After: 300`; `backend/app/deps.py:295-330`), so it holds for every build, old ones included, which retry the 503; current builds also show the feature as paused. `share` has no route, so only builds that read `/v1/config` obey it | Repo variable, space-separated, then `deploy-backend.yml` ([ENVIRONMENTS.md](ENVIRONMENTS.md)); watch `event="feature_paused"` in the logs to see what it holds back |
-| `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` | Material Testing builds below it keep their analyses, viewer and exports, and cannot start an analysis, upload or restore until updated. `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING` only nudges. Semper has its own pair, `MIN_SUPPORTED_VERSION_CODE` / `RECOMMENDED_VERSION_CODE`, because each app's versionCodes come from its own release counter (`settings.release_gate(app)`, `backend/app/config.py:293-300`) | Repo variable, redeploy. Raise the recommended one a release ahead. A local debug build at versionCode 1 is never gated |
+| `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` | Material Testing builds below it keep their analyses, viewer and exports, and cannot start an analysis, upload or restore until updated. `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING` only nudges. Since ADR-030 the backend reads the pair as `MIN_SUPPORTED_VERSION_CODE_SEMPER_CLASSROOM` / `RECOMMENDED_VERSION_CODE_SEMPER_CLASSROOM` and falls back to these `_MATERIAL_TESTING` names when those are unset ([ADR-030](../adr/ADR-030-semper-classroom-app-identity.md)); either pair gates this app's builds. Semper has its own pair, `MIN_SUPPORTED_VERSION_CODE` / `RECOMMENDED_VERSION_CODE`, because each app's versionCodes come from its own release counter (`settings.release_gate(app)`, `backend/app/config.py:308-335`) | Repo variable, redeploy. Raise the recommended one a release ahead. A local debug build at versionCode 1 is never gated |
 | `ENTITLEMENT_OFFLINE_GRACE_DAYS` | How long newly issued entitlement tokens hold offline; the fail-open / fail-closed lever for licensing. Tokens already issued keep theirs | Repo variable, redeploy ([ADR-023](../adr/ADR-023-signed-offline-entitlement.md)) |
 | `APP_CHECK_MODE` | `enforce` back to `monitor` or `off` | [INCIDENT_RESPONSE.md](INCIDENT_RESPONSE.md) |
 | Backend revision | Traffic back to the previous revision | `gcloud run services update-traffic semper-api --to-revisions=<previous>=100 --region asia-south1`; the image is kept as `rollback-prev` ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A7). Firestore is never rolled back by a deploy |
@@ -186,7 +187,7 @@ A running install sees a change on its next config read: launches within five
 minutes of the last reconcile reuse the cached `/v1/config`
 (`data/cloud/CloudSync.kt:412`, `RECONCILE_MIN_INTERVAL_MS`), and **Refresh
 licence** fetches it at once. Lifting a lever reaches phones the same way, so
-allow that long before calling a rollback done. The Material Testing pair and
+allow that long before calling a rollback done. The Semper Classroom pair and
 `ENTITLEMENT_OFFLINE_GRACE_DAYS` were not moved (TD-220).
 
 ## CI-based release (workflow_dispatch)

@@ -120,6 +120,10 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       Never a bare `firebase deploy`. From Windows PowerShell, set the variable there
       (`$env:API_BASE_URL = gh variable get INDIC_API_BASE_URL`) and run the script
       through Git Bash; PowerShell 5.1 drops quotes nested inside `bash -c "…"`.
+      The deploy publishes the **legal pages** too (`/privacy`, `/terms`). While
+      `main` holds legal text counsel has not cleared (TD-277; #474 since 2026-10-22),
+      deploy from a worktree with those two `index.html` files checked out from the
+      last cleared commit (`b940cc29`), then compare the live pages with it.
 - [x] The script runs `scripts/check_live_console.py`; it must pass (no `__`
       placeholder left live).
 - [ ] By hand: `/account` shows the licence facts and, for a demo account, the
@@ -128,13 +132,21 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
 
 ## 5. Monitoring (TD-217)
 
-- [ ] Dry run:
+- [x] Dry run:
       `scripts/apply-monitoring.sh --project indicvision-dic-app --notification-channel <id> --staging-service semper-api-staging`.
+      Done 2026-10-22 with a placeholder channel: 24 files render as valid JSON with
+      no unfilled placeholder; it would create 9 log metrics, the `/readyz` uptime
+      check, the service and its 99.5 % SLO, 8 alert policies and 4 dashboards. The
+      project has **none** of these today, and **no notification channel** in either
+      project, so `--apply` first needs a channel created
+      (`gcloud beta monitoring channels create`, email to the on-call address).
 - [ ] The same with `--apply`: log metrics, uptime check, SLO and burn-rate
-      alerts, four dashboards.
-- [ ] `scripts/check_gcp_posture.sh` against both projects, with
+      alerts, four dashboards; then the `run.invoker` grant for the Monitoring
+      service agent that the script prints under "By hand, once".
+- [x] `scripts/check_gcp_posture.sh` against both projects, with
       `--backup-bucket <FIRESTORE_BACKUP_BUCKET>`; record the output in
-      [PRODUCTION_READINESS_GATE.md](PRODUCTION_READINESS_GATE.md).
+      [PRODUCTION_READINESS_GATE.md](PRODUCTION_READINESS_GATE.md). Done 2026-10-22
+      (18 FAIL; recorded there). On Windows the script needs `python3` on `PATH`.
 
 ## 6. After the deploy
 
@@ -164,7 +176,7 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       (`SESSION_CREATE` `testAccount: true`, three `UPLOAD_COMPLETE`), which
       `session_provision.py:102` sends under `_test/` (the Drive folder itself not
       listed). End it from the console, then check the audit rows and the Auth user.
-- [ ] **Audit retention, backfill and lock (TD-237, TD-246).** Retention is decided:
+- [x] **Audit retention, backfill and lock (TD-237, TD-246).** Retention is decided:
       **365 days** (owner, 2026-10-22; `AUDIT_RETENTION_DAYS`, default 365), and the
       one-time backfill is approved (owner, 2026-10-22). In this order, by the
       commands in [FIRESTORE_DATA_PROTECTION.md](../backend/FIRESTORE_DATA_PROTECTION.md),
@@ -175,17 +187,31 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
          on older rows: `python backend/scripts/stamp_audit_licence_ids.py --project indicvision-dic-app`
          (dry run; read both counts), then the same with `--apply --decision
          "TD-246: backfill approved by <owner>, 2026-10-22"`. A rerun reports 0 to
-         stamp.
+         stamp. **Done 2026-10-23** (dry run, then `--apply`; the rerun: 6145 rows, all with
+         `expireAt`, 0 to stamp).
       3. The `audit-trail` log bucket at `--retention-days=365`, the sink on
          `jsonPayload.event="audit_row"`, then lock the bucket (irreversible).
          Check: a staff licence edit's row reaches the bucket, and lowering its
          retention is refused. Needs `roles/logging.configWriter` (§0).
+         **Done 2026-10-23**: bucket `audit-trail` in `asia-south1`, sink on the filter
+         `resource.type="cloud_run_revision" AND jsonPayload.event="audit_row"`; a staff
+         licence edit (08:27:53 UTC) reached it, the bucket is locked, and
+         `--retention-days=1` answered `FAILED_PRECONDITION`. The sink routed nothing in
+         its first minutes: two rows (08:24:46, 08:25:49) are only in `_Default` and Firestore.
       4. The Firestore TTL:
          `gcloud firestore fields ttls update expireAt --collection-group=audit_logs --enable-ttl --project=indicvision-dic-app`;
          `ttls list --collection-group=audit_logs` shows it `ACTIVE`. Rows already
          older than a year go within about a day. The policy is declared in
          `backend/firestore.indexes.json`, so an indexes deploy before this step
          would create it early: run none until step 2 is done.
+         `PROJECT=indicvision-dic-app scripts/deploy-firestore.sh indexes` can
+         also do this step: it now runs a pinned `firebase-tools@15.33.0`, which
+         matches the six live composites and the five live overrides (TD-316,
+         fixed in file), so it writes only this policy. After the `gcloud`
+         command, run the script once anyway: it should print no "not present"
+         line and write nothing, which closes TD-316. Never with `--force`.
+         **Done 2026-10-23** by the script after step 2: no "not present" line, deploy
+         complete, the policy `CREATING` (TD-316 closed). Step 3 is still open.
 - [ ] Move the merged-and-deployed entries from [CONTEXT.md](../../CONTEXT.md)
       "Current state" into [CHANGELOG.md](CHANGELOG.md), in both repos.
 

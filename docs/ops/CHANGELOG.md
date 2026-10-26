@@ -12,6 +12,130 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-10-26 — semperdic-app's backend and console: Material Testing becomes Semper Classroom (#484)
+
+The backend and Hosting from `main` at `46ac8b5e` went live, staging first. That commit
+carries #484 ([ADR-030](../adr/ADR-030-semper-classroom-app-identity.md)):
+- The backend knows `com.sempermechanics.semperclassroom` as the app `semperclassroom`. It
+  still stores and reads the old `materialtesting` tag and `*MaterialTesting` fields, and
+  dual-writes the new ones, until TD-330.
+- Each build gets the entitlement claim it pins.
+- `com.sempermechanics.materialtesting` is retired from device registration (410
+  `app_retired`); its other calls are served as before.
+- The consoles say Semper Classroom.
+- `assetlinks.json` lists the new package.
+
+No gateway change, no Firestore index, no app release. `rename_classroom_app.py` has not run.
+
+- **Staging.** Run 40299991596: `semper-api-staging-40299991596-1` at 100 % after `/readyz`
+  passed on the candidate. The gateway dry run showed only the `?app=` description change in
+  `openapi.yaml`.
+- **Production.** Run 40300681201, approved by the required reviewer (TD-228):
+  `semper-api-40300681201-1` at 100 % after `/readyz` passed on the candidate, with
+  `semper-api-40063322039-1` pinned as `rollback-prev`. The gateway job's dry run showed the
+  same description-only diff and left `v202610230501-112` serving.
+- **Hosting.**
+  - The first deploy came from a plain `main` checkout. It therefore published #474's
+    Privacy and Terms text, which counsel has not cleared (TD-277).
+  - It was redeployed the same day from a worktree of `46ac8b5e` with both legal
+    `index.html` files taken from `b940cc29`, per [the checklist](DEPLOY_CHECKLIST_2026-10.md)
+    §4. The live `/privacy` and `/terms` were then compared with `b940cc29` and match.
+  - `check_live_console.py` passed after both deploys.
+  - After the redeploy: the live `assetlinks.json` lists `com.sempermechanics.semperclassroom`,
+    and `/account` shows "Use Semper Classroom on a different device".
+- **Not checked.** The live access log and the 5xx rate after the deploy: `gcloud` needed
+  a fresh sign-in.
+- **Owed.**
+  - The Firebase Android app for `com.sempermechanics.semperclassroom`, with App Check.
+  - The repo variables `MIN_SUPPORTED_/RECOMMENDED_VERSION_CODE_SEMPER_CLASSROOM`; the gate
+    falls back to the `*_MATERIAL_TESTING` values until they are set.
+  - The fork's release.
+  - `rename_classroom_app.py`: a dry run, then `--apply` once a rollback past this release is
+    ruled out.
+
+## 2026-10-24 — semperdic-app's backend: a staff-released phone is told so (#482)
+
+The backend from `main` at `187f4870` went live, staging first. It carries #482: a QC phone
+staff released from its test account (TD-314) is now refused registration with 409
+`device_released` instead of `device_conflict` (still audited `DEVICE_REGISTER` DENIED,
+`reason=staff_released`), and app builds from `187f4870` say "Staff released this phone from
+this account". Installed builds read any 409 there as a conflict, as before. The other PRs
+merged since `d79aa0c7` are docs, the console (#478, Hosting 2026-10-23) and the Firestore
+index script (#476). No gateway change, no Hosting deploy, no app release.
+
+- **Staging.** Run 39948110403 (`semper-api-staging-39948110403-1`, 100 %), gateway dry run.
+  On emulator-5586, the QC phone released on 2026-10-23 (`and-36439a0f18da2a33`), a debug
+  build of `187f4870` signing in to the QC account was refused and showed the new message.
+- **Production.** Run 40063322039, approved by the required reviewer (TD-228):
+  `semper-api-40063322039-1` at 100 % after `/readyz` passed on the candidate; the gateway
+  job found `v202610230501-112` already serving this spec and changed nothing.
+
+## 2026-10-23 — semperdic-app's backend, gateways and console: #466–#468; its main green again
+
+The backend from `main` at `d79aa0c7` went live: staging first, then production with the
+required reviewer's approval (TD-228). That deploy carries #466, #467 and #468; the other
+PRs merged since `b940cc29` change no runtime backend code. Hosting followed with the
+console's per-phone **Release**. No Firestore index deploy, no app release.
+
+- **Staging.** Run 39900999296 (`semper-api-staging-39900999296-1`, 100 %). The gateway job
+  found `semper-gw-staging` already serving this spec (config `v202610221243-110`, applied
+  by CI on `main`) and changed nothing.
+- **Tier 3 on `main`.** It had failed twice after #470, though the same tree passed on the
+  PR: staging still ran `f2a58466`, which predates #464's CI-phone rotation, so
+  `POST /v1/devices/register` answered 409 once the CI test account's phones were full.
+  After the staging deploy, attempt 3 of run 39775004430 passed (register 201, round trip
+  200s) and `CI OK` went green.
+- **Production.** Run 39900623312 (`semper-api-39900623312-1`, 100 %), with
+  `CHECK_REVOKED_ON_STEP_UP=true` live (TD-214; its acceptance check is still owed). The
+  gateway diff against `v202610220502-104` added one path,
+  `POST /v1/admin/test-accounts/{uid}/devices/{device_id}/release` (#468); config
+  `v202610230501-112` now serves `semper-gw` and its outside check passed. An anonymous
+  call to the new path answers 401 `Jwt is missing`; an undefined path answers 404. A
+  second production dispatch of the same commit (run 39900805964) was cancelled.
+- **Live now:** a Firestore outage answers 503 `firestore_unreachable` with `Retry-After`
+  (#466, TD-250); new audit rows carry `expireAt` for one-year retention (#467, TD-237; the
+  TTL policy, the TD-246 backfill and the index deploy are still the operator's,
+  [checklist](DEPLOY_CHECKLIST_2026-10.md) §6); staff can release one phone of a test
+  account (#468, TD-314).
+- **Hosting.** `scripts/deploy-console.sh` from `main` at `d79aa0c7` put the operator desk's
+  **Release** live (`console/operator/test-accounts.js`, 07:43 UTC). That deploy also
+  published #474's Privacy and Terms text, which waits on counsel (TD-277). At 07:51 UTC
+  the operator redeployed from a worktree at `d79aa0c7` with
+  `firebase-hosting/public/{privacy,terms}/index.html` checked out from `b940cc29`; the live
+  pages then matched `b940cc29` byte for byte, `test-accounts.js` still carried
+  `data-ta-release`, and `check_live_console.py` passed. At 08:06 UTC the operator
+  deployed the redesigned operator desk (#478) the same way, from `main` at `000575b0`
+  with the two legal pages from `b940cc29`; the live console files and both legal pages
+  matched that tree byte for byte, and `check_live_console.py` passed.
+- **TD-314 on staging** (QC test account, emulators): staff released
+  `and-36439a0f18da2a33` in the console (audit `test_account_device_released`, 07:45:50 UTC);
+  after **Refresh licence** that phone showed "Still on the demo" with backup and data
+  management locked; its re-registration answered 409 `device_conflict`, audited
+  `DEVICE_REGISTER` DENIED `reason=staff_released` (07:49:00 UTC); a third emulator
+  (`and-100a171151b8fdb0`) registered once the CI rotation had freed its id. The app shows
+  the generic "already linked to another account" message for a released phone.
+- **Audit retention in Firestore** ([checklist](DEPLOY_CHECKLIST_2026-10.md) §6). The
+  operator ran the TD-246 backfill (dry run, then `--apply`; it stamps `licenseId` and
+  `expireAt` on older rows, counts in `_migrations/td246_stamp_audit_licence_ids`; a dry-run
+  rerun after it: 6145 rows, all with `expireAt`, 48 with `licenseId`, 6097 whose target
+  names no licence, 0 without `ts`, 0 to stamp), then
+  `scripts/deploy-firestore.sh indexes` with the pinned `firebase-tools@15.33.0` (#476): no
+  "not present" line, and the only change was the `audit_logs.expireAt` TTL policy, then
+  `CREATING` (later `ACTIVE`). That closes TD-316. Then the `audit-trail` bucket (`asia-south1`, 365 days) and its sink on `jsonPayload.event="audit_row"` were created and the bucket locked on 2026-10-23: a staff licence
+  edit's row reached the bucket, and lowering its retention answered `FAILED_PRECONDITION`.
+  That closes TD-237. A new sink routes nothing for its first minutes: two rows from then
+  (08:24:46 and 08:25:49 UTC) are only in `_Default` and Firestore.
+- **Merged the same days, nothing to deploy:** #472 (Current state condensed; the first
+  `check_gcp_posture.sh` run, 18 FAIL, and the §5 monitoring dry run recorded) and #473 (the
+  audit-repo path test passes on Windows).
+
+The Current state entry this deploy closes, as it stood:
+
+- **Backend on `main`, not deployed:** #466 (a Firestore outage answers 503, TD-250), #467
+  (one-year audit retention: `expireAt`, TTL, backfill; TD-237, TD-246) and #468 (staff
+  release one test-account phone, TD-314; a new gateway route). `CHECK_REVOKED_ON_STEP_UP`
+  is set and goes live with that deploy (TD-214).
+
 ## 2026-10-22 — semperdic-app's backend, gateways and Hosting: the readiness change, #457 and test accounts
 
 Everything from `main` at `b940cc29` went live, in [checklist](DEPLOY_CHECKLIST_2026-10.md)

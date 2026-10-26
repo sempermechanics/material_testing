@@ -454,7 +454,7 @@ Everything above is required (or near enough). These are the rest of what
 | `ENTITLEMENT_KID` | `ent-1` | The key's id in the token header; the app pins keys by it |
 | `ENTITLEMENT_OFFLINE_GRACE_DAYS` | `14` | How long a token lets the app keep its entitlement offline, capped at a timed licence's end plus grace and a floating lease's end |
 | `MIN_SUPPORTED_VERSION_CODE` · `RECOMMENDED_VERSION_CODE` | `0` · `0` | Semper's release gate, published on `/v1/config` to Semper builds only; the app blocks new runs and cloud calls below the minimum and nudges below the recommended. The server refuses nothing on them. `0` = no gate |
-| `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` · `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING` | `0` · `0` | The same pair for Material Testing builds, which number their versionCodes separately (`settings.release_gate(app)`, `backend/app/config.py:293-300`) |
+| `MIN_SUPPORTED_VERSION_CODE_SEMPER_CLASSROOM` · `RECOMMENDED_VERSION_CODE_SEMPER_CLASSROOM` | `0` · `0` | The same pair for Semper Classroom builds, which number their versionCodes separately (`settings.release_gate(app)`, `backend/app/config.py:308-335`). Each unset one falls back to its pre-rename name, `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` / `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING` (`_env_int_renamed`, `backend/app/config.py:18`; [ADR-030](../adr/ADR-030-semper-classroom-app-identity.md), until TD-330) |
 | `KILL_SWITCHES` | empty | Features switched off fleet-wide: any of `backup`, `share`, `restore`, `upload`, **space-separated**. An unknown name is logged and ignored (`backend/app/config.py:18-34`). Published on `/v1/config` and enforced by the backend (`backend/app/config.py:305-317`; `deps.unless_paused`, `backend/app/deps.py:295-330`): `upload` or `backup` refuse `POST /v1/sessions` and `POST /v1/files/{id}/complete`; `restore` refuses `GET /v1/files/{id}/content` and `GET /v1/sessions/{sid}/bundle`; each answers 503 `feature_paused` with `Retry-After: 300`, logged `event="feature_paused"`. `share` is the app's own export and is published only. A change is a new revision |
 | `CONSOLE_ORIGINS` | `https://app.sempermechanics.com https://indicvision-dic-app-auth.firebaseapp.com` | Browser origins the API answers CORS for. The dashboards live on Firebase Hosting, never on the gateway host, so every console call is cross-origin and preflighted; an origin missing here renders a page whose every button silently does nothing. Exact origins, **space-separated** (the deploy action splits its `env_vars` on commas, so a comma-separated value is truncated), no wildcard. The phone sends no `Origin` and is unaffected. The gateway must also carry `allowCors` (step 3 below) or the preflight never reaches Cloud Run |
 
@@ -470,7 +470,8 @@ Everything above is required (or near enough). These are the rest of what
 > `DEMO_MAX_ANALYSES`, `LICENSED_MAX_SESSIONS_PER_USER`, `ADMIN_WEB_MFA_ENABLED`,
 > `APP_CHECK_MODE`, `SELF_DEVICE_CHANGE_COOLDOWN_DAYS`, `CONSOLE_ORIGINS`,
 > `CHECK_REVOKED_ON_STEP_UP`, `ENTITLEMENT_KID`, `ENTITLEMENT_OFFLINE_GRACE_DAYS`,
-> `MIN_SUPPORTED_VERSION_CODE`, `RECOMMENDED_VERSION_CODE`, their `_MATERIAL_TESTING` pair and `KILL_SWITCHES` from repository
+> `MIN_SUPPORTED_VERSION_CODE`, `RECOMMENDED_VERSION_CODE`, their `_SEMPER_CLASSROOM` pair (falling back to the
+> `_MATERIAL_TESTING` variables) and `KILL_SWITCHES` from repository
 > variables of the same name, with the defaults above when a variable is unset
 > (`.github/workflows/deploy-backend.yml:308-334`), and mounts `ENTITLEMENT_SIGNING_KEY`
 > from the secret `ENTITLEMENT_SIGNING_SECRET` names (A8). Its `release_train` input

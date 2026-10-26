@@ -91,6 +91,8 @@ data class ViewerArgs(
     val strainMethod: String = STRAIN_METHOD_VSG,
     /** A video's frame times in its clip (ms), index-aligned with [frameNames]; null for anything else. */
     val frameTimesMs: List<Long>? = null,
+    /** 0: every frame solved against the first image; N: the reference moved every N frames. */
+    val refUpdateInterval: Int = 0,
 ) {
 
     /**
@@ -130,6 +132,8 @@ data class ViewerArgs(
             putExtra(IntentKeys.SUBSET_SIZE, subsetSize)
             putExtra(IntentKeys.STRAIN_WINDOW, strainWindow)
             putExtra(IntentKeys.STRAIN_METHOD, strainMethod)
+            // Only an incremental run writes it, so every other Intent keeps the base build's keys.
+            if (refUpdateInterval > 0) putExtra(IntentKeys.REF_UPDATE_INTERVAL, refUpdateInterval)
             putExtra(IntentKeys.ENGINE_STATS, engineStats?.toFloatArray())
             putExtra(IntentKeys.ROI_X, roiX)
             putExtra(IntentKeys.ROI_Y, roiY)
@@ -213,6 +217,7 @@ data class ViewerArgs(
             roiW = session.roiW,
             roiH = session.roiH,
             frameTimesMs = session.frameTimesMs.takeUnless { session.isSweep },
+            refUpdateInterval = session.refUpdateInterval,
             sweep = if (session.isSweep) {
                 ViewerSweepArgs(
                     subsets = session.sweepSubsets,
@@ -395,6 +400,9 @@ data class ViewerArgs(
                 // Absent for anything but a video, so never filled from the record:
                 // an older Intent's video frames keep their names.
                 frameTimesMs = intent.getLongArrayExtra(IntentKeys.FRAME_TIMES_MS)?.toList(),
+                // Absent for a fixed reference, so never filled from the record: no
+                // released build wrote an incremental run without it (#458).
+                refUpdateInterval = intent.getIntExtra(IntentKeys.REF_UPDATE_INTERVAL, 0),
             )
             logMissingKeys()
             return args

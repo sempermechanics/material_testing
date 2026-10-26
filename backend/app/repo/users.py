@@ -310,8 +310,10 @@ def list_users(
             "displayName": u.get("displayName"),
             "role": u.get("role"),
             "access_status": u.get("access_status"),
-            **{apps.field("activeDeviceId", app): u.get(apps.field("activeDeviceId", app))
-               for app in apps.ALL},
+            # Each app's phone, under its new name and its old (ADR-030).
+            **{k: v for app in apps.ALL
+               for k, v in apps.written_fields(
+                   "activeDeviceId", app, apps.read_field(u, "activeDeviceId", app)).items()},
         })
     return out, next_token
 
@@ -343,7 +345,7 @@ def release_account_device(uid: str) -> dict[str, str]:
     user = snap.to_dict() or {}
     if user.get("licenseId") and effective_mode(user) == MODE_LICENSED:
         raise Refusal(errors.LICENSE_DEVICE_CLEAR_REQUIRED)
-    released = {app: user.get(apps.field("activeDeviceId", app)) or "" for app in apps.ALL}
+    released = {app: apps.read_field(user, "activeDeviceId", app) or "" for app in apps.ALL}
     released = {app: device for app, device in released.items() if device}
     if not released:
         return {}
@@ -366,8 +368,9 @@ def set_user_status(uid: str, status: str) -> bool:
     batch = db().batch()
     batch.update(ref, {"access_status": status, "updatedAt": _base.firestore.SERVER_TIMESTAMP})
     if status != statuses.ACCESS_APPROVED:
-        batch.update(ref, {apps.field("activeDeviceId", app): _base.firestore.DELETE_FIELD
-                           for app in apps.ALL})
+        batch.update(ref, {k: v for app in apps.ALL
+                           for k, v in apps.written_fields(
+                               "activeDeviceId", app, _base.firestore.DELETE_FIELD).items()})
         for dev in _stream(db().collection("devices").where("uid", "==", uid)):
             _retire_device(batch, dev.reference, statuses.DEVICE_REVOKED)
     _commit(batch)

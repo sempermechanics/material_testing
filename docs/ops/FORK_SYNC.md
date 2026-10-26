@@ -1,9 +1,13 @@
 # material_testing: syncing and porting
 
 [material_testing](https://github.com/sempermechanics/material_testing) is a fork of
-this repo. It adds the tensile, bending and lab-report features, ships under its own
-app id (`com.indicvision.semper.materialtesting`, its ADR-009) and uses this repo's
-backend. It takes this `main` with a plain `git merge` on a `sync/semperdic-<sha>`
+this repo. It adds the tensile, bending and lab-report features, ships as **Semper
+Classroom** under its own app id (`com.sempermechanics.semperclassroom`,
+[ADR-030](../adr/ADR-030-semper-classroom-app-identity.md); the app was Material
+Testing, `com.sempermechanics.materialtesting` and before that
+`com.indicvision.semper.materialtesting`, its ADR-009) and uses this repo's
+backend. The repo is to be renamed `semper_classroom` (an owner step; GitHub
+redirects the old URL, so the `mat` remote keeps working). It takes this `main` with a plain `git merge` on a `sync/semperdic-<sha>`
 branch.
 
 In the week to 2026-10-01, nine changes were written twice, once in each repo: the
@@ -26,8 +30,9 @@ apps. The deploy and Firestore workflows only run in this repo
 
 ## Syncing into material_testing
 
-**Last sync:** semperdic-app `14b279d6` (its #453, #457–#460), merged on material_testing's
-`ccr-603fe346-1bw2fa` on 2026-10-21; the one before was `17d7bc8` (material_testing #139).
+**Last sync:** semperdic-app `25334af1` (its #471–#486), merged on material_testing's
+`sync/semperdic-25334af` on 2026-10-26; before it `968637cb` (material_testing #144) and
+`14b279d6` (on `ccr-603fe346-1bw2fa`, 2026-10-21).
 `git log --merges --grep=semperdic-app` on the fork lists them all.
 
 1. `git fetch semperdic main` and branch `sync/semperdic-<short sha>` from its `main`.
@@ -173,6 +178,32 @@ fork's own id change:
 Do not take this code under the old id: the prefs files (`semper_*`) and the
 Keystore alias (`SemperDeviceKeyEc`) are renamed, so an install that upgrades in
 place would find them empty and lose sign-in, settings and its device key.
+
+### The Semper Classroom rename (ADR-030, 2026-10)
+
+[ADR-030](../adr/ADR-030-semper-classroom-app-identity.md) renames Material Testing
+Semper Classroom. The backend half (short name `semperclassroom`, field suffix
+`SemperClassroom`, the old names read and mirrored until TD-330) lands here and
+deploys before the fork releases. On the fork, in the sync that takes it:
+
+1. Set `applicationId = "com.sempermechanics.semperclassroom"` and the app name to
+   Semper Classroom. Keep the release signing key (alias `materialtesting`): the
+   fingerprints in Firebase and `assetlinks.json` are the same. Register the new
+   app in Firebase (`indicvision-dic-app-auth`, with App Check) and take its
+   `google-services.json` client.
+2. Check that `EntitlementApp` (`data/account/entitlement/EntitlementPins.kt`) maps
+   the new id to `semperclassroom`, as `apps.token_claim` does; without it the
+   build pins its id and refuses every token as `WRONG_APP`. The old ids stay
+   mapped to `materialtesting`.
+3. The namespace and Kotlin package stay `com.sempermechanics.semper`: nothing
+   moves, and the prefs and Keystore names do not change. The new id is still a
+   new install, with empty storage; testers back up in Material Testing first,
+   since `com.sempermechanics.materialtesting` can no longer register a device
+   (`apps.RETIRED`).
+4. Release it. The owner then dry-runs and applies
+   `backend/scripts/rename_classroom_app.py` once the new backend serves all
+   traffic (ADR-030, Rollout order;
+   [FIRESTORE_SCHEMA_RUNBOOK](../backend/FIRESTORE_SCHEMA_RUNBOOK.md)).
 
 ### The naming scheme (2026-10)
 
@@ -326,6 +357,31 @@ lab test reaches a fresh result through `ViewerArgs.of(record)`; Home's **Which 
 the lab Re-run live in `HomeNewAnalysis`; and the viewer's lab parts take the Results helper
 as a parameter (`ViewerSummaryController`, `ViewerChromeController`) or read
 `ShareControllerHost.labSession` / `stressModel` / `loadsN`.
+
+### Tamper-evident records (ADR-028, 2026-10)
+
+material_testing gets the record manifest with the next sync of this `main`; nothing
+in it is Semper-only. What its lab code has to know:
+
+- Every run that is not cancelled ends in `RunSession.commitRecord` (was `commit()` in
+  `BatchAnalysis` and `endSweep`), which writes `record_manifest.json` into the staging
+  and then commits. The manifest hashes every `*.dat` and `field_ranges.bin` there, and
+  the verifier reads any other `*.dat` in the session folder as **Changed**: a lab file
+  ending in `.dat` must be staged before that call or take another extension.
+- The signature is the `DeviceKeys` Keystore key (same alias, `SemperDeviceKeyEc`), so
+  the fork's manifests are signed by its own install's key. Only that key reads
+  **Verified**; a manifest signed by any other key reads **Signed on another device**
+  (`RecordIntegrity.SignedElsewhere`). `RecordVerifier.verify(context, dir)` reads this
+  phone's thumbprint through `LocalRecordKey`; tests call `verify(dir, localThumbprint)`.
+- Backups carry it as `dat/record_manifest.json` in `Session.zip` (no new role, no
+  backend change); restore and "Export everything" bring it along.
+- API changes: `ResultViewerViewModel.listFrames(dispatcher, check, read)` and
+  `ViewerState.integrity`; `ReportData.recordFingerprint`, set by the callers of
+  `ReportBuilder.buildReport`; `ViewerReportFactory.Source.integrity`. The Details sheet
+  (`SettingsUsedSheet.entriesFor`) gains a "Reference" row (from the new
+  `ViewerArgs.refUpdateInterval`, `IntentKeys.REF_UPDATE_INTERVAL`, written only for an
+  incremental run) and a "Record integrity" row, plus an `integrityWarnRow` chip in
+  `sheet_settings_used.xml`.
 
 ## Porting back
 

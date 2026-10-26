@@ -416,7 +416,7 @@ test("the return leg of Extend finishes it with the stashed days", async () => {
 const PHONES = {
   ...QC, activeDevices: 2, devices: [
     { deviceId: "and-phone-1", app: "semper", model: "Pixel 6", registeredAt: "2026-10-19T10:00:00Z" },
-    { deviceId: "and-phone-<2>", app: "materialtesting", model: "", registeredAt: null },
+    { deviceId: "and-phone-<2>", app: "semperclassroom", model: "", registeredAt: null },
   ],
 };
 const RELEASE = `/v1/admin/test-accounts/${QC.uid}/devices/and-phone-1/release`;
@@ -425,11 +425,27 @@ const releaseButton = (deviceId) => $("testAccountRows").querySelector(
 
 test("the list shows each active phone with its own Release", async () => {
   await showList([PHONES, CI]);
+  // Model and app, the id under them (or the id alone, without a model), Release.
   assert.deepEqual(accountRows()[0].slice(3, 4), [
-    "2 of 3 Pixel 6 (and-phone-1) · Semper Release and-phone-<2> · Material Testing Release"]);
+    "2 of 3 Pixel 6 Semper and-phone-1 Release and-phone-<2> Semper Classroom Release"]);
   assert.deepEqual(accountRows()[1].slice(3, 4), ["0 of 10"], "no phones, no buttons");
+  const phones = $("testAccountRows").querySelectorAll("li");
+  assert.equal(phones.length, 2, "one line per phone");
   assert.ok(releaseButton("and-phone-1"));
   assert.ok(releaseButton("and-phone-<2>"), "an id is text, never markup");
+  assert.equal(releaseButton("and-phone-1").getAttribute("aria-label"), "Release Pixel 6 (and-phone-1)",
+    "each Release names its phone to a screen reader");
+  assert.equal(releaseButton("and-phone-1").className, "danger", "a release cannot be undone");
+  assert.equal(rowButton("end", QC.uid).className, "danger");
+  assert.equal(rowButton("extend", QC.uid).className, "secondary");
+});
+
+test("a phone registered before ADR-030 is labelled Semper Classroom too", async () => {
+  // devices/{id}.app is never rewritten, so it may still say materialtesting.
+  await showList([{ ...QC, activeDevices: 1, devices: [
+    { deviceId: "old-phone", app: "materialtesting", model: "Pixel 5", registeredAt: null },
+  ] }]);
+  assert.deepEqual(accountRows()[0].slice(3, 4), ["1 of 3 Pixel 5 Semper Classroom old-phone Release"]);
 });
 
 test("Release confirms, sends, says so and reads the list again", async () => {

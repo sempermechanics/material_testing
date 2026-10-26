@@ -124,9 +124,9 @@ private fun AnalysisViewModel.solveSweep(
  * How a sweep in [session], which the runner left as [run], ends. A cancel
  * keeps nothing, however many combinations it solved
  * ([discardCancelledSweep]). Any other end moves the results into the
- * session ([RunSession.commit]) and saves the combinations that solved. One
- * that solved none opens its lattice of failed nodes with no row behind it
- * ([ViewerArgs.forFailedSweep]).
+ * session with their signed record ([RunSession.commitRecord]) and saves
+ * the combinations that solved. One that solved none opens its lattice of
+ * failed nodes with no row behind it ([ViewerArgs.forFailedSweep]).
  */
 @WorkerThread
 internal fun AnalysisViewModel.endSweep(
@@ -139,7 +139,7 @@ internal fun AnalysisViewModel.endSweep(
     if (result.engineErrorCode == RunStop.Cancelled.wireCode) {
         return discardCancelledSweep(appContext, session, run.executionTimeMs)
     }
-    session.commit()
+    session.commitRecord(appContext, run.spec.recordSettings())
     val duration = "duration" to SemperAnalytics.durationBucket(run.executionTimeMs.toLong())
 
     return if (result.runs.isEmpty()) {

@@ -90,6 +90,9 @@ object IntentKeys {
     const val SUBSET_SIZE = "SUBSET_SIZE"
     const val STRAIN_WINDOW = "STRAIN_WINDOW"
     const val STRAIN_METHOD = "STRAIN_METHOD"
+
+    /** 0: every frame against the first image; N: the reference moved every N frames (incremental DIC). */
+    const val REF_UPDATE_INTERVAL = "REF_UPDATE_INTERVAL"
     const val ENGINE_STATS = "ENGINE_STATS"
     const val ROUTING_ERROR = "ROUTING_ERROR"
 

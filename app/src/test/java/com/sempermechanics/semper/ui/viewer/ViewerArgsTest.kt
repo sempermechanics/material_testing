@@ -182,6 +182,19 @@ class ViewerArgsTest {
     }
 
     @Test
+    fun `an incremental run's reference interval survives the Intent, and only such a run writes it`() {
+        val sent = args().copy(refUpdateInterval = 2)
+        assertEquals(sent, ViewerArgs.from(sent.toIntent(context), ::noRecord))
+        assertFalse(args().toIntent(context).hasExtra(IntentKeys.REF_UPDATE_INTERVAL))
+
+        val row = record().copy(refUpdateInterval = 3)
+        assertEquals(3, ViewerArgs.of(row).refUpdateInterval)
+        assertEquals(3, ViewerArgs.from(ViewerArgs.of(row).toIntent(context), ::noRecord).refUpdateInterval)
+        val fixed = ViewerArgs.from(args().toIntent(context), ::noRecord)
+        assertEquals("a fixed reference by default", 0, fixed.refUpdateInterval)
+    }
+
+    @Test
     fun `a sweep and its picked frame survive the Intent unchanged`() {
         val sent = args(sweepArgs).copy(startFrame = 1)
 

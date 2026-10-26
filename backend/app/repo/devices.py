@@ -44,10 +44,11 @@ def _release_patch(device_id: str, app: str = apps.SEMPER) -> dict:
     dropped and the id stamped, so `repo.devlock.released_device_held` holds it
     off while the new phone registers. Shared by a lock clear and a staff phone
     release."""
+    released_at = _now()
     return {
-        apps.field("activeDeviceId", app): _base.firestore.DELETE_FIELD,
-        apps.field("releasedDeviceId", app): device_id,
-        apps.field("releasedAt", app): _now(),
+        **apps.written_fields("activeDeviceId", app, _base.firestore.DELETE_FIELD),
+        **apps.written_fields("releasedDeviceId", app, device_id),
+        **apps.written_fields("releasedAt", app, released_at),
     }
 
 
@@ -128,7 +129,7 @@ def _oldest_active_devices(uid: str, app: str, *, exclude: str, count: int) -> l
     for snap in _stream(db().collection("devices").where("uid", "==", uid)):
         dev = snap.to_dict() or {}
         if (snap.id != exclude and dev.get("status") == statuses.DEVICE_ACTIVE
-                and (dev.get("app") or apps.SEMPER) == app):
+                and apps.same_app(dev.get("app"), app)):
             registered = dev.get("registeredAt")
             found.append((registered is not None, registered or 0, snap.id))
     found.sort(key=lambda row: (row[0], row[1], row[2]))
@@ -154,7 +155,7 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
     phones as superseded in the same transaction, since every CI run is a
     fresh emulator with a new key (TD-313). The answer's `rotated` lists them.
     A phone staff released from the test account on its own
-    (`staff_released_from`) is refused `device_conflict` for that account, so
+    (`staff_released_from`) is refused `device_released` for that account, so
     it cannot take back the place it gave up (TD-314); another account may
     still register it. A real account is unchanged.
 
@@ -166,7 +167,8 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
     """
     dev = {
         "uid": uid,
-        "app": app,
+        # The stored name, which every backend reads (ADR-030, TD-330).
+        "app": apps.stored_name(app),
         "publicKeyPem": body.publicKeyPem,
         "status": statuses.DEVICE_ACTIVE,
         "stepUpEligible": bool(step_up_eligible),
@@ -181,7 +183,6 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
     device_ref = db().collection("devices").document(body.deviceId)
     # Only one device may be active per account and app (the app's
     # `activeDeviceId` field is the single binding, ADR-010).
-    active_field = apps.field("activeDeviceId", app)
     rotated: list[str] = []
 
     @_base.firestore.transactional
@@ -201,7 +202,7 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
                 raise Refusal(errors.DEVICE_CONFLICT)
             rotated.extend(_oldest_active_devices(uid, app, exclude=body.deviceId, count=over))
         else:
-            bound = held_user.get(active_field) if user_snap.exists else None
+            bound = apps.read_field(held_user, "activeDeviceId", app) if user_snap.exists else None
             if bound and bound != body.deviceId:
                 raise Refusal(errors.DEVICE_CONFLICT)
         existing = _get(device_ref, tx)
@@ -209,7 +210,7 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
         if held.get("status") == statuses.DEVICE_ACTIVE and held.get("uid") != uid:
             raise Refusal(errors.DEVICE_IN_USE)
         if tag is not None and staff_released_from(held, uid):
-            raise Refusal(errors.DEVICE_CONFLICT)
+            raise Refusal(errors.DEVICE_RELEASED)
         for old in rotated:  # the writes come after every read of the transaction
             tx.update(db().collection("devices").document(old), {
                 "status": statuses.DEVICE_SUPERSEDED,
@@ -219,9 +220,9 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
         # A registration ends any release hold: either the new phone has
         # arrived, or the hold has run out and the old one is back.
         tx.update(user_ref, {
-            active_field: body.deviceId,
-            apps.field("releasedDeviceId", app): _base.firestore.DELETE_FIELD,
-            apps.field("releasedAt", app): _base.firestore.DELETE_FIELD,
+            **apps.written_fields("activeDeviceId", app, body.deviceId),
+            **apps.written_fields("releasedDeviceId", app, _base.firestore.DELETE_FIELD),
+            **apps.written_fields("releasedAt", app, _base.firestore.DELETE_FIELD),
         })
 
     def _contended():

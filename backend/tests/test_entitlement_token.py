@@ -409,10 +409,21 @@ async def test_config_carries_a_token_that_agrees_with_the_plain_json(issuing, c
     assert payload["exp"] - payload["iat"] == settings.ENTITLEMENT_OFFLINE_GRACE_DAYS * 86400
 
 
-async def test_config_names_the_app_that_asked(issuing, client):
-    r = await client.get("/v1/config", headers={
-        "X-Device-Id": "dev-device", "X-App-Id": "com.sempermechanics.materialtesting"})
-    assert ent.verify(r.json()["entitlement"], PINNED)["app"] == "materialtesting"
+@pytest.mark.parametrize(("app_id", "claim"), [
+    ("com.sempermechanics.semperclassroom", "semperclassroom"),
+    # A build from before the rename pins the old name (ADR-030,
+    # `EntitlementPins.kt`) and refuses any other as WRONG_APP.
+    ("com.sempermechanics.materialtesting", "materialtesting"),
+    ("com.indicvision.semper.materialtesting", "materialtesting"),
+    ("com.sempermechanics.semper", "semper"),
+    ("", "semper"),
+])
+async def test_config_names_the_app_that_asked(issuing, client, app_id, claim):
+    headers = {"X-Device-Id": "dev-device"}
+    if app_id:
+        headers["X-App-Id"] = app_id
+    r = await client.get("/v1/config", headers=headers)
+    assert ent.verify(r.json()["entitlement"], PINNED)["app"] == claim
 
 
 async def test_a_demo_account_gets_a_demo_token(issuing, client, monkeypatch):

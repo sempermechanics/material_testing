@@ -28,8 +28,11 @@ branch ([ADR-024](../adr/ADR-024-account-anchored-entitlements.md)).
 - **Semper staff**: `role: admin` accounts and `ADMIN_EMAILS`.
 
 No location, contacts, camera, phone-state or advertising data is read by the app
-(`app/src/main/AndroidManifest.xml:6-14`). Whether the merged manifest carries
-Firebase Analytics' `AD_ID` permission is unchecked (TD-232).
+(`app/src/main/AndroidManifest.xml:6-14`). Firebase Analytics merges in
+`com.google.android.gms.permission.AD_ID` and the Privacy Sandbox
+`ACCESS_ADSERVICES_*` permissions (present in the CI release APK at `968637cb`); the
+manifest removes all three and turns advertising-ID collection off
+(`app/src/main/AndroidManifest.xml:16-27, 53-57`; TD-232).
 
 ## Stores
 
@@ -85,11 +88,13 @@ account (`DELETE /v1/me` removes the user folder first,
 
 ### Firebase Crashlytics and Analytics (opt-in)
 
-Off in the manifest (`app/src/main/AndroidManifest.xml:28-38`) until the user
+Off in the manifest (`app/src/main/AndroidManifest.xml:42-52`) until the user
 agrees (`AppSettings.diagnosticsEnabled`, `data/prefs/AppSettings.kt:61`).
 Crash reports with device and app version; breadcrumbs and non-fatals only with
 consent (`diagnostics/CrashReportingTree.kt:23-41`); Analytics events with enum and
-bucket parameters only (CONTEXT.md, Invariants). On a staff-made QC or CI test
+bucket parameters only (CONTEXT.md, Invariants), and the approximate location
+Google derives from the masked IP (Google's own disclosure for the SDK). Never
+the advertising ID (`app/src/main/AndroidManifest.xml:16-27, 53-57`). On a staff-made QC or CI test
 account only, and only with the same consent, the user property and Crashlytics
 key `account_type` (`test` or `ci`; `diagnostics/Diagnostics.kt`); a real
 account carries none. Retention: Firebase project
@@ -127,14 +132,14 @@ transfer exclude preferences and session files
 | Account, devices, sessions, files, Drive content | Until erasure | `DELETE /v1/me`; per session `DELETE /v1/sessions/{sid}` |
 | Nonces | Minutes | TTL `challenges.expireAt`, delete on use |
 | Deleted licences and seats | 30 days | TTL `purgeAt` |
-| Audit rows | 365 days once the TTL is enabled; indefinite until then | TTL `audit_logs.expireAt` (TD-237); older rows stamped by the TD-246 backfill |
+| Audit rows | 365 days (TTL enabled 2026-10-23); their log copy 365 days in the locked `audit-trail` bucket | TTL `audit_logs.expireAt`; older rows stamped by the TD-246 backfill |
 | Firestore exports | Bucket lifecycle (35 days recommended, `docs/backend/FIRESTORE_DATA_PROTECTION.md:19-26`; applied state unverified) | GCS lifecycle |
 | Logs, crash reports, email | Vendor settings, unverified | Gate "Confirm Crashlytics / Cloud Logging / Resend retention" |
 
 ## Findings recorded elsewhere
 
-TD-237 (audit retention and lock), TD-271
+TD-271
 (erasure's seat index; erasures before the change), TD-273 (the deprecated search
 query), TD-227 (location), TD-232
-(Data safety, `AD_ID`), TD-36 (policy placeholders). `docs/backend/CLOUD_ARCHITECTURE_GCP.md`
+(Data safety submission), TD-317 (policy omits Analytics, App Check and IP-derived location), TD-36 (policy placeholders). `docs/backend/CLOUD_ARCHITECTURE_GCP.md`
 §5 lists `ua` on `audit_logs`; the code writes none.

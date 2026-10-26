@@ -71,6 +71,7 @@ object EntitlementApp {
 
     private val BY_APPLICATION_ID = mapOf(
         "com.sempermechanics.semper" to "semper",
+        "com.sempermechanics.semperclassroom" to "semperclassroom",
         "com.sempermechanics.materialtesting" to "materialtesting",
         "com.indicvision.semper" to "semper",
         "com.indicvision.semper.materialtesting" to "materialtesting",

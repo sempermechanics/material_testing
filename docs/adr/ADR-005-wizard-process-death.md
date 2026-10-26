@@ -8,7 +8,7 @@
 
 TD-26 said the wizard loses state on rotation. It does not:
 `StaticAnalysisActivity` declares the full `configChanges` set
-(`AndroidManifest.xml:189-191`), so rotation, dark mode and font scale never
+(`AndroidManifest.xml:207-209`), so rotation, dark mode and font scale never
 recreate it. **Process death** does, and nothing survives it:
 
 - `AnalysisViewModel` has no `SavedStateHandle` (none exists anywhere in

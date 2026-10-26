@@ -328,6 +328,20 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     
     <string name="settings_used_roi_fmt">%1$d × %2$d at (%3$d, %4$d)</string>
     <string name="settings_used_size_fmt">%1$d × %2$d px</string>
+    <!-- The record's check against the signed manifest its run wrote (ADR-028). -->
+    <string name="settings_used_integrity">Record integrity</string>
+    <string name="record_integrity_checking">Checking…</string>
+    <string name="record_integrity_verified">Verified</string>
+    <string name="record_integrity_changed">Changed since analysis</string>
+    <string name="record_integrity_unsigned">Not signed</string>
+    <string name="record_integrity_not_recorded">Not recorded</string>
+    <string name="record_integrity_signed_elsewhere">Signed on another device</string>
+    <string name="record_integrity_signed_elsewhere_warn_fmt">Signed by a device key that is not this phone\'s (key %1$s). That is not a pass: the key has to be checked against the account\'s registered devices. A reinstall or a restore on another phone also reads this way.</string>
+    <string name="record_integrity_changed_warn_fmt">These files no longer match what the analysis wrote, so its results may have been edited: %1$s</string>
+    <plurals name="record_integrity_more_fmt">
+        <item quantity="one">%1$s and %2$d more file</item>
+        <item quantity="other">%1$s and %2$d more files</item>
+    </plurals>
     <string name="export_data">Export my data</string>
     <string name="export_progress_fmt">Exporting session %1$d of %2$d</string>
     <string name="export_data_failed">Couldn\'t prepare the export. Free up some storage and try again.</string>
@@ -345,7 +359,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="diagnostics_prompt_decline">Not now</string>
     <string name="delete_account">Delete account</string>
     <string name="delete_account_title">Delete your account?</string>
-    <string name="delete_account_body">This erases:\n\n• every analysis on this phone\n• every cloud backup\n• your profile and device\n• your sign-in, for both Semper and Material Testing\n\nThis can\'t be undone.</string>
+    <string name="delete_account_body">This erases:\n\n• every analysis on this phone\n• every cloud backup\n• your profile and device\n• your sign-in, for both Semper and Semper Classroom\n\nThis can\'t be undone.</string>
     <string name="delete_account_confirm">Delete everything</string>
     <string name="delete_account_working">Erasing your account and data…</string>
     <string name="delete_account_done">Your account and all data have been deleted.</string>
@@ -1196,6 +1210,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="url_faq_viewer_oom" translatable="false">https://sempermechanics.com/support/troubleshooting/#reading</string>
     <string name="url_faq_custom_scale" translatable="false">https://sempermechanics.com/support/troubleshooting/#reading</string>
     <string name="url_faq_load_csv" translatable="false">https://sempermechanics.com/support/troubleshooting/#loading</string>
+    <string name="url_faq_record_integrity" translatable="false">https://sempermechanics.com/support/troubleshooting/#reading</string>
     <string name="url_report_bug">https://sempermechanics.com/support/</string>
     <string name="url_request_feature">https://sempermechanics.com/support/</string>
 
