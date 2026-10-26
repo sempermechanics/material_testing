@@ -311,8 +311,8 @@ online; ≤ grace period offline')."
 
 **Now.** The release gate is per app but not per institution:
 `MIN_SUPPORTED_VERSION_CODE` / `RECOMMENDED_VERSION_CODE` for Semper and the
-`_MATERIAL_TESTING` pair for Material Testing (`settings.release_gate(app)`,
-`backend/app/config.py:286-300`) go into every `/v1/config` answer for that app
+`_SEMPER_CLASSROOM` pair for Semper Classroom (`settings.release_gate(app)`,
+`backend/app/config.py:308-335`) go into every `/v1/config` answer for that app
 (`backend/app/routers/account.py:145-172`), and the app gates
 itself (`VersionGate.decide`,
 `app/src/main/java/com/sempermechanics/semper/data/policy/VersionGate.kt:33`).

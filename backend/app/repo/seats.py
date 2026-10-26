@@ -131,7 +131,7 @@ def _settle_holder(license_id: str, lic: dict, ref, scope: str, uid: str,
     }
     releasing = {}
     for app, lock in locks.items():
-        active = user.get(apps.field("activeDeviceId", app)) or ""
+        active = apps.read_field(user, "activeDeviceId", app) or ""
         if active and (not lock or lock == active):
             releasing[app] = active
     _release_devices(user_ref, releasing, patch)
@@ -163,7 +163,7 @@ def clear_device_lock(license_id: str, uid: str = "", *,
     releases every app, because the holder's phone changed and both apps are
     on it. The holder's own clear releases `app` alone, the app that asked,
     and its cooldown is that app's: moving Semper to a new phone does not make
-    Material Testing wait a month to follow.
+    Semper Classroom wait a month to follow.
 
     A staff or IT clear also stops the released phone's demo count holding
     the holder's analyses (`forget_device_sessions`, TD-276); the holder's
@@ -176,7 +176,7 @@ def clear_device_lock(license_id: str, uid: str = "", *,
     `deviceChangedAt`, which only this path writes: a staff or IT clear
     neither reads nor writes that stamp, so a support request always works
     however recently the holder changed device themselves. Each app has its
-    own stamp (`apps.field("deviceChangedAt", app)`).
+    own stamp (`apps.read_field(doc, "deviceChangedAt", app)`).
 
     The answer is the audit detail, including the device
     that was given up — the other half of the record `revalidate_device_lock`
@@ -187,8 +187,9 @@ def clear_device_lock(license_id: str, uid: str = "", *,
     `device_change_too_soon` refusal carries the instant the next change is
     allowed, so it can say when.
     Both device ids come once per app (`apps.spread`): `previousDeviceId` and
-    `releasedDeviceId` are Semper's, `previousDeviceIdMaterialTesting` and so
-    on the other app's, "" for an app the clear did not touch.
+    `releasedDeviceId` are Semper's, `previousDeviceIdSemperClassroom` and so
+    on the other app's (mirrored under the old `...MaterialTesting` names,
+    ADR-030), "" for an app the clear did not touch.
     """
     lic_snap = _get(db().collection("licenses").document(license_id))
     if not lic_snap.exists:
@@ -215,9 +216,9 @@ def clear_device_lock(license_id: str, uid: str = "", *,
         if not snap.exists:
             raise Refusal(not_found)
         doc = snap.to_dict() or {}
-        previous = {a: doc.get(apps.field("deviceIdLock", a)) or "" for a in apps.ALL}
+        previous = {a: apps.read_field(doc, "deviceIdLock", a) or "" for a in apps.ALL}
         _update_doc(ref, {
-            **{apps.field("deviceIdLock", a): "" for a in apps.ALL},
+            **apps.spread("deviceIdLock", {}),
             "updatedAt": _base.firestore.SERVER_TIMESTAMP,
             "schemaVersion": SCHEMA_VERSION,
         })
@@ -231,8 +232,6 @@ def clear_device_lock(license_id: str, uid: str = "", *,
 
     now = _now()
     cooldown = timedelta(days=max(0, settings.SELF_DEVICE_CHANGE_COOLDOWN_DAYS))
-    lock_field = apps.field("deviceIdLock", app)
-    changed_field = apps.field("deviceChangedAt", app)
 
     def too_soon(next_allowed) -> Refusal:
         # The refusal says when, as the success does: "not yet" with no date
@@ -246,18 +245,19 @@ def clear_device_lock(license_id: str, uid: str = "", *,
         if not snap.exists:
             raise Refusal(not_found)
         doc = snap.to_dict() or {}
-        changed = as_utc(doc.get(changed_field))
+        changed = as_utc(apps.read_field(doc, "deviceChangedAt", app))
         if cooldown and changed and now - changed < cooldown:
             raise too_soon(changed + cooldown)
         tx.update(ref, {
-            lock_field: "",
-            changed_field: now,
+            **apps.written_fields("deviceIdLock", app, ""),
+            **apps.written_fields("deviceChangedAt", app, now),
             "updatedAt": _base.firestore.SERVER_TIMESTAMP,
             "schemaVersion": SCHEMA_VERSION,
         })
         return {
             **detail,
-            **apps.spread("previousDeviceId", {app: doc.get(lock_field) or ""}),
+            **apps.spread("previousDeviceId",
+                          {app: apps.read_field(doc, "deviceIdLock", app) or ""}),
             "nextChangeAllowedAt": (now + cooldown).isoformat() if cooldown else "",
         }
 

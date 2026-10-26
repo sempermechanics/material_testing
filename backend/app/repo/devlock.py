@@ -70,7 +70,7 @@ def _device_lock_state(user: dict, device_id: str,
 
     Individual: the lock lives on the licence, one device for the licence.
     Institution: on the seat, one device per member. Either way there is one
-    lock per app (`apps.field`), so a licence holds one phone for each app
+    lock per app (`apps.read_field`), so a licence holds one phone for each app
     (ADR-010).
     """
     license_id = user.get("licenseId")
@@ -87,7 +87,7 @@ def _device_lock_state(user: dict, device_id: str,
         tag = test_account_of(user)
         if tag is not None:
             return _test_lock_verdict(user, tag, device_id, app), None
-        return _lock_verdict(lic.get(apps.field("deviceIdLock", app)), device_id, ref)
+        return _lock_verdict(apps.read_field(lic, "deviceIdLock", app), device_id, ref)
     seat_ref = _seat_ref(license_id, user.get("uid") or "")
     seat_snap = _get(seat_ref)
     if not seat_snap.exists:
@@ -95,7 +95,7 @@ def _device_lock_state(user: dict, device_id: str,
     seat = seat_snap.to_dict() or {}
     if seat.get("status") in ("revoked", "disabled"):
         return _Lock.REVOKED, None
-    return _lock_verdict(seat.get(apps.field("deviceIdLock", app)), device_id, seat_ref)
+    return _lock_verdict(apps.read_field(seat, "deviceIdLock", app), device_id, seat_ref)
 
 
 def _test_lock_verdict(user: dict, tag: dict, device_id: str, app: str) -> _Lock:
@@ -111,7 +111,7 @@ def _test_lock_verdict(user: dict, tag: dict, device_id: str, app: str) -> _Lock
     snap = _get(db().collection("devices").document(device_id))
     dev = (snap.to_dict() or {}) if snap.exists else None
     if (dev and dev.get("uid") == user.get("uid") and dev.get("status") == statuses.DEVICE_ACTIVE
-            and (dev.get("app") or apps.SEMPER) == app):
+            and apps.same_app(dev.get("app"), app)):
         return _Lock.OK
     if staff_released_from(dev, user.get("uid") or ""):
         return _Lock.MISMATCH
@@ -168,15 +168,18 @@ def bind_device_lock(ref, device_id: str, app: str = apps.SEMPER) -> bool:
     device holds.
     """
 
-    lock = apps.field("deviceIdLock", app)
+    def _held(snap) -> bool:
+        return bool(snap.exists and (apps.read_field(snap.to_dict(), "deviceIdLock", app) or ""))
 
     @_base.firestore.transactional
     def _bind(tx) -> bool:
         snap = _get(ref, tx)
-        if not snap.exists or ((snap.to_dict() or {}).get(lock) or ""):
+        if not snap.exists or _held(snap):
             return False
-        # A seat or an individual licence; both are stamped (TD-254).
-        tx.update(ref, {lock: device_id, "schemaVersion": SCHEMA_VERSION})
+        # A seat or an individual licence; both are stamped (TD-254). Both
+        # the new field and the old one (ADR-030).
+        tx.update(ref, {**apps.written_fields("deviceIdLock", app, device_id),
+                        "schemaVersion": SCHEMA_VERSION})
         return True
 
     for round_ in range(_BIND_ROUNDS):
@@ -184,7 +187,7 @@ def bind_device_lock(ref, device_id: str, app: str = apps.SEMPER) -> bool:
         if bound is not None:
             return bound
         snap = _get(ref)
-        if not snap.exists or ((snap.to_dict() or {}).get(lock) or ""):
+        if not snap.exists or _held(snap):
             # Another device bound it first. This one is a mismatch from its
             # next request onward, which revalidate_device_lock will act on.
             return False
@@ -204,10 +207,10 @@ def released_device_held(user: dict, device_id: str, app: str = apps.SEMPER) -> 
     Registering any other device clears the stamp (`register_device`), and after
     `DEVICE_RELEASE_HOLD_HOURS` the old phone may return.
     """
-    if not device_id or user.get(apps.field("releasedDeviceId", app)) != device_id:
+    if not device_id or apps.read_field(user, "releasedDeviceId", app) != device_id:
         return False
     hold = timedelta(hours=max(0, settings.DEVICE_RELEASE_HOLD_HOURS))
-    released = as_utc(user.get(apps.field("releasedAt", app)))
+    released = as_utc(apps.read_field(user, "releasedAt", app))
     return bool(hold) and released is not None and _now() - released < hold
 
 
@@ -224,7 +227,7 @@ def _may_bind(user: dict, device_id: str, app: str = apps.SEMPER) -> bool:
     sign-in). The same path let a released phone's upload worker retake the
     lock during its hold.
     """
-    active = user.get(apps.field("activeDeviceId", app)) or ""
+    active = apps.read_field(user, "activeDeviceId", app) or ""
     if active:
         return device_id == active
     return not released_device_held(user, device_id, app)
@@ -259,7 +262,7 @@ def revalidate_device_lock(user: dict, device_id: str | None,
     _device_lock_state.
 
     `app` is the app the request came from (`X-App-Id`). Each app has its own
-    lock, so Semper and Material Testing on one phone are each checked against
+    lock, so Semper and Semper Classroom on one phone are each checked against
     their own device id, and neither is a mismatch for the other (ADR-010).
 
     This only ever *removes* entitlement in place — it never deletes or hides

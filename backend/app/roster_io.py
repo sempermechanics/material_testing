@@ -144,9 +144,12 @@ def _render(header: list[str], rows: list[list]) -> str:
 
 
 #: The roster export's columns. `email` first, so the file imports back as it is.
+#: Semper Classroom's lock keeps its old column name until TD-330, so IT's
+#: sheets keyed on it still read it (ADR-030).
 ROSTER_COLUMNS = [
     "email", "status", "uid",
-    *(apps.field("deviceIdLock", app) for app in apps.ALL),
+    *(apps.legacy_field("deviceIdLock", app) or apps.field("deviceIdLock", app)
+      for app in apps.ALL),
     "leaseExpiresAt", "lastHeartbeatAt", "createdAt", "updatedAt",
 ]
 

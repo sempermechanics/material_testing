@@ -5,7 +5,7 @@
 import { api } from "../api.js";
 import { confirmInPage, tellInPage } from "../dialogs.js";
 import { setStatus } from "../status.js";
-import { esc, seatDevices, placeholderRows, retryRow } from "../util.js";
+import { esc, seatDevices, classroomField, APP_NAMES, placeholderRows, retryRow } from "../util.js";
 import { explain } from "../messages.js";
 import { $, labelOf } from "./state.js";
 import { showLicence } from "./licences.js";
@@ -45,15 +45,16 @@ export async function showDeviceHistory(id) {
       // The registered phone the clear signed out, when it is not the lock's.
       const released = (e.detail && e.detail.releasedDeviceId) || "";
       const next = (e.detail && e.detail.deviceId) || "";
-      // Material Testing's half of the same clear, and which app a bind was for.
-      const prevMt = (e.detail && e.detail.previousDeviceIdMaterialTesting) || "";
+      // Semper Classroom's half of the same clear, and which app a bind was
+      // for. Rows from before ADR-030 hold only the Material Testing name.
+      const prevMt = classroomField(e.detail, "previousDeviceId") || "";
       const app = (e.detail && e.detail.app) || "";
       const who = e.uid || "—";
       return `${e.ts || "?"}  ${e.action}  by ${who}` +
-        (app ? ` (${app})` : "") +
+        (app ? ` (${APP_NAMES[app] || app})` : "") +
         (prev ? `  left ${prev}` : "") +
         (released && released !== prev ? `  signed out ${released}` : "") +
-        (prevMt ? `  left ${prevMt} (Material Testing)` : "") +
+        (prevMt ? `  left ${prevMt} (Semper Classroom)` : "") +
         (next ? `  → ${next}` : "");
     });
     // One move a line: the card keeps single line breaks.
@@ -100,7 +101,7 @@ export async function loadUsers(started) {
             <td>${esc(u.displayName || "—")}</td>
             <td class="muted">${seatDevices({
               deviceIdLock: u.activeDeviceId,
-              deviceIdLockMaterialTesting: u.activeDeviceIdMaterialTesting,
+              deviceIdLockMaterialTesting: classroomField(u, "activeDeviceId"),
             }) || "—"}</td>
             <td class="actions">
               <button data-approve="${esc(u.uid)}">Approve</button>
@@ -137,9 +138,10 @@ $("releasePhone").addEventListener("click", async () => {
       body: JSON.stringify({ email }),
     });
     // One phone per app (ADR-010); a release frees both.
+    const classroom = classroomField(out, "releasedDeviceId");
     const released = [
       out.releasedDeviceId,
-      out.releasedDeviceIdMaterialTesting && `${out.releasedDeviceIdMaterialTesting} (Material Testing)`,
+      classroom && `${classroom} (Semper Classroom)`,
     ].filter(Boolean);
     setStatus(released.length
       ? `Released ${released.join(" and ")} for ${out.email || email}; the new phone can sign in.`

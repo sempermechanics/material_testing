@@ -38,8 +38,10 @@ def _as(store, monkeypatch, uid="dev-user"):
 def test_the_retired_ids_are_the_old_ones_only():
     assert apps.is_retired("com.indicvision.semper")
     assert apps.is_retired(" com.indicvision.semper.materialtesting ")
+    # Semper Classroom is signed with Semper Classroom's key (ADR-030).
+    assert apps.is_retired("com.sempermechanics.materialtesting")
     assert not apps.is_retired("com.sempermechanics.semper")
-    assert not apps.is_retired("com.sempermechanics.materialtesting")
+    assert not apps.is_retired("com.sempermechanics.semperclassroom")
     assert not apps.is_retired("")
     assert not apps.is_retired(None)
     # Still the same apps everywhere else (sessions, locks, the access log).
@@ -116,7 +118,7 @@ async def test_registering_the_same_device_again_only_rewrites_its_key(client, s
 
 @pytest.mark.asyncio
 async def test_another_apps_registration_on_the_shared_id_is_put_back(client, store, audited, monkeypatch):
-    """The slot both apps share (TD-209): Material Testing on the same signing
+    """The slot both apps share (TD-209): Semper Classroom on the same signing
     key registers the same device id and takes the key; Semper registering
     again takes it back, and each app's binding stays where it was."""
     _bound(store)
@@ -126,7 +128,7 @@ async def test_another_apps_registration_on_the_shared_id_is_put_back(client, st
     mt = await client.post(
         "/v1/devices/register",
         json={"deviceId": "and-semper", "publicKeyPem": mt_key},
-        headers={"X-App-Id": "com.sempermechanics.materialtesting"},
+        headers={"X-App-Id": "com.sempermechanics.semperclassroom"},
     )
     assert mt.status_code == 201, mt.text
     assert store._data["devices"]["and-semper"]["publicKeyPem"] == mt_key
@@ -143,4 +145,5 @@ async def test_another_apps_registration_on_the_shared_id_is_put_back(client, st
     assert store._data["devices"]["and-semper"]["status"] == "ACTIVE"
     user = store._data["users"]["dev-user"]
     assert user["activeDeviceId"] == "and-semper"
+    assert user["activeDeviceIdSemperClassroom"] == "and-semper"
     assert user["activeDeviceIdMaterialTesting"] == "and-semper"

@@ -4,6 +4,8 @@
 **Date:** 2026-10-01
 **Deciders:** product owner, backend owner
 
+[2026-10-26: Material Testing is renamed Semper Classroom (`com.sempermechanics.semperclassroom`), and its sessions are still tagged `materialtesting` (`apps.stored_name`), which a backend from before the rename reads; the tag is read, compared (`apps.same_app`) and answered as `semperclassroom` until TD-330 retags it (`backend/scripts/rename_classroom_app.py --retag`) and drops the alias. See [ADR-030](ADR-030-semper-classroom-app-identity.md).]
+
 ## Context
 
 Semper (`com.indicvision.semper`) and Material Testing

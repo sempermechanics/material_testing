@@ -19,7 +19,10 @@ The contract the Android verifier implements; change it only together with it:
   ============  ===========================================================
   iss           "semper-api"
   sub           the account's Firebase uid
-  app           the app the request came from (`semper`, `materialtesting`)
+  app           the app the request came from, as that build pins it
+                (`apps.token_claim`): `semper`, `semperclassroom`, or
+                `materialtesting` for a Material Testing build from before
+                the rename (ADR-030)
   dev           the device id (`X-Device-Id`)
   dkt           base64url(SHA-256(DER SubjectPublicKeyInfo of the device's
                 registered public key)), so a token copied to another

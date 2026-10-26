@@ -159,8 +159,8 @@ def _seat_public(seat_id: str, s: dict) -> dict:
     return {
         "uid": seat_id,
         "email": s.get("email") or "",
-        **{apps.field("deviceIdLock", app): s.get(apps.field("deviceIdLock", app)) or ""
-           for app in apps.ALL},
+        **apps.spread("deviceIdLock", {app: apps.read_field(s, "deviceIdLock", app)
+                                       for app in apps.ALL}),
         "status": s.get("status") or "active",
         # The lease is the point of the floating roster view: without it
         # IT cannot see who is actually using a seat right now, only who

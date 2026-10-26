@@ -83,19 +83,24 @@ def test_a_release_frees_the_phone_in_both_apps(store):
     """One phone per app (ADR-010): the holder is changing phones, and both
     apps are on the phone they are changing."""
     uid = _demo_on(store)
+    # Bound before ADR-030: only the old field names the Classroom phone.
     store._data["users"][uid]["activeDeviceIdMaterialTesting"] = "old-phone-mt"
     store._data["devices"]["old-phone-mt"] = {"uid": uid, "status": "ACTIVE"}
 
     err, released = attempt(repo.release_account_device, uid)
 
-    assert (err, released) == ("", {"semper": "old-phone", "materialtesting": "old-phone-mt"})
+    assert (err, released) == ("", {"semper": "old-phone", "semperclassroom": "old-phone-mt"})
     user = store._data["users"][uid]
     assert "activeDeviceId" not in user and "activeDeviceIdMaterialTesting" not in user
+    assert "activeDeviceIdSemperClassroom" not in user
+    # Written under both names (ADR-030).
+    assert user["releasedDeviceIdSemperClassroom"] == "old-phone-mt"
     assert user["releasedDeviceIdMaterialTesting"] == "old-phone-mt"
     assert store._data["devices"]["old-phone-mt"]["status"] == "SUPERSEDED"
+    assert repo.released_device_held(user, "old-phone-mt", "semperclassroom") is True
     assert repo.released_device_held(user, "old-phone-mt", "materialtesting") is True
-    # Each app's hold is its own: the Semper id is not held off Material Testing.
-    assert repo.released_device_held(user, "old-phone", "materialtesting") is False
+    # Each app's hold is its own: the Semper id is not held off Semper Classroom.
+    assert repo.released_device_held(user, "old-phone", "semperclassroom") is False
 
 
 @pytest.mark.asyncio
@@ -118,10 +123,12 @@ async def test_released_over_http_then_the_new_phone_registers(client, monkeypat
     assert resp.status_code == 200, resp.text
     assert resp.json() == {"uid": "demo-1", "email": "demo@lab.org",
                            "releasedDeviceId": "old-phone",
+                           "releasedDeviceIdSemperClassroom": "",
                            "releasedDeviceIdMaterialTesting": ""}
     released = [r for r in audited if r["action"] == "ADMIN_DEVICE_RELEASE"]
     assert released[0]["target"] == {"type": "user", "id": "demo-1"}
     assert released[0]["detail"] == {"releasedDeviceId": "old-phone",
+                                     "releasedDeviceIdSemperClassroom": "",
                                      "releasedDeviceIdMaterialTesting": "",
                                      "sessionsForgotten": 0}
 

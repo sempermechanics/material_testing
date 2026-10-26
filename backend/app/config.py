@@ -2,7 +2,7 @@ import logging
 import os
 import re
 
-from .apps import MATERIAL_TESTING
+from .apps import SEMPER_CLASSROOM, canonical
 
 
 def _env_int(name: str, default: str) -> int:
@@ -13,6 +13,16 @@ def _env_int(name: str, default: str) -> int:
         return int(raw)
     except ValueError as e:
         raise RuntimeError(f"Environment variable {name}={raw!r} is not an integer") from e
+
+
+def _env_int_renamed(name: str, old_name: str, default: str) -> int:
+    """`_env_int` for a variable that was renamed: `name` when it is set,
+    else `old_name`, so a service deployed with only the old name keeps its
+    value. An empty value counts as unset."""
+    for env in (name, old_name):
+        if os.environ.get(env):
+            return _env_int(env, default)
+    return int(default)
 
 
 #: Features `KILL_SWITCHES` may name. The app ignores any other value.
@@ -300,24 +310,28 @@ class Settings:
     # nothing on it: the app compares its own versionCode and blocks (below
     # minimum) or nudges (below recommended). 0 = no gate.
     #
-    # Per app: Semper and Material Testing share this service, and each
+    # Per app: Semper and Semper Classroom share this service, and each
     # numbers its builds from its own release run counter, so one number for
     # both would retire the other app's builds by accident. The unsuffixed
-    # pair is Semper's; `release_gate(app)` picks the caller's.
+    # pair is Semper's; `release_gate(app)` picks the caller's. Semper
+    # Classroom's pair was `*_MATERIAL_TESTING` before the rename (ADR-030),
+    # read when the new name is unset.
     MIN_SUPPORTED_VERSION_CODE = _env_int("MIN_SUPPORTED_VERSION_CODE", "0")
     RECOMMENDED_VERSION_CODE = _env_int("RECOMMENDED_VERSION_CODE", "0")
-    MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING = _env_int(
+    MIN_SUPPORTED_VERSION_CODE_SEMPER_CLASSROOM = _env_int_renamed(
+        "MIN_SUPPORTED_VERSION_CODE_SEMPER_CLASSROOM",
         "MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING", "0")
-    RECOMMENDED_VERSION_CODE_MATERIAL_TESTING = _env_int(
+    RECOMMENDED_VERSION_CODE_SEMPER_CLASSROOM = _env_int_renamed(
+        "RECOMMENDED_VERSION_CODE_SEMPER_CLASSROOM",
         "RECOMMENDED_VERSION_CODE_MATERIAL_TESTING", "0")
 
     def release_gate(self, app: str) -> tuple[int, int]:
         """(minSupportedVersionCode, recommendedVersionCode) for `app`
-        (`apps.SEMPER` / `apps.MATERIAL_TESTING`): only that app's builds are
-        compared with them."""
-        if app == MATERIAL_TESTING:
-            return (self.MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING,
-                    self.RECOMMENDED_VERSION_CODE_MATERIAL_TESTING)
+        (`apps.SEMPER` / `apps.SEMPER_CLASSROOM`, or the old
+        `materialtesting`): only that app's builds are compared with them."""
+        if canonical(app) == SEMPER_CLASSROOM:
+            return (self.MIN_SUPPORTED_VERSION_CODE_SEMPER_CLASSROOM,
+                    self.RECOMMENDED_VERSION_CODE_SEMPER_CLASSROOM)
         return self.MIN_SUPPORTED_VERSION_CODE, self.RECOMMENDED_VERSION_CODE
     # Features switched off, fleet-wide, without a release: any of backup,
     # share, restore, upload. Separated by whitespace, `;` or `,` (prefer

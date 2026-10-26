@@ -216,7 +216,7 @@ def access_request(uid: str, email, display_name, provider) -> None:
 
 
 #: How the device mail names the app the device registered for.
-_APP_NAMES = {apps.SEMPER: "Semper", apps.MATERIAL_TESTING: "Material Testing"}
+_APP_NAMES = {apps.SEMPER: "Semper", apps.SEMPER_CLASSROOM: "Semper Classroom"}
 
 
 def device_registered(uid: str, address: str, device_id: str, app: str, *,
@@ -230,7 +230,7 @@ def device_registered(uid: str, address: str, device_id: str, app: str, *,
     """
     if not address:
         return
-    name = _APP_NAMES.get(app, "Semper")
+    name = _APP_NAMES.get(apps.canonical(app), "Semper")
     text = (
         f"A new device was registered to your {name} account.\n\n"
         f"Device: {model or '(model not reported)'}\n"

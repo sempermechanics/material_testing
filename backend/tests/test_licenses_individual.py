@@ -85,7 +85,7 @@ def test_a_second_device_is_refused_once_the_lock_is_taken(store):
 
 
 def test_a_second_app_on_the_licensed_phone_does_not_demote_the_account(store):
-    """Material Testing and Semper share an account, but each app on a phone
+    """Semper Classroom and Semper share an account, but each app on a phone
     has its own ANDROID_ID, so the second one arrives as another device. Its
     launch calls used to write Demo onto the account, which then read Demo in
     both apps until someone cleared the lock (2026-09-28)."""

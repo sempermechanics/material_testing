@@ -253,7 +253,7 @@ test("the delete card says it is done in the app and removes the sign-in for bot
   await open({ license: { mode: "demo", held: false } });
   const said = $("deleteAccount").textContent;
   assert.match(said, /Settings → Your data → Delete account/);
-  assert.match(said, /removes the sign-in itself for both apps, Semper and Material Testing/);
+  assert.match(said, /removes the sign-in itself for both apps, Semper and Semper Classroom/);
   assert.match(said, /cannot be undone/);
 });
 
@@ -327,12 +327,14 @@ test("every app's analyses are listed, each with the app that backed it up", asy
   // only Semper's (ADR-014).
   await open({ sessions: { quota: { used: 3, max: 25 }, sessions: [
     { sessionId: "s1", specimen: "Steel A", app: "semper", status: "COMPLETED", completedCount: 1 },
-    { sessionId: "s2", specimen: "Beam B", app: "materialtesting", status: "COMPLETED", completedCount: 1 },
+    { sessionId: "s2", specimen: "Beam B", app: "semperclassroom", status: "COMPLETED", completedCount: 1 },
+    // Backed up before ADR-030: the record keeps Material Testing's short name.
+    { sessionId: "s5", specimen: "Rod E", app: "materialtesting", status: "COMPLETED", completedCount: 1 },
     { sessionId: "s3", specimen: "Old C", status: "COMPLETED", completedCount: 1 },
     { sessionId: "s4", specimen: "Next D", app: "<b>future</b>", status: "COMPLETED", completedCount: 1 },
   ] } });
   assert.deepEqual(sent(/sessions/), ["GET /v1/sessions?app=all"]);
-  assert.deepEqual(rowTexts().map((r) => r[1]), ["Semper", "Material Testing", "Semper", "<b>future</b>"]);
+  assert.deepEqual(rowTexts().map((r) => r[1]), ["Semper", "Semper Classroom", "Semper Classroom", "Semper", "<b>future</b>"]);
   assert.equal($("rows").querySelectorAll("b").length, 0, "an unknown app name is text, never markup");
 });
 
@@ -467,9 +469,11 @@ test("moving the licence asks first and says when it can be moved again", async 
     `restore your analyses. You can do this again after ${when(next)}.`);
 });
 
-test("Material Testing moves on its own, named in the query", async () => {
+test("Semper Classroom moves on its own, named in the query", async () => {
   // Each app holds its own device (ADR-010). A browser cannot send X-App-Id,
-  // so the page names the app; Semper's button still names none.
+  // so the page names the app; Semper's button still names none. Semper
+  // Classroom is named by its old short name: a backend from before ADR-030
+  // knows only it, and every backend since reads it as Semper Classroom.
   await open({
     license: { mode: "licensed", held: true, kind: "individual" },
     routes: { "POST /v1/licenses/unbind": () => json(200, { nextChangeAllowedAt: "" }) },
@@ -480,7 +484,7 @@ test("Material Testing moves on its own, named in the query", async () => {
   await settle();
   assert.deepEqual(sent(/unbind/), ["POST /v1/licenses/unbind?app=materialtesting"]);
   assert.equal($("status").textContent,
-    "Done. Sign in on the new device, open Material Testing once so the licence attaches, " +
+    "Done. Sign in on the new device, open Semper Classroom once so the licence attaches, " +
     "and then restore your analyses.");
 });
 

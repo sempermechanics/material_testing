@@ -70,7 +70,9 @@ def test_bench_name_drops_the_warning_prefix(ab, name, expected):
 
 
 def test_default_app_id(ab, tmp_path):
-    assert ab.default_app_id() == "com.sempermechanics.semper"
+    # Semper upstream; Semper Classroom (Material Testing before ADR-030) downstream.
+    assert ab.default_app_id() in {"com.sempermechanics.semper", "com.sempermechanics.semperclassroom",
+                                 "com.sempermechanics.materialtesting"}
     assert ab.default_app_id(tmp_path / "absent.kts") == ab.FALLBACK_APP
 
 

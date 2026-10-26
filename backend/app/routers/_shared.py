@@ -47,7 +47,8 @@ def drive_failure(e: requests.RequestException, what: str, drive_file_id: str, *
 
 
 def named_app(app: str, header_app: str) -> str:
-    """The app a `?app=` names (`semper`, `materialtesting`), or the caller's
+    """The app a `?app=` names (`semper`, `semperclassroom`, or the old
+    `materialtesting`, read as `semperclassroom`), or the caller's
     own (by `X-App-Id`) when there is none. A browser cannot send the header,
     so the consoles name the app. Anything else is 400 `unknown_app`."""
     if not app:

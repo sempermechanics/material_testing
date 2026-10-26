@@ -124,12 +124,16 @@ def release_test_device(uid: str, device_id: str) -> None:
         if dev.get("uid") != uid or dev.get("status") != statuses.DEVICE_ACTIVE:
             raise Refusal(errors.DEVICE_NOT_FOUND)
         user_snap = _get(user_ref, tx)
-        field = apps.field("activeDeviceId", dev.get("app") or apps.SEMPER)
-        bound = (user_snap.to_dict() or {}).get(field) if user_snap.exists else None
+        # The app by its name today (ADR-030); a value no app has binds
+        # no field, so there is nothing to drop for it.
+        app = apps.canonical(dev.get("app"))
+        known = app in apps.ALL
+        bound = (apps.read_field(user_snap.to_dict(), "activeDeviceId", app)
+                 if known and user_snap.exists else None)
         _retire_device(tx, device_ref, statuses.DEVICE_REVOKED, {STAFF_RELEASED: True})
         patch = {"updatedAt": _base.firestore.SERVER_TIMESTAMP}
         if bound == device_id:
-            patch[field] = _base.firestore.DELETE_FIELD
+            patch.update(apps.written_fields("activeDeviceId", app, _base.firestore.DELETE_FIELD))
         tx.update(user_ref, patch)
 
     def _contended():
@@ -143,12 +147,12 @@ def active_test_devices(uid: str) -> list[dict]:
     them: `{deviceId, app, model, registeredAt}`, oldest first (one without
     `registeredAt` first). The same equality query on `uid` as
     `_active_devices`; a record from before devices named their app is
-    Semper's."""
+    Semper's, and one tagged `materialtesting` Semper Classroom's (ADR-030)."""
     found = []
     for snap in _stream(db().collection("devices").where("uid", "==", uid)):
         dev = snap.to_dict() or {}
         if dev.get("status") == statuses.DEVICE_ACTIVE:
-            found.append({"deviceId": snap.id, "app": dev.get("app") or apps.SEMPER,
+            found.append({"deviceId": snap.id, "app": apps.canonical(dev.get("app")),
                           "model": dev.get("model") or "",
                           "registeredAt": dev.get("registeredAt")})
     found.sort(key=lambda d: (d["registeredAt"] is not None, str(d["registeredAt"] or ""),

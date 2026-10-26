@@ -43,19 +43,23 @@ async def test_the_defaults_gate_nothing(store, client):
 
 
 async def test_each_app_gets_its_own_release_gate(store, client, monkeypatch):
-    """Semper and Material Testing number their builds separately, so a
+    """Semper and Semper Classroom number their builds separately, so a
     minimum set for one must not retire the other's builds."""
     monkeypatch.setattr(settings, "MIN_SUPPORTED_VERSION_CODE", 1040)
     monkeypatch.setattr(settings, "RECOMMENDED_VERSION_CODE", 1045)
-    monkeypatch.setattr(settings, "MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING", 1003)
-    monkeypatch.setattr(settings, "RECOMMENDED_VERSION_CODE_MATERIAL_TESTING", 0)
+    monkeypatch.setattr(settings, "MIN_SUPPORTED_VERSION_CODE_SEMPER_CLASSROOM", 1003)
+    monkeypatch.setattr(settings, "RECOMMENDED_VERSION_CODE_SEMPER_CLASSROOM", 0)
     semper = (await client.get("/v1/config", headers={"X-App-Id": "com.sempermechanics.semper"})).json()
     assert (semper["minSupportedVersionCode"], semper["recommendedVersionCode"]) == (1040, 1045)
     unnamed = (await client.get("/v1/config")).json()
     assert unnamed["minSupportedVersionCode"] == 1040
     mt = (await client.get(
-        "/v1/config", headers={"X-App-Id": "com.sempermechanics.materialtesting"})).json()
+        "/v1/config", headers={"X-App-Id": "com.sempermechanics.semperclassroom"})).json()
     assert (mt["minSupportedVersionCode"], mt["recommendedVersionCode"]) == (1003, 0)
+    # A Semper Classroom build is the same app, numbered by the same counter.
+    old = (await client.get(
+        "/v1/config", headers={"X-App-Id": "com.sempermechanics.materialtesting"})).json()
+    assert (old["minSupportedVersionCode"], old["recommendedVersionCode"]) == (1003, 0)
 
 
 async def test_an_old_build_is_still_served(store, client, monkeypatch):
@@ -85,8 +89,11 @@ def test_an_unknown_kill_switch_is_dropped_with_a_warning(caplog):
 def test_the_settings_read_their_env_vars(monkeypatch):
     monkeypatch.setenv("MIN_SUPPORTED_VERSION_CODE", "31")
     monkeypatch.setenv("RECOMMENDED_VERSION_CODE", "36")
-    monkeypatch.setenv("MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING", "21")
-    monkeypatch.setenv("RECOMMENDED_VERSION_CODE_MATERIAL_TESTING", "22")
+    monkeypatch.setenv("MIN_SUPPORTED_VERSION_CODE_SEMPER_CLASSROOM", "21")
+    monkeypatch.setenv("RECOMMENDED_VERSION_CODE_SEMPER_CLASSROOM", "22")
+    # The old names lose to the new ones when both are set (ADR-030).
+    monkeypatch.setenv("MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING", "11")
+    monkeypatch.setenv("RECOMMENDED_VERSION_CODE_MATERIAL_TESTING", "12")
     monkeypatch.setenv("KILL_SWITCHES", "restore nope")
     monkeypatch.setenv("CHECK_REVOKED_ON_STEP_UP", "true")
     monkeypatch.setenv("ENTITLEMENT_OFFLINE_GRACE_DAYS", "7")
@@ -98,6 +105,7 @@ def test_the_settings_read_their_env_vars(monkeypatch):
         assert fresh.MIN_SUPPORTED_VERSION_CODE == 31
         assert fresh.RECOMMENDED_VERSION_CODE == 36
         assert fresh.release_gate("semper") == (31, 36)
+        assert fresh.release_gate("semperclassroom") == (21, 22)
         assert fresh.release_gate("materialtesting") == (21, 22)
         assert fresh.KILL_SWITCHES == ["restore"]
         assert fresh.CHECK_REVOKED_ON_STEP_UP is True
@@ -106,10 +114,38 @@ def test_the_settings_read_their_env_vars(monkeypatch):
         assert fresh.ENTITLEMENT_SIGNING_KEY == ""
     finally:
         for name in ("MIN_SUPPORTED_VERSION_CODE", "RECOMMENDED_VERSION_CODE",
+                     "MIN_SUPPORTED_VERSION_CODE_SEMPER_CLASSROOM",
+                     "RECOMMENDED_VERSION_CODE_SEMPER_CLASSROOM",
                      "MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING",
                      "RECOMMENDED_VERSION_CODE_MATERIAL_TESTING", "KILL_SWITCHES",
                      "CHECK_REVOKED_ON_STEP_UP", "ENTITLEMENT_OFFLINE_GRACE_DAYS", "ENTITLEMENT_KID"):
             monkeypatch.delenv(name)
+        importlib.reload(config)
+
+
+@pytest.mark.parametrize(("env", "gate"), [
+    # Deployed before the rename: only the old pair is set.
+    ({"MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING": "41",
+      "RECOMMENDED_VERSION_CODE_MATERIAL_TESTING": "42"}, (41, 42)),
+    # The new name set but empty, as an unset repo variable renders: the old one.
+    ({"MIN_SUPPORTED_VERSION_CODE_SEMPER_CLASSROOM": "",
+      "MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING": "43"}, (43, 0)),
+    ({}, (0, 0)),
+])
+def test_the_classroom_gate_falls_back_to_the_material_testing_names(monkeypatch, env, gate):
+    for name in ("MIN_SUPPORTED_VERSION_CODE_SEMPER_CLASSROOM",
+                 "RECOMMENDED_VERSION_CODE_SEMPER_CLASSROOM",
+                 "MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING",
+                 "RECOMMENDED_VERSION_CODE_MATERIAL_TESTING"):
+        monkeypatch.delenv(name, raising=False)
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    import importlib
+
+    try:
+        assert importlib.reload(config).Settings().release_gate("semperclassroom") == gate
+    finally:
+        monkeypatch.undo()
         importlib.reload(config)
 
 
@@ -214,12 +250,12 @@ async def test_a_checkout_logs_the_licence_it_leased(client, monkeypatch, caplog
     })
     with caplog.at_level(logging.INFO, logger="semper.license"):
         r = await client.post("/v1/licenses/checkout", headers={
-            "X-Device-Id": "dev-device", "X-App-Id": "com.sempermechanics.materialtesting"})
+            "X-Device-Id": "dev-device", "X-App-Id": "com.sempermechanics.semperclassroom"})
     assert r.status_code == 200, r.text
     [event] = _events(caplog, "checkout")
     assert (event["outcome"], event["licenseId"]) == ("ok", license_id)
     assert event["uid"] == "dev-user"
-    assert event["appId"] == "com.sempermechanics.materialtesting"
+    assert event["appId"] == "com.sempermechanics.semperclassroom"
 
 
 def _bound(store) -> str:
