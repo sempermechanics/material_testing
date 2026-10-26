@@ -300,9 +300,9 @@
             android:paddingTop="6dp"
             android:paddingBottom="6dp"
             android:textSize="15sp"
-            android:textColor="@color/viewer_action_ink"
+            android:textColor="@color/lattice_action_ink"
             app:cornerRadius="12dp"
-            app:strokeColor="@color/viewer_action_ink"
+            app:strokeColor="@color/lattice_action_ink"
             android:text="@string/vsg_lattice_save_graph" />
 
         <com.google.android.material.button.MaterialButton
