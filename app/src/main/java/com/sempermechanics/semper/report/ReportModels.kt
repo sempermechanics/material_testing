@@ -73,7 +73,7 @@ data class FieldResult(
     val minValue: Float,
     val maxValue: Float,
     val meanValue: Float,
-    val meanType: String, // "Simple Mean" or "Mean Absolute"
+    val meanType: String, // ReportBuilder.meanLabel: "Mean" or "Mean of |value|"
     val stdDevValue: Float,
     val minCoordX: Int,
     val minCoordY: Int,

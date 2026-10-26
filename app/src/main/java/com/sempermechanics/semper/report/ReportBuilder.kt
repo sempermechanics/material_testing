@@ -35,6 +35,9 @@ object ReportBuilder {
     /** The report's one name: its cover, its page footers and its field images (readiness AE1-010). */
     const val REPORT_NAME = "Semper Analysis Report"
 
+    /** The PDF's mean row: a strain's mean averages |value|, the others the signed value (readiness AE1-017). */
+    internal fun meanLabel(isStrain: Boolean): String = if (isStrain) "Mean of |value|" else "Mean"
+
     // The report's blocks: the five fields (FieldKind's table), then ZNSSD,
     // which follows Exy in a `.dat` point.
     private val FIELD_NAMES = FieldKind.entries.map { it.title } + "ZNSSD (Correlation Quality)"
@@ -173,7 +176,7 @@ object ReportBuilder {
                     isCorrelation -> ""
                     else -> "px"
                 }
-                val meanTypeString = if (isStrain) "Mean Absolute" else "Simple Mean"
+                val meanTypeString = meanLabel(isStrain)
 
                 // One collect pass: store signed values (what computeFieldExtrema's
                 // absoluteStrainValues=false path needs) and accumulate the abs-mean sum in

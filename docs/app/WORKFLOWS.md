@@ -685,7 +685,7 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.1.9 | Enter valid bounds and apply | The heatmap and the scale labels both change |
 | [ ] 8.1.10 | Switch field, then switch back | The custom bounds are remembered *per field* |
 | [ ] 8.1.11 | Reopen the dialog and tap **Auto scale** | The override is dropped; the scale returns to this frame's clamped bounds — not to its true extrema |
-| [ ] 8.1.12 | Open ⓘ | Peek sheet shows the specimen name, max / min with coordinates, mean, a histogram of this field, and settings used |
+| [ ] 8.1.12 | Open ⓘ | Peek sheet shows the specimen name, max (raw) / min (raw) with coordinates and unit, the signed mean, a histogram of this field, and settings used |
 | [ ] 8.1.13 | Scrub frames without a custom scale | Scale labels follow each frame's own 2nd/98th-percentile clamp |
 
 ### 8.2 Frames

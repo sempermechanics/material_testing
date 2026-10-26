@@ -299,16 +299,9 @@ class PdfLayoutEngine(
         canvas?.drawText("${field.fieldName}  [${field.unit}]", margin, cursorY + 60f, h2Paint)
         cursorY += 100f
 
-        // Dynamic Scientific Notation applied here!
-        val format = ReportBuilder::formatMetric
         drawTable(
-            headers = listOf("Metric", "Value", "Location (X,Y)"),
-            rows = listOf(
-                listOf("Maximum (+)", format(field.maxValue), "(${field.maxCoordX}, ${field.maxCoordY})"),
-                listOf("Minimum (-)", format(field.minValue), "(${field.minCoordX}, ${field.minCoordY})"),
-                listOf(field.meanType, format(field.meanValue), "—"),
-                listOf("Standard Dev.", format(field.stdDevValue), "—"),
-            ),
+            headers = FIELD_TABLE_HEADERS,
+            rows = fieldTableRows(field),
             colWeights = listOf(0.4f, 0.3f, 0.3f),
         )
         canvas?.drawText(EXTREMA_NOTE, margin, cursorY, bodyPaintLeft)
@@ -352,16 +345,34 @@ class PdfLayoutEngine(
         cursorY = startY + blockHeight
     }
 
-    private companion object {
-        const val BRAND_LOGO_WIDTH = 520f
-        const val BRAND_LOGO_GAP = 40f
+    companion object {
+        private const val BRAND_LOGO_WIDTH = 520f
+        private const val BRAND_LOGO_GAP = 40f
 
         /** Inset and line pitch of [drawNotice]'s box. */
-        const val NOTICE_PAD = 40f
-        const val NOTICE_LINE = 55f
+        private const val NOTICE_PAD = 40f
+        private const val NOTICE_LINE = 55f
+
+        /** The field table's columns; marker locations are image pixels (readiness AE1-017). */
+        internal val FIELD_TABLE_HEADERS = listOf("Metric", "Value", "Location (x, y) px")
+
+        /**
+         * The field table: max / min are the 98th / 2nd percentile points
+         * ([EXTREMA_NOTE]), so their labels say so beside the viewer's and the
+         * CSV's raw extremes (readiness AE1-017). Values are unchanged.
+         */
+        internal fun fieldTableRows(field: FieldResult): List<List<String>> {
+            val format = ReportBuilder::formatMetric
+            return listOf(
+                listOf("Maximum (98th percentile)", format(field.maxValue), "(${field.maxCoordX}, ${field.maxCoordY})"),
+                listOf("Minimum (2nd percentile)", format(field.minValue), "(${field.minCoordX}, ${field.minCoordY})"),
+                listOf(field.meanType, format(field.meanValue), "—"),
+                listOf("Standard deviation", format(field.stdDevValue), "—"),
+            )
+        }
 
         /** Why the field table's max / min can differ from the CSV's. */
-        const val EXTREMA_NOTE =
-            "Max / min leave out the top and bottom 2% of points as outliers; the CSV gives raw extremes."
+        private const val EXTREMA_NOTE =
+            "Max / min leave out the top and bottom 2% of points as outliers; the viewer and the CSV give raw extremes."
     }
 }
