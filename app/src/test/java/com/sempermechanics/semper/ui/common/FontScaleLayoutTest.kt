@@ -195,6 +195,21 @@ class FontScaleLayoutTest {
     }
 
     @Test
+    fun `the ROI studio keeps Use full image left and Crop-Erase right when they share a row`() {
+        val ctx = context(1f)
+        prepare = {}
+        val root = laidOut(ctx, R.layout.activity_roi_draw, merge = false, widthDp = PHONE_DP)
+        val chip = root.findViewById<View>(R.id.btnFullImageRoi)
+        val group = root.findViewById<View>(R.id.rgCropErase)
+        val chipLeft = chip.rightIn(root) - chip.width
+        val chipMid = (chip.top + chip.bottom) / 2
+        assertTrue("one row at font scale 1", chipMid in group.top..group.bottom)
+        assertTrue("Use full image starts at ${chipLeft}px", chipLeft <= ctx.px(EDGE_DP))
+        val groupRight = group.rightIn(root)
+        assertTrue("Crop/Erase ends at ${groupRight}px of ${root.width}", groupRight >= root.width - ctx.px(EDGE_DP))
+    }
+
+    @Test
     fun `the deformed frames' range names both files in full at font scale 1`() = assertRangeInFull(1f)
 
     @Test
@@ -258,5 +273,8 @@ class FontScaleLayoutTest {
         const val GOOGLE_MIN_DP = 52
         const val TILE_DP = 72
         const val UNIT_GAP_DP = 4
+
+        /** The ROI tool row's side padding (12dp) plus a little slack. */
+        const val EDGE_DP = 16
     }
 }

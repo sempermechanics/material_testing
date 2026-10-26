@@ -94,7 +94,7 @@
                 app:flow_horizontalGap="8dp"
                 app:flow_horizontalStyle="spread_inside"
                 app:flow_lastHorizontalBias="1"
-                app:flow_lastHorizontalStyle="packed"
+                app:flow_lastHorizontalStyle="spread_inside"
                 app:flow_verticalAlign="center"
                 app:flow_verticalGap="4dp"
                 app:flow_wrapMode="chain"
