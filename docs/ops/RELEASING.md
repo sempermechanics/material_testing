@@ -234,7 +234,11 @@ so none of the signing steps run if any of the above fails.
    `DebugViewerSeedActivity`), contains `DebugAppCheckProviderFactory` or a
    firebase-appcheck-debug version file, allows cleartext (manifest or network
    security config), has a `minSdkVersion` other than `minSdk` in
-   `app/build.gradle.kts`, or R8's `mapping.txt` is missing or empty. It
+   `app/build.gradle.kts`, has a `targetSdkVersion` other than `targetSdk` there
+   or below Play's floor of 36 (`target-sdk`), ships a `lib/<abi>/*.so` with a
+   LOAD segment aligned below 16 KB or stored uncompressed off a 16 KB zip
+   offset, or ships no `.so` at all (`native-16kb`, Play's 16 KB page-size
+   rule), or R8's `mapping.txt` is missing or empty. It
    **warns** when no `sha256/…` pin is compiled in, i.e. the
    `SEMPER_API_CERT_PINS` secret was empty. CI tier 5 runs the same check on
    its own release build. Locally:

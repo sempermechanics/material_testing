@@ -306,6 +306,8 @@ jobs:
               - 'app/src/androidTest/java/com/sempermechanics/semper/benchmark/HotPathMicroBenchmark.kt'
               - 'scripts/micro_ab.py'
               - 'benchmark/gates.json'
+              # The launch smoke of the minified build runs in the same job.
+              - 'scripts/launch_smoke.py'
 
       - name: Resolve tier flags
         id: flags
@@ -396,8 +398,13 @@ jobs:
               release_build=true
             fi
             # Keep rules and the release build config only fail under R8, which
-            # Tier 1 never runs.
+            # Tier 1 never runs. Tier 5 builds the R8 APK; on a PR the benchmark
+            # job also launches one (its launch smoke), since only running it
+            # shows a keep rule that is missing.
             if [ "$FILTER_PACKAGING" = "true" ]; then release_build=true; fi
+            if [ "$FILTER_PACKAGING" = "true" ] && [ "$EVENT_NAME" = "pull_request" ]; then
+              benchmark=true
+            fi
             if [ "$E2E_LABEL" = "true" ] || [ "$RELEASE_LABEL" = "true" ]; then
               emulator=true
               release_build=true
@@ -427,8 +434,27 @@ jobs:
           echo "Resolved: event=$EVENT_NAME full=$full app=$app backend=$backend rules=$rules emulator=$emulator release_build=$release_build benchmark_ci=$benchmark"
 
   # ===================================================================
-  # Tier 1 — Kotlin compile + JVM unit tests + quality gates (no NDK)
+  # Tier 1 — two jobs, no NDK. Static: spotless and detekt, about two
+  # minutes, which is what the heavy tiers wait for, so the emulator does not
+  # boot for a PR that is not even formatted. App fast: compile, JVM unit
+  # tests, lint and the Kover floor (~8 min), beside the heavy tiers instead of
+  # in front of them; its failure still fails CI OK. Of the material_testing
+  # fork's five Tier 1 failures from 2026-10-18 to 10-26, two were spotless.
   # ===================================================================
+  tier1-static:
+    name: Tier 1 — Static checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-android-build
+
+      - name: Spotless and detekt
+        run: ./gradlew --continue --console=plain spotlessCheck :app:detekt
+
   tier1-app-fast:
     name: Tier 1 — App fast
     runs-on: ubuntu-24.04
@@ -447,8 +473,6 @@ jobs:
         run: >
           ./gradlew --continue --console=plain
           :app:testDebugUnitTest
-          spotlessCheck
-          :app:detekt
           :app:lintDebug
           :app:compileReleaseKotlin
           :app:compileDebugAndroidTestKotlin
@@ -496,20 +520,20 @@ jobs:
   # (EnginePipelineSmokeTest through the JNI, AnalysisWizardSmokeTest, …).
   # Runs on an engine/JNI change, the e2e/release/full-ci labels, the weekly
   # run and main pushes that touch them. Runs even when Tier 1 is skipped (an
-  # engine-only bump), but never after Tier 1 failed.
+  # engine-only bump), but never after its static checks failed.
   # ===================================================================
   tier3-emulator-e2e:
     name: Tier 3 — Emulator E2E
     runs-on: ubuntu-24.04
     timeout-minutes: 90
-    needs: [changes, tier1-app-fast]
+    needs: [changes, tier1-static]
     permissions:
       contents: read
       actions: write   # prune-cache
     if: >-
       always()
       && needs.changes.result == 'success'
-      && (needs.tier1-app-fast.result == 'success' || needs.tier1-app-fast.result == 'skipped')
+      && (needs.tier1-static.result == 'success' || needs.tier1-static.result == 'skipped')
       && needs.changes.outputs.emulator == 'true'
     steps:
       - uses: actions/checkout@v7
@@ -745,20 +769,20 @@ jobs:
   # Tier 5 — Signed release build (arm64-v8a), with R8
   # Runs on an engine/JNI change, a packaging change (keep rules, the app's
   # build script, the version catalog), the labels and the weekly run; even
-  # when Tier 1 is skipped, never after it failed.
+  # when Tier 1 is skipped, never after its static checks failed.
   # ===================================================================
   tier5-signed-release:
     name: Tier 5 — Signed release
     runs-on: ubuntu-24.04
     timeout-minutes: 90
-    needs: [changes, tier1-app-fast]
+    needs: [changes, tier1-static]
     permissions:
       contents: read
       actions: write   # prune-cache
     if: >-
       always()
       && needs.changes.result == 'success'
-      && (needs.tier1-app-fast.result == 'success' || needs.tier1-app-fast.result == 'skipped')
+      && (needs.tier1-static.result == 'success' || needs.tier1-static.result == 'skipped')
       && needs.changes.outputs.release_build == 'true'
     steps:
       - uses: actions/checkout@v7
@@ -868,14 +892,14 @@ jobs:
     name: Benchmarks (macro + micro)
     runs-on: ubuntu-24.04
     timeout-minutes: 90
-    needs: [changes, tier1-app-fast]
+    needs: [changes, tier1-static]
     permissions:
       contents: read
     if: >-
       always()
       && needs.changes.result == 'success'
       && needs.changes.outputs.benchmark_ci == 'true'
-      && (needs.tier1-app-fast.result == 'success' || needs.tier1-app-fast.result == 'skipped')
+      && (needs.tier1-static.result == 'success' || needs.tier1-static.result == 'skipped')
     steps:
       - uses: actions/checkout@v7
         with:
@@ -911,9 +935,11 @@ jobs:
           echo "APP_ID=$APP_ID" >> "$GITHUB_ENV"
 
       # The micro A/B's two builds (TD-199): the PR's base (A) and the PR (B),
-      # each a debug app APK and its androidTest APK. Both build in this
-      # checkout, base first, so the PR's build is the one left in app/build
-      # and the base's native objects are reused where the engine is the same.
+      # each a debug app APK and its androidTest APK, and its app id in `app-id`
+      # (a PR that changes applicationId, as ADR-019 did, runs each build under
+      # its own). Both build in this checkout, base first, so the PR's build is
+      # the one left in app/build and the base's native objects are reused where
+      # the engine is the same.
       - name: Build the PR's base and the PR for the microbenchmark A/B
         if: github.event_name == 'pull_request'
         env:
@@ -926,6 +952,8 @@ jobs:
             ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest -PabiFilters=x86_64 -PnativeCompilerLauncher=ccache --console=plain
             mkdir -p "$ab/$1"
             cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk "$ab/$1/"
+            sed -n 's/^ *applicationId = "\([^"]*\)".*/\1/p' app/build.gradle.kts > "$ab/$1/app-id"
+            test "$(wc -l < "$ab/$1/app-id")" -eq 1
           }
           git fetch --no-tags --depth=1 origin "$BASE_SHA"
           git -c advice.detachedHead=false checkout "$BASE_SHA"
@@ -936,22 +964,47 @@ jobs:
           build B
           ls -l "$ab"/*
 
-      # One emulator boot, two suites; each line is its own command, and a failing
-      # one fails the step. The micro run is a debug build on an emulator, hence
-      # DEBUGGABLE in its suppress list: its numbers are relative, not absolutes.
-      # It goes through `am instrument`, not connectedDebugAndroidTest: an
-      # instrumentation argument passed through Gradle arrives cut at its first
-      # comma (only EMULATOR was suppressed, TD-86), and API 34 raises
-      # ACTIVITY-MISSING and NOT-AOT-COMPILED too. `am instrument` exits 0 on test
-      # failures, so the grep on its summary line is the pass/fail. On a PR the
-      # last line runs the micro A/B (scripts/micro_ab.py): A B B A on this
-      # emulator, failing a hot path whose median is over microAbMargin
-      # (benchmark/gates.json) above the base's. The `perf-accepted` label makes
-      # it report without failing, for a slowdown the PR means to make.
+      # The minified benchmark app (R8, as release) and the Macrobenchmark APK,
+      # built before the emulator boots so it does not sit idle through the
+      # compile. x86_64 only and through ccache: without -PabiFilters the
+      # benchmark type adds x86_64 to release's arm64-v8a, and arm64 never runs
+      # on this AVD (4 of the step's 14 minutes in material_testing run
+      # 40310692266). The
+      # connected task below passes the same flags, so it finds these up to date.
+      - name: Build the minified benchmark app
+        run: >
+          ./gradlew :app:assembleBenchmark :benchmark:assembleBenchmark
+          -PabiFilters=x86_64 -PnativeCompilerLauncher=ccache --console=plain
+
+      # One emulator boot; each line is its own command, and a failing one fails
+      # the step.
+      # - The launch smoke (scripts/launch_smoke.py) cold-starts the minified app
+      #   and fails on a crash or an R8 symptom in logcat: nothing else launches
+      #   an R8 build before a user does.
+      # - Macrobenchmarks: on a PR a dry run (one pass each, androidx.benchmark
+      #   dryRunMode), since their emulator numbers are not gated; the full
+      #   iterations run on dispatch and with the `benchmark` label.
+      # - The micro smoke run only when there is no A/B (dispatch): on a PR the
+      #   A/B's rounds run the same class twice from this build. It is a debug
+      #   build on an emulator, hence DEBUGGABLE in its suppress list: its
+      #   numbers are relative, not absolutes. It goes through `am instrument`,
+      #   not connectedDebugAndroidTest: an instrumentation argument passed
+      #   through Gradle arrives cut at its first comma (only EMULATOR was
+      #   suppressed, TD-86), and API 34 raises ACTIVITY-MISSING and
+      #   NOT-AOT-COMPILED too. `am instrument` exits 0 on test failures, so the
+      #   grep on its summary line is the pass/fail.
+      # - On a PR the last line runs the micro A/B (scripts/micro_ab.py): A B B A
+      #   on this emulator, failing a hot path whose median is over microAbMargin
+      #   (benchmark/gates.json) above the base's. The `perf-accepted` label makes
+      #   it report without failing, for a slowdown the PR means to make.
       - name: Run startup Macrobenchmarks and hot-path Microbenchmarks
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         env:
           MICRO_AB_FLAGS: ${{ contains(github.event.pull_request.labels.*.name, 'perf-accepted') && '--advisory' || '' }}
+          MACRO_DRY_RUN: >-
+            ${{ github.event_name == 'pull_request'
+            && !contains(github.event.pull_request.labels.*.name, 'benchmark')
+            && '-Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.dryRunMode.enable=true' || '' }}
         with:
           # Same image as tier 3. API 37 empties gfxinfo framestats, so
           # startActivityAndWait cannot confirm launch.
@@ -960,14 +1013,15 @@ jobs:
           # The action's default options plus -no-metrics (see tier 3).
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
           script: |
-            ./gradlew :benchmark:connectedBenchmarkAndroidTest -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED
-            ./gradlew :app:installDebug :app:installDebugAndroidTest -PabiFilters=x86_64 -PnativeCompilerLauncher=ccache --console=plain
-            "$ANDROID_HOME/platform-tools/adb" shell am instrument -w -e class com.sempermechanics.semper.benchmark.HotPathMicroBenchmark -e androidx.benchmark.suppressErrors EMULATOR,DEBUGGABLE,LOW-BATTERY,UNLOCKED,ACTIVITY-MISSING,NOT-AOT-COMPILED "$APP_ID.test/androidx.test.runner.AndroidJUnitRunner" | tee micro-instrument.txt
+            python3 scripts/launch_smoke.py app/build/outputs/apk/benchmark/app-benchmark.apk --package "$APP_ID" --out launch-smoke
+            ./gradlew :benchmark:connectedBenchmarkAndroidTest -PabiFilters=x86_64 -PnativeCompilerLauncher=ccache --console=plain -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED $MACRO_DRY_RUN
+            [ -d "$RUNNER_TEMP/micro-ab/A" ] || ./gradlew :app:installDebug :app:installDebugAndroidTest -PabiFilters=x86_64 -PnativeCompilerLauncher=ccache --console=plain
+            [ -d "$RUNNER_TEMP/micro-ab/A" ] || "$ANDROID_HOME/platform-tools/adb" shell am instrument -w -e class com.sempermechanics.semper.benchmark.HotPathMicroBenchmark -e androidx.benchmark.suppressErrors EMULATOR,DEBUGGABLE,LOW-BATTERY,UNLOCKED,ACTIVITY-MISSING,NOT-AOT-COMPILED "$APP_ID.test/androidx.test.runner.AndroidJUnitRunner" | tee micro-instrument.txt
             mkdir -p app/build/outputs/connected_android_test_additional_output
-            "$ANDROID_HOME/platform-tools/adb" pull "/sdcard/Android/media/$APP_ID.test" app/build/outputs/connected_android_test_additional_output || true
-            "$ANDROID_HOME/platform-tools/adb" pull "/sdcard/Android/media/$APP_ID" app/build/outputs/connected_android_test_additional_output || true
+            [ -d "$RUNNER_TEMP/micro-ab/A" ] || "$ANDROID_HOME/platform-tools/adb" pull "/sdcard/Android/media/$APP_ID.test" app/build/outputs/connected_android_test_additional_output || true
+            [ -d "$RUNNER_TEMP/micro-ab/A" ] || "$ANDROID_HOME/platform-tools/adb" pull "/sdcard/Android/media/$APP_ID" app/build/outputs/connected_android_test_additional_output || true
             "$ANDROID_HOME/platform-tools/adb" logcat -d -s Benchmark:I || true
-            grep -q "^OK (" micro-instrument.txt
+            [ -d "$RUNNER_TEMP/micro-ab/A" ] || grep -q "^OK (" micro-instrument.txt
             if [ -d "$RUNNER_TEMP/micro-ab/A" ]; then python3 scripts/micro_ab.py --a "$RUNNER_TEMP/micro-ab/A" --b "$RUNNER_TEMP/micro-ab/B" --out micro-ab --package "$APP_ID" $MICRO_AB_FLAGS; fi
 
       # The smoke runs' numbers are not gated (absolute times on an emulator say
@@ -1000,6 +1054,15 @@ jobs:
           path: app/build/outputs/connected_android_test_additional_output/**
           if-no-files-found: warn
 
+      # The launch smoke's logcat and crash buffer, for a red smoke.
+      - name: Upload launch smoke logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: launch-smoke
+          path: launch-smoke/**
+          if-no-files-found: ignore
+
       # Each A/B round's instrument output and benchmark JSON (1-A, 2-B, ...).
       - name: Upload microbenchmark A/B rounds
         if: always() && github.event_name == 'pull_request'
@@ -1022,6 +1085,7 @@ jobs:
       - legal-pages
       - console-pages
       - changes
+      - tier1-static
       - tier1-app-fast
       - tier3-emulator-e2e
       - tier4-backend
@@ -1036,6 +1100,7 @@ jobs:
             "${{ needs.legal-pages.result }}" \
             "${{ needs.console-pages.result }}" \
             "${{ needs.changes.result }}" \
+            "${{ needs.tier1-static.result }}" \
             "${{ needs.tier1-app-fast.result }}" \
             "${{ needs.tier3-emulator-e2e.result }}" \
             "${{ needs.tier4-backend.result }}" \

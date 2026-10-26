@@ -43,6 +43,16 @@ class CrashReportTest(unittest.TestCase):
         self.assertTrue(any(line.startswith("No JVM error file") for line in lines))
         self.assertIn("[1.0s] GC(1) Pause Young 900M->300M(2048M)", lines)
 
+    def test_every_worker_gc_log_is_printed(self) -> None:
+        (self.crash_dir / "gc-101.log").write_text("[2.0s] GC(4) Pause Full 1900M->1890M(2048M)\n")
+        (self.crash_dir / "gc-202.log").write_text("[2.0s] GC(3) Pause Young 400M->200M(2048M)\n")
+        (self.crash_dir / "gc-202.log.0").write_text("[0.5s] older rotation\n")
+        lines = crash.report(self.crash_dir, self.results_dir)
+        self.assertIn("Last 25 lines of gc-101.log:", lines)
+        self.assertIn("Last 25 lines of gc-202.log:", lines)
+        self.assertIn("[2.0s] GC(4) Pause Full 1900M->1890M(2048M)", lines)
+        self.assertNotIn("[0.5s] older rotation", lines)
+
     def test_last_classes_are_listed_oldest_first(self) -> None:
         for index, name in enumerate(["a.FirstTest", "b.SecondTest"]):
             path = self.results_dir / f"TEST-{name}.xml"
@@ -50,6 +60,16 @@ class CrashReportTest(unittest.TestCase):
             os.utime(path, (1000 + index, 1000 + index))
         lines = crash.report(self.crash_dir, self.results_dir)
         self.assertEqual(lines[-2:], ["  a.FirstTest", "  b.SecondTest"])
+
+    def test_worker_output_is_read_under_either_gradle_name(self) -> None:
+        for name in ("output.bin", "output-events.bin"):
+            with self.subTest(name=name):
+                for old in (self.results_dir / "binary").iterdir():
+                    old.unlink()
+                (self.results_dir / "binary" / name).write_bytes(b"\x01\x00\x07Exception in thread \"main\"\x00")
+                lines = crash.report(self.crash_dir, self.results_dir)
+                self.assertIn(f"Last 80 lines the test worker printed ({name}):", lines)
+                self.assertIn('Exception in thread "main"', lines)
 
     def test_binary_output_keeps_the_text_in_order(self) -> None:
         data = b"\x01\x00\x07Exception in thread \"x\"\x00\x02\x05    at a.B.c(B.kt:3)\n"

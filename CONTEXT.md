@@ -158,7 +158,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   `rename_classroom_app.py`.
 - **CI.** Tiers follow the diff, coverage floors rise with every test PR
   ([TESTING.md](docs/app/TESTING.md#coverage-floors)), and `main` requires `CI OK`. Tier 3 signs
-  in to live staging, so a staging backend behind `main` fails it.
+  in to live staging, so a staging backend behind `main` fails it. Open on
+  `claude/ci-speedups-release-checks` (from material_testing#148 and #150): the release check
+  fails a targetSdk below 36 or a `.so` off 16 KB pages; the `benchmark` build is R8-minified
+  and launch-smoked; Macrobenchmarks dry-run on PRs; heavy tiers wait for `tier1-static` only.
 - **Owed.** A device smoke of the next release ([RELEASING.md](docs/ops/RELEASING.md) step 5);
   the on-device characterization at the 0.6.1 pin (TD-212); Pixel 6 benchmarks for #435;
   ADR-015's queued-work upgrade check; transfer notifications and AVI import on a device
