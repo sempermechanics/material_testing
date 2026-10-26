@@ -155,6 +155,27 @@ class ContrastTokensTest {
         )
     }
 
+    /**
+     * The sweep lattice opts out of force dark, so its outlined Save graph button sits
+     * on the night canvas as written; the darker brand blue was 3.5:1 there.
+     */
+    @Test
+    @Config(qualifiers = "night")
+    fun `the lattice's outlined button reads on the night canvas`() {
+        val root = LayoutInflater.from(themed).inflate(R.layout.activity_vsg_lattice, FrameLayout(themed), false)
+        val save = root.findViewById<MaterialButton>(R.id.btnSaveGraph)
+        assertText("btnSaveGraph label", save.currentTextColor, c(R.color.viewer_canvas))
+        assertBoundary("btnSaveGraph stroke", requireNotNull(save.strokeColor).defaultColor, c(R.color.viewer_canvas))
+    }
+
+    @Test
+    fun `the lattice's outlined button reads on the day canvas`() {
+        val root = LayoutInflater.from(themed).inflate(R.layout.activity_vsg_lattice, FrameLayout(themed), false)
+        val save = root.findViewById<MaterialButton>(R.id.btnSaveGraph)
+        assertText("btnSaveGraph label", save.currentTextColor, c(R.color.viewer_canvas))
+        assertBoundary("btnSaveGraph stroke", requireNotNull(save.strokeColor).defaultColor, c(R.color.viewer_canvas))
+    }
+
     private companion object {
         const val TEXT = 4.5
         const val NON_TEXT = 3.0

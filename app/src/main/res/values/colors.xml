@@ -132,6 +132,9 @@
          separate 8 simultaneous hues, only ever one against this neutral. -->
     <color name="viewer_plot_muted">#7E8B99</color>
     <color name="viewer_plot_node_solved">@color/sky_primary</color>
+    <!-- An outlined action (label and rim) on a force-dark opt-out canvas, such as the
+         lattice's Save graph: sky_primary by day; the night half lightens it. -->
+    <color name="viewer_action_ink">@color/sky_primary</color>
     <color name="viewer_plot_node_skipped">@color/semantic_danger</color>
     <color name="viewer_plot_connector">@color/sky_container</color>
 
