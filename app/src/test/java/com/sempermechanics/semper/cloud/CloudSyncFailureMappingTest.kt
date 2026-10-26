@@ -2,6 +2,7 @@ package com.sempermechanics.semper.cloud
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.cloud.CloudSync
 import com.sempermechanics.semper.data.cloud.CloudSync.EraseOutcome
 import com.sempermechanics.semper.data.cloud.SessionDeletes
@@ -61,15 +62,23 @@ class CloudSyncFailureMappingTest {
         configDown()
         api.onListSessions = { _, _ -> throw NotApprovedException() }
 
-        assertEquals(CloudSync.Outcome.Failed("your account isn't approved for cloud backup"), reconcile())
+        assertEquals(CloudSync.Outcome.Failed(R.string.cloud_check_not_approved), reconcile())
     }
 
     @Test
-    fun `a backend error names its status`() {
+    fun `a backend error says the cloud is not answering, not its status`() {
         configDown()
         api.onListSessions = { _, _ -> throw ApiException(503, "{}") }
 
-        assertEquals(CloudSync.Outcome.Failed("server returned HTTP 503"), reconcile())
+        assertEquals(CloudSync.Outcome.Failed(R.string.cloud_check_server), reconcile())
+    }
+
+    @Test
+    fun `a refusal that is not a busy cloud is a failed check, without its status`() {
+        configDown()
+        api.onListSessions = { _, _ -> throw ApiException(404, "Not Found") }
+
+        assertEquals(CloudSync.Outcome.Failed(R.string.cloud_check_failed), reconcile())
     }
 
     @Test
@@ -86,7 +95,7 @@ class CloudSyncFailureMappingTest {
         api.onListSessions = { _, _ -> throw IllegalStateException("bad state") }
 
         // Home shows the reason, so it carries no class name; the log keeps that.
-        assertEquals(CloudSync.Outcome.Failed("unexpected error"), reconcile())
+        assertEquals(CloudSync.Outcome.Failed(R.string.cloud_check_failed), reconcile())
     }
 
     @Test

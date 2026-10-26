@@ -1,6 +1,7 @@
 package com.sempermechanics.semper.data.policy
 
 import android.content.Context
+import androidx.annotation.VisibleForTesting
 import androidx.core.content.edit
 import com.sempermechanics.semper.BuildConfig
 import com.sempermechanics.semper.data.net.AppRemoteConfig
@@ -20,6 +21,14 @@ object AppPolicy {
     /** `app/build.gradle.kts`'s versionCode when no `-PversionCode` is given. */
     private const val UNVERSIONED = 1
 
+    /**
+     * The installed versionCode [version] checks, in place of
+     * BuildConfig.VERSION_CODE: a unit test's build is unversioned, so it sets
+     * one to reach the gate (readiness TE4-006). Null in the app.
+     */
+    @VisibleForTesting
+    internal var versionCodeForTest: Int? = null
+
     fun inputs(context: Context): PolicyInputs = PolicyInputs(
         killSwitches = AppRemoteConfig.killSwitches(context),
         managed = ManagedConfigReader.current(context),
@@ -33,17 +42,19 @@ object AppPolicy {
      * release the backend can retire, so it is never gated; to try the gate,
      * build with `-PversionCode` below the backend's minimum.
      */
-    fun version(context: Context): VersionVerdict =
-        if (BuildConfig.DEBUG && BuildConfig.VERSION_CODE == UNVERSIONED) {
+    fun version(context: Context): VersionVerdict {
+        val versionCode = versionCodeForTest ?: BuildConfig.VERSION_CODE
+        return if (versionCodeForTest == null && BuildConfig.DEBUG && versionCode == UNVERSIONED) {
             VersionVerdict.Current
         } else {
             VersionGate.decide(
-                versionCode = BuildConfig.VERSION_CODE,
+                versionCode = versionCode,
                 minSupported = AppRemoteConfig.minSupportedVersionCode(context),
                 recommended = AppRemoteConfig.recommendedVersionCode(context),
                 lastNudge = privatePrefs(context, PrefFiles.Onboarding.NAME)[PrefFiles.Onboarding.UPDATE_NUDGE],
             )
         }
+    }
 
     /** The update nudge for [verdict] has been shown; it is not shown again for this pair. */
     fun markNudged(context: Context, verdict: VersionVerdict.Recommended) {

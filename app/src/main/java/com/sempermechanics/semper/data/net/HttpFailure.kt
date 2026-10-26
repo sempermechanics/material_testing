@@ -1,5 +1,7 @@
 package com.sempermechanics.semper.data.net
 
+import androidx.annotation.StringRes
+import com.sempermechanics.semper.R
 import java.io.IOException
 
 /**
@@ -90,6 +92,19 @@ data class HttpFailure(val kind: Kind, val cause: Throwable) {
      * generic rule is the one it had.
      */
     val isRetryable: Boolean get() = kind == Kind.RATE_LIMITED || kind == Kind.SERVER || kind == Kind.OFFLINE
+
+    /**
+     * What to tell the user about this failure (ADR-018, readiness AE1-009):
+     * offline, a cloud that is not answering and a lapsed session by name,
+     * every other kind [fallback]. Never the exception's or the server's text.
+     */
+    @StringRes
+    fun userMessage(@StringRes fallback: Int): Int = when (kind) {
+        Kind.OFFLINE -> R.string.error_offline
+        Kind.SERVER, Kind.RATE_LIMITED -> R.string.error_cloud_unavailable
+        Kind.UNAUTHORIZED -> R.string.error_session_expired
+        else -> fallback
+    }
 
     /** 404 or 403: the restore and bundle-download workers give up rather than retry. */
     val isGoneOrNotOurs: Boolean get() = kind == Kind.NOT_FOUND || kind == Kind.FORBIDDEN

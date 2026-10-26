@@ -151,7 +151,7 @@ private class CoachOverlay(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT,
         )
-        setBackgroundColor(Color.argb(160, 0, 0, 0))
+        setBackgroundColor(ContextCompat.getColor(activity, R.color.coach_scrim))
         isClickable = true
         isFocusable = true
     }

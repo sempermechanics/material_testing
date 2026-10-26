@@ -62,7 +62,7 @@ internal object ReportAnnotations {
         val bgPaint = Paint().apply { color = Color.argb(160, 0, 0, 0) }
 
         val infoText = listOfNotNull(
-            "Semper Classroom Analysis Report",
+            ReportBuilder.REPORT_NAME,
             annotation.imageName?.takeIf { it.isNotBlank() }?.let { "Image: $it" },
             "Field: ${annotation.typeString} [$unit]",
             // The marked points' values; the colour bar below keeps the scale's ends.

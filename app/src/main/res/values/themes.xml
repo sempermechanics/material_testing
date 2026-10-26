@@ -8,7 +8,7 @@
         <item name="colorPrimary">@color/sky_primary</item>
         <item name="colorPrimaryVariant">@color/sky_primary_dark</item>
         <item name="colorOnPrimary">@color/text_on_primary</item>
-        <item name="colorSecondary">@color/sky_bright</item>
+        <item name="colorSecondary">@color/sky_primary</item>
         <item name="colorSecondaryVariant">@color/sky_primary_dark</item>
         <item name="colorOnSecondary">@color/text_on_primary</item>
 

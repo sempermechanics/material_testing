@@ -29,7 +29,7 @@
         <item name="android:textAllCaps">false</item>
         <item name="android:letterSpacing">0.01</item>
         <item name="android:textStyle">bold</item>
-        <item name="rippleColor">#33FFFFFF</item>
+        <item name="rippleColor">@color/ripple_on_primary</item>
     </style>
 
     <!-- Tonal / secondary: light sky container, dark text -->
@@ -41,7 +41,7 @@
         <item name="android:textColor">@color/sky_primary</item>
         <item name="android:textAllCaps">false</item>
         <item name="android:textStyle">bold</item>
-        <item name="rippleColor">#220288D1</item>
+        <item name="rippleColor">@color/ripple_sky</item>
     </style>
 
     <!-- Outlined, one line high: a quiet action beside a section title -->
@@ -61,14 +61,14 @@
     <style name="Widget.Semper.Button.Text.Danger" parent="Widget.MaterialComponents.Button.TextButton">
         <item name="android:textColor">@color/semantic_danger</item>
         <item name="android:textAllCaps">false</item>
-        <item name="rippleColor">#22E53935</item>
+        <item name="rippleColor">@color/ripple_danger</item>
     </style>
 
     <!-- Quiet secondary action beside a filled one (a tip card's Skip) -->
     <style name="Widget.Semper.Button.Text.Quiet" parent="Widget.MaterialComponents.Button.TextButton">
         <item name="android:textColor">@color/text_secondary</item>
         <item name="android:textAllCaps">false</item>
-        <item name="rippleColor">#225B6B7A</item>
+        <item name="rippleColor">@color/ripple_quiet</item>
     </style>
 
     <!-- Prominent success CTA (Compute) -->
@@ -153,11 +153,11 @@
     <!-- ============================================================= -->
     <style name="Widget.Semper.Slider" parent="Widget.MaterialComponents.Slider">
         <item name="trackColorActive">@color/sky_primary</item>
-        <item name="trackColorInactive">@color/sky_container</item>
+        <item name="trackColorInactive">@color/outline_strong</item>
         <item name="thumbColor">@color/sky_primary</item>
-        <item name="haloColor">#330288D1</item>
-        <item name="tickColorActive">#66FFFFFF</item>
-        <item name="tickColorInactive">#660288D1</item>
+        <item name="haloColor">@color/slider_halo</item>
+        <item name="tickColorActive">@color/slider_tick_active</item>
+        <item name="tickColorInactive">@color/slider_tick_inactive</item>
         <item name="labelStyle">@style/Widget.Semper.Slider.Tooltip</item>
     </style>
 
@@ -169,20 +169,20 @@
     <!-- Segmented button group (replaces radio groups) -->
     <style name="Widget.Semper.SegmentedButton" parent="Widget.MaterialComponents.Button.OutlinedButton">
         <item name="android:textAllCaps">false</item>
-        <item name="strokeColor">@color/surface_outline</item>
+        <item name="strokeColor">@color/outline_strong</item>
         <item name="android:textColor">@color/segmented_text</item>
         <item name="backgroundTint">@color/segmented_bg</item>
-        <item name="rippleColor">#220288D1</item>
+        <item name="rippleColor">@color/ripple_sky</item>
     </style>
 
     <!-- Floating glass field pills over the immersive heatmap (wireframe: rounded-full).
          Shape and colour are the immersive treatment — stadium, no stroke, translucent
          fill that inverts to solid when checked. Metrics are deliberately the LARGER
-         touch sizes the viewer settled on (40dp / 14sp), not the original compact
-         30dp / 11sp: the shape language changes, the tap target does not. -->
+         touch sizes the viewer settled on (48dp / 14sp, the minimum touch target),
+         not the original compact 30dp / 11sp. -->
     <style name="Widget.Semper.SegmentedButton.ViewerImmersive" parent="Widget.MaterialComponents.Button.OutlinedButton">
         <item name="android:textAllCaps">false</item>
-        <item name="android:minHeight">40dp</item>
+        <item name="android:minHeight">48dp</item>
         <item name="android:minWidth">0dp</item>
         <item name="android:insetTop">0dp</item>
         <item name="android:insetBottom">0dp</item>
@@ -227,7 +227,7 @@
     <style name="Widget.Semper.Button.ViewerPeekHome" parent="Widget.MaterialComponents.Button.UnelevatedButton">
         <item name="android:textAllCaps">false</item>
         <item name="android:textColor">@color/viewer_peek_text</item>
-        <item name="android:minHeight">44dp</item>
+        <item name="android:minHeight">48dp</item>
         <item name="backgroundTint">@color/viewer_glass_fill</item>
         <item name="strokeColor">@color/viewer_glass_stroke</item>
         <item name="strokeWidth">0.5dp</item>
@@ -266,11 +266,15 @@
         <item name="android:textAllCaps">false</item>
         <item name="android:textColor">@color/viewer_on_dark</item>
         <item name="android:textSize">12sp</item>
+        <!-- 12dp sides, not the default 16dp: "Square" keeps its last letters in a
+             half-width pill at font scale 2.0. -->
+        <item name="android:paddingLeft">12dp</item>
+        <item name="android:paddingRight">12dp</item>
         <item name="cornerRadius">20dp</item>
         <item name="backgroundTint">@color/chip_toggle_bg_dark</item>
-        <item name="strokeColor">@color/surface_outline</item>
+        <item name="strokeColor">@color/outline_strong</item>
         <item name="strokeWidth">1dp</item>
-        <item name="rippleColor">#33FFFFFF</item>
+        <item name="rippleColor">@color/ripple_on_primary</item>
     </style>
 
     <!-- Small outlined assist chip (Reset / Paste in advanced params) -->
@@ -282,8 +286,9 @@
         <item name="chipIconTint">@color/sky_primary</item>
         <item name="chipIconSize">16dp</item>
         <item name="chipMinHeight">32dp</item>
-        <item name="ensureMinTouchTargetSize">false</item>
-        <item name="rippleColor">#220288D1</item>
+        <!-- A 32dp chip, padded out to a 48dp touch target. -->
+        <item name="ensureMinTouchTargetSize">true</item>
+        <item name="rippleColor">@color/ripple_sky</item>
     </style>
 
     <!-- ============================================================= -->
@@ -304,7 +309,31 @@
         <item name="cornerSizeBottomRight">0dp</item>
     </style>
 
+    <!-- The type scale: Title 20, Subtitle 16, Body 14, Label 13, Caption 12 sp
+         (dimens text_*). Layouts move onto it when they are reworked, as with the
+         spacing scale; nothing goes below Caption. -->
+    <style name="TextAppearance.Semper.Title" parent="TextAppearance.MaterialComponents.Headline6">
+        <item name="android:textSize">@dimen/text_title</item>
+        <item name="android:textColor">@color/text_primary</item>
+    </style>
+
+    <style name="TextAppearance.Semper.Subtitle" parent="TextAppearance.MaterialComponents.Subtitle1">
+        <item name="android:textSize">@dimen/text_subtitle</item>
+        <item name="android:textColor">@color/text_primary</item>
+    </style>
+
+    <style name="TextAppearance.Semper.Body" parent="TextAppearance.MaterialComponents.Body2">
+        <item name="android:textSize">@dimen/text_body</item>
+        <item name="android:textColor">@color/text_primary</item>
+    </style>
+
+    <style name="TextAppearance.Semper.Label" parent="TextAppearance.MaterialComponents.Body2">
+        <item name="android:textSize">@dimen/text_label</item>
+        <item name="android:textColor">@color/text_secondary</item>
+    </style>
+
     <style name="TextAppearance.Semper.Caption" parent="TextAppearance.MaterialComponents.Caption">
+        <item name="android:textSize">@dimen/text_caption</item>
         <item name="android:textColor">@color/text_secondary</item>
     </style>
 

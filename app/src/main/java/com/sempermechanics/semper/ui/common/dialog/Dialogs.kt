@@ -66,8 +66,10 @@ object Dialogs {
  * Makes this view (an "i" button) open [Dialogs.info] with [titleRes] and
  * [bodyRes] on [activity]. The Activity is passed rather than taken from the
  * view, so a button inside a bottom sheet still themes the dialog as the
- * Activity's, as every site did.
+ * Activity's, as every site did. The button is named "About <title>" for
+ * TalkBack, so a screen of "i" buttons does not read as a row of "Info".
  */
 fun View.bindInfo(activity: Activity, @StringRes titleRes: Int, @StringRes bodyRes: Int) {
+    contentDescription = activity.getString(R.string.info_about, activity.getString(titleRes))
     setOnClickListener { Dialogs.info(activity, titleRes, bodyRes) }
 }

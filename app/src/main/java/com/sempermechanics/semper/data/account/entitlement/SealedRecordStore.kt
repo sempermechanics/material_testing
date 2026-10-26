@@ -36,6 +36,15 @@ interface EntitlementDisk {
      * durably. False when the write did not reach the disk.
      */
     fun commit(record: String?): Boolean
+
+    /**
+     * Replace the record beside a key already in place, without waiting for
+     * the disk: the clock's once-a-minute write (readiness TE1-006). A crash
+     * can lose that minute of clock state, never part a record from its key.
+     */
+    fun update(record: String) {
+        commit(record)
+    }
 }
 
 /**
@@ -52,7 +61,9 @@ interface EntitlementDisk {
  * - a lost Keystore key leaves the same, and reads the same.
  *
  * Only a key with neither record nor mark, a record whose MAC does not match
- * its key, or a record this build cannot parse reads as tampered.
+ * its key, or a record this build cannot parse reads as tampered. A record
+ * with a good MAC that a newer build wrote reads as no token; the next save
+ * overwrites it in this build's version (readiness TE1-004).
  */
 object SealedRecordStore {
 
@@ -73,6 +84,7 @@ object SealedRecordStore {
             StoreReading.UNSEAL -> when (val unsealed = SealedEntitlement.unseal(checkNotNull(text), disk.tagger)) {
                 is SealedEntitlement.Unsealed.Ok -> StoredEntitlement.Sealed(unsealed.record)
                 SealedEntitlement.Unsealed.Tampered -> StoredEntitlement.Tampered
+                SealedEntitlement.Unsealed.Newer -> StoredEntitlement.Nothing
             }
         }
     }
@@ -84,6 +96,19 @@ object SealedRecordStore {
             disk.createKey()
         }
         return disk.commit(SealedEntitlement.seal(record, disk.tagger))
+    }
+
+    /**
+     * Write [record]'s newer clock state over the sealed record already beside
+     * its key, through the quick [EntitlementDisk.update]. With no sealed
+     * record in place it is a first seal, and goes through [save].
+     */
+    fun update(disk: EntitlementDisk, record: SealedEntitlement.Record) {
+        if (disk.key() == KeyPresence.PRESENT && disk.record() != null && !disk.sealing()) {
+            disk.update(SealedEntitlement.seal(record, disk.tagger))
+        } else {
+            save(disk, record)
+        }
     }
 
     /**

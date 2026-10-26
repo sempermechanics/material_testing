@@ -93,7 +93,7 @@ object PdfReportGenerator {
         frameCount: Int,
         dataAt: (Int) -> ReportData?,
         outputStream: OutputStream,
-        frameTitle: (Int) -> String = { "DIC Analysis Report — Frame ${it + 1}" },
+        frameTitle: (Int) -> String = { "${ReportBuilder.REPORT_NAME} — Frame ${it + 1}" },
         resources: Resources? = null,
         stressStrain: StressStrainPage? = null,
     ): Flow<Progress> = renderPdf(outputStream, resources) { layout ->
@@ -137,7 +137,7 @@ object PdfReportGenerator {
     ): Flow<Progress> = renderPdf(outputStream, resources) { layout ->
         currentCoroutineContext().ensureActive()
         emit(Progress.Status(Stage.COVER, 10))
-        drawCoverPage(layout, data, "Master DIC Analysis Report", frameCount = null)
+        drawCoverPage(layout, data, ReportBuilder.REPORT_NAME, frameCount = null)
 
         currentCoroutineContext().ensureActive()
         emit(Progress.Status(Stage.MAPS, 30))
@@ -274,43 +274,37 @@ object PdfReportGenerator {
      */
     private fun drawTelemetryPage(layout: PdfLayoutEngine, data: ReportData, summary: TelemetrySummary) {
         layout.newPage()
-        layout.drawTitle("Engine Performance Log")
+        layout.drawTitle(TelemetrySummary.TITLE)
+        layout.drawNotice(TelemetrySummary.INTRO)
         summary.scopeNote?.let { layout.drawNotice(it) }
 
         val stats = data.engineStats
+        val sections = TelemetrySummary.SECTIONS
 
-        layout.drawSectionHeader("1. Solver Pipeline (2-Pass Architecture)")
+        layout.drawSectionHeader(sections[0])
         layout.drawTable(
-            headers = listOf("Pipeline Stage", "Points"),
-            rows = listOf(
-                listOf("Seeding Mode", stats.meshSeedingLabel()),
-                listOf("Total Target Grid Points", "${stats.totalPointsAttempted}"),
-                listOf("Phase 1: Solved by Delaunay Mesh", "${stats.pathAPoints}"),
-                listOf("Phase 2: Saved by RGDIC Propagation", "${stats.pathBPoints}"),
-                listOf("Final Unsolvable (Dead Points)", "${stats.totalPointsRejected}"),
-            ),
+            headers = listOf("Step", "Points"),
+            rows = TelemetrySummary.pipelineRows(stats),
             colWeights = listOf(0.7f, 0.3f),
         )
 
-        layout.drawSectionHeader("2. Optimization & Quality")
+        layout.drawSectionHeader(sections[1])
         layout.drawTable(
-            headers = listOf("Metric", "Value"),
+            headers = listOf("Measure", "Value"),
             rows = summary.qualityRows(stats),
             colWeights = listOf(0.7f, 0.3f),
         )
 
-        layout.drawSectionHeader("3. Simplex Rescue Subsystem")
+        layout.drawSectionHeader(sections[2])
         layout.drawTable(
-            headers = listOf("Intervention", "Triggered", "Saved"),
-            rows = listOf(
-                listOf("Simplex Interventions", "${stats.simplexCalls}", "${stats.simplexSaved}"),
-            ),
+            headers = listOf("Recovery", "Tried", "Recovered"),
+            rows = TelemetrySummary.rescueRows(stats),
             colWeights = listOf(0.5f, 0.25f, 0.25f),
         )
 
-        layout.drawSectionHeader("4. Hardware Profiling (Wall Time)")
+        layout.drawSectionHeader(sections[3])
         layout.drawTable(
-            headers = listOf("Execution Phase", "Time (ms)"),
+            headers = listOf("Phase", "Time"),
             rows = TelemetrySummary.timingRows(stats),
             colWeights = listOf(0.6f, 0.4f),
         )

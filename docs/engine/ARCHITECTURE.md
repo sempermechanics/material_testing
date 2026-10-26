@@ -29,5 +29,6 @@ cd native && ./scripts/sparse-opencv.sh && cd ..   # Windows: .\scripts\sparse-o
 ```
 
 Engine host tests, AddressSanitizer/UndefinedBehaviorSanitizer and
-ThreadSanitizer suites run in the engine repo's own CI, not in this repo's
-`ci.yml`. See [../ops/CI.md](../ops/CI.md) for what this repo does run.
+ThreadSanitizer suites run in the engine repo's own CI; this repo's `ci.yml`
+reruns the host suite under ASan+UBSan at the pinned commit
+(`engine-host-sanitized`) and checks the pin is a tag (`engine-pin`). See [../ops/CI.md](../ops/CI.md) for what this repo does run.

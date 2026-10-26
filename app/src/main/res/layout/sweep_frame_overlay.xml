@@ -14,6 +14,7 @@
         android:id="@+id/imgSweepFrameOverlay"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:forceDarkAllowed="false"
         android:adjustViewBounds="true"
         android:scaleType="fitCenter"
         tools:ignore="ContentDescription" />

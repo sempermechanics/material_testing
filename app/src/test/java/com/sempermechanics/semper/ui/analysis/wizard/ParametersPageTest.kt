@@ -108,7 +108,10 @@ class ParametersPageTest {
 
         gate.apply(isProcessing = false, sweepController = sweep)
 
-        assertEquals("Compute · about 71 s", bed.binding.btnCalculateFullField.text.toString())
+        // Short on the half-width button, as the sweep's Run button is; spoken in full
+        // (readiness AE1V-001: "Compute · about 71 s" did not fit at font scale 2).
+        assertEquals("Compute · 71 s", bed.binding.btnCalculateFullField.text.toString())
+        assertEquals("Compute, about 71 seconds", bed.binding.btnCalculateFullField.contentDescription)
     }
 
     @Test
@@ -119,6 +122,7 @@ class ParametersPageTest {
 
         assertEquals("Full image", bed.settings.tvInstruction.text.toString())
         assertEquals("Compute", bed.binding.btnCalculateFullField.text.toString())
+        assertEquals(null, bed.binding.btnCalculateFullField.contentDescription)
     }
 
     @Test

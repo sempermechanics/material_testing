@@ -33,7 +33,7 @@ const status = () => [$("status").textContent, $("status").className];
 test("an account answer with no licence block reads as the demo, with nothing to move", async () => {
   await open({ sessions: { sessions: [], quota: { used: 0, max: 25 } } });
   assert.deepEqual(pills(), [["demo", "pill off"]]);
-  assert.match($("explain").textContent, /^You are on the demo\./);
+  assert.match($("explain").textContent, /^You are on Demo\./);
   assert.equal($("unbind").hidden, true);
   assert.equal($("unbindMt").hidden, true);
   assert.equal($("release").hidden, true);
@@ -62,7 +62,7 @@ test("a quota without a count is counted from the analyses listed", async () => 
   assert.equal($("quota").textContent, "2 of 25 analyses stored.");
 });
 
-test("a download refused with a code the page has no sentence for names the code alone", async () => {
+test("a download refused with a code the page has no sentence for keeps the code as a reference", async () => {
   await open({
     sessions: { quota: { used: 1, max: 25 }, sessions: [
       { sessionId: "s1", specimen: "Steel", status: "COMPLETED", completedCount: 2, totalBytes: 2048 },
@@ -72,6 +72,6 @@ test("a download refused with a code the page has no sentence for names the code
   const button = $("rows").querySelector("button");
   button.click();
   await settle();
-  assert.deepEqual(status(), ["Could not download: bundle_build_failed", "muted err"]);
+  assert.deepEqual(status(), ["Could not download: the server refused it (ref: bundle_build_failed)", "muted err"]);
   assert.equal(button.disabled, false);
 });

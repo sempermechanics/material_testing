@@ -82,8 +82,8 @@ async function downloads(fn) {
 test("the seat counts show as tiles, the ones wanting attention marked", async () => {
   await open();
   assert.deepEqual(tiles(), [
-    ["4 assigned", false], ["2 active in the last 7 days", false], ["1 on hold", false],
-    ["2 invited", false], ["1 removed, device not told yet", true], ["0 seats ending within 30 days", false],
+    ["4 assigned", false], ["2 active in the last 7 days", false], ["1 paused", false],
+    ["2 invited", false], ["1 removed, phone not told yet", true], ["0 seats ending within 30 days", false],
   ]);
   assert.deepEqual(sent(/summary/), [`GET ${L1}/summary`]);
 });
@@ -92,6 +92,11 @@ test("counts that fail to load say so, and the roster stays", async () => {
   await open({ routes: { [`GET ${L1}/summary`]: () => json(500, { detail: "boom" }) } });
   assert.equal(text($("tiles")), "Could not count seats: boom");
   assert.equal(tableRows("rows").length, 2);
+});
+
+test("a gateway refusal of the counts reads as words, not http_503 (AE2V-002)", async () => {
+  await open({ routes: { [`GET ${L1}/summary`]: () => new Response("<html>unavailable</html>", { status: 503 }) } });
+  assert.equal(text($("tiles")), "Could not count seats: The server did not answer — try again in a moment.");
 });
 
 test("counts for a licence no longer shown are dropped, and so is its failure", async () => {
@@ -166,6 +171,7 @@ test("the import says how many rows it holds before it is sent", async () => {
   assert.equal($("importSubmit").disabled, true, "nothing to send yet");
   typeImport("email\nana@uni.edu\n\nben@uni.edu\n");
   assert.deepEqual([$("importPreview").textContent, $("importSubmit").disabled], ["2 rows ready", false]);
+  assert.equal($("importPreview").getAttribute("aria-live"), "polite", "the count and the 500-row stop are read out");
   typeImport("ana@uni.edu");
   assert.equal($("importPreview").textContent, "1 row ready");
   typeImport("email\n");
@@ -211,6 +217,9 @@ test("an import sends the file, lists every row's result and reloads the roster"
   assert.deepEqual(JSON.parse(post.body), { csv: file });
   assert.equal($("importSummary").textContent,
     "1 added, 1 invited, 1 already on the roster, 1 repeated, 1 not added.");
+  // Said on the live status line too, after the roster reload, so a screen
+  // reader hears the outcome (AE2-009).
+  assert.deepEqual(status(), ["1 added, 1 invited, 1 already on the roster, 1 repeated, 1 not added.", "muted"]);
   assert.equal($("importResults").hidden, false);
   assert.deepEqual(tableRows("importRows"), [
     ["2", "new@uni.edu", "on the licence now"],
@@ -234,6 +243,7 @@ test("an import that added nobody leaves the roster as it is", async () => {
   $("importSubmit").click();
   await settle();
   assert.equal($("importSummary").textContent, "1 already on the roster.");
+  assert.deepEqual(status(), ["1 already on the roster.", "muted"]);
   assert.deepEqual(sent(/GET .*seats$/), [`GET ${L1}/seats`]);
 });
 
@@ -256,13 +266,33 @@ test("a refused import is explained", async () => {
   }
 });
 
+test("a whole-file refusal names its line, and an oversized file is too large (AE2-008)", async () => {
+  // The backend's shapes (backend/app/roster_io.py): the line after the
+  // code, as device_change_too_soon carries its instant; a 413 code for a
+  // file over 512,000 characters.
+  const cases = [
+    [() => json(400, { detail: "roster_import_malformed: line 3" }), "Line 3 could not be read as CSV — check its quotes."],
+    [() => json(400, { detail: "roster_import_malformed: line 12" }), "Line 12 could not be read as CSV — check its quotes."],
+    [() => json(413, { detail: "roster_import_too_large" }),
+      "That file is too large to import at once. Split it into parts of at most 500 rows."],
+  ];
+  for (const [reply, sentence] of cases) {
+    reset();
+    await open({ routes: { [`POST ${L1}/seats/import`]: reply } });
+    typeImport("ana@uni.edu");
+    $("importSubmit").click();
+    await settle();
+    assert.deepEqual(status(), [sentence, "muted err"], sentence);
+  }
+});
+
 test("every import outcome reads as a sentence", () => {
   const said = (outcome, error = "") => rowResult({ outcome, error });
   assert.equal(said("duplicate"), "repeats an earlier row");
   assert.equal(said("refused", "license_seats_exhausted"), "no seats left on this licence");
   assert.equal(said("refused", "member_already_licensed"),
     "already has a Semper licence of their own — Semper support can move them");
-  assert.equal(said("refused", "strange"), "not added: strange");
+  assert.equal(said("refused", "strange"), "not added — the server refused it (ref: strange)");
   assert.equal(said("unprocessed", "roster_row_unprocessed"), "not reached — import the file again to finish");
   assert.equal(said("novel"), "novel");
   assert.equal(importSummary({ refused: 2, unprocessed: 3 }), "2 not added, 3 not reached.");
@@ -296,8 +326,14 @@ const events = [
     target: { type: "license", id: "L1" }, detail: {} },
 ];
 
+/** The query a From / To pair sends: local midnights, the To day included. */
+const localRange = (from, to) => new URLSearchParams({
+  ...(from ? { since: new Date(...from).toISOString() } : {}),
+  ...(to ? { until: new Date(...to).toISOString() } : {}),
+}).toString();
+
 test("Show reads the log for the dates chosen and names members by address", async () => {
-  const query = "since=2026-10-01&until=2026-10-02&page_size=50";
+  const query = `${localRange([2026, 9, 1], [2026, 9, 3])}&page_size=50`;
   await open({ routes: {
     [`GET ${L1}/audit?${query}`]: () => json(200, { events, page: { nextPageToken: "e2" } }),
     [`GET ${L1}/audit?${query}&page_token=e2`]: () => json(200, {
@@ -363,9 +399,9 @@ test("a log page for a licence no longer shown is dropped", async () => {
 
 test("the log exports as CSV and as JSON", async () => {
   await open({ routes: {
-    [`GET ${L1}/audit?since=2026-10-01&format=csv&page_size=5000`]: () =>
+    [`GET ${L1}/audit?${localRange([2026, 9, 1])}&format=csv&page_size=5000`]: () =>
       new Response("ts,action\r\n", { status: 200 }),
-    [`GET ${L1}/audit?since=2026-10-01&page_size=5000`]: () =>
+    [`GET ${L1}/audit?${localRange([2026, 9, 1])}&page_size=5000`]: () =>
       json(200, { licenseId: "L1", events, page: { hasMore: false } }),
   } });
   $("auditSince").value = "2026-10-01";
@@ -379,7 +415,7 @@ test("the log exports as CSV and as JSON", async () => {
   assert.deepEqual(saved.map((s) => s.name), ["audit-SEMP-UNI1.csv", "audit-SEMP-UNI1.json"]);
   assert.equal(await saved[0].blob.text(), "ts,action\r\n");
   assert.deepEqual(JSON.parse(await saved[1].blob.text()),
-    { licenseId: "L1", since: "2026-10-01", until: "", events });
+    { licenseId: "L1", since: new Date(2026, 9, 1).toISOString(), until: "", events });
   assert.deepEqual(status(), ["Audit log exported.", "muted"]);
 });
 

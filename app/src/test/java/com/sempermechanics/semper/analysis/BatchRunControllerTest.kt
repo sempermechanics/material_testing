@@ -215,12 +215,28 @@ class BatchRunControllerTest {
     }
 
     @Test
-    fun `a run that threw says what it said, batch run or sweep`() {
-        controller().render(RunEnd.Unexpected("boom"))
+    fun `a run that threw says so in the app's words, batch run or sweep`() {
+        controller().render(RunEnd.Unexpected("IllegalStateException"))
 
         assertEquals(activity.getString(R.string.analysis_unexpected_title), line.text.toString())
-        assertEquals(activity.getString(R.string.analysis_unexpected_fmt, "boom"), messageOf(latestDialog()))
+        assertEquals(activity.getString(R.string.analysis_unexpected_body), messageOf(latestDialog()))
         assertNull("no toast stands in for it", ShadowToast.getTextOfLatestToast())
+    }
+
+    /**
+     * What an exception says is for the log, not the screen (ADR-018, readiness
+     * AE1-009): it can name a path, a file or a specimen, and it is not in the
+     * user's language.
+     */
+    @Test
+    fun `a run that threw never shows what the exception said`() {
+        val said = "open failed: /storage/emulated/0/Specimens/ACME-bracket-07.tif (ENOSPC)"
+        controller().render(RunEnd.unexpected(IllegalStateException(said)))
+
+        val message = messageOf(latestDialog())
+        assertTrue("a message is shown", message.isNotBlank())
+        assertFalse("raw exception text on screen: $message", message.contains("ACME") || message.contains("ENOSPC"))
+        assertFalse("the exception's class on screen", message.contains("IllegalStateException"))
     }
 
     @Test

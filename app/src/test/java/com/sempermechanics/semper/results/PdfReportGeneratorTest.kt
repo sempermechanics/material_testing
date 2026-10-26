@@ -47,7 +47,15 @@ class PdfReportGeneratorTest {
         return Collected(events.filterIsInstance<Progress.Status>(), failure)
     }
 
-    private fun statuses(flow: Flow<Progress>): List<Progress.Status> = collect(flow).statuses
+    private fun statuses(flow: Flow<Progress>): List<Progress.Status> {
+        val collected = collect(flow)
+        // Only the final write may fail here; a flow that failed before its
+        // first status is a defect, so show its cause rather than an empty list.
+        if (collected.statuses.isEmpty() && collected.failure != null) {
+            throw AssertionError("the PDF flow emitted nothing", collected.failure)
+        }
+        return collected.statuses
+    }
 
     @Test
     fun `batch progress spreads frames over the middle of the bar`() {

@@ -8,6 +8,7 @@ import android.annotation.SuppressLint
 import android.content.res.ColorStateList
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
@@ -135,7 +136,7 @@ class SessionListAdapter(
         }
         if (thumbs == null) {
             val edge = parent.resources.getDimensionPixelSize(R.dimen.session_thumb_size) * THUMB_OVERSAMPLE
-            thumbs = SessionThumbs(edge)
+            thumbs = SessionThumbs(edge, ContextCompat.getColor(parent.context, R.color.thumb_hole))
         }
         return Holder(ItemSessionBinding.inflate(inflater, parent, false))
     }

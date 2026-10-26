@@ -53,6 +53,36 @@ No gateway change, no Firestore index, no app release. `rename_classroom_app.py`
   - `rename_classroom_app.py`: a dry run, then `--apply` once a rollback past this release is
     ruled out.
 
+## 2026-10-26 — semperdic-app: Current state condensed (readiness run close-out)
+
+No deploy. CONTEXT.md's Current state was cut back to its ~40-line budget for the readiness
+run's close-out ([report](readiness/20261024/REPORT.md)). The #484 deploy that superseded the
+"Deployed" entry is recorded on `main` by #486. The Live list moves here; every item on it
+has its own deploy entry below. The checklist entry stays in CONTEXT, shorter, with the
+posture count from the 2026-10-24 re-run (17 FAIL, 0 UNKNOWN).
+
+The Current state entries this closes, as they stood:
+
+- **Deployed.** Backend from `187f4870` (2026-10-24; #482 on top of #466–#468): Cloud Run
+  `semper-api` (`semper-api-40063322039-1`, gateway config `v202610230501-112`) and staging
+  `semper-api-staging` (`semper-api-staging-39948110403-1`, `v202610221243-110`)
+  ([CHANGELOG](CHANGELOG.md)). Hosting is from `000575b0` (2026-10-23, the operator desk
+  redesign, #478) with `/privacy` and `/terms` held at `b940cc29`. Live: licensing
+  ([ADR-007](../adr/ADR-007-licence-lifecycle.md)), device binding per app
+  ([ADR-010](../adr/ADR-010-device-binding-per-app.md)), sessions tagged by app
+  ([ADR-014](../adr/ADR-014-session-app-tag.md)), consoles on `app.sempermechanics.com`
+  ([§20](../backend/CLOUD_ARCHITECTURE_GCP.md)), test accounts for `qa.sempermechanics.com`
+  ([ADR-027](../adr/ADR-027-test-accounts.md)), `CHECK_REVOKED_ON_STEP_UP` (TD-214, acceptance
+  owed). Project IDs keep `indic-*` ([ENVIRONMENTS.md](ENVIRONMENTS.md)).
+- **[Checklist](DEPLOY_CHECKLIST_2026-10.md) still open:** monitoring `--apply` (§5;
+  no notification channel exists yet); staff/IT phones re-registering with TOTP, the 24 h log
+  watch, ending the staging QC test account, and the erasure check (§6; the audit backfill, the
+  `expireAt` TTL and the locked `audit-trail` log bucket went in 2026-10-23). The posture check's FAILs (18 on
+  2026-10-22; 17 once 3.4's `CHECK_REVOKED_ON_STEP_UP` went live 2026-10-23, not re-run;
+  [gate](PRODUCTION_READINESS_GATE.md)) are console or `gcloud` changes. Optional and
+  unset: TD-215 (entitlement key), TD-309. Every Admin action is one table:
+  [gate § Admin actions](PRODUCTION_READINESS_GATE.md#admin-actions-external).
+
 ## 2026-10-24 — semperdic-app's backend: a staff-released phone is told so (#482)
 
 The backend from `main` at `187f4870` went live, staging first. It carries #482: a QC phone

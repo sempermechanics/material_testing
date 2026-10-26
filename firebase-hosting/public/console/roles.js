@@ -4,6 +4,7 @@
  * page's dashboard switch is built from them (switcher.js). No DOM here.
  */
 import { api } from "./api.js";
+import { explain } from "./messages.js";
 
 /**
  * The institution licences this address administers, and whether the
@@ -16,7 +17,7 @@ export async function licencesAdministered() {
     return { licenses: out.licenses || [], certain: true };
   } catch (e) {
     if (e.code === "email_not_verified") return { licenses: [], certain: true };
-    return { licenses: [], certain: false, why: e.message };
+    return { licenses: [], certain: false, why: explain(e) };
   }
 }
 

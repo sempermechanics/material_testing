@@ -94,7 +94,7 @@ test("a failed sign-in redirect is reported on the status line", async () => {
   await start(null);
   $("signIn").click();
   await settle();
-  assert.equal($("status").textContent, "Sign-in failed: auth/unauthorized-domain");
+  assert.equal($("status").textContent, "Sign-in failed: this address is not set up for sign-in.");
   assert.equal($("status").className, "muted err");
 });
 
@@ -195,7 +195,7 @@ test("a rejected code on the return leg reports Firebase's code and marks the re
   codes.answer("000000", null); // the wrong code, then Cancel instead of Try again
   const ready = await start(readyUser());
   assert.deepEqual(ready[0].resume, { ...resume, reauthFailed: "auth/invalid-verification-code" });
-  assert.equal($("status").textContent, "Sign-in failed: auth/invalid-verification-code");
+  assert.equal($("status").textContent, "Sign-in failed: the authenticator code was not accepted.");
   assert.equal($("status").className, "muted err");
 });
 

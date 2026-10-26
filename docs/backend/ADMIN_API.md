@@ -5,14 +5,14 @@ script against them (readiness item 5.7,
 [READINESS_FRAMEWORK_2026-10.md](../ops/READINESS_FRAMEWORK_2026-10.md)). The
 source of truth is the code: `backend/app/routers/roster.py`,
 `backend/app/routers/institutions.py`, `backend/app/routers/admin.py`; each
-route's auth tier is asserted in `backend/tests/test_route_authz_matrix.py:76-181`,
+route's auth tier is asserted in `backend/tests/test_route_authz_matrix.py:81-197`,
 and every path must also be declared in `backend/gateway/openapi.yaml` (the gateway
 404s anything else). Design background:
 [CLOUD_ARCHITECTURE_GCP.md §20](CLOUD_ARCHITECTURE_GCP.md#20-licensing--entitlements).
 
 **Limits of automation today.** Every institution route takes the browser step-up
 below, which needs an interactive sign-in with a second factor no older than
-`ADMIN_WEB_REAUTH_SECONDS` (default 900 s, `backend/app/config.py:175`). There are no
+`ADMIN_WEB_REAUTH_SECONDS` (default 900 s, `backend/app/config.py:203`). There are no
 machine tokens (FI-20) and no SCIM (FI-18). A script can run inside one such
 window, using the ID token of a signed-in session.
 
@@ -24,7 +24,7 @@ window, using the ID token of a signed-in session.
   project. The gateway checks it and forwards it as `X-Forwarded-Authorization`;
   the backend verifies it again (`backend/app/deps.py:55-69`).
 - **Errors:** JSON `{"detail": "<code>"}`, sometimes `"<code>: <suffix>"`. The
-  code is stable; the status per code is `backend/app/errors.py:300-351`
+  code is stable; the status per code is `backend/app/errors.py:320-376`
   ([ADR-020](../adr/ADR-020-backend-refusal-model.md)). A 429 carries `Retry-After`.
 - **Paging:** `page_size` (or `limit`) and `page_token`; the answer's `page` block
   carries `nextPageToken` and `hasMore`.
@@ -38,7 +38,7 @@ window, using the ID token of a signed-in session.
 |---|---|---|---|
 | `user` | any approved account | ID token | 401 `invalid_token`, 403 `not_approved` |
 | `institution-stepup` | an address in this licence's `adminEmails`, verified | ID token + TOTP second factor on a sign-in younger than `ADMIN_WEB_REAUTH_SECONDS` (`backend/app/routers/institutions.py:58-74`) | 403 `email_not_verified`; 404 `license_not_found` for a licence that does not name the caller, exactly as for one that does not exist; then 403 `mfa_required` / `reauth_required` |
-| `admin` | Semper staff (`role: admin`, or a token proving an address in `ADMIN_EMAILS`) | ID token (`backend/app/deps.py:333-347`) | 403 `not_admin` |
+| `admin` | Semper staff (`role: admin`, or a token proving an address in `ADMIN_EMAILS`) | ID token (`backend/app/deps.py:339-353`) | 403 `not_admin` |
 | `admin-stepup` | staff | a signed request from the staff phone, registered from a sign-in that completed the second factor (`stepUpEligible`; [ADR-010](../adr/ADR-010-device-binding-per-app.md) amendment), or the browser step-up as above | as above; a phone registered without the second factor is 403 `mfa_required` |
 | `admin-stepup-fresh` | staff | as `admin-stepup`, with a sign-in younger than `ADMIN_WEB_REVOKE_REAUTH_SECONDS` (default 120 s) | `reauth_required` |
 
@@ -48,13 +48,16 @@ for Firebase Auth Admin calls (`AUTH_ADMIN_CALLS_PER_SECOND`, default 10, burst
 `AUTH_ADMIN_BURST` 20; `backend/app/rate_limit.py:138-147`). When it is spent the
 check is not made and the call answers **503 `auth_check_busy`** with `Retry-After`
 (`backend/app/step_up.py:207-215`): the token is not judged, so retry after the delay.
-The consoles say "The server is busy checking sign-ins — wait a few seconds and try again." (`firebase-hosting/public/console/messages.js:18`) and do not retry by themselves.
+The consoles say "The server is busy checking sign-ins — wait a few seconds and try again." (`firebase-hosting/public/console/messages.js:19`) and do not retry by themselves.
 
 **A paused feature.** While an operator has a kill switch on (`KILL_SWITCHES`,
 [ENVIRONMENTS.md](../ops/ENVIRONMENTS.md)), the routes it guards answer **503
 `feature_paused`** with `Retry-After: 300`, before any work and after the token
-check (`deps.unless_paused`, `backend/app/deps.py:292-330`): `upload` or `backup`
-refuse `POST /v1/sessions` and `POST /v1/files/{id}/complete`; `restore` refuses
+check (`deps.unless_paused`, `backend/app/deps.py:292-336`): `upload` or `backup`
+refuse `POST /v1/sessions`, `GET /v1/sessions/{sid}/uploads`,
+`PUT /v1/sessions/{sid}/metadata` (both since 2026-10-24,
+`backend/app/routers/sessions.py:139-141`, `:222-224`) and
+`POST /v1/files/{id}/complete`; `restore` refuses
 `GET /v1/files/{id}/content` and `GET /v1/sessions/{sid}/bundle`, the bundle being
 the one a script can call. Nothing is wrong with the request; send it again after
 the delay. No institution or staff route is guarded.
@@ -70,15 +73,15 @@ Prefix `/v1/institutions/licenses/{license_id}`. Rate limits: `institution_bucke
 | Method and path | Tier | Request | Response (200) | Errors |
 |---|---|---|---|---|
 | `GET /v1/institutions/licenses` (no prefix) | `user` | — | `{"licenses": [...]}`: the institution licences whose `adminEmails` hold the caller's verified address (`institutions.py:77-97`) | 403 `email_not_verified` |
-| `GET …/seats` | `institution-stepup` | `page_size` (≤ 1000, default 500), `page_token` | `{license, seats[], invites[], page}`; a seat is `uid`, `email`, device locks, `status` (`active` / `disabled` / `revoked`), lease fields, times (`roster.py:128-152`) | 404 `license_not_found` |
-| `POST …/seats` | `institution-stepup` | `{"email": "…"}` | `{licenseId, seat, invite}`: exactly one of the two is set (`:154-168`); an account that is pending or has not verified the address gets the invite, not a seat | 400 `invalid_email`; 409 `member_already_licensed`, `license_seats_exhausted`, `license_seat_disabled`; 503 `claim_contended` (retry) |
-| `POST …/seats/import` | `institution-stepup` | `{"csv": "<file text>"}`: one column `email`, or the first column when there is no header; ≤ 500 rows, ≤ 512 000 characters (`backend/app/roster_io.py:22-25`) | `{licenseId, rows, counts, results[]}`; `counts` has `seated`, `invited`, `exists`, `duplicate`, `invalid`, `refused`, `unprocessed`; each result is `{row, email, outcome, error}` (`roster.py:170-241`) | 400 `roster_import_empty`, `roster_import_malformed`, `roster_import_no_email_column`; 413 `roster_import_too_many_rows`. Re-import the same file to finish `unprocessed` rows: rows already on the roster answer `exists` |
-| `GET …/seats/export` | `institution-stepup` | — | `text/csv`, every seat then every invite, `email` first, so the file imports back (`:243-258`); a cell starting with `=`, `+`, `-` or `@` is prefixed with `'` against spreadsheet formulas, and the import drops that one `'` again (`roster_io.undefused`, `backend/app/roster_io.py:112-120`) | — |
-| `GET …/summary` | `institution-stepup` | — | `{licenseId, seating, maxSeats, seatsUsed, leasesActive (floating only), expiresAt, counts}`; `counts` holds `assigned`, `onHold`, `activeLast7Days`, `invited`, `revocationPending`, `revocationPendingNoCheckIn`, `removed`, `expiringWithin30Days` (`roster.py:260-272`; `backend/app/roster_io.py:202-247`) | — |
-| `GET …/audit` | `institution-stepup` | `format` = `json` or `csv`; `since`, `until` (ISO date or instant, UTC; a bare `until` date includes that day); `page_size` (1–5000, default 100); `page_token` | JSON `{licenseId, events[], page}`, newest first; each event `{id, ts, uid, action, outcome, target, detail}`, no IP or device id. CSV: the same page, next token in the `X-Next-Page-Token` response header (`roster.py:274-313`; `backend/app/repo/audit_log.py:123-162`). The CORS answer does not expose that header, so only a non-browser client (a script) can read it and page on; a browser gets one page. The console's CSV export therefore asks for 5,000 events and says so when it stopped at that ceiling (`firebase-hosting/public/console/audit-log.js`, shared by the institution page and the operator desk); page CSV from a script, or narrow `since` / `until` | 400 `invalid_audit_range`. Events written before 2026-10-18 are absent (TD-246) |
-| `PATCH …/seats/{uid}` | `institution-stepup` | `{"clearDeviceLock": true}` and/or `{"enabled": false}` | `{licenseId, seat}` (`:334-366`) | 400 `empty_patch`; 404 `seat_not_found`; 409 `seat_revoked` |
-| `DELETE …/seats/{uid}` | `institution-stepup` | — | `{licenseId, uid, revoked: true}`: the holder drops to Demo, keeps their data, and the slot is freed (`:368-380`) | 404 `seat_not_found` |
-| `DELETE …/invites/{invite_key}` | `institution-stepup` | — | `{licenseId, inviteId, revoked: true}` (`:315-332`) | 404 `invite_not_found` |
+| `GET …/seats` | `institution-stepup` | `page_size` (≤ 1000, default 500), `page_token` | `{license, seats[], invites[], page}`; a seat is `uid`, `email`, device locks, `status` (`active` / `disabled` / `revoked`), lease fields, times (`roster.py:130-154`) | 404 `license_not_found` |
+| `POST …/seats` | `institution-stepup` | `{"email": "…"}` | `{licenseId, seat, invite}`: exactly one of the two is set (`:156-170`); an account that is pending or has not verified the address gets the invite, not a seat | 400 `invalid_email`; 409 `member_already_licensed`, `license_seats_exhausted`, `license_seat_disabled`; 503 `claim_contended` (retry) |
+| `POST …/seats/import` | `institution-stepup` | `{"csv": "<file text>"}`: one column `email`, or the first column when there is no header; ≤ 500 rows, ≤ 512 000 characters (`backend/app/roster_io.py:22-25`) | `{licenseId, rows, counts, results[]}`; `counts` has `seated`, `invited`, `exists`, `duplicate`, `invalid`, `refused`, `unprocessed`; each result is `{row, email, outcome, error}` (`roster.py:172-242`) | 400 `roster_import_empty`, `roster_import_malformed: line <n>` (the line the bad record starts on, a quote never closed included; `backend/app/roster_io.py:73-89`), `roster_import_no_email_column`; 413 `roster_import_too_many_rows`, `roster_import_too_large` (over 512 000 characters, before any row is read; was a 422 until 2026-10-24). Re-import the same file to finish `unprocessed` rows: rows already on the roster answer `exists` |
+| `GET …/seats/export` | `institution-stepup` | — | `text/csv`, every seat then every invite, `email` first, so the file imports back (`:244-259`); a cell starting with `=`, `+`, `-` or `@` is prefixed with `'` against spreadsheet formulas, and the import drops that one `'` again (`roster_io.undefused`, `backend/app/roster_io.py:134-143`) | — |
+| `GET …/summary` | `institution-stepup` | — | `{licenseId, seating, maxSeats, seatsUsed, leasesActive (floating only), expiresAt, counts}`; `counts` holds `assigned`, `onHold`, `activeLast7Days`, `invited`, `revocationPending`, `revocationPendingNoCheckIn`, `removed`, `expiringWithin30Days` (`roster.py:261-273`; `backend/app/roster_io.py:228-273`) | — |
+| `GET …/audit` | `institution-stepup` | `format` = `json` or `csv`; `since`, `until` (ISO date or instant, UTC; a bare `until` date includes that day); `page_size` (1–5000, default 100); `page_token` | JSON `{licenseId, events[], page}`, newest first; each event `{id, ts, uid, action, outcome, target, detail}`, no IP or device id. CSV: the same page, next token in the `X-Next-Page-Token` response header (`roster.py:275-314`; `backend/app/repo/audit_log.py:122-161`). The CORS answer does not expose that header, so only a non-browser client (a script) can read it and page on; a browser gets one page. The console's CSV export therefore asks for 5,000 events and says so when it stopped at that ceiling (`firebase-hosting/public/console/audit-log.js`, shared by the institution page and the operator desk); page CSV from a script, or narrow `since` / `until` | 400 `invalid_audit_range`. Events written before 2026-10-18 are absent (TD-246) |
+| `PATCH …/seats/{uid}` | `institution-stepup` | `{"clearDeviceLock": true}` and/or `{"enabled": false}` | `{licenseId, seat}` (`:335-367`) | 400 `empty_patch`; 404 `seat_not_found`; 409 `seat_revoked` |
+| `DELETE …/seats/{uid}` | `institution-stepup` | — | `{licenseId, uid, revoked: true}`: the holder drops to Demo, keeps their data, and the slot is freed (`:369-381`) | 404 `seat_not_found` |
+| `DELETE …/invites/{invite_key}` | `institution-stepup` | — | `{licenseId, inviteId, revoked: true}` (`:316-333`) | 404 `invite_not_found` |
 
 What a removal means for a phone: online, on its next request; offline, when its
 signed entitlement's `graceUntil` passes (at most 14 days by default,
@@ -134,7 +137,7 @@ pasted CSV does not survive the round trip: paste it and import again on return.
 | `POST /v1/admin/test-accounts` | `admin-stepup-fresh` | Create a QC or CI login. Body `{"email", "purpose": "qc"\|"ci", "days"?, "maxDevices"?, "note"?}`: `days` 1..90 (a QC account without it lasts 30; a CI account without it never ends and holds a perpetual licence), `maxDevices` 1..10 (default 3), `note` at most 200 characters, any other field 422 (`AdminTestAccountCreate`, `backend/app/models.py:519-546`). 201 `{"uid", "email", "password", "purpose", "expiresAt", "maxDevices", "licenseId"}` with `Cache-Control: no-store`; the password (20 URL-safe characters) is in this answer only. 403 `test_accounts_disabled` when `TEST_ACCOUNT_DOMAINS` is empty or lacks the address's domain (exact match); 409 `email_in_use` for a staff address (`ADMIN_EMAILS`) or one that has an account, a Firebase Auth user or a licence or invite; 503 `auth_check_busy` / `internal_error` with `Retry-After: 30` when the Auth project cannot be asked. Audited `test_account_created` (`backend/app/services/testaccounts.py:72-107`) |
 | `POST /v1/admin/test-accounts/{uid}/extend` | `admin-stepup-fresh` | Body `{"days"}` (1..90): the account and its licence now end `days` from now (sooner too, if that is what it says; a CI account with no end gets one). Answers the account's row as the list shows it. 404 `user_not_found` for a uid that is not a test account. Audited `test_account_extended` (`services/testaccounts.py:117-132`) |
 | `POST /v1/admin/test-accounts/{uid}/password` | `admin-stepup-fresh` | `{"password"}`, a new one, with `Cache-Control: no-store`; every refresh token the account holds is revoked. Audited `test_account_password_reset`, without the password (`services/testaccounts.py:135-146`) |
-| `POST /v1/admin/test-accounts/{uid}/devices/{device_id}/release` | `admin-stepup-fresh` | Release one ACTIVE phone of the account, so another can take its place without ending it (TD-314). One transaction: the device REVOKED and stamped `staffReleased: true`, and the app's `activeDeviceId` dropped when it names this phone; no release hold (`releasedDeviceId` is not written) and its sessions are untouched. The released phone may not register for this account again: `POST /v1/devices/register` answers it 409 `device_released` (builds before it read any 409 there as `device_conflict`), audited `DEVICE_REGISTER` DENIED with `reason: "staff_released"`, and its `/v1/config` calls are Demo, not licensed as an unregistered phone with room would be (`repo/devlock.py`, `_test_lock_verdict`); another account may still register it. Answers the account's row as the list shows it. 404 `user_not_found` for a uid that is not a test account, `device_not_found` for a device that is not one of its ACTIVE phones. Audited `test_account_device_released` with `{deviceId, app}` (`services/testaccounts.py:149-164`, `repo/testaccounts.py:109-138`, `repo/_base.py:268-274`) |
+| `POST /v1/admin/test-accounts/{uid}/devices/{device_id}/release` | `admin-stepup-fresh` | Release one ACTIVE phone of the account, so another can take its place without ending it (TD-314). One transaction: the device REVOKED and stamped `staffReleased: true`, and the app's `activeDeviceId` dropped when it names this phone; no release hold (`releasedDeviceId` is not written) and its sessions are untouched. The released phone may not register for this account again: `POST /v1/devices/register` answers it 409 `device_released` (builds before it read any 409 there as `device_conflict`), audited `DEVICE_REGISTER` DENIED with `reason: "staff_released"`, and its `/v1/config` calls are Demo, not licensed as an unregistered phone with room would be (`repo/devlock.py`, `_test_lock_verdict`); another account may still register it. Answers the account's row as the list shows it. 404 `user_not_found` for a uid that is not a test account, `device_not_found` for a device that is not one of its ACTIVE phones. Audited `test_account_device_released` with `{deviceId, app}` (`services/testaccounts.py:149-164`, `repo/testaccounts.py:109-142`, `repo/_base.py:275-281`) |
 | `DELETE /v1/admin/test-accounts/{uid}` | `admin-stepup-fresh` | 204. End the account now: suspended, tokens revoked, its test licences revoked, then the holder erasure's own steps (Drive tree, Firestore records, Firebase Auth users; `erase_data`, `backend/app/services/account.py`), run as staff. Audited `test_account_ended`, not `ACCOUNT_DELETE` (`services/testaccounts.py:167-185`) |
 
 ### Account routes a script may meet

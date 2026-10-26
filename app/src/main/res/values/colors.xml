@@ -12,9 +12,11 @@
     <color name="wordmark_dic">#00A9A6</color>
 
     <!-- Brand: deep sky blue ramp -->
-    <color name="sky_primary">#0288D1</color>          <!-- primary actions, headers -->
-    <color name="sky_primary_dark">#0277BD</color>     <!-- status bar / pressed -->
-    <color name="sky_bright">#00BFFF</color>           <!-- accent, active states -->
+    <!-- sky_primary carries text and the white label of the filled button, so it
+         holds 4.5:1 on surface, surface_muted and sky_container (5.3 / 5.0 / 4.7)
+         and under white (5.3). The lighter #0288D1 failed all four (readiness AE1-001). -->
+    <color name="sky_primary">#0270B0</color>          <!-- primary actions, links, headers -->
+    <color name="sky_primary_dark">#01579B</color>     <!-- status bar / pressed -->
     <color name="sky_container">#E1F5FE</color>        <!-- tonal surfaces, chips -->
     <color name="sky_on_container">#014A72</color>     <!-- text on sky_container -->
 
@@ -29,9 +31,31 @@
     <color name="text_on_primary">#FFFFFF</color>
 
     <!-- Semantic -->
-    <color name="semantic_success">#4CAF50</color>
-    <color name="semantic_danger">#E53935</color>
-    <color name="semantic_warning">#F5A623</color>
+    <!-- Success and danger draw icons, lines and text, so each clears 4.5:1 on both
+         surfaces (success 5.1 / 4.8, danger 5.6 / 5.3). -->
+    <color name="semantic_success">#2E7D32</color>
+    <color name="semantic_danger">#C62828</color>
+    <!-- Amber (#F5A623) is 2:1 on white: it cannot carry text or an icon. Warning text
+         and icons use the ink (6.3:1 on surface, 5.6:1 on the warn chip). -->
+    <color name="semantic_warning_ink">#8A5300</color>
+    <color name="warn_chip_fill">#22FFC107</color>
+
+    <!-- Boundary of a control (unfocused input, segmented outline, slider track):
+         3.6:1 on surface, 3.4:1 on surface_muted (WCAG 1.4.11). Card strokes and
+         dividers are not controls and keep surface_outline. -->
+    <color name="outline_strong">#728A99</color>
+
+    <!-- Ripples, slider decorations and scrims: alpha tints of the tokens above. -->
+    <color name="ripple_on_primary">#33FFFFFF</color>  <!-- on a sky fill -->
+    <color name="ripple_sky">#220270B0</color>         <!-- sky_primary at 13% -->
+    <color name="ripple_danger">#22C62828</color>      <!-- semantic_danger at 13% -->
+    <color name="ripple_quiet">#225B6B7A</color>       <!-- text_secondary at 13% -->
+    <color name="ripple_neutral">#22000000</color>
+    <color name="slider_halo">#330270B0</color>
+    <color name="slider_tick_active">#66FFFFFF</color>
+    <color name="slider_tick_inactive">#660270B0</color>
+    <color name="scrim_dim">#80000000</color>          <!-- a sheet's busy cover -->
+    <color name="coach_scrim">#A0000000</color>        <!-- around a coach mark's hole -->
 
     <!-- Result viewer: dark canvas so heatmaps stay vivid, with translucent
          glass controls on top -->
@@ -57,7 +81,9 @@
 
     <!-- bg_probe_chip is deliberately dark in BOTH themes (a dark puck reads over any
          jet colour), so its ink and rim stay light in both — no night override. Used
-         by the probe readout. -->
+         by the probe readout and the colour scale's end labels, which sit over the
+         heatmap itself (white on it is 7.5:1 or better over every jet colour). -->
+    <color name="viewer_probe_fill">#B8121212</color>
     <color name="viewer_probe_ink">#FFFFFFFF</color>
     <color name="viewer_probe_stroke">#73FFFFFF</color>
 
@@ -110,8 +136,11 @@
          neutral instead of their own hue, so only the focused curve carries
          colour meaning, so the categorical palette below no longer needs to
          separate 8 simultaneous hues, only ever one against this neutral. -->
-    <color name="viewer_plot_muted">#9FB0BC</color>
+    <color name="viewer_plot_muted">#7E8B99</color>
     <color name="viewer_plot_node_solved">@color/sky_primary</color>
+    <!-- An outlined action (label and rim) on a force-dark opt-out canvas, such as the
+         lattice's Save graph: sky_primary by day; the night half lightens it. -->
+    <color name="viewer_action_ink">@color/sky_primary</color>
     <color name="viewer_plot_node_skipped">@color/semantic_danger</color>
     <color name="viewer_plot_connector">@color/sky_container</color>
 
@@ -141,4 +170,19 @@
     <color name="viewer_line_cut_0">#0288D1</color>
     <color name="viewer_line_cut_1">#E53935</color>
     <color name="viewer_line_cut_2">#8E24AA</color>
+
+    <!-- Drawn on the photo, which opts out of force dark, so one value serves both
+         themes: the ROI studio's crop and holes (StudioOverlayPaints), the viewer's
+         probe crosshair (InspectOverlayView), a Home thumbnail's empty margin
+         (ResultThumbnail) and a saved sweep graph's page (SweepPlotView.renderToBitmap).
+         None has a night value (readiness AE1-007). -->
+    <color name="roi_studio_dim">#99000000</color>
+    <color name="roi_studio_crop">#FF00FF00</color>
+    <color name="roi_studio_handle">#FFFFFFFF</color>
+    <color name="roi_studio_hole_fill">#88FF0000</color>
+    <color name="roi_studio_hole_stroke">#FFFF0000</color>
+    <color name="viewer_probe_crosshair">#FF00FF00</color>
+    <color name="viewer_probe_shadow">#88000000</color>
+    <color name="thumb_hole">#FFE3E8EC</color>
+    <color name="sweep_export_page">#FFFFFFFF</color>
 </resources>

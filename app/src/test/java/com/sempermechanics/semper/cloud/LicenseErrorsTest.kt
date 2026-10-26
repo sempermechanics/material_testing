@@ -75,11 +75,9 @@ class LicenseErrorsTest {
     }
 
     @Test
-    fun `unknown detail stays formatted rather than blank`() {
+    fun `an unknown detail is the generic message, never the code`() {
+        // The code is the server's, not words for the user (readiness AE1-009).
         val msg = LicenseErrors.restoreMessage(ctx, "something_else")
-        assertEquals(
-            ctx.getString(com.sempermechanics.semper.R.string.restore_failed_fmt, "something_else"),
-            msg,
-        )
+        assertEquals(ctx.getString(com.sempermechanics.semper.R.string.restore_failed_generic), msg)
     }
 }

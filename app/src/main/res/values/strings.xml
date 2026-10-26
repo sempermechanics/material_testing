@@ -99,22 +99,22 @@
     <string name="analysis_unexpected_title">Analysis stopped unexpectedly</string>
     <string name="analysis_not_saved_title">Couldn\'t save results</string>
     <string name="analysis_index_unavailable_body">The list of analyses couldn\'t be updated. Free up space and run again.</string>
-    <string name="analysis_unexpected_fmt">The run ended with an error it could not describe:
-
-%1$s
+    <string name="analysis_unexpected_body">The run ended with an error.
 
 A large region at a small step can exhaust memory — try a coarser step or a smaller ROI. If it repeats on the same images, send them to support.</string>
     <string name="video_read_failed">Could not read this video.</string>
     <string name="video_codec_unsupported">This AVI holds %1$s video, which this device has no decoder for. Re-save it as MP4 (H.264), or export the frames as PNG and import them as images.</string>
     <string name="video_extract_insufficient">Could not extract enough frames from this segment.</string>
-    <string name="video_read_error_fmt">Failed to read video: %1$s</string>
-    <string name="video_codec_unsupported_fmt">This AVI holds %1$s video, which this device has no decoder for. Re-save it as MP4 (H.264), or export the frames as PNG and import them as images.</string>
-    <string name="error_loading_images_fmt">Error loading images: %1$s</string>
+    <string name="video_codec_unsupported_fmt">This AVI holds %1$s video, which this phone has no decoder for. Re-save it as MP4 (H.264), or export the frames as PNG and import them as images.</string>
+    <string name="error_loading_images">Couldn\'t load these images. Check that this phone can open them, then try again.</string>
     
 
     <!-- Result viewer -->
     <string name="no_batch_data">No valid batch data found.</string>
     <string name="viewer_frame_oom">Not enough memory to open this frame. Try closing other apps, or view a smaller analysis.</string>
+    <!-- A frame whose .dat cannot be decoded: the frame asked for, then the one still on screen (readiness AE1-013). -->
+    <string name="viewer_frame_unreadable_fmt">Frame %1$d can\'t be read. Still showing frame %2$d.</string>
+    <string name="viewer_frame_unreadable_none_fmt">Frame %1$d can\'t be read.</string>
     <string name="scale_dialog_title_fmt">Scale · %1$s</string>
     <string name="scale_max_value_fmt">Max %1$s</string>
     <string name="scale_min_value_fmt">Min %1$s</string>
@@ -129,7 +129,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="auth_toggle_to_register">Need an account? Create one</string>
     <string name="auth_toggle_to_login">Have an account? Sign in</string>
     <string name="auth_email_link">Email me a sign-in link (no password)</string>
-    <string name="auth_link_sent_fmt">Sign-in link sent to %1$s. Open it on this device to finish.</string>
+    <string name="auth_link_sent_fmt">Sign-in link sent to %1$s. Open it on this phone to finish.</string>
     <string name="auth_reset_sent_fmt">If an account exists for %1$s, a password-reset link is on its way.</string>
     <string name="auth_reset_failed">Could not send the reset email.</string>
     <string name="auth_reset_body">Choose a new password for your account.</string>
@@ -189,7 +189,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="label_6_6_keys">6×6 Keys</string>
     <string name="result">Result: --</string>
     <string name="back">Back</string>
-    <string name="initializing_engine">Initializing engine…</string>
+    <string name="initializing_engine">Initialising engine…</string>
     <string name="text">—</string>
     <string name="extraction_frame_rate">Frame rate</string>
     <string name="time_segment">Segment</string>
@@ -200,7 +200,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="home_new_analysis">New analysis</string>
     <string name="home_settings">Settings</string>
     <string name="home_thumb_desc">Reference image preview</string>
-    <string name="home_sync_config_unavailable">Can\'t sync yet — check your connection and pull to refresh</string>
+    <string name="home_sync_config_unavailable">Can\'t check cloud backup yet — check your connection and pull to refresh</string>
     <string name="transfer_channel_name">Cloud transfers</string>
     <string name="transfer_upload_title">Uploading analysis…</string>
     <string name="transfer_restore_title">Restoring analysis…</string>
@@ -292,7 +292,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="delete_confirm_body_cloud">A deleted cloud copy can\'t be recovered.</string>
     <string name="restore_analysis_title_fmt">Restore %1$s?</string>
     <string name="restore_analysis_body">It\'s only in the cloud.</string>
-    <string name="delete_device_only_done">Removed from this phone · in the cloud</string>
+    <string name="delete_device_only_done">Freed from this phone · in the cloud</string>
     <string name="delete_done_fmt">Deleted %1$s</string>
     <string name="download_local_action">Download</string>
     <string name="download_analysis_working">Downloading…</string>
@@ -336,20 +336,20 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="record_integrity_unsigned">Not signed</string>
     <string name="record_integrity_not_recorded">Not recorded</string>
     <string name="record_integrity_signed_elsewhere">Signed on another device</string>
-    <string name="record_integrity_signed_elsewhere_warn_fmt">Signed by a device key that is not this phone\'s (key %1$s). That is not a pass: the key has to be checked against the account\'s registered devices. A reinstall or a restore on another phone also reads this way.</string>
+    <string name="record_integrity_signed_elsewhere_warn_fmt">Signed by a device key that is not this phone\'s (key %1$s). That is not a pass: the key has to be checked against the account\'s registered phones. A reinstall or a restore on another phone also reads this way.</string>
     <string name="record_integrity_changed_warn_fmt">These files no longer match what the analysis wrote, so its results may have been edited: %1$s</string>
     <plurals name="record_integrity_more_fmt">
         <item quantity="one">%1$s and %2$d more file</item>
         <item quantity="other">%1$s and %2$d more files</item>
     </plurals>
     <string name="export_data">Export my data</string>
-    <string name="export_progress_fmt">Exporting session %1$d of %2$d</string>
+    <string name="export_progress_fmt">Exporting analysis %1$d of %2$d</string>
     <string name="export_data_failed">Couldn\'t prepare the export. Free up some storage and try again.</string>
     <!-- Cloud account export (GDPR portability) — distinct from the local session
          zip above: this is what the backend holds, not what is on this phone. -->
     <string name="export_cloud_data">Download cloud data</string>
     <string name="export_cloud_data_failed">Couldn\'t download your account data. Check your connection and try again.</string>
-    <string name="export_cloud_data_offline">Cloud sync isn\'t set up on this build, so there\'s no cloud data to download.</string>
+    <string name="export_cloud_data_offline">Cloud backup isn\'t set up on this build, so there\'s no cloud data to download.</string>
     <!-- Diagnostics consent -->
     <string name="settings_diagnostics">Send crash reports and usage data</string>
     <string name="settings_diagnostics_sub">Share anonymous crash diagnostics and coarse usage events — which features ran, and whether they succeeded — so we can fix problems. Off by default; your images, results, specimen names, file paths and analysis data are never sent.</string>
@@ -359,7 +359,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="diagnostics_prompt_decline">Not now</string>
     <string name="delete_account">Delete account</string>
     <string name="delete_account_title">Delete your account?</string>
-    <string name="delete_account_body">This erases:\n\n• every analysis on this phone\n• every cloud backup\n• your profile and device\n• your sign-in, for both Semper and Semper Classroom\n\nThis can\'t be undone.</string>
+    <string name="delete_account_body">This erases:\n\n• every analysis on this phone\n• every cloud backup\n• your profile and registered phone\n• your sign-in, for both Semper and Semper Classroom\n\nThis can\'t be undone.</string>
     <string name="delete_account_confirm">Delete everything</string>
     <string name="delete_account_working">Erasing your account and data…</string>
     <string name="delete_account_done">Your account and all data have been deleted.</string>
@@ -379,9 +379,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="transfer_banner_restore">Restoring…</string>
     <string name="help_support_feedback_action">Send feedback</string>
     <string name="help_support_feedback_subject_fmt">Semper Classroom feedback (v%1$s / %2$d)</string>
-    <string name="help_support_feedback_body_fmt">Describe your feedback below.\n\n---\nApp: %1$s (%2$d)\nDevice: %3$s\nAndroid: %4$d\nBuild: %5$s\n</string>
-    <string name="settings_save_cloud">Save to cloud</string>
-    <string name="settings_save_cloud_desc">Save to cloud: new analyses upload when a network is available. Off keeps them on this phone; existing cloud copies remain</string>
+    <string name="help_support_feedback_body_fmt">Describe your feedback below.\n\n---\nApp: %1$s (%2$d)\nPhone: %3$s\nAndroid: %4$d\nBuild: %5$s\n</string>
+    <string name="settings_save_cloud">Back up to the cloud</string>
+    <string name="settings_save_cloud_desc">Back up to the cloud: new analyses back up when a network is available. Off keeps them on this phone; existing backups remain</string>
     <string name="settings_wifi_only">Wi‑Fi only</string>
     <string name="settings_wifi_only_desc">Wi‑Fi only: wait for unmetered Wi‑Fi before uploading</string>
     <string name="account_section">Account</string>
@@ -430,7 +430,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="storage_auto_free">Auto-free space</string>
     <string name="storage_auto_free_off">Off</string>
     <string name="storage_auto_free_on_fmt">Over %1$d GB</string>
-    <string name="storage_auto_free_info">When off, analyses stay on this phone until you remove them. Set a size, and whenever this phone holds more than that, backed-up analyses are released, oldest first, to get back under it. Only analyses that finished backing up are ever released. They stay in the cloud and download again when opened. Analyses that are not backed up are never touched.</string>
+    <string name="storage_auto_free_info">When off, analyses stay on this phone until you remove them. Set a size, and whenever this phone holds more than that, backed-up analyses are freed from this phone, oldest first, to get back under it. Only analyses that finished backing up are ever freed. They stay in the cloud and download again when opened. Analyses that are not backed up are never touched.</string>
     <string name="action_undo">Undo</string>
     <string name="analysis_preferences">Analysis preferences</string>
     <string name="cloud_retry_backup">Retry backup</string>
@@ -440,11 +440,11 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="cloud_backup_retry_action">Try again</string>
     <string name="cloud_backup_failed_title">Backup failed</string>
     <string name="cloud_backup_failed_generic">This backup couldn\'t be completed. Tap Try again to retry.</string>
-    <string name="cloud_backup_failed_device">This account is backing up from another device.</string>
+    <string name="cloud_backup_failed_device">This account is backing up from another phone.</string>
     <string name="cloud_backup_failed_too_large">This analysis is too large to back up.</string>
-    <string name="cloud_backup_failed_oom">Not enough memory on this device to prepare the backup. Try again after closing other apps, or use a device with more RAM.</string>
+    <string name="cloud_backup_failed_oom">Not enough memory on this phone to prepare the backup. Try again after closing other apps, or use a phone with more RAM.</string>
     <string name="cloud_backup_failed_provision">Cloud backup setup could not be completed. Tap Try again.</string>
-    <string name="cloud_backup_failed_missing_files">This analysis\'s results are no longer on this device, so it can\'t be backed up.</string>
+    <string name="cloud_backup_failed_missing_files">This analysis\'s results are no longer on this phone, so it can\'t be backed up.</string>
     <string name="cloud_delete_backup">Delete from backup</string>
     <!-- A backup with no copy on this phone; delete_cloud_title_fmt names it. -->
     <string name="cloud_delete_body">Raw images, results and report. This can\'t be undone.</string>
@@ -456,13 +456,13 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="your_data_delete_hint">Delete analyses from Home</string>
     <string name="restore_need_sign_in">Sign in to see cloud backups.</string>
     <string name="restore_api_off">Cloud backup is not configured on this build.</string>
-    <string name="restore_failed_fmt">Restore failed. %1$s</string>
     <string name="restore_failed_generic">This backup couldn\'t be restored.</string>
     <string name="restore_backup_gone">This backup\'s files are no longer in cloud storage. Back the analysis up again from a phone that still has it.</string>
-    <string name="restore_device_mismatch">This phone is not the one bound to the licence yet. Sign in, wait a moment for the device to bind, then try restore again — or move the licence from the Semper account page first.</string>
-    <string name="restore_not_licensed">Restore isn\'t available in demo mode.</string>
+    <string name="restore_device_mismatch">This phone is not the one bound to the licence yet. Sign in, wait a moment for the phone to bind, then try restore again — or move the licence from the Semper account page first.</string>
+    <!-- The demo's refusals end with license_lock_note's sentence: how to unlock (readiness AE1-015). -->
+    <string name="restore_not_licensed">Restore isn\'t available on the demo. Included with an institution seat or a Semper licence. Ask your institution\'s IT, or contact Semper support.</string>
     <string name="restore_paused">Restoring from the cloud is paused right now. Your analyses on this phone aren\'t affected.</string>
-    <string name="download_not_licensed">Downloading from the cloud isn\'t available in demo mode.</string>
+    <string name="download_not_licensed">Downloading from the cloud isn\'t available on the demo. Included with an institution seat or a Semper licence. Ask your institution\'s IT, or contact Semper support.</string>
     <!-- Share in the viewer while the share kill switch is on: not a licence lock. -->
     <string name="share_paused">Sharing is temporarily unavailable. Your analyses on this phone aren\'t affected.</string>
     <!-- Locked, not hidden (FeatureLocks): the one note beside, and on a tap of, anything
@@ -474,6 +474,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="settings_max_frames">Max frames</string>
     <string name="settings_max_frames_info">A ceiling, not a target: it can only reduce a run, never add frames. It caps imported frames and frames sampled from a video. More frames = longer analysis and more memory.</string>
     <string name="info">Info</string>
+    <!-- An "i" button's TalkBack name: the setting its dialog explains (Dialogs.bindInfo). -->
+    <string name="info_about">About %1$s</string>
     <string name="action_sign_out">Sign out</string>
     <string name="about_title">About</string>
     <string name="about_message_fmt">Semper Classroom v%1$s (%2$d)\n\nPrivacy Policy and Terms of Service are available from the links below.</string>
@@ -491,16 +493,16 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="terms_read_privacy">Privacy Policy</string>
     <string name="terms_checkbox_agree">I have read and agree to the Terms of Service and the Privacy Policy</string>
     <string name="terms_checkbox_improve">Use data to improve Semper</string>
-    <string name="terms_checkbox_improve_hint">Optional. Lets us use images, results and reports you sync to test and tune the engine. Untick to opt out; you can change this any time in Settings \u2192 Your data.</string>
+    <string name="terms_checkbox_improve_hint">Optional. Lets us use images, results and reports you back up to test and tune the engine. Untick to opt out; you can change this any time in Settings \u2192 Your data.</string>
     <string name="terms_action_agree">Agree and continue</string>
     <string name="terms_action_decline">Decline</string>
     <string name="terms_error_update_app">This version of the app is out of date. Please update Semper Classroom to accept the current Terms.</string>
     <string name="terms_error_generic">Could not record your acceptance. Please try again.</string>
     <string name="terms_register_hint">You\u2019ll be asked to accept the Terms next.</string>
     <string name="settings_improve_title">Use my data to improve Semper</string>
-    <string name="settings_improve_summary">Optional. Synced images, results and reports may be used to test and tune the engine. Withdrawing stops future use and removes your data from improvement datasets within 30 days.</string>
+    <string name="settings_improve_summary">Optional. Backed-up images, results and reports may be used to test and tune the engine. Withdrawing stops future use and removes your data from improvement datasets within 30 days.</string>
     <string name="settings_terms_accepted_fmt">Terms accepted: version %1$s</string>
-    <string name="settings_terms_not_accepted">Terms not yet accepted on this device</string>
+    <string name="settings_terms_not_accepted">Terms not yet accepted on this phone</string>
     <string name="settings_view_terms">View Terms</string>
     
     
@@ -595,6 +597,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="error_low_convergence_why">The images may have decorrelated: the speckle pattern changed, or the specimen moved out of view.</string>
     <string name="action_open_faq">Open FAQ</string>
     <string name="vsg_lattice_all_failed">All combinations failed — tap a node for details.</string>
+    <!-- The lattice opened without a sweep to draw: nothing ran, so nothing failed. -->
+    <string name="vsg_lattice_empty">No sweep to show. Run a parameter sweep from a new analysis.</string>
 
     <!-- One-line failure labels for lattice nodes, in measurement terms. -->
     <string name="sweep_reason_decorrelated">Decorrelated — the pair could not be matched</string>
@@ -638,6 +642,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- Compact lattice: unit folded onto the rightmost subset tick instead of a
          separate axis title (see SweepLatticeView.compact). -->
     <string name="vsg_lattice_axis_subset_unit_fmt">%1$d px</string>
+    <!-- The result lattice's y-axis title: what the axis is and its unit. -->
+    <string name="vsg_lattice_axis_vsg">VSG (px)</string>
     <string name="vsg_lattice_param_fmt">ss:%1$d · st:%2$d · %3$s</string>
     <string name="vsg_lattice_param_labeled_fmt">subset size %1$d · step size %2$d · %3$s</string>
     <string name="vsg_lattice_scrub_xy_fmt">x=%1$.1f  y=%2$.4g</string>
@@ -975,6 +981,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- The collapsible section holding the overlap, the interpolation and the reference. -->
     <string name="param_advanced">Advanced</string>
     <string name="run_compute_eta_fmt">Compute · %1$s</string>
+    <!-- What TalkBack reads for Compute with a time: "Compute, about 1 minute". -->
+    <string name="run_compute_eta_spoken_fmt">Compute, %1$s</string>
     <string name="run_estimate_seconds_fmt">about %1$d s</string>
     <string name="run_estimate_minutes_fmt">about %1$d min</string>
     <!-- The same times without "about", for the sweep's short run button, and spoken in full. -->
@@ -1070,8 +1078,11 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="field_eyy">Eyy</string>
     <string name="field_exy">Exy</string>
     <string name="stat_empty">--</string>
-    <string name="viewer_stats_fmt">max %1$s at (%2$d, %3$d)\nmin %4$s at (%5$d, %6$d)\nmean %7$s %8$s</string>
-    <string name="viewer_stats_plain_fmt">max %1$s · min %2$s · mean %3$s %4$s</string>
+    <!-- Every value with its unit, and the point's coordinates in px (readiness AE1V-018). The viewer's max / min are the raw extremes and its mean is signed; the PDF's are percentiles (AE1-017). -->
+    <string name="viewer_stats_fmt">max (raw) %1$s %8$s at (%2$d, %3$d) px\nmin (raw) %4$s %8$s at (%5$d, %6$d) px\nmean %7$s %8$s</string>
+    <string name="viewer_stats_plain_fmt">max (raw) %1$s %4$s · min (raw) %2$s %4$s · mean %3$s %4$s</string>
+    <!-- The Details histogram's y axis: how many points fall in each bin. -->
+    <string name="viewer_histogram_y_axis">points</string>
     <!-- Summary colour bar is a whole-sequence scale; the ⓘ sheet must quote
          those same ends, not the hidden first frame's extrema. They are the
          scale's ends (a percentile clamp, or the user's fixed scale), not the
@@ -1155,7 +1166,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="share_cancelled">Cancelled</string>
     <string name="share_save_to_files">Save to Files</string>
     <string name="send_to_title">Send to</string>
-    <string name="save_success">Saved to device</string>
+    <string name="save_success">Saved to this phone</string>
     <string name="save_failed">Couldn\'t save the file. Try again.</string>
     <string name="app_name_short">Semper Classroom</string>
     <string name="approval_title">Access required</string>
@@ -1164,9 +1175,14 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="action_request_access">Request access</string>
     <string name="error_generic">Something went wrong. Please try again.</string>
     
-    <string name="cloud_check_failed_fmt">Couldn\'t check your cloud backups (%1$s). Backup status shown may be out of date.</string>
+    <!-- A failed Home cloud check, by kind (readiness AE1-009): no HTTP status or exception text. -->
+    <string name="cloud_check_not_approved">Couldn\'t check your cloud backups: your account isn\'t approved for cloud backup.</string>
+    <string name="cloud_check_server">The cloud isn\'t answering, so the backup status shown may be out of date.</string>
+    <string name="cloud_check_failed">Couldn\'t check your cloud backups. The backup status shown may be out of date.</string>
     <string name="restore_action">Restore</string>
-    <string name="restore_load_error_fmt">Couldn\'t load backups: %1$s</string>
+    <!-- The Settings backups list when it could not be read (AE1-009). -->
+    <string name="restore_list_offline">You\'re offline. Showing what\'s on this phone.</string>
+    <string name="restore_list_failed">Couldn\'t load your backups. Try again later.</string>
     <string name="restore_background_note">Restore continues even if you leave this screen.</string>
     <string name="download_background_note">Download continues even if you leave this screen.</string>
     <string name="admin_pending_requests">Pending access requests</string>
@@ -1216,7 +1232,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
 
     <!-- First-login beta / data-use declaration (shown once per account on Home) -->
     <string name="beta_notice_title">Beta notice</string>
-    <string name="beta_notice_body">Analysis data generated while using the app will be collected for enhancing performance, reliability, and features of the app. \n\nThe user has the right to access, update, or delete their data at any time.</string>
+    <!-- Says what terms_checkbox_improve_hint and settings_improve_summary say: optional,
+         ticked at the Terms with the choice to untick, withdrawable (readiness AE1V-016). -->
+    <string name="beta_notice_body">Semper is in beta. \"Use data to improve Semper\" was ticked when you accepted the Terms, and you could untick it. While it is on, the images, results and reports you back up may be used to test and tune the engine.\n\nYou can turn it off any time in Settings \u2192 Your data: that stops future use and removes your data from improvement datasets within 30 days. Crash reports and usage data are sent only if you agree to them. You can access, update or delete your data at any time.</string>
     <string name="beta_notice_ack">I understand</string>
 
     <!-- Session/analysis quota limit screen -->
@@ -1254,7 +1272,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="restrictions_email_domain_title">Account email domain</string>
     <string name="restrictions_email_domain_description">Your organisation\'s email domain, such as example.edu. Google sign-in offers only accounts in this domain.</string>
     <string name="restrictions_cloud_backup_title">Allow cloud backup</string>
-    <string name="restrictions_cloud_backup_description">When off, analyses stay on this device only: no cloud backup, upload or restore.</string>
+    <string name="restrictions_cloud_backup_description">When off, analyses stay on this phone only: no cloud backup, upload or restore.</string>
     <string name="restrictions_unmetered_title">Back up on unmetered networks only</string>
     <string name="restrictions_unmetered_description">When on, uploads wait for Wi-Fi or another unmetered network, whatever the user\'s own setting.</string>
     <string name="seat_offline">You\'re offline — connect to take a seat.</string>
@@ -1272,8 +1290,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="license_expiring_today">Licence expires today</string>
     <string name="license_expired">Licence expired — ask your institution\'s IT or Semper support</string>
     <!-- %1$s: the date grace ends, e.g. 15 Mar 2027 -->
-    <string name="license_grace_until_fmt">Licence expired — still working until %1$s</string>
-    <string name="license_grace">Licence expired — still working for now</string>
+    <string name="license_grace_until_fmt">Licence expired — after-expiry grace until %1$s</string>
+    <string name="license_grace">Licence expired — in after-expiry grace</string>
     <string name="request_access_none_fmt">No email app found. Please email %1$s to request access.</string>
     <string name="dot_separator">" · "</string>
     <string name="error_email_invalid">That does not look like an email address</string>
@@ -1302,8 +1320,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- Auth: sign-in errors -->
     <string name="error_passwords_mismatch">Passwords do not match.</string>
     <string name="auth_link_send_failed">Could not send the link.</string>
-    <string name="auth_link_wrong_device">Kindly open the sign-in link on the requested device.</string>
-    <string name="auth_google_no_account">No Google account available on this device.</string>
+    <string name="auth_link_wrong_device">Open the sign-in link on the phone you asked for it on.</string>
+    <string name="auth_google_no_account">No Google account available on this phone.</string>
     <string name="auth_google_failed">Google sign-in failed.</string>
     <string name="auth_sign_in_failed">Sign-in failed.</string>
     <string name="auth_verify_first">Check your email for the verification link.</string>
@@ -1328,6 +1346,35 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="status_still_pending">Account is still pending approval.</string>
     <string name="status_changed_relogin">Your access status has changed. Please log in again.</string>
     <string name="error_network_retry">Network error. Try again.</string>
+
+    <!-- Failure text by kind (ADR-018, readiness AE1-009): what a screen says
+         instead of an exception's or the server's own words. -->
+    <string name="error_offline">You\'re offline. Check your connection and try again.</string>
+    <string name="error_cloud_unavailable">The cloud isn\'t answering. Try again later.</string>
+    <string name="error_session_expired">Session expired. Please sign in again.</string>
+    <string name="auth_too_many_requests">Too many attempts from this phone. Wait a few minutes, then try again.</string>
+
+    <!-- Auth failures (readiness AE1-010): were literals in AuthRepository,
+         AuthLinks, AccessStatusResolver and ReauthCredentials. -->
+    <string name="auth_wrong_credentials">Incorrect email or password.</string>
+    <string name="auth_wrong_totp_code">Incorrect authenticator code.</string>
+    <string name="auth_wrong_password">Incorrect password.</string>
+    <string name="auth_not_signed_in">Not signed in.</string>
+    <string name="auth_no_email">This account has no email.</string>
+    <string name="auth_verify_identity_failed">Could not verify your identity.</string>
+    <string name="auth_delete_identity_failed">Could not delete the sign-in identity.</string>
+    <string name="auth_cloud_not_configured">Sign-in isn\'t available on this build: it has no cloud backend.</string>
+    <string name="auth_sign_in_incomplete">Sign-in did not complete.</string>
+    <string name="auth_weak_password">Password is too weak (min 6 characters).</string>
+    <string name="auth_account_exists">An account already exists for this email. Sign in instead.</string>
+    <string name="auth_no_account">No account for this email.</string>
+    <string name="auth_verify_email_first_fmt">Verify your email first. We\'ve sent a link to %1$s — open it, then sign in again.</string>
+    <string name="auth_totp_needs_enrolment">This account needs an authenticator app. Open the Semper website, enrol one, then try again on the phone.</string>
+    <string name="auth_reset_confirm_failed">Could not reset the password.</string>
+    <string name="auth_account_check_failed">Could not verify your account. Try again later.</string>
+    <string name="auth_account_check_offline">Could not verify account. Check your connection and sign in again.</string>
+    <string name="auth_phone_released">Staff released this phone from this account, so it cannot be used with it again. Sign in with another account, or use another phone.</string>
+    <string name="auth_phone_linked_elsewhere">This phone is already linked to another account, or this account to another phone. Sign in with that account, or ask an admin to reset the binding.</string>
 
     <!-- Sign out confirmation -->
     <string name="sign_out_confirm_title">Sign out of this phone?</string>

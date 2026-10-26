@@ -145,3 +145,30 @@ async def test_device_history_includes_a_staff_roster_unbind(store, client):
     r = await client.get(f"/v1/admin/licenses/{license_id}/device-history",
                          headers={"Authorization": "Bearer ok"})
     assert [e["id"] for e in r.json()["events"]] == ["clear"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("on_cloud_run", [True, False], ids=["cloud_run", "local"])
+async def test_an_audit_log_outage_is_a_503_not_an_empty_history(store, client, monkeypatch,
+                                                                 on_cloud_run):
+    """The audit_logs read used to swallow every error and answer 200 with no
+    events, so support read "no device moves" during an outage (readiness
+    TE3-008). It now reaches the edge like any other Firestore outage."""
+    from google.api_core import exceptions as gexc
+    from app.repo import audit_log
+
+    monkeypatch.setattr(settings, "ON_CLOUD_RUN", on_cloud_run)
+    license_id = "lic-down"
+    store._data["licenses"] = {
+        license_id: {"kind": "individual", "status": "active", "keyPrefix": "SEMP-DOWN"},
+    }
+
+    def down(*_a, **_k):
+        raise gexc.ServiceUnavailable("firestore down")
+
+    monkeypatch.setattr(audit_log, "_stream", down)
+    r = await client.get(f"/v1/admin/licenses/{license_id}/device-history",
+                         headers={"Authorization": "Bearer ok"})
+    assert r.status_code == 503, r.text
+    assert r.json() == {"detail": "firestore_unreachable"}
+    assert r.headers["retry-after"] == "30"

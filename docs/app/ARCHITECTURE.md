@@ -262,7 +262,8 @@ change export UX.
 
 Two exports deliberately bypass it: Settings' **Download** already has its
 destination (§4 of [WORKFLOWS.md](WORKFLOWS.md)), and the lattice's **Save graph**
-goes to the system chooser directly.
+goes to the system chooser directly. Save graph still takes the Share check
+(`ShareCenter.access` / `blockedMessage`, greyed and explained like the viewer's Share).
 
 Every export of a frame draws what the viewer draws for it
 ([ADR-011](../adr/ADR-011-viewer-deformed-frame.md), TD-139). The field PNGs

@@ -129,6 +129,17 @@ class DialogsTest {
     }
 
     @Test
+    fun `an info button is named after the setting it explains`() {
+        val subset = View(activity).apply { contentDescription = activity.getString(R.string.info) }
+        val step = View(activity).apply { contentDescription = activity.getString(R.string.info) }
+        subset.bindInfo(activity, R.string.subset_size, R.string.info_subset)
+        step.bindInfo(activity, R.string.step_size_density, R.string.info_step)
+
+        assertEquals("About ${activity.getString(R.string.subset_size)}", subset.contentDescription)
+        assertEquals("About ${activity.getString(R.string.step_size_density)}", step.contentDescription)
+    }
+
+    @Test
     fun `sign-out confirm starts the run for this screen only when confirmed`() {
         var signedOut = 0
         val dialog = SignOutRun.confirm(activity) { signedOut++ }

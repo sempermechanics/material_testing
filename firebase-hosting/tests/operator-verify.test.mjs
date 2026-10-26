@@ -56,21 +56,21 @@ test("Verify says what IT intends, what is entitled, and which revokes have not 
   await settle();
   assert.equal(summary(),
     "IT's roster says 3 seats are in use. 2 accounts are actually entitled. " +
-    "1 revoke has not landed yet — see below for which, and why. " +
+    "1 removal has not landed yet — see below for which, and why. " +
     "1 seat is on the roster without entitling anyone — see below for why.");
   assert.deepEqual(verifyRows(), [
     ["a@uni.edu", "active", "On the roster and holding the licence.", "never"],
-    ["u2", "revoked", "The revoke did not land — this account is still licensed. Revoke the seat again to repair it.",
+    ["u2", "revoked", "The removal did not land — this account is still licensed. Remove the seat again to repair it.",
       when(SEEN)],
-    ["c@uni.edu", "revoked", "Revoked, and the account is on a different licence now.", "never"],
+    ["c@uni.edu", "revoked", "Removed, and the account is on a different licence now.", "never"],
     ["d@uni.edu", "active", "The account is on a different licence now. Occupies a seat here; entitles nobody.", "never"],
     ["e@uni.edu", "disabled", "brand_new_reason", "never"],
     ["f@uni.edu", "revoked",
-      "Revoked, but this account has not been back since. The device may still be running on the licence it cached.",
+      "Removed, but this account has not been back since. The phone may still be running on the licence it cached.",
       "never"],
   ]);
   assert.deepEqual(pills(), ["pill ok", "pill warn", "pill off", "pill ok", "pill off", "pill off"]);
-  assert.equal(seatsCell(), "1/5 in use · 4 on roster · 1 revoke not landed", "the second count beside the first");
+  assert.equal(seatsCell(), "1/5 in use · 4 on roster · 1 removal not landed", "the second count beside the first");
   assert.deepEqual(sent(/reconcile/), [RECONCILE]);
 });
 
@@ -79,8 +79,8 @@ test("all revokes landed, one of each, an older backend's count, and a drifted c
     intended: 1, intendedRecounted: 1, entitled: 1, counts: {}, seats: [],
   }) } });
   await click(rowButton("verify", UNI.id));
-  assert.equal(summary(), "IT's roster says 1 seat is in use. 1 account is actually entitled. Every revoke has landed.");
-  assert.equal($("verifySummary").querySelector(".ok").textContent, "Every revoke has landed.");
+  assert.equal(summary(), "IT's roster says 1 seat is in use. 1 account is actually entitled. Every removal has landed.");
+  assert.equal($("verifySummary").querySelector(".ok").textContent, "Every removal has landed.");
   assert.deepEqual(verifyRows(), [["No seats on this licence yet."]]);
   assert.equal(seatsCell(), "1/5 in use · 4 on roster · 1 verified");
 
@@ -91,10 +91,10 @@ test("all revokes landed, one of each, an older backend's count, and a drifted c
   await click(rowButton("verify", UNI.id));
   assert.equal(summary(),
     "IT's roster says 4 seats are in use. 0 accounts are actually entitled. " +
-    "2 revokes have not landed yet — see below for which, and why. " +
+    "2 removals have not landed yet — see below for which, and why. " +
     "2 seats are on the roster without entitling anyone — see below for why. " +
     "seatsUsed says 4 but there are 2 live seats — the counter has drifted.");
-  assert.equal(seatsCell(), "1/5 in use · 4 on roster · 2 revokes not landed");
+  assert.equal(seatsCell(), "1/5 in use · 4 on roster · 2 removals not landed");
 });
 
 test("a licence with no roster, or a check that fails, says so in the panel", async () => {
@@ -102,7 +102,7 @@ test("a licence with no roster, or a check that fails, says so in the panel", as
     [() => json(409, { detail: "kind_not_institution" }),
       "This is an individual licence: one holder, no roster, so there are no two counts to compare."],
     [() => json(503, { detail: "unavailable" }), "Could not check the seats: unavailable"],
-    [offline, "Could not check the seats: Failed to fetch"],
+    [offline, "Could not check the seats: The server could not be reached — check your connection and try again."],
   ]) {
     reset();
     await openDesk({ routes: { [RECONCILE]: reply } });

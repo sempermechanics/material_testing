@@ -2,9 +2,10 @@ package com.sempermechanics.semper.ui.analysis.sweep
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Color
 import android.view.View.MeasureSpec
+import androidx.core.content.ContextCompat
 import androidx.core.graphics.createBitmap
+import com.sempermechanics.semper.R
 
 /**
  * Renders the current plot at [widthPx]×[heightPx] (full resolution, not a
@@ -19,7 +20,7 @@ fun SweepPlotView.renderToBitmap(widthPx: Int, heightPx: Int): Bitmap {
     layout(0, 0, widthPx, heightPx)
     val bitmap = createBitmap(widthPx, heightPx)
     val canvas = Canvas(bitmap)
-    canvas.drawColor(Color.WHITE)
+    canvas.drawColor(ContextCompat.getColor(context, R.color.sweep_export_page))
     draw(canvas)
     if (prevW > 0 && prevH > 0) {
         measure(

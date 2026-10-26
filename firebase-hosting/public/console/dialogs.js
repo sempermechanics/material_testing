@@ -7,6 +7,7 @@
  * `confirm` / `alert`, because some browsers show none of them at all (the
  * Claude desktop app's browser pane answers "prompt() is not supported").
  */
+import { authErrorText } from "./util.js";
 
 /** The person closed a card instead of answering it. */
 export const ERR_CANCELLED = "console_cancelled";
@@ -23,10 +24,18 @@ export const ERR_CANCELLED = "console_cancelled";
  * (default: the status line). The Edit dialog passes an element inside
  * itself, because a modal dialog makes everything outside it unreachable.
  * Every piece of text goes in as a text node, so a licence label or address
- * is never markup.
+ * is never markup. The box is named `label` ("Password", "Licence key"), or
+ * the card's title, for a screen reader: it has no visible label of its own.
+ *
+ * For a keyboard and a screen reader the card is an alertdialog named by its
+ * heading and described by its message; Escape answers it as Cancel (a tell
+ * card: as Close); and once answered, focus goes back to what had it when the
+ * card opened (`restoreFocus`), not to the top of the page.
  */
+let cards = 0; // ids for each card's heading and message
+
 function pageCard(kind, {
-  title, message, input = false, password = false, confirm, cancel = "Cancel", anchor, answer,
+  title, message, input = false, password = false, label, confirm, cancel = "Cancel", anchor, answer,
 }) {
   const card = document.createElement("section");
   card.className = `card ${kind}`;
@@ -38,8 +47,15 @@ function pageCard(kind, {
       <button type="button" class="confirm"></button>
       <button type="button" class="secondary cancel"></button>
     </div>`;
-  card.querySelector("h2").textContent = title;
+  const heading = card.querySelector("h2");
+  heading.textContent = title;
   const lines = card.querySelector(".lines");
+  cards += 1;
+  heading.id = `card-title-${cards}`;
+  lines.id = `card-message-${cards}`;
+  card.setAttribute("role", "alertdialog");
+  card.setAttribute("aria-labelledby", heading.id);
+  card.setAttribute("aria-describedby", lines.id);
   for (const text of String(message).split("\n\n")) {
     const p = document.createElement("p");
     p.className = "muted line";
@@ -50,6 +66,7 @@ function pageCard(kind, {
   if (input) {
     box.type = password ? "password" : "text";
     box.autocomplete = password ? "current-password" : "off";
+    box.setAttribute("aria-label", label || title);
   } else {
     box.remove();
   }
@@ -59,6 +76,7 @@ function pageCard(kind, {
   if (cancel == null) no.remove();
   else no.textContent = cancel;
 
+  const opener = document.activeElement;
   const at = anchor || document.getElementById("status") || document.querySelector("main");
   at.insertAdjacentElement("afterend", card);
   // The desk's status line sits above a long table; bring the card into view.
@@ -66,8 +84,15 @@ function pageCard(kind, {
   (input ? box : ok).focus();
 
   return new Promise((resolve) => {
-    const done = (value) => { card.remove(); resolve(value); };
+    const done = (value) => { card.remove(); restoreFocus(opener); resolve(value); };
     const yes = () => done(answer(input ? box.value.trim() : ""));
+    card.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      // Inside the Edit dialog, Escape must close the card, not the dialog.
+      if (e.preventDefault) e.preventDefault();
+      if (e.stopPropagation) e.stopPropagation();
+      done(cancel == null ? answer("") : null);
+    });
     ok.addEventListener("click", yes);
     if (input) {
       // Enter answers the card; inside the Edit form it must not also submit it.
@@ -82,12 +107,25 @@ function pageCard(kind, {
 }
 
 /**
- * Ask for one line of text in the page. Resolves the trimmed answer ("" if
- * left blank), or null on Cancel.
+ * Give focus back to `opener`, the control that had it when a card opened.
+ * Not when it has left the page (its row was redrawn: the page puts focus on
+ * the new row itself). A button in a row's More menu, which closed when the
+ * button was chosen, cannot take focus; its menu's summary does.
  */
-export function askInPage({ title, message, password = false, confirm = "Confirm", anchor } = {}) {
+export function restoreFocus(opener) {
+  if (!opener || !opener.isConnected || !opener.focus) return;
+  const menu = opener.closest && opener.closest("details");
+  const target = menu && !menu.open ? menu.querySelector("summary") : opener;
+  if (target) target.focus();
+}
+
+/**
+ * Ask for one line of text in the page. Resolves the trimmed answer ("" if
+ * left blank), or null on Cancel. `label` names the box (default: `title`).
+ */
+export function askInPage({ title, message, password = false, label, confirm = "Confirm", anchor } = {}) {
   return pageCard("ask", {
-    title, message, input: true, password, confirm, anchor, answer: (text) => text,
+    title, message, input: true, password, label, confirm, anchor, answer: (text) => text,
   });
 }
 
@@ -110,14 +148,25 @@ export async function tellInPage({ title, message, anchor } = {}) {
  * the wrong licence drops a whole institution to demo, so the friction is the
  * point.
  */
-export async function confirmByTyping(label, what, { title = "Confirm", anchor } = {}) {
+export async function confirmByTyping(label, what, { title = "Confirm", anchor, boxLabel } = {}) {
   const typed = await askInPage({
     title,
     message: `This cannot be undone.\n\nType ${label} to ${what}:`,
+    label: boxLabel || `Type ${label}`,
     confirm: "Confirm",
     anchor,
   });
   return typed != null && typed === label;
+}
+
+/**
+ * Give `feedback` (a code card's "not accepted" line, an alert) an id and
+ * point each control at it, so the box and Try again are read with why.
+ */
+function describeBy(feedback, ...controls) {
+  cards += 1;
+  feedback.id = `card-feedback-${cards}`;
+  for (const control of controls) control.setAttribute("aria-describedby", feedback.id);
 }
 
 /**
@@ -141,19 +190,20 @@ export function codeCard() {
     <h2>Enter your authenticator code</h2>
     <p class="muted">The 6-digit code your authenticator app shows for Semper DIC.</p>
     <div class="row">
-      <input inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*"
+      <input inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" aria-label="Authenticator code"
              placeholder="6-digit code" size="12" />
       <button class="confirm">Confirm</button>
       <button class="retry" hidden>Try again</button>
       <button class="secondary cancel">Cancel</button>
     </div>
-    <p class="muted err feedback"></p>`;
+    <p class="muted err feedback" role="alert"></p>`;
   const anchor = document.getElementById("status") || document.querySelector("main");
   anchor.insertAdjacentElement("afterend", card);
   const input = card.querySelector("input");
   const confirmBtn = card.querySelector(".confirm");
   const retryBtn = card.querySelector(".retry");
   const feedback = card.querySelector(".feedback");
+  describeBy(feedback, input, retryBtn);
 
   // Whoever is waiting on the card, next() or rejected(), and what Cancel
   // answers it with.
@@ -231,12 +281,12 @@ export function enrolInPage(enrolment, account, qrSvg) {
         Semper DIC · Time-based, 6 digits, 30 seconds</p>
     </details>
     <div class="row">
-      <input inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*"
+      <input inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" aria-label="Authenticator code"
              placeholder="6-digit code" size="12" />
       <button class="confirm">Confirm</button>
       <button class="secondary cancel">Cancel</button>
     </div>
-    <p class="muted err feedback"></p>`;
+    <p class="muted err feedback" role="alert"></p>`;
   if (qrSvg) {
     card.querySelector(".qr").innerHTML = qrSvg(enrolment.qrUrl);
   } else {
@@ -250,6 +300,7 @@ export function enrolInPage(enrolment, account, qrSvg) {
   anchor.insertAdjacentElement("afterend", card);
   const input = card.querySelector("input");
   const feedback = card.querySelector(".feedback");
+  describeBy(feedback, input);
   input.focus();
 
   return new Promise((resolve, reject) => {
@@ -264,9 +315,10 @@ export function enrolInPage(enrolment, account, qrSvg) {
         done(resolve);
       } catch (e) {
         card.querySelector(".confirm").disabled = false;
-        feedback.textContent =
-          `That code was not accepted (${e.code || e.message}). ` +
-          "Check the phone's clock is set automatically, then try the next code.";
+        feedback.textContent = e.code === "auth/invalid-verification-code"
+          ? "That code was not accepted. Check the phone's clock is set automatically, " +
+            "then try the next code."
+          : `That did not work: ${authErrorText(e)}. Try the next code.`;
       }
     };
     card.querySelector(".confirm").addEventListener("click", confirm);
