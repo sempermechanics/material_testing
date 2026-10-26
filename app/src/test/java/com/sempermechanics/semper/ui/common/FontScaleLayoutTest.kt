@@ -287,8 +287,36 @@ class FontScaleLayoutTest {
         }
     }
 
+    /**
+     * The ROI studio's info pill (tvHud) sits above the canvas, never on it: at font
+     * scale 2 its two lines covered the crop's top edge and corner handles (readiness
+     * AE1V-023). It keeps to one line, so the canvas does not resize while the numbers
+     * change mid-drag, and its whole text stays the view's text for TalkBack.
+     */
+    @Test
+    fun `the ROI studio's info pill never covers the canvas at font scale 2`() {
+        val ctx = context(2f)
+        val full = ctx.getString(R.string.roi_hud_dimensions_fmt, 6000, 4000, 1234, 5678)
+        prepare = { it.findViewById<TextView>(R.id.tvHud).text = full }
+        val root = LayoutInflater.from(ctx).inflate(R.layout.activity_roi_draw, LinearLayout(ctx), false).apply {
+            prepare(this)
+            measure(
+                View.MeasureSpec.makeMeasureSpec(ctx.px(PHONE_DP), View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(ctx.px(PHONE_HEIGHT_DP), View.MeasureSpec.EXACTLY),
+            )
+            layout(0, 0, measuredWidth, measuredHeight)
+        }
+        val hud = root.findViewById<TextView>(R.id.tvHud)
+        val canvas = root.findViewById<View>(R.id.canvasFrame)
+        assertTrue("the pill ends at ${hud.bottom}px, the canvas starts at ${canvas.top}px", hud.bottom <= canvas.top)
+        assertTrue("the canvas keeps room to draw (${canvas.height}px)", canvas.height > 0)
+        assertEquals("one line", 1, hud.lineCount)
+        assertEquals("TalkBack reads it whole", full, hud.text.toString())
+    }
+
     private companion object {
         const val PHONE_DP = 360
+        const val PHONE_HEIGHT_DP = 640
         const val GOOGLE_MIN_DP = 52
         const val TILE_DP = 72
         const val UNIT_GAP_DP = 4

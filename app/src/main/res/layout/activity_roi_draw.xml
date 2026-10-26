@@ -143,16 +143,19 @@
         </androidx.constraintlayout.widget.ConstraintLayout>
     </LinearLayout>
 
-    <!-- forceDarkAllowed=false: specimen image and ROI strokes keep exact colors. -->
+    <!-- forceDarkAllowed=false: specimen image and ROI strokes keep exact colors.
+         Below the info pill, not under it: on the canvas the pill covered the crop's
+         top edge and handles (readiness AE1V-023). -->
     <FrameLayout
         android:id="@+id/canvasFrame"
         android:layout_width="0dp"
         android:layout_height="0dp"
+        android:layout_marginTop="8dp"
         android:forceDarkAllowed="false"
         app:layout_constraintBottom_toTopOf="@id/bottomToolbar"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/headerChrome">
+        app:layout_constraintTop_toBottomOf="@id/tvHud">
 
         <ImageView
             android:id="@+id/imgRoiCanvas"
@@ -168,13 +171,18 @@
             android:layout_height="match_parent" />
     </FrameLayout>
 
+    <!-- One line, ellipsized: a second line would resize the canvas mid-drag. The
+         whole text stays the view's text, so TalkBack reads it in full. -->
     <TextView
         android:id="@+id/tvHud"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="12dp"
         android:layout_marginTop="8dp"
+        android:layout_marginEnd="12dp"
         android:background="@drawable/bg_viewer_panel"
+        android:ellipsize="end"
+        android:maxLines="1"
         android:paddingHorizontal="12dp"
         android:paddingVertical="6dp"
         android:text="@string/roi_hud_select_tool"
@@ -182,6 +190,9 @@
         android:textColor="@color/viewer_on_dark"
         android:textSize="13sp"
         android:textStyle="bold"
+        app:layout_constrainedWidth="true"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/headerChrome"
         tools:text="ROI: 1530 × 1530 px" />
