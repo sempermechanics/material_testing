@@ -136,8 +136,12 @@ object DicResult {
     // few decimals, strains in scientific form (they are ~1e-4).
     // ------------------------------------------------------------------
 
-    /** Header for the per-point columns every CSV export ends with. */
-    const val CSV_POINT_HEADER = "x_px,y_px,u_px,v_px,exx,eyy,exy,znssd"
+    /**
+     * Header for the per-point columns every CSV export ends with. Each column
+     * names its unit: pixels, or `_strain` for raw (dimensionless) strain, which
+     * the `#` stats rows give in mε instead (CSV version 2, readiness AE1-016).
+     */
+    const val CSV_POINT_HEADER = "x_px,y_px,u_px,v_px,exx_strain,eyy_strain,exy_strain,znssd"
 
     /** Buffer sizes a CSV writer should use for a large (~10 MB) export. */
     const val CSV_ROW_CAPACITY = 128

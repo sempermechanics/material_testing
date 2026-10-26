@@ -47,7 +47,12 @@ object AnalysisCsvWriter {
         val data: () -> FloatArray?,
     )
 
-    private const val CSV_VERSION = 1
+    /**
+     * 2: point strain columns are `exx_strain` / `eyy_strain` / `exy_strain` (raw
+     * strain; the stats rows stay in mε) and the stats header's VSG column is
+     * `vsg_px`, as in the sweep point header. Values are the same as version 1.
+     */
+    private const val CSV_VERSION = 2
 
     // One definition, shared with the row formatter's tests (TD-39): a second
     // copy here let the header and the rows drift apart unnoticed.
@@ -105,7 +110,7 @@ object AnalysisCsvWriter {
         val w = out.bufferedWriter(bufferSize = DicResult.CSV_BUFFER_BYTES)
         writeGlobalPreamble(w, metadata)
         w.append("# field_stats\n")
-        w.append("# image,subset_px,step_px,strain_window_px,field,max,min,mean,unit\n")
+        w.append("# image,subset_px,step_px,vsg_px,field,max,min,mean,unit\n")
         return Appender(w, File(out.path + POINTS_STAGING_SUFFIX), sweep)
     }
 

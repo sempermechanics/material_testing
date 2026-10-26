@@ -44,7 +44,7 @@ class AnalysisCsvMotionTest {
     @Test
     fun `the point header carries the motion columns for every session`() {
         assertEquals(
-            "image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd,shift_u_px,shift_v_px,shift_rot_deg",
+            "image,x_px,y_px,u_px,v_px,exx_strain,eyy_strain,exy_strain,znssd,shift_u_px,shift_v_px,shift_rot_deg",
             AnalysisCsvWriter.pointHeader(sweep = false),
         )
     }
