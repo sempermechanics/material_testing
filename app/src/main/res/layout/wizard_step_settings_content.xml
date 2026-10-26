@@ -535,7 +535,8 @@
                         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense.ExposedDropdownMenu"
                         android:layout_width="168dp"
                         android:layout_height="wrap_content"
-                        android:contentDescription="@string/sub_pixel_interpolation_kernel">
+                        android:contentDescription="@string/sub_pixel_interpolation_kernel"
+                        app:boxStrokeColor="@color/input_box_stroke">
 
                         <com.google.android.material.textfield.MaterialAutoCompleteTextView
                             android:id="@+id/ddInterpolator"
@@ -568,7 +569,8 @@
                         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense.ExposedDropdownMenu"
                         android:layout_width="168dp"
                         android:layout_height="wrap_content"
-                        android:contentDescription="@string/reference_update_description">
+                        android:contentDescription="@string/reference_update_description"
+                        app:boxStrokeColor="@color/input_box_stroke">
 
                         <com.google.android.material.textfield.MaterialAutoCompleteTextView
                             android:id="@+id/ddReference"

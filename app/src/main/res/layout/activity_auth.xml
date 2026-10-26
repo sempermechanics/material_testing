@@ -107,7 +107,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="14dp"
                     android:hint="@string/email_address"
-                    app:boxStrokeColor="@color/sky_primary"
+                    app:boxStrokeColor="@color/input_box_stroke"
                     app:hintTextColor="@color/sky_primary">
 
                     <com.google.android.material.textfield.TextInputEditText
@@ -126,7 +126,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="6dp"
                     android:hint="@string/password_min_6_characters"
-                    app:boxStrokeColor="@color/sky_primary"
+                    app:boxStrokeColor="@color/input_box_stroke"
                     app:hintTextColor="@color/sky_primary"
                     app:endIconMode="password_toggle"
                     app:endIconTint="@color/text_secondary">
@@ -148,7 +148,7 @@
                     android:layout_marginBottom="6dp"
                     android:visibility="gone"
                     android:hint="@string/confirm_password"
-                    app:boxStrokeColor="@color/sky_primary"
+                    app:boxStrokeColor="@color/input_box_stroke"
                     app:hintTextColor="@color/sky_primary"
                     app:endIconMode="password_toggle"
                     app:endIconTint="@color/text_secondary">
@@ -249,7 +249,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:hint="@string/auth_totp_hint"
-                    app:boxStrokeColor="@color/sky_primary"
+                    app:boxStrokeColor="@color/input_box_stroke"
                     app:hintTextColor="@color/sky_primary">
 
                     <com.google.android.material.textfield.TextInputEditText

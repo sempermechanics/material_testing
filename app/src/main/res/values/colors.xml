@@ -17,7 +17,6 @@
          and under white (5.3). The lighter #0288D1 failed all four (readiness AE1-001). -->
     <color name="sky_primary">#0270B0</color>          <!-- primary actions, links, headers -->
     <color name="sky_primary_dark">#01579B</color>     <!-- status bar / pressed -->
-    <color name="sky_bright">#00BFFF</color>           <!-- accent, active states -->
     <color name="sky_container">#E1F5FE</color>        <!-- tonal surfaces, chips -->
     <color name="sky_on_container">#014A72</color>     <!-- text on sky_container -->
 
