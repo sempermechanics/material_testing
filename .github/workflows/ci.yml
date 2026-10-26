@@ -531,6 +531,7 @@ jobs:
       # libopencv-dev or the full-field pipeline is silently left out of the
       # build (the engine CI's note); DIC_REQUIRE_OPENCV makes that a failure.
       - name: Install OpenCV + ccache
+        id: deps
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends libopencv-dev ccache
@@ -552,8 +553,10 @@ jobs:
         run: cmake --build build/tests -j"$(nproc)"
       - name: Run dic_tests
         run: ./build/tests/dic_tests
+      # Only once ccache is installed: a failed checkout (the engine's Eigen
+      # submodule comes from gitlab.com) would otherwise add a second error.
       - name: ccache statistics
-        if: always()
+        if: always() && steps.deps.outcome == 'success'
         run: ccache --show-stats
 
   # ===================================================================
