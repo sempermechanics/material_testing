@@ -326,6 +326,65 @@ class RoiDrawActivityTest {
         assertEquals(R.id.rbSquare, activity.findViewById<MaterialButtonToggleGroup>(R.id.rgDrawMode).checkedButtonId)
     }
 
+    // ── Selection across a recreate (readiness AE1V-004, AE1V-005) ───────────
+
+    /** A typed crop (100, 100, 300, 200) with a typed erase rect (150, 150, 50, 50) inside it. */
+    private fun RoiDrawActivity.cropWithHole() {
+        check(R.id.rgEditMode, R.id.rbModeManual)
+        type("100", "100", "300", "200")
+        click(R.id.btnApplyManualRoi)
+        check(R.id.rgCropErase, R.id.rbErase)
+        type("150", "150", "50", "50")
+        click(R.id.btnApplyManualRoi)
+    }
+
+    /** The saved mask's byte at image pixel ([x], [y]). */
+    private fun RoiDrawActivity.maskAt(x: Int, y: Int): Byte {
+        val mask = File(shadowOf(this).resultIntent.getStringExtra(IntentKeys.MASK_FILE_PATH)!!).readBytes()
+        return mask[y * IMG_W + x]
+    }
+
+    @Test
+    fun `an erase rect survives a recreate and stays out of the saved mask`() {
+        val controller = launch(intent(rawReference().path))
+        awaitCanvas(controller.get())
+        controller.get().cropWithHole()
+
+        val activity = controller.recreate().get()
+        awaitCanvas(activity)
+
+        val overlay = activity.findViewById<StudioOverlayView>(R.id.overlayRoi)
+        assertEquals(1, overlay.holes.size)
+        assertEquals(Roi(150, 150, 50, 50), Roi.fromImageRect(overlay.lastHoleRelative(), ImageSize(IMG_W, IMG_H)))
+        activity.click(R.id.btnSaveRoi)
+        awaitFinish(activity)
+        assertEquals(listOf(100, 100, 300, 200), activity.resultRect())
+        assertEquals("inside the erase rect", 0.toByte(), activity.maskAt(175, 175))
+        assertEquals("inside the crop, outside the hole", 0xFF.toByte(), activity.maskAt(120, 120))
+    }
+
+    @Test
+    fun `a second recreate before the reference is decoded keeps the crop and its hole`() {
+        val controller = launch(intent(rawReference().path))
+        awaitCanvas(controller.get())
+        controller.get().cropWithHole()
+
+        // Two configuration changes back to back: the second comes before the
+        // rebuilt editor has decoded the reference and handed the selection to
+        // its overlay, so that editor has nothing drawn yet.
+        controller.recreate()
+        val activity = controller.recreate().get()
+        awaitCanvas(activity)
+
+        val overlay = activity.findViewById<StudioOverlayView>(R.id.overlayRoi)
+        assertTrue(overlay.hasValidRoi)
+        assertEquals(1, overlay.holes.size)
+        activity.click(R.id.btnSaveRoi)
+        awaitFinish(activity)
+        assertEquals("not the full image", listOf(100, 100, 300, 200), activity.resultRect())
+        assertEquals(0.toByte(), activity.maskAt(175, 175))
+    }
+
     private companion object {
         const val IMG_W = 640
         const val IMG_H = 400

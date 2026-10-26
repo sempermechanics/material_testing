@@ -61,6 +61,9 @@ class StudioOverlayView @JvmOverloads constructor(
 
     private var pendingRestoreRoi: RectF? = null
 
+    /** Erase rects in image px awaiting the image bounds ([restoreRelativeHoles]). */
+    private var pendingRestoreHoles: List<Hole>? = null
+
     fun updateImageBounds() {
         val imageView = imageView ?: return
         val drawable = imageView.drawable
@@ -155,6 +158,17 @@ class StudioOverlayView @JvmOverloads constructor(
         return true
     }
 
+    /** Every erase rect in image pixels, with its tool: what a saved state keeps (AE1V-004). */
+    fun relativeHoles(): List<Hole> = holes.map { it.copy(rect = viewRectToImage(it.rect)) }
+
+    /** Puts back erase rects [relativeHoles] gave, once the image is laid out, replacing any there. */
+    fun restoreRelativeHoles(saved: List<Hole>) {
+        pendingRestoreHoles = saved
+        if (!imageBounds.isEmpty) {
+            applyPendingRestore()
+        }
+    }
+
     /** Image-pixel bounds of the last erase rect, or empty if there are none. */
     fun lastHoleRelative(): RectF {
         val hole = holes.lastOrNull() ?: return RectF()
@@ -192,6 +206,12 @@ class StudioOverlayView @JvmOverloads constructor(
             invalidate()
         }
         pendingRestoreRoi = null
+        pendingRestoreHoles?.let { saved ->
+            holes.clear()
+            saved.mapTo(holes) { it.copy(rect = imageRectToView(it.rect)) }
+            invalidate()
+        }
+        pendingRestoreHoles = null
     }
 
     // --- 3. RESET ---
