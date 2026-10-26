@@ -195,6 +195,23 @@ class FontScaleLayoutTest {
     }
 
     @Test
+    fun `the deformed frames' range names both files in full at font scale 1`() {
+        val ctx = context(1f)
+        prepare = { root ->
+            root.findViewById<View>(R.id.defCard).visibility = View.VISIBLE
+            root.findViewById<TextView>(R.id.tvDefName).text = "4 deformed frames"
+            // A phone camera's names: on the 360 dp emulator even "specimen_01.png …
+            // specimen_04.png" lost a letter on one line.
+            root.findViewById<TextView>(R.id.tvDefMeta).text = "IMG_20261024_101530.png … IMG_20261024_101934.png"
+        }
+        val root = laidOut(ctx, R.layout.activity_static_analysis, merge = false, widthDp = PHONE_DP)
+        val meta = root.findViewById<TextView>(R.id.tvDefMeta)
+        val lines = meta.layout.lineCount
+        val cut = (0 until lines).sumOf { meta.layout.getEllipsisCount(it) }
+        assertEquals("tvDefMeta '${meta.text}' ellipsizes $cut chars", 0, cut)
+    }
+
+    @Test
     fun `a frame's order badge holds its number at font scale 2`() {
         val ctx = context(2f)
         prepare = { it.findViewById<TextView>(R.id.tvFrameBadge).text = "50" }
