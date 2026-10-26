@@ -64,9 +64,6 @@ import java.io.File
 class VsgLatticeActivity : AppCompatActivity() {
 
     private companion object {
-        /** Every combination of a sweep solves the same one deformed image. */
-        const val SWEEP_DEFORMED_IMAGES = 1
-
         /** The solved combination selected, kept across a rotation (TE1-005). */
         const val STATE_FOCUSED_FRAME = "lattice_focused_frame"
 
@@ -471,39 +468,20 @@ class VsgLatticeActivity : AppCompatActivity() {
         }
     }
 
-    /** Study type, image names, and settings for the export header. */
+    /** Study type, image names, and settings for the export header ([vsgExportHeaderLines]). */
     private fun exportHeaderLines(series: List<SweepPlotView.Series>): List<String> {
-        val lines = mutableListOf<String>()
-        val horizontal = isLineCutHorizontal()
-        val axis = getString(if (horizontal) R.string.axis_x else R.string.axis_y)
         val index = binding.spinnerStrainComponent.selectedItemPosition.coerceIn(0, STRAIN_OPTIONS.lastIndex)
-        lines += getString(
-            R.string.vsg_export_title_fmt,
-            getString(R.string.settings_used_vsg),
-            getString(STRAIN_OPTIONS[index].first),
-            axis,
-        )
-        val ref = args.refName
-        if (ref.isNotBlank()) {
-            // A sweep solves one deformed image (`RunSpec.Sweep.frameIndex`) with
-            // every combination. `frameNames` holds the combination labels, and
-            // counting those made a 12-node sweep "12 deformed images".
-            lines += resources.getQuantityString(
-                R.plurals.vsg_export_images_fmt,
-                SWEEP_DEFORMED_IMAGES,
-                ref,
-                SWEEP_DEFORMED_IMAGES,
-            )
-        }
         val node = selectedNode()
-        if (node != null) {
-            lines += getString(R.string.vsg_lattice_param_labeled_fmt, node.subset, node.step, windowText(node))
-        }
         val isolate = binding.rgPlotMode.checkedButtonId == R.id.btnPlotIsolate
-        if (!isolate) {
-            lines += resources.getQuantityString(R.plurals.vsg_export_combos_fmt, series.size, series.size)
-        }
-        return lines
+        return vsgExportHeaderLines(
+            horizontal = isLineCutHorizontal(),
+            strainLabel = STRAIN_OPTIONS[index].first,
+            refName = args.refName,
+            nodeLabel = node?.let {
+                getString(R.string.vsg_lattice_param_labeled_fmt, it.subset, it.step, windowText(it))
+            },
+            comboCount = if (isolate) null else series.size,
+        )
     }
 
     private fun selectedStrainComponent(): Int {
