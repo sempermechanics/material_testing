@@ -6,6 +6,8 @@ import android.os.Looper
 import android.view.LayoutInflater
 import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.databinding.ItemSessionBinding
@@ -47,6 +49,7 @@ class SessionThumbsTest {
     val tmp = TemporaryFolder()
 
     private val edge = 64
+    private val hole = ContextCompat.getColor(ApplicationProvider.getApplicationContext(), R.color.thumb_hole)
     private val direct = Executor { it.run() }
 
     /** A 10 × 10 grid at step 5 from (100, 200), U rising along x; [accepted] false fails every point. */
@@ -79,18 +82,18 @@ class SessionThumbsTest {
         writeFrame(dir, 0)
         writeFrame(dir, 1)
 
-        val first = SessionThumbs.decodeResult(key(dir), edge) as ThumbnailLoader.Decoded.Loaded
+        val first = SessionThumbs.decodeResult(key(dir), edge, hole) as ThumbnailLoader.Decoded.Loaded
         assertEquals(edge, first.bitmap.width)
         assertEquals(edge, first.bitmap.height)
         val centre = first.bitmap.getPixel(edge / 2, edge / 2)
         assertEquals("opaque", 0xFF, Color.alpha(centre))
-        assertNotEquals("the field, not the hole grey", 0xFFE3E8EC.toInt(), centre)
+        assertNotEquals("the field, not the hole grey", hole, centre)
 
         val cache = SessionPaths.resultThumb(dir)
         assertTrue(cache.isFile)
         val stamp = cache.lastModified() + 10_000L
         cache.setLastModified(stamp)
-        assertTrue(SessionThumbs.decodeResult(key(dir), edge) is ThumbnailLoader.Decoded.Loaded)
+        assertTrue(SessionThumbs.decodeResult(key(dir), edge, hole) is ThumbnailLoader.Decoded.Loaded)
         assertEquals("read, not rewritten", stamp, cache.lastModified())
     }
 
@@ -108,19 +111,19 @@ class SessionThumbsTest {
         assertFalse("no cache", ResultThumbnail.isFresh(File(dir, "none.png"), listOf(frame)))
 
         cache.setLastModified(frame.lastModified() - 10_000L)
-        assertTrue(SessionThumbs.decodeResult(key(dir), edge) is ThumbnailLoader.Decoded.Loaded)
+        assertTrue(SessionThumbs.decodeResult(key(dir), edge, hole) is ThumbnailLoader.Decoded.Loaded)
         assertTrue("re-rendered over the stale one", cache.length() > 1)
     }
 
     @Test
     fun `no frames is missing for now, and a frame with no accepted point keeps the reference`() {
         val empty = tmp.newFolder("empty")
-        assertEquals(ThumbnailLoader.Decoded.Missing, SessionThumbs.decodeResult(key(empty), edge))
-        assertEquals(ThumbnailLoader.Decoded.Missing, SessionThumbs.decodeResult(key(File(empty, "gone")), edge))
+        assertEquals(ThumbnailLoader.Decoded.Missing, SessionThumbs.decodeResult(key(empty), edge, hole))
+        assertEquals(ThumbnailLoader.Decoded.Missing, SessionThumbs.decodeResult(key(File(empty, "gone")), edge, hole))
 
         val failed = tmp.newFolder("failed")
         writeFrame(failed, 0, accepted = false)
-        assertEquals(ThumbnailLoader.Decoded.Undecodable, SessionThumbs.decodeResult(key(failed), edge))
+        assertEquals(ThumbnailLoader.Decoded.Undecodable, SessionThumbs.decodeResult(key(failed), edge, hole))
         assertFalse(SessionPaths.resultThumb(failed).exists())
     }
 
@@ -137,7 +140,7 @@ class SessionThumbsTest {
         val dir = tmp.newFolder("s1")
         writeFrame(dir, 0)
         val row = row()
-        val thumbs = SessionThumbs(edge, direct, direct)
+        val thumbs = SessionThumbs(edge, hole, direct, direct)
 
         thumbs.bind(row, sessionRecord(id = "s1", sessionDir = dir.path), framesOnPhone = true)
         shadowOf(Looper.getMainLooper()).idle()
@@ -151,7 +154,7 @@ class SessionThumbsTest {
         val dir = tmp.newFolder("s1")
         writeFrame(dir, 0)
         val row = row()
-        val thumbs = SessionThumbs(edge, direct, direct)
+        val thumbs = SessionThumbs(edge, hole, direct, direct)
 
         thumbs.bind(row, sessionRecord(id = "s1", sessionDir = dir.path), framesOnPhone = false)
         shadowOf(Looper.getMainLooper()).idle()

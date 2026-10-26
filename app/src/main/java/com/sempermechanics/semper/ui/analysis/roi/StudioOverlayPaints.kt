@@ -1,36 +1,38 @@
 package com.sempermechanics.semper.ui.analysis.roi
 
-import android.graphics.Color
+import android.content.Context
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
-import androidx.core.graphics.toColorInt
+import androidx.core.content.ContextCompat
+import com.sempermechanics.semper.R
 
 /**
  * The paints [StudioOverlayView] draws with, one set per view: the dim and the
  * clear that cuts the crop out of it, the crop outline and handles, the holes.
+ * Their colours are the roi_studio_* tokens.
  */
-internal class StudioOverlayPaints {
+internal class StudioOverlayPaints(context: Context) {
     val holeFillPaint = Paint().apply {
-        color = "#88FF0000".toColorInt()
+        color = ContextCompat.getColor(context, R.color.roi_studio_hole_fill)
         style = Paint.Style.FILL
     }
     val holeBorderPaint = Paint().apply {
-        color = Color.RED
+        color = ContextCompat.getColor(context, R.color.roi_studio_hole_stroke)
         style = Paint.Style.STROKE
         strokeWidth = STROKE_WIDTH
     }
     val borderPaint = Paint().apply {
-        color = Color.GREEN
+        color = ContextCompat.getColor(context, R.color.roi_studio_crop)
         style = Paint.Style.STROKE
         strokeWidth = STROKE_WIDTH
     }
     val handlePaint = Paint().apply {
-        color = Color.WHITE
+        color = ContextCompat.getColor(context, R.color.roi_studio_handle)
         style = Paint.Style.FILL
     }
     val dimPaint = Paint().apply {
-        color = "#99000000".toColorInt()
+        color = ContextCompat.getColor(context, R.color.roi_studio_dim)
         style = Paint.Style.FILL
     }
     val clearPaint = Paint().apply {

@@ -229,7 +229,7 @@ class StudioOverlayView @JvmOverloads constructor(
     data class Hole(val mode: RoiMode, val rect: RectF)
     val holes = mutableListOf<Hole>()
 
-    private val paints = StudioOverlayPaints()
+    private val paints = StudioOverlayPaints(context)
     var hasValidRoi = false
         private set
 

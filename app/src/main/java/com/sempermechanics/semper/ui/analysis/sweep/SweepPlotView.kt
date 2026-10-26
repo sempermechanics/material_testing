@@ -3,7 +3,6 @@ package com.sempermechanics.semper.ui.analysis.sweep
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
@@ -247,7 +246,7 @@ class SweepPlotView @JvmOverloads constructor(
         layout(0, 0, widthPx, heightPx)
         val bitmap = createBitmap(widthPx, heightPx)
         val canvas = Canvas(bitmap)
-        canvas.drawColor(Color.WHITE)
+        canvas.drawColor(ContextCompat.getColor(context, R.color.sweep_export_page))
         draw(canvas)
         if (prevW > 0 && prevH > 0) {
             measure(

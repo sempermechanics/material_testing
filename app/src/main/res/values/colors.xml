@@ -163,4 +163,19 @@
     <color name="viewer_line_cut_0">#0288D1</color>
     <color name="viewer_line_cut_1">#E53935</color>
     <color name="viewer_line_cut_2">#8E24AA</color>
+
+    <!-- Drawn on the photo, which opts out of force dark, so one value serves both
+         themes: the ROI studio's crop and holes (StudioOverlayPaints), the viewer's
+         probe crosshair (InspectOverlayView), a Home thumbnail's empty margin
+         (ResultThumbnail) and a saved sweep graph's page (SweepPlotView.renderToBitmap).
+         None has a night value (readiness AE1-007). -->
+    <color name="roi_studio_dim">#99000000</color>
+    <color name="roi_studio_crop">#FF00FF00</color>
+    <color name="roi_studio_handle">#FFFFFFFF</color>
+    <color name="roi_studio_hole_fill">#88FF0000</color>
+    <color name="roi_studio_hole_stroke">#FFFF0000</color>
+    <color name="viewer_probe_crosshair">#FF00FF00</color>
+    <color name="viewer_probe_shadow">#88000000</color>
+    <color name="thumb_hole">#FFE3E8EC</color>
+    <color name="sweep_export_page">#FFFFFFFF</color>
 </resources>
