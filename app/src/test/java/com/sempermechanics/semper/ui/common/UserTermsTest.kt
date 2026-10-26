@@ -17,7 +17,8 @@ class UserTermsTest {
         val xml = File("src/main/res/values/strings.xml").readText()
         Regex("""<string name="([^"]+)"[^>]*>(.*?)</string>""", RegexOption.DOT_MATCHES_ALL)
             .findAll(xml)
-            .associate { it.groupValues[1] to it.groupValues[2] }
+            // A "\n" or "\t" escape reads as a break, so "\nDevice:" still starts a word.
+            .associate { it.groupValues[1] to it.groupValues[2].replace(Regex("""\\[nt]"""), " ") }
     }
 
     private fun offenders(pattern: String, except: (String, String) -> Boolean = { _, _ -> false }): List<String> {

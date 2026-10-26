@@ -125,7 +125,7 @@ class HelpSupportSectionTest {
         assertTrue("subject should include version: $subject", subject.contains("feedback"))
         val body = started.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
         assertTrue("body should include App line:\n$body", body.contains("App:"))
-        assertTrue("body should include Device line:\n$body", body.contains("Device:"))
+        assertTrue("body should include Phone line:\n$body", body.contains("Phone:"))
     }
 
     @Test
@@ -152,7 +152,7 @@ class HelpSupportSectionTest {
         activity.findViewById<View>(R.id.btnEmailSupport).performClick()
 
         val body = shadowOf(activity).nextStartedActivity.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
-        for (label in listOf("Account:", "Device ID:", "App:", "Device:")) {
+        for (label in listOf("Account:", "Device ID:", "App:", "Phone:")) {
             assertTrue("body is missing '$label':\n$body", body.contains(label))
         }
         // The user types above the diagnostics block, not below it.
