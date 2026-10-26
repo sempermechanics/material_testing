@@ -142,9 +142,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Release blockers:** TD-229 (Play account; TD-226, TD-230, TD-231 follow it), TD-232 (two
   owner decisions, then submit), TD-219's device checks, counsel on the Terms (TD-277).
 - **Semper Classroom** (`material_testing`; [ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md),
-  old names aliased until TD-330) merges this `main` (last `968637cb`, material_testing#144,
-  2026-10-22; [FORK_SYNC.md](docs/ops/FORK_SYNC.md)). Owed before its release: its engine-pin
-  fix merged (readiness MT-TE2-001), its Firebase app, the sync, then `rename_classroom_app.py`.
+  old names aliased until TD-330) merges this `main` (last `25334af1`, material_testing#146,
+  2026-10-26; [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); its engine-pin fix is in (#145,
+  readiness MT-TE2-001), the rename is material_testing#147. Owed before its release: the
+  readiness port (report §6), then `rename_classroom_app.py`.
 - **CI.** Tiers follow the diff, floors rise with every test PR ([TESTING.md](docs/app/TESTING.md#coverage-floors)),
   `main` requires `CI OK`, and Tier 3 signs in to live staging, so a staging backend behind
   `main` fails it. Always-on: `engine-pin`, `console-a11y`; `engine-host-sanitized` follows
