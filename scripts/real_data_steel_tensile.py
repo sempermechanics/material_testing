@@ -11,6 +11,9 @@ Two steps sit around one manual app run (docs/app/REAL_WORLD_VALIDATION.md):
            written, so the app pairs loads with photos by time (see below).
   compare  read the app's .dat files and print its strain against the
            gauge points, and E by the app's rule next to fixed-window fits.
+  truth    write the ground truth the app's bundled example ships with
+           (truth_gauge_strain.csv): the gauge points' strain and the force
+           at every deformed frame. Needs only GAUGE_FILE, not the image zip.
            The app's strain is the virtual extensometer's ΔL / L0 (ADR-012);
            the region-mean Exx it plotted before is printed beside it.
 
@@ -24,6 +27,7 @@ row by time instead of by position.
 Usage:
   python scripts/real_data_steel_tensile.py prep --data DIR --out DIR [--timed] [--frames DIR]
   python scripts/real_data_steel_tensile.py compare --data DIR --dat DIR
+  python scripts/real_data_steel_tensile.py truth --data DIR --out DIR
 """
 from __future__ import annotations
 
@@ -104,6 +108,26 @@ def prep(data: Path, out: Path, timed: bool = False, frames: Path | None = None)
         (out / "steel_loads_timed.csv").write_text("\n".join(rows) + "\n", newline="")
         written += f" and steel_loads_timed.csv ({len(rows) - 1} rows)"
     print(f"{len(STEPS)} frames and {written} in {out}")
+
+
+def truth_rows(ref: dict[int, tuple[float, float]]) -> list[str]:
+    """One CSV row per deformed frame: its step, force, stress and the gauge points' strain."""
+    rows = ["Frame,Step,Load (kN),Stress (MPa),Gauge strain (1e-3)"]
+    for k, step in enumerate(STEPS[1:], start=1):
+        force, strain = ref[step]
+        rows.append(f"{k},{step},{force / 1000:.4f},{force / AREA_MM2:.3f},{strain:.5f}")
+    return rows
+
+
+def truth(data: Path, out: Path) -> None:
+    ref = gauge_points(data)
+    rows = truth_rows(ref)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "truth_gauge_strain.csv").write_text("\n".join(rows) + "\n", newline="")
+    elastic = np.array([ref[s] for s in STEPS[1:27]])  # the app's elastic run, frames 1-26
+    slope, r2 = fit(elastic[:, 1], elastic[:, 0] / AREA_MM2)
+    print(f"{len(rows) - 1} rows in {out / 'truth_gauge_strain.csv'}; "
+          f"gauge points, frames 1-26: E {slope:.1f} GPa, R2 {r2:.4f}")
 
 
 def fit(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
@@ -211,10 +235,15 @@ def main() -> None:
     c = sub.add_parser("compare")
     c.add_argument("--data", type=Path, required=True, help="folder with the Zenodo files")
     c.add_argument("--dat", type=Path, required=True, help="the app session's frame_NNNN.dat files")
+    t = sub.add_parser("truth")
+    t.add_argument("--data", type=Path, required=True, help="folder with the Zenodo files")
+    t.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")  # µε on a Windows console
     if args.cmd == "prep":
         prep(args.data, args.out, args.timed, args.frames)
+    elif args.cmd == "truth":
+        truth(args.data, args.out)
     else:
         compare(args.data, args.dat)
 

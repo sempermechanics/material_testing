@@ -1,0 +1,109 @@
+{
+  "schema": 1,
+  "id": "pmma_bending",
+  "order": 2,
+  "title": "PMMA beam in 3-point bending",
+  "summary": "Real photos of a speckled acrylic beam loaded at mid-span until it breaks, with the load cell's force at each photo. Gives the deflection, bending stress and E.",
+  "test_type": "bending",
+  "outcome": "works",
+  "folder_name": "PMMA bending",
+  "image_size": [
+    2380,
+    1228
+  ],
+  "reference": "pmma_00.png",
+  "deformed": [
+    "pmma_01.png",
+    "pmma_02.png",
+    "pmma_03.png",
+    "pmma_04.png",
+    "pmma_05.png",
+    "pmma_06.png",
+    "pmma_07.png",
+    "pmma_08.png",
+    "pmma_09.png",
+    "pmma_10.png",
+    "pmma_11.png",
+    "pmma_12.png",
+    "pmma_13.png",
+    "pmma_14.png",
+    "pmma_15.png",
+    "pmma_16.png",
+    "pmma_17.png",
+    "pmma_18.png",
+    "pmma_19.png",
+    "pmma_20.png",
+    "pmma_21.png",
+    "pmma_22.png",
+    "pmma_23.png",
+    "pmma_24.png",
+    "pmma_25.png",
+    "pmma_26.png",
+    "pmma_27.png",
+    "pmma_28.png",
+    "pmma_29.png",
+    "pmma_30.png",
+    "pmma_31.png",
+    "pmma_32.png",
+    "pmma_33.png"
+  ],
+  "roi": [
+    59,
+    69,
+    2259,
+    509
+  ],
+  "load_log": {
+    "file": "pmma_loads.csv",
+    "unit": "N"
+  },
+  "specimen": {
+    "span_mm": 75.0,
+    "width_mm": 12.0,
+    "thickness_mm": 31.0
+  },
+  "tap_hint": {
+    "x": 1170,
+    "top_y": 39,
+    "bottom_y": 611
+  },
+  "expected": [
+    {
+      "label": "E from the graph",
+      "value": "≈ 1.98 GPa",
+      "source": "dataset",
+      "note": "From the authors' own 3D DIC deflection"
+    },
+    {
+      "label": "Average E",
+      "value": "≈ 2.09 GPa",
+      "source": "dataset"
+    },
+    {
+      "label": "Deflection at 9.34 kN",
+      "value": "≈ 1.39 mm",
+      "source": "dataset"
+    },
+    {
+      "label": "E from the graph",
+      "value": "2.00 GPa",
+      "source": "app",
+      "note": "An earlier run of this app"
+    }
+  ],
+  "truth_file": "truth_deflection.csv",
+  "extra_files": [
+    "frame_index.csv"
+  ],
+  "credit": {
+    "creators": "R. Delorme, I. Tabiai, P. Diehl, L. Laberge Lebel, M. Lévesque",
+    "title": "PMMA 3 point bending test until failure loaded in displacement",
+    "year": 2018,
+    "publisher": "Zenodo",
+    "doi": "10.5281/zenodo.1172068",
+    "url": "https://doi.org/10.5281/zenodo.1172068",
+    "licence": "CC BY 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by/4.0/",
+    "changes": "Camera 0 of the stereo pair only. Image 32 (the reference) and every second image from 33 to 97 kept. Each cropped to (40, 820)–(2420, 2048) and saved as 8-bit PNG. The load cell's force at those images written to pmma_loads.csv (N); frame_index.csv maps each file to its original image; truth_deflection.csv is the authors' deflection at the load point, averaged over the probe circle the app uses."
+  }
+}

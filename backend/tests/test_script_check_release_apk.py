@@ -7,6 +7,7 @@ The parsers run on aapt2 output fixtures under `scripts/tests/fixtures/apk/`;
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import stat
 import struct
@@ -256,6 +257,7 @@ def test_a_hardened_release_passes(apk, tmp_path):
         "debuggable": "PASS", "debug-components": "PASS", "appcheck-debug": "PASS",
         "cleartext": "PASS", "min-sdk": "PASS", "target-sdk": "PASS", "native-16kb": "PASS",
         "r8-mapping": "PASS", "cert-pins": "PASS",
+        "example-assets": "SKIP", "apk-size": "SKIP",
     }
 
 
@@ -356,13 +358,89 @@ def _fake_aapt2(tmp_path: Path, manifest: str, badging: str) -> Path:
     return tool
 
 
+_EXAMPLE = {
+    "id": "pair", "reference": "ref.png", "deformed": ["def.png"],
+    "load_log": {"file": "loads.csv", "unit": "N"}, "truth_file": "truth.csv",
+    "credit": {"licence_file": "LICENSE.x"},
+}
+
+
 def _zip(tmp_path: Path, dex: bytes) -> Path:
     path = tmp_path / "app-release.apk"
     with zipfile.ZipFile(path, "w") as zf:
         zf.writestr("AndroidManifest.xml", b"\x03\x00\x08\x00")
         zf.writestr("classes.dex", dex)
         _zip_lib(zf, "lib/arm64-v8a/libsemper_core.so", _elf([16384, 16384]))
+        _write_example(zf, "pair")
     return path
+
+
+def _write_example(zf: zipfile.ZipFile, set_id: str, skip: str = "", deflate: str = "") -> None:
+    """One bundled example set (ADR-031), stored as the app stores them; `skip` left out, `deflate` compressed."""
+    base = f"assets/examples/{set_id}/"
+    zf.writestr(base + "example.json", json.dumps(_EXAMPLE))
+    for name in ("README.md", "CREDIT.txt", "LICENSE.x", "ref.png", "def.png", "loads.csv", "truth.csv"):
+        if name != skip:
+            kind = zipfile.ZIP_DEFLATED if name == deflate else zipfile.ZIP_STORED
+            zf.writestr(zipfile.ZipInfo(base + name), b"x" * 64, compress_type=kind)
+
+
+def _example_facts(apk, tmp_path: Path, **kw):
+    path = tmp_path / "ex.apk"
+    with zipfile.ZipFile(path, "w") as zf:
+        _write_example(zf, "pair", **kw)
+    with zipfile.ZipFile(path) as zf:
+        entries = zf.namelist()
+        stored = {i.filename for i in zf.infolist() if i.compress_type == zipfile.ZIP_STORED}
+    facts = _facts(apk, entries=entries)
+    facts.examples = {"pair": apk.example_files(_EXAMPLE)}
+    facts.stored = stored
+    return facts
+
+
+def test_example_files_lists_what_the_app_lists(apk):
+    listed, opened = apk.example_files(_EXAMPLE)
+    assert listed == ["README.md", "CREDIT.txt", "LICENSE.x", "truth.csv", "ref.png", "def.png",
+                      "loads.csv", "example.json"]
+    assert opened == ["ref.png", "def.png", "loads.csv"]
+
+
+def test_bundled_examples_pass_when_whole_and_stored(apk, tmp_path):
+    res = _by_check(apk.evaluate(_example_facts(apk, tmp_path), expected_min_sdk=30, expected_target_sdk=36, debug_names=_DEBUG,
+                                 mapping=None))
+    assert res["example-assets"].status == "PASS"
+    assert "1 sets, 8 files" in res["example-assets"].detail
+
+
+def test_a_missing_example_file_fails(apk, tmp_path):
+    res = _by_check(apk.evaluate(_example_facts(apk, tmp_path, skip="CREDIT.txt"), expected_min_sdk=30, expected_target_sdk=36,
+                                 debug_names=_DEBUG, mapping=None))
+    assert res["example-assets"].status == "FAIL"
+    assert "pair/CREDIT.txt" in res["example-assets"].detail
+
+
+def test_a_compressed_load_log_fails(apk, tmp_path):
+    res = _by_check(apk.evaluate(_example_facts(apk, tmp_path, deflate="loads.csv"), expected_min_sdk=30, expected_target_sdk=36,
+                                 debug_names=_DEBUG, mapping=None))
+    assert res["example-assets"].status == "FAIL"
+    assert "compressed" in res["example-assets"].detail and "pair/loads.csv" in res["example-assets"].detail
+
+
+def test_no_examples_at_all_fails(apk):
+    facts = _facts(apk)
+    facts.examples = {}
+    res = _by_check(apk.evaluate(facts, expected_min_sdk=30, expected_target_sdk=36, debug_names=_DEBUG, mapping=None))
+    assert res["example-assets"].status == "FAIL"
+
+
+def test_an_apk_over_budget_fails(apk):
+    facts = _facts(apk)
+    facts.size = (apk.APK_BUDGET_MB + 1) * 1_000_000
+    over = _by_check(apk.evaluate(facts, expected_min_sdk=30, expected_target_sdk=36, debug_names=_DEBUG, mapping=None))["apk-size"]
+    assert over.status == "FAIL"
+    facts.size = 99 * 1_000_000
+    within = _by_check(apk.evaluate(facts, expected_min_sdk=30, expected_target_sdk=36, debug_names=_DEBUG, mapping=None))["apk-size"]
+    assert within.status == "PASS" and "99.0 MB" in within.detail
 
 
 def _gradle(tmp_path: Path, min_sdk: int) -> Path:

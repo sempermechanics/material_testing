@@ -21,7 +21,11 @@ import com.sempermechanics.semper.data.mechanical.TestType
  */
 object TestTypeSheet {
 
-    fun show(activity: AppCompatActivity, onPicked: (TestType) -> Unit) {
+    /**
+     * @param onExamples when given, a row under the tests opens the bundled
+     *   example sets instead (ADR-031); without it the row stays hidden.
+     */
+    fun show(activity: AppCompatActivity, onExamples: (() -> Unit)? = null, onPicked: (TestType) -> Unit) {
         val sheet = BottomSheetDialog(activity)
         val root = activity.layoutInflater.inflate(R.layout.sheet_test_type, null)
         sheet.setContentView(root)
@@ -29,6 +33,15 @@ object TestTypeSheet {
             root.findViewById<View>(id).setOnClickListener {
                 sheet.dismiss()
                 onPicked(type)
+            }
+        }
+        if (onExamples != null) {
+            root.findViewById<View>(R.id.btnTryExample).apply {
+                visibility = View.VISIBLE
+                setOnClickListener {
+                    sheet.dismiss()
+                    onExamples()
+                }
             }
         }
         sheet.show()
