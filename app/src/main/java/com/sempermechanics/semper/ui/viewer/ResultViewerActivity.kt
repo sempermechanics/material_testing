@@ -108,6 +108,9 @@ class ResultViewerActivity :
      */
     private var opened: ViewerFrameLoader.FrameSet? = null
 
+    /** The frame whose data is on screen; -1 until one is drawn. */
+    private var shownFrameIndex = -1
+
     /** True once [onFrameSetRead] has run: [batchFiles] and the rest are final. */
     override val frameSetLoaded: Boolean get() = opened != null
 
@@ -354,6 +357,7 @@ class ResultViewerActivity :
 
     override fun applyLoadedFrame(index: Int, data: FloatArray) {
         rawData = data
+        shownFrameIndex = index
         // A sweep's frames each have their own grid pitch.
         step = frameParams.at(index).step
         // Invalidate rather than rebuild: the O(n) bucket map is only needed for
@@ -370,6 +374,24 @@ class ResultViewerActivity :
         if (inspect.lastClosestIdx != -1) {
             inspect.refreshCrosshairs()
         }
+    }
+
+    /**
+     * Names the frame that could not be read and puts the frame field back on
+     * the frame still on screen, so the number never claims a picture that is
+     * not there (readiness AE1-013).
+     */
+    override fun onFrameUnreadable(index: Int) {
+        val shown = shownFrameIndex
+        val message = if (shown in batchFiles.indices && shown != index) {
+            viewModel.currentFrameIndex = shown
+            frameJump.updateNavButtons()
+            frameJump.syncFrameNumber()
+            getString(R.string.viewer_frame_unreadable_fmt, index + 1, shown + 1)
+        } else {
+            getString(R.string.viewer_frame_unreadable_none_fmt, index + 1)
+        }
+        CrispToast.show(this, message, long = true)
     }
 
     /**

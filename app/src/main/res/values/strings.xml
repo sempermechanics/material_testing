@@ -103,6 +103,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- Result viewer -->
     <string name="no_batch_data">No valid batch data found.</string>
     <string name="viewer_frame_oom">Not enough memory to open this frame. Try closing other apps, or view a smaller analysis.</string>
+    <!-- A frame whose .dat cannot be decoded: the frame asked for, then the one still on screen (readiness AE1-013). -->
+    <string name="viewer_frame_unreadable_fmt">Frame %1$d can\'t be read. Still showing frame %2$d.</string>
+    <string name="viewer_frame_unreadable_none_fmt">Frame %1$d can\'t be read.</string>
     <string name="scale_dialog_title_fmt">Scale · %1$s</string>
     <string name="scale_max_value_fmt">Max %1$s</string>
     <string name="scale_min_value_fmt">Min %1$s</string>
