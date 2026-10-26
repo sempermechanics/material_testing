@@ -429,10 +429,10 @@ private class RoiSelection(val edges: RectF?, val holes: List<StudioOverlayView.
             val modes = state.getIntArray(STATE_HOLE_MODES) ?: IntArray(0)
             val tools = StudioOverlayView.RoiMode.entries
             val holes = modes.indices.filter { (it + 1) * EDGES_PER_RECT <= rects.size }.map { i ->
-                val at = i * EDGES_PER_RECT
+                val edges = rects.copyOfRange(i * EDGES_PER_RECT, (i + 1) * EDGES_PER_RECT)
                 StudioOverlayView.Hole(
                     tools.getOrElse(modes[i]) { StudioOverlayView.RoiMode.RECTANGLE },
-                    RectF(rects[at], rects[at + 1], rects[at + 2], rects[at + 3]),
+                    RectF(edges.component1(), edges.component2(), edges.component3(), edges.component4()),
                 )
             }
             return RoiSelection(state.getRoiEdges(), holes)
