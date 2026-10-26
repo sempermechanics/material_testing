@@ -268,7 +268,10 @@ class SweepLatticeViewTest {
             val textHeight = view.labelPaint.textSize * 1.2f
             val spacing = view.plotFrame.height() / SweepLatticeGutters.Y_TICKS
             val stride = view.yTickStride
-            assertTrue("fs $scale: labels every $stride of $spacing px rows, text $textHeight", spacing * stride >= textHeight)
+            assertTrue(
+                "fs $scale: labels every $stride of $spacing px rows, text $textHeight",
+                spacing * stride >= textHeight,
+            )
             assertEquals("fs $scale stride", expectedStride, stride)
         }
     }

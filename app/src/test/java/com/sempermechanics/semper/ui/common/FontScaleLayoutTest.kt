@@ -109,7 +109,8 @@ class FontScaleLayoutTest {
             assertEquals("$name breaks mid-word at $midWord", emptyList<Int>(), midWord)
         }
         // A value keeps a gap before its unit ("31 px", not "31px").
-        for ((value, unit) in listOf(R.id.etSubsetValue to R.id.tvSubsetUnit, R.id.etStrainValue to R.id.tvStrainUnit)) {
+        val units = listOf(R.id.etSubsetValue to R.id.tvSubsetUnit, R.id.etStrainValue to R.id.tvStrainUnit)
+        for ((value, unit) in units) {
             val gap = root.findViewById<View>(unit).left - root.findViewById<View>(value).right
             val name = ctx.resources.getResourceEntryName(unit)
             assertTrue("$name is ${gap}px from its value", gap >= ctx.px(UNIT_GAP_DP))
@@ -132,7 +133,10 @@ class FontScaleLayoutTest {
         val compute = root.findViewById<TextView>(R.id.btnCalculateFullField)
         val room = compute.width - compute.totalPaddingLeft - compute.totalPaddingRight
         val lines = compute.layout.lineCount
-        assertTrue("Compute label '${compute.text}' needs $lines lines of ${compute.maxLines}", lines <= compute.maxLines)
+        assertTrue(
+            "Compute label '${compute.text}' needs $lines lines of ${compute.maxLines}",
+            lines <= compute.maxLines,
+        )
         val midWord = (0 until lines - 1).map { compute.layout.getLineEnd(it) }
             .filter { end -> !compute.text[end - 1].isWhitespace() }
         assertEquals("Compute label breaks mid-word at $midWord", emptyList<Int>(), midWord)
@@ -149,7 +153,8 @@ class FontScaleLayoutTest {
         val ctx = context(2f)
         prepare = { root ->
             root.findViewById<View>(R.id.strainPlotSection).visibility = View.VISIBLE
-            root.findViewById<TextView>(R.id.tvStrainPlotTitle).text = ctx.getString(R.string.line_cut_title_axis_fmt, "X")
+            root.findViewById<TextView>(R.id.tvStrainPlotTitle).text =
+                ctx.getString(R.string.line_cut_title_axis_fmt, "X")
         }
         val root = laidOut(ctx, R.layout.activity_vsg_lattice, merge = false, widthDp = PHONE_DP)
         for (id in intArrayOf(R.id.tvStrainPlotTitle, R.id.btnSaveGraph, R.id.btnView)) {
