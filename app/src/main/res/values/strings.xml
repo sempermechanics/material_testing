@@ -775,7 +775,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
 
     <!-- Bending: hanger loads typed per photo (TypedLoadsSheet) -->
     <string name="load_type_kg">Type loads (kg)</string>
-    <string name="load_type_needs_frames">Add the deformed photos first</string>
+    <string name="load_type_needs_frames">Add the deformed frames first</string>
     <string name="load_typed_title">Hanger load per photo</string>
     <string name="load_typed_done">Done</string>
     <string name="load_typed_subtitle">The mass on the hanger when each photo was taken, in kg. W = m × 9.80665 N. Every photo needs a number: type 0 for a photo with no weight.</string>
@@ -936,7 +936,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- Bending Results: Adjust deflection (ViewerDeflectionCorrection) -->
     <string name="deflection_adjust">Adjust deflection</string>
     <string name="deflection_adjust_title">Deflection correction</string>
-    <string name="deflection_adjust_body">δ = scale × δ measured + bias, for this analysis, e.g. from your TA for your camera and tripod. The graph, table, both E values, the report and the CSV all use it.\n\nThe scale changes both E values. The bias changes each step\'s E but not E from the graph.</string>
+    <string name="deflection_adjust_body">δ = scale × δ measured + bias, for this analysis, e.g. from your teaching assistant for your camera and tripod. The graph, table, both E values, the report and the CSV all use it.\n\nThe scale changes both E values. The bias changes each step\'s E but not E from the graph.</string>
     <string name="deflection_scale_hint">Scale (×), 1 for none</string>
     <string name="deflection_bias_hint">Bias (mm), 0 for none</string>
     <string name="deflection_scale_invalid">Enter a number above 0, e.g. 1.05</string>

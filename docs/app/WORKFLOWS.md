@@ -454,7 +454,7 @@ offers **Type loads (kg)**: the hanger mass of each photo, typed on the phone
 | # | Action | Expected |
 |---|---|---|
 | [ ] 5.1b.1 | Start a **Tensile** analysis | A **Machine load** card with an **Import load log** dropzone, a **Cross-section** field (mm²) and an X / Y **Strain axis** toggle |
-| [ ] 5.1b.2 | Start a **Bending** analysis | Same card, with a **Type loads (kg)** button above the dropzone (disabled, "Add the deformed photos first", until frames are in), the dropzone hint "Optional: a CSV with the load in newtons", and **Support span**, **Width** and **Thickness** (mm) in place of the cross-section |
+| [ ] 5.1b.2 | Start a **Bending** analysis | Same card, with a **Type loads (kg)** button above the dropzone (disabled, "Add the deformed frames first", until frames are in), the dropzone hint "Optional: a CSV with the load in newtons", and **Support span**, **Width** and **Thickness** (mm) in place of the cross-section |
 | [ ] 5.1b.3 | Load reference + frames, no log | **Next** is disabled with "import the machine load log to continue" (bending: "type the hanger load of each photo (kg) to continue") |
 | [ ] 5.1b.4 | Import a comma CSV with a `Load (N)` header and one row per frame | Card shows the filename, "N rows · N · one row per frame", no chip; **Next** now says "enter the specimen cross-section to continue" |
 | [ ] 5.1b.5 | Type a cross-section | **Next** enables |

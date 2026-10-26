@@ -40,6 +40,7 @@ Use these words. Do not invent synonyms.
 | VSG | Strain window: least-squares plane fit over the points within (window − 1) / 2 steps. The window is entered in data points (odd); VSG = `(window − 1) × step + 1` px (`SweepStudy.vsgFor`) is what the engine takes as its circle's diameter and what sessions store |
 | `.dat` | Binary field: 8 floats/point (`x y u v exx eyy exy znssd`), 32 bytes |
 | session | One saved analysis on disk (and optionally in the cloud) |
+| test | What Home's **Which test?** asks: tensile, bending or 2D DIC. In the copy, one test is one specimen's run, a reference and its deformed frames, saved as one analysis ("The whole test" is all of its frames) |
 
 Engine pipeline (`engine/docs/ARCHITECTURE.md`): anchor-lattice seeds (AKAZE + RANSAC homography + ICGN, engine 0.6.0) → Delaunay → RGDIC → ICGN → VSG → `.dat`.
 
