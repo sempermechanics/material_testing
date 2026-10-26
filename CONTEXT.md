@@ -189,7 +189,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Rename to Semper Classroom ([ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md)):** branch
   `claude/semper-classroom-app`, waits on the upstream PR, its deploy and the owner's Firebase app registration.
 - **Play submission ([gate](docs/ops/PRODUCTION_READINESS_GATE.md#google-play-submission-semper-classroom)):**
-  branch `claude/play-readiness-checks`, stacked on the rename. The release check now fails
+  branch `claude/play-readiness-checks`. The release check now fails
   a targetSdk below 36 or a native library off 16 KB pages; the rest is the operator's
   (signing key TD-318, reviewer access TD-331, TD-36, TD-229–TD-232).
 - **Faster CI ([CI.md](docs/ops/CI.md)):** branch `claude/ci-faster-benchmarks`, stacked on

@@ -942,11 +942,11 @@ jobs:
           echo "APP_ID=$APP_ID" >> "$GITHUB_ENV"
 
       # The micro A/B's two builds (TD-199): the PR's base (A) and the PR (B),
-      # each a debug app APK and its androidTest APK, and its app id in `app-id`
-      # (a PR that changes applicationId, as ADR-030 did, runs each build under
-      # its own). Both build in this checkout, base first, so the PR's build is
-      # the one left in app/build and the base's native objects are reused where
-      # the engine is the same.
+      # each a debug app APK and its androidTest APK. Both build in this
+      # checkout, base first, so the PR's build is the one left in app/build
+      # and the base's native objects are reused where the engine is the same.
+      # Each folder's app-id.txt is the id its checkout builds: a PR that
+      # renames the app runs its base under the old id.
       - name: Build the PR's base and the PR for the microbenchmark A/B
         if: github.event_name == 'pull_request'
         env:
@@ -959,8 +959,7 @@ jobs:
             ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest -PabiFilters=x86_64 -PnativeCompilerLauncher=ccache --console=plain
             mkdir -p "$ab/$1"
             cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk "$ab/$1/"
-            sed -n 's/^ *applicationId = "\([^"]*\)".*/\1/p' app/build.gradle.kts > "$ab/$1/app-id"
-            test "$(wc -l < "$ab/$1/app-id")" -eq 1
+            sed -nE 's/^\s*applicationId\s*=\s*"([^"]+)".*/\1/p' app/build.gradle.kts > "$ab/$1/app-id.txt"
           }
           git fetch --no-tags --depth=1 origin "$BASE_SHA"
           git -c advice.detachedHead=false checkout "$BASE_SHA"
@@ -970,6 +969,7 @@ jobs:
           git submodule update --init --recursive
           build B
           ls -l "$ab"/*
+          cat "$ab"/*/app-id.txt
 
       # The minified benchmark app (R8, as release) and the Macrobenchmark APK,
       # built before the emulator boots so it does not sit idle through the
