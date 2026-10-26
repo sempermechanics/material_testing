@@ -156,7 +156,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   wizard state is `WizardInputs.lab`, changed through `edit {}`, and a run's result reads
   the lab test from its saved row (`ViewerArgs.of`). Metadata schema `/7` here (ours past
   `/3` are not the parent's numbers). Lab inputs ride its seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` (ADR-003),
-  `WizardDraft` (ADR-005). ADR and TD numbers are shared; TD-319–TD-329 are reserved by the readiness PR, TD-330 is the rename.
+  `WizardDraft` (ADR-005). ADR and TD numbers are shared; TD-319–TD-329 are reserved by the readiness PR, TD-330 is the rename, TD-318 and TD-331 the Play listing.
 - **#140 merged 2026-10-20** (`a66606d9`, the 2026-10-19 review; not released): load logs
   in kgf/tf, decimal commas and the delimiter read after a long preamble, logged time units;
   photo times matched within 1 s when any lacks EXIF sub-seconds; E refitted over 10–40 % of
@@ -188,6 +188,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   references (TD-135). Owner decision: Terms §1.2 and §1.3 against a student audience.
 - **Rename to Semper Classroom ([ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md)):** branch
   `claude/semper-classroom-app`, waits on the upstream PR, its deploy and the owner's Firebase app registration.
+- **Play submission ([gate](docs/ops/PRODUCTION_READINESS_GATE.md#google-play-submission-semper-classroom)):**
+  branch `claude/play-readiness-checks`, stacked on the rename. The release check now fails
+  a targetSdk below 36 or a native library off 16 KB pages; the rest is the operator's
+  (signing key TD-318, reviewer access TD-331, TD-36, TD-229–TD-232).
 - **Look it up; this list rots.** `gh pr list --state open`; history in
   [CHANGELOG.md](docs/ops/CHANGELOG.md); proposals in [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
