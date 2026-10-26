@@ -264,6 +264,31 @@ def test_main_run_mode_installs_abba_and_gates_the_result(ab, tmp_path, monkeypa
     assert "B +4.0%" in capsys.readouterr().out
 
 
+def test_each_build_runs_under_the_app_id_its_folder_names(ab, tmp_path, monkeypatch):
+    """A PR that renames the app id (ADR-030) is compared with a base on the old one."""
+    a, b = _apks(tmp_path / "apks")
+    (a / "app-id").write_text("org.old\n", encoding="utf-8")
+    (b / "app-id").write_text("org.new\n", encoding="utf-8")
+    device = FakeDevice()
+    monkeypatch.setattr(ab.subprocess, "run", device)
+    assert ab.main(["micro_ab.py", "--a", str(a), "--b", str(b), "--out", str(tmp_path / "ab"),
+                    "--package", "org.ignored"]) == 0
+    runs = [c[-1].split()[-1] for c in device.calls if "am instrument" in c[-1]]
+    assert runs == [f"org.{n}.test/androidx.test.runner.AndroidJUnitRunner" for n in ("old", "new", "new", "old")]
+    # Every round clears both builds' apps, so neither is left installed beside the other.
+    first_round = [c[-1] for c in device.calls[:4]]
+    assert first_round == ["org.old.test", "org.old", "org.new.test", "org.new"]
+    assert all("org.ignored" not in " ".join(c) for c in device.calls)
+
+
+def test_build_package_falls_back_to_the_default(ab, tmp_path):
+    assert ab.build_package(tmp_path, "org.example") == "org.example"
+    (tmp_path / "app-id").write_text("  \n", encoding="utf-8")
+    assert ab.build_package(tmp_path, "org.example") == "org.example"
+    (tmp_path / "app-id").write_text("org.named\n", encoding="utf-8")
+    assert ab.build_package(tmp_path, "org.example") == "org.named"
+
+
 def test_main_run_mode_fails_a_slow_candidate(ab, tmp_path, monkeypatch):
     a, b = _apks(tmp_path / "apks")
     monkeypatch.setattr(ab.subprocess, "run", FakeDevice(times={"A": 100.0, "B": 130.0}))

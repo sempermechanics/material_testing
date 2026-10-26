@@ -918,9 +918,11 @@ jobs:
           echo "APP_ID=$APP_ID" >> "$GITHUB_ENV"
 
       # The micro A/B's two builds (TD-199): the PR's base (A) and the PR (B),
-      # each a debug app APK and its androidTest APK. Both build in this
-      # checkout, base first, so the PR's build is the one left in app/build
-      # and the base's native objects are reused where the engine is the same.
+      # each a debug app APK and its androidTest APK, and its app id in `app-id`
+      # (a PR that changes applicationId, as ADR-030 did, runs each build under
+      # its own). Both build in this checkout, base first, so the PR's build is
+      # the one left in app/build and the base's native objects are reused where
+      # the engine is the same.
       - name: Build the PR's base and the PR for the microbenchmark A/B
         if: github.event_name == 'pull_request'
         env:
@@ -933,6 +935,8 @@ jobs:
             ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest -PabiFilters=x86_64 -PnativeCompilerLauncher=ccache --console=plain
             mkdir -p "$ab/$1"
             cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk "$ab/$1/"
+            sed -n 's/^ *applicationId = "\([^"]*\)".*/\1/p' app/build.gradle.kts > "$ab/$1/app-id"
+            test "$(wc -l < "$ab/$1/app-id")" -eq 1
           }
           git fetch --no-tags --depth=1 origin "$BASE_SHA"
           git -c advice.detachedHead=false checkout "$BASE_SHA"

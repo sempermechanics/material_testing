@@ -25,7 +25,11 @@ slowdown its author and reviewer have agreed to.
 Usage:
   python scripts/micro_ab.py --a base-apks/ --b pr-apks/ --out micro-ab [--serial S] [--rounds 1] [--package ID]
   python scripts/micro_ab.py --analyse micro-ab [--advisory]
-Each APK folder holds app-debug.apk and app-debug-androidTest.apk.
+Each APK folder holds app-debug.apk and app-debug-androidTest.apk, and may hold
+``app-id``, the build's applicationId: a PR that changes the id (the Semper
+Classroom rename, ADR-030) is compared with a base still on the old one, so
+each round installs, runs and pulls under its own build's id. ``--package`` is
+the id of a folder without one.
 """
 
 from __future__ import annotations
@@ -43,6 +47,7 @@ ROOT = Path(__file__).resolve().parent.parent
 FALLBACK_APP = "com.sempermechanics.semper"
 BENCHMARK_CLASS = "com.sempermechanics.semper.benchmark.HotPathMicroBenchmark"
 APKS = ("app-debug.apk", "app-debug-androidTest.apk")
+APP_ID_FILE = "app-id"
 # A debug build on an emulator: every warning androidx.benchmark raises there.
 SUPPRESS = "EMULATOR,DEBUGGABLE,LOW-BATTERY,UNLOCKED,ACTIVITY-MISSING,NOT-AOT-COMPILED"
 METRIC = "timeNs"
@@ -59,6 +64,15 @@ def default_app_id(build_file: Path = ROOT / "app" / "build.gradle.kts") -> str:
     except OSError:
         ids = []
     return ids[0] if len(ids) == 1 else FALLBACK_APP
+
+
+def build_package(apk_dir: Path, default: str) -> str:
+    """The app id an APK folder names in ``app-id``, else ``default``."""
+    try:
+        named = (apk_dir / APP_ID_FILE).read_text(encoding="utf-8").strip()
+    except OSError:
+        named = ""
+    return named or default
 
 
 def abba(rounds: int) -> list[str]:
@@ -144,14 +158,17 @@ def adb(prefix: list[str], *args: str, check: bool = True) -> str:
     return result.stdout
 
 
-def run_round(prefix: list[str], number: int, build: str, apk_dir: Path, package: str, out: Path) -> None:
+def run_round(prefix: list[str], number: int, build: str, apk_dir: Path, package: str, out: Path,
+              others: tuple[str, ...] = ()) -> None:
     round_dir = out / f"{number}-{build}"
     round_dir.mkdir(parents=True, exist_ok=True)
     # Uninstall first: a build signed with another debug key (CI's smoke run
     # installs through Gradle) refuses to install over this one, and every round
-    # starts from the same clean install.
-    for installed in (f"{package}.test", package):
-        adb(prefix, "uninstall", installed, check=False)
+    # starts from the same clean install. `others` is the other build's id when
+    # it differs, so its app is not left installed beside this one.
+    for app in dict.fromkeys((package, *others)):
+        for installed in (f"{app}.test", app):
+            adb(prefix, "uninstall", installed, check=False)
     for apk in APKS:
         adb(prefix, "install", "-r", "-t", str(apk_dir / apk))
     media = [f"/sdcard/Android/media/{package}", f"/sdcard/Android/media/{package}.test"]
@@ -180,8 +197,10 @@ def run(args: argparse.Namespace) -> None:
         if missing:
             raise RuntimeError(f"{build_dir} is missing {', '.join(missing)}")
     args.out.mkdir(parents=True, exist_ok=True)
+    dirs = {"A": args.a, "B": args.b}
+    packages = {build: build_package(folder, args.package) for build, folder in dirs.items()}
     for number, build in enumerate(abba(args.rounds), start=1):
-        run_round(prefix, number, build, args.a if build == "A" else args.b, args.package, args.out)
+        run_round(prefix, number, build, dirs[build], packages[build], args.out, tuple(packages.values()))
 
 
 def main(argv: list[str]) -> int:
