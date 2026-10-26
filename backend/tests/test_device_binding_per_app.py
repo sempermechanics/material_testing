@@ -1,4 +1,4 @@
-"""One phone per app (ADR-010): Semper and Material Testing each bind their own device.
+"""One phone per app (ADR-010): Semper and Semper Classroom each bind their own device.
 
 Android scopes `ANDROID_ID` to the signing key, so the two apps on one phone
 report two device ids. Before this, the second app was a second device on a
@@ -19,8 +19,8 @@ from license_helpers import (  # noqa: F401
 )
 from refusals import attempt
 
-MT = apps.MATERIAL_TESTING
-MT_HEADER = {"X-App-Id": "com.sempermechanics.materialtesting"}
+MT = apps.SEMPER_CLASSROOM
+MT_HEADER = {"X-App-Id": "com.sempermechanics.semperclassroom"}
 
 
 def _licensed(store, uid="solo-1", email="solo@lab.org"):
@@ -38,6 +38,8 @@ def test_the_header_names_the_app():
     assert apps.from_header("") == apps.SEMPER
     assert apps.from_header(None) == apps.SEMPER
     assert apps.from_header("com.sempermechanics.semper") == apps.SEMPER
+    assert apps.from_header(" com.sempermechanics.semperclassroom ") == MT
+    # Semper Classroom's id names Semper Classroom (ADR-030).
     assert apps.from_header(" com.sempermechanics.materialtesting ") == MT
     # The ids from before the move to com.sempermechanics name the same apps.
     assert apps.from_header("com.indicvision.semper") == apps.SEMPER
@@ -48,9 +50,10 @@ def test_the_header_names_the_app():
 
 def test_semper_keeps_the_fields_it_always_had():
     assert apps.field("deviceIdLock", apps.SEMPER) == "deviceIdLock"
-    assert apps.field("deviceIdLock", MT) == "deviceIdLockMaterialTesting"
+    assert apps.field("deviceIdLock", MT) == "deviceIdLockSemperClassroom"
     assert apps.spread("releasedDeviceId", {MT: "x"}) == {
-        "releasedDeviceId": "", "releasedDeviceIdMaterialTesting": "x"}
+        "releasedDeviceId": "", "releasedDeviceIdSemperClassroom": "x",
+        "releasedDeviceIdMaterialTesting": "x"}
 
 
 # ------------------------------------------------------------------ the locks
@@ -65,7 +68,7 @@ def test_the_second_app_binds_its_own_lock_and_both_stay_licensed(store):
     assert mt["mode"] == "licensed"
     lic = store._data["licenses"][license_id]
     assert lic["deviceIdLock"] == "and-semper"
-    assert lic["deviceIdLockMaterialTesting"] == "and-mt"
+    assert lic["deviceIdLockSemperClassroom"] == "and-mt"
     semper = repo.revalidate_device_lock(store._data["users"]["solo-1"], "and-semper")
     assert semper["mode"] == "licensed"
 
@@ -83,8 +86,8 @@ def test_each_app_still_holds_one_phone(store):
 
 
 def test_one_apps_device_is_a_mismatch_in_the_other(store):
-    """The locks are separate: Semper's device id does not pass Material
-    Testing's lock, and the reverse."""
+    """The locks are separate: Semper's device id does not pass Semper
+    Classroom's lock, and the reverse."""
     store._data["users"] = {}
     _licensed(store)
     repo.revalidate_device_lock(store._data["users"]["solo-1"], "and-mt", MT)
@@ -110,8 +113,8 @@ def test_a_seat_binds_one_device_per_app(store):
     assert config["mode"] == "licensed"
     seat = store._data[f"licenses/{license_id}/seats"]["u1"]
     assert seat["deviceIdLock"] == "and-semper"
-    assert seat["deviceIdLockMaterialTesting"] == "and-mt"
-    # A second phone typing the key in Material Testing is still refused.
+    assert seat["deviceIdLockSemperClassroom"] == "and-mt"
+    # A second phone typing the key in Semper Classroom is still refused.
     assert attempt(repo.activate_license,
         "u1", "a@university.edu", "and-mt-2", minted["key"], MT)[0] == "license_device_mismatch"
 
@@ -126,19 +129,21 @@ def test_a_typed_individual_key_binds_the_asking_apps_lock(store):
     err, _ = attempt(repo.activate_license, "solo-1", "solo@lab.org", "and-mt", minted["key"], MT)
 
     assert err == ""
-    assert store._data["licenses"][license_id]["deviceIdLockMaterialTesting"] == "and-mt"
+    assert store._data["licenses"][license_id]["deviceIdLockSemperClassroom"] == "and-mt"
 
 
 # ------------------------------------------------------------ device changes
 
 
 def _registered(store, uid, semper="and-semper", mt="and-mt"):
+    """Both phones registered as this backend registers them: Semper Classroom's
+    binding under both field names, its device tagged with the stored name."""
     user = store._data["users"][uid]
     user["activeDeviceId"] = semper
-    user["activeDeviceIdMaterialTesting"] = mt
+    user.update(apps.written_fields("activeDeviceId", MT, mt))
     store._data.setdefault("devices", {})
     store._data["devices"][semper] = {"uid": uid, "status": "ACTIVE", "app": apps.SEMPER}
-    store._data["devices"][mt] = {"uid": uid, "status": "ACTIVE", "app": MT}
+    store._data["devices"][mt] = {"uid": uid, "status": "ACTIVE", "app": apps.stored_name(MT)}
 
 
 def test_a_staff_clear_moves_both_apps(store):
@@ -151,13 +156,14 @@ def test_a_staff_clear_moves_both_apps(store):
 
     assert err == ""
     assert cleared["previousDeviceId"] == "and-semper"
-    assert cleared["previousDeviceIdMaterialTesting"] == "and-mt"
+    assert cleared["previousDeviceIdSemperClassroom"] == "and-mt"
     assert cleared["releasedDeviceId"] == "and-semper"
-    assert cleared["releasedDeviceIdMaterialTesting"] == "and-mt"
+    assert cleared["releasedDeviceIdSemperClassroom"] == "and-mt"
     lic = store._data["licenses"][license_id]
-    assert lic["deviceIdLock"] == "" and lic["deviceIdLockMaterialTesting"] == ""
+    assert lic["deviceIdLock"] == "" and lic["deviceIdLockSemperClassroom"] == ""
     user = store._data["users"]["solo-1"]
-    assert "activeDeviceId" not in user and "activeDeviceIdMaterialTesting" not in user
+    assert not {"activeDeviceId", "activeDeviceIdSemperClassroom",
+                "activeDeviceIdMaterialTesting"} & set(user)
     assert store._data["devices"]["and-mt"]["status"] == "SUPERSEDED"
     assert repo.released_device_held(user, "and-mt", MT) is True
 
@@ -172,15 +178,15 @@ def test_the_holder_moves_one_app_with_its_own_cooldown(store):
 
     assert err == ""
     assert cleared["app"] == MT
-    assert cleared["previousDeviceIdMaterialTesting"] == "and-mt"
-    assert cleared["releasedDeviceIdMaterialTesting"] == "and-mt"
+    assert cleared["previousDeviceIdSemperClassroom"] == "and-mt"
+    assert cleared["releasedDeviceIdSemperClassroom"] == "and-mt"
     assert cleared["releasedDeviceId"] == ""
     lic = store._data["licenses"][license_id]
     assert lic["deviceIdLock"] == "and-semper", "Semper's phone is untouched"
-    assert lic["deviceIdLockMaterialTesting"] == ""
-    assert "deviceChangedAtMaterialTesting" in lic and "deviceChangedAt" not in lic
+    assert lic["deviceIdLockSemperClassroom"] == ""
+    assert "deviceChangedAtSemperClassroom" in lic and "deviceChangedAt" not in lic
     assert store._data["users"]["solo-1"]["activeDeviceId"] == "and-semper"
-    # Moving Material Testing does not make Semper wait, and the reverse.
+    # Moving Semper Classroom does not make Semper wait, and the reverse.
     assert attempt(repo.clear_device_lock, license_id, "solo-1", actor=repo.ACTOR_SELF)[0] == ""
     assert attempt(repo.clear_device_lock,
         license_id, "solo-1", actor=repo.ACTOR_SELF, app=MT)[0] == "device_change_too_soon"
@@ -194,7 +200,7 @@ def _as(store, monkeypatch, uid):
 
 
 @pytest.mark.asyncio
-async def test_material_testing_registers_beside_semper(client, monkeypatch):
+async def test_semper_classroom_registers_beside_semper(client, monkeypatch):
     """The sign-in that said "already linked" (2026-09-28)."""
     store = fake_firestore.install(monkeypatch)
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
@@ -213,9 +219,11 @@ async def test_material_testing_registers_beside_semper(client, monkeypatch):
     assert registered.status_code == 201, registered.text
     user = store._data["users"]["dev-user"]
     assert user["activeDeviceId"] == "and-semper"
+    assert user["activeDeviceIdSemperClassroom"] == "and-mtphone1"
     assert user["activeDeviceIdMaterialTesting"] == "and-mtphone1"
     assert store._data["devices"]["and-semper"]["status"] == "ACTIVE"
-    assert store._data["devices"]["and-mtphone1"]["app"] == MT
+    # Stored by the old name, which a backend from before the rename reads too.
+    assert store._data["devices"]["and-mtphone1"]["app"] == apps.LEGACY_MATERIAL_TESTING
 
 
 @pytest.mark.asyncio
@@ -227,7 +235,7 @@ async def test_an_unknown_app_is_refused(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_the_holder_moves_material_testing_from_a_browser(client, monkeypatch):
+async def test_the_holder_moves_semper_classroom_from_a_browser(client, monkeypatch):
     store = fake_firestore.install(monkeypatch)
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     store._data["users"] = {}
@@ -235,14 +243,14 @@ async def test_the_holder_moves_material_testing_from_a_browser(client, monkeypa
     repo.revalidate_device_lock(store._data["users"]["dev-user"], "and-mt", MT)
     _as(store, monkeypatch, "dev-user")
 
-    resp = await client.post("/v1/licenses/unbind?app=materialtesting")
+    resp = await client.post("/v1/licenses/unbind?app=semperclassroom")
     unknown = await client.post("/v1/licenses/unbind?app=other")
 
     assert resp.status_code == 200, resp.text
     assert resp.json()["app"] == MT
     assert resp.json()["previousDeviceId"] == "and-mt"
     lic = store._data["licenses"][license_id]
-    assert lic["deviceIdLockMaterialTesting"] == ""
+    assert lic["deviceIdLockSemperClassroom"] == ""
     assert lic["deviceIdLock"] == "and-semper"
     assert unknown.status_code == 400
 
@@ -259,7 +267,7 @@ async def test_the_app_moves_its_own_device_by_header(client, monkeypatch):
     resp = await client.post("/v1/licenses/unbind", headers=MT_HEADER)
 
     assert resp.status_code == 200, resp.text
-    assert store._data["licenses"][license_id]["deviceIdLockMaterialTesting"] == ""
+    assert store._data["licenses"][license_id]["deviceIdLockSemperClassroom"] == ""
     assert store._data["licenses"][license_id]["deviceIdLock"] == "and-semper"
 
 

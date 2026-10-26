@@ -108,8 +108,9 @@ def admin_release_account_device(body: AdminDeviceRelease,
     `license_device_clear_required`: **New device** on its licence moves both
     bindings. `releasedDeviceId` is "" when nothing was registered.
 
-    Releases every app's phone (ADR-010); `releasedDeviceIdMaterialTesting`
-    names the Material Testing one.
+    Releases every app's phone (ADR-010); `releasedDeviceIdSemperClassroom`
+    names the Semper Classroom one (mirrored as `releasedDeviceIdMaterialTesting`
+    for a console from before ADR-030).
     """
     admin = ctx.user
     user = repo.find_user_by_email(body.email)

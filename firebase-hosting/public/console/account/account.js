@@ -9,7 +9,9 @@ import { requireSignIn } from "../auth.js";
 import { api, apiBlob, saveBlob } from "../api.js";
 import { confirmInPage } from "../dialogs.js";
 import { setStatus, markFirstData, whileWaiting } from "../status.js";
-import { esc, when, day, errorDetail, holdsLicence, placeholderRows, retryRow } from "../util.js";
+import {
+  esc, when, day, errorDetail, holdsLicence, placeholderRows, retryRow, APP_NAMES,
+} from "../util.js";
 import { explain as refusalText, ACCOUNT } from "../messages.js";
 import { mountSwitcher } from "../switcher.js";
 import { licencesAdministered } from "../roles.js";
@@ -226,7 +228,9 @@ function releaseError(e) {
 }
 
 $("unbind").addEventListener("click", () => unbind("", "Semper"));
-$("unbindMt").addEventListener("click", () => unbind("materialtesting", "Material Testing"));
+// Semper Classroom's old short name: a backend from before ADR-030 knows only
+// it, and every backend since reads it as Semper Classroom (TD-330).
+$("unbindMt").addEventListener("click", () => unbind("materialtesting", "Semper Classroom"));
 
 /**
  * Move one app's device. A browser cannot send `X-App-Id`, so the app is
@@ -347,7 +351,6 @@ function renderSessions() {
 
 // The app that backed an analysis up (ADR-014). A backend without the tag
 // answers nothing, and every analysis then was Semper's.
-const APP_NAMES = { semper: "Semper", materialtesting: "Material Testing" };
 
 function appName(app) {
   return APP_NAMES[app || "semper"] || app;

@@ -159,12 +159,20 @@ def test_the_same_device_mails_once_and_another_device_again(security_mail, sent
     notify.device_registered("uid-1", "holder@uni.edu", "phone-1", "semper")
     notify.device_registered("uid-1", "holder@uni.edu", "phone-1", "semper")
     notify.flush_for_tests()
-    notify.device_registered("uid-1", "holder@uni.edu", "phone-2", "materialtesting")
+    notify.device_registered("uid-1", "holder@uni.edu", "phone-2", "semperclassroom")
     notify.flush_for_tests()
 
     assert [kw["headers"]["Idempotency-Key"] for _, kw in sent] == [
         "device-registered:uid-1:phone-1", "device-registered:uid-1:phone-2"]
-    assert "Material Testing" in sent[1][1]["json"]["subject"]
+    assert "Semper Classroom" in sent[1][1]["json"]["subject"]
+
+
+def test_the_device_mail_names_the_old_short_name_as_semper_classroom(security_mail, sent):
+    """A value stored before ADR-030 names the app by its name today."""
+    notify.device_registered("uid-1", "holder@uni.edu", "phone-3", "materialtesting")
+    notify.flush_for_tests()
+
+    assert "Semper Classroom" in sent[0][1]["json"]["subject"]
 
 
 def test_the_device_mail_has_its_own_dedup_from_the_access_request(security_mail, sent):

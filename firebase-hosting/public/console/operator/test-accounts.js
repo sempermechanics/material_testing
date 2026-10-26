@@ -17,7 +17,7 @@ import { askInPage, confirmInPage, confirmByTyping, ERR_CANCELLED } from "../dia
 import { setStatus } from "../status.js";
 import {
   esc, day, placeholderRows, retryRow, reauthFailureText,
-  TEST_ACCOUNT, testAccountBody, testAccountEnds, extendDays,
+  TEST_ACCOUNT, testAccountBody, testAccountEnds, extendDays, APP_NAMES,
 } from "../util.js";
 import { explain } from "../messages.js";
 import { $ } from "./state.js";
@@ -33,7 +33,6 @@ const SENTENCES = {
 };
 
 const PURPOSES = { qc: "QC", ci: "CI" };
-const APPS = { semper: "Semper", materialtesting: "Material Testing" };
 
 /** A phone as staff know it: its model, else its device id. */
 const phoneName = (d) => (d.model ? `${d.model} (${d.deviceId})` : d.deviceId);
@@ -185,7 +184,7 @@ function accountRow(a) {
  * the button in the middle of the cell, and two phones read as one paragraph.
  */
 function phoneLine(uid, d) {
-  const app = `<span class="tag">${esc(APPS[d.app] || d.app || "—")}</span>`;
+  const app = `<span class="tag">${esc(APP_NAMES[d.app] || d.app || "—")}</span>`;
   const id = esc(d.deviceId);
   const name = d.model
     ? `<span class="phone-model">${esc(d.model)} ${app}</span>

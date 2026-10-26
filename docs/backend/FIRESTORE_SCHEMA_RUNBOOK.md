@@ -19,13 +19,16 @@ records are returned by `GET /v1/me/export` and deleted with the user document.
 
 ### `sessions/{sid}.app`, and its backfill
 
-`app` (`semper` or `materialtesting`) is written by `POST /v1/sessions` from
+`app` (`semper`, or `materialtesting` for Semper Classroom until TD-330:
+`apps.stored_name`, below) is written by `POST /v1/sessions` from
 `X-App-Id` ([ADR-014](../adr/ADR-014-session-app-tag.md)). Absent means
 `semper` (`repo/sessions.session_app`), so it needs no version bump either, but
-a Material Testing session left untagged drops out of Material Testing's list
+a Semper Classroom session left untagged drops out of Semper Classroom's list
 and restore. `backend/scripts/tag_session_apps.py` tags every session without
-`app` from its device (`devices/{deviceId}.app`, `materialtesting` only when the
-device says so). It is not a chain migration: it does not stamp
+`app` from its device (`devices/{deviceId}.app`, Semper Classroom only when the
+device says so, under the same stored name). A tag is compared by its name
+today (`apps.canonical`, `apps.same_app`), so a `materialtesting` tag (below) is
+Semper Classroom's. It is not a chain migration: it does not stamp
 `schemaVersion` and keeps no ledger, because it is idempotent by construction
 (a tagged session is skipped).
 
@@ -40,6 +43,39 @@ device says so). It is not a chain migration: it does not stamp
    between step 2 and its replacement. A second dry-run must report zero to tag.
 
 Staging and production share one database, so there is one run.
+
+### Material Testing → Semper Classroom (ADR-030)
+
+[ADR-030](../adr/ADR-030-semper-classroom-app-identity.md) renamed the app's
+short name `materialtesting` → `semperclassroom` and its field suffix
+`MaterialTesting` → `SemperClassroom`. A backend from before the rename knows
+only the old names, so until TD-330 they stay the stored truth: tags are
+stored as `materialtesting` (`apps.stored_name`) and read as `semperclassroom`
+(`apps.canonical`); per-app fields are read from the old field only
+(`apps.read_field`) and written to both (`apps.written_fields`). So no
+`schemaVersion` bump and no chain migration.
+`backend/scripts/rename_classroom_app.py` makes each new field on `users/`,
+`licenses/` and `licenses/{id}/seats/` equal to the old one: it copies
+`<name>MaterialTesting` to `<name>SemperClassroom` where the new field is
+absent or differs, and deletes a `<name>SemperClassroom` whose old twin is
+absent (a previous backend deleted the old field and left the new one stale).
+It never modifies or deletes an old field and never touches audit or event
+rows. `--retag` also rewrites the `app` tag on `devices/` and `sessions/` to
+`semperclassroom`; that is TD-330's first step, not part of the rollout.
+
+Every run is the owner's: staging and production share one database.
+
+1. After the backend is deployed, Hosting and the repo variables are set and
+   Semper Classroom is released (ADR-030, Rollout order), dry-run:
+   `python backend/scripts/rename_classroom_app.py --project PROJECT_ID`.
+   It prints per-collection counts and lists any document whose new field
+   differs from the old one or has no old one.
+2. Apply, once the new backend serves all traffic and rolling back past it is
+   ruled out: the same command with `--apply`. A dry-run must then report
+   nothing to change.
+3. TD-330 only, once no backend from before the rename can serve and no build
+   sends the old id: `--apply` again, then `--apply --retag`, before reads and
+   tags move to the new names.
 
 ## How migrations are defined
 

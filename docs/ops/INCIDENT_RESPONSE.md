@@ -82,8 +82,8 @@ it cannot license a device the backend never licensed.
    ignores tokens signed with the old key: an unverifiable token counts as no
    token and the cached config decides (`EntitlementPolicy.kt:177-184`), so a
    forged `ent-1` token gains nothing on it.
-4. After adoption, raise `MIN_SUPPORTED_VERSION_CODE` (and the `_MATERIAL_TESTING`
-   pair for Material Testing) to that build, so builds pinning the old key stop
+4. After adoption, raise `MIN_SUPPORTED_VERSION_CODE` (and the `_SEMPER_CLASSROOM`
+   pair for Semper Classroom) to that build, so builds pinning the old key stop
    running new analyses.
 5. Re-enable signing: `ENTITLEMENT_SIGNING_SECRET` to the new secret,
    `ENTITLEMENT_KID=ent-2`, redeploy.

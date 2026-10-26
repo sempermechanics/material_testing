@@ -149,14 +149,16 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   TD-232 (Data safety answers ready; two owner decisions, then submit), TD-219's device checks,
   counsel on the Terms (TD-277).
 - **material_testing** merges this `main` (last `9d116f2`, material_testing#142, 2026-10-22;
-  [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); it released `v1.4-beta.2` 2026-10-17.
+  [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); it released `v1.4-beta.2` 2026-10-17 as Material Testing,
+  now being renamed **Semper Classroom** (`claude/semper-classroom-upstream`, not merged; rollout
+  order in [ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md), aliases until TD-330).
 - **CI.** Tiers follow the diff, coverage floors rise with every test PR
   ([TESTING.md](docs/app/TESTING.md#coverage-floors)), and `main` requires `CI OK`. Tier 3 signs
   in to live staging, so a staging backend behind `main` fails it.
 - **Owed.** A device smoke of the next release ([RELEASING.md](docs/ops/RELEASING.md) step 5);
   the on-device characterization at the 0.6.1 pin (TD-212); Pixel 6 benchmarks for #435;
   ADR-015's queued-work upgrade check; transfer notifications and AVI import on a device
-  ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a); Material Testing beside Semper on one phone;
+  ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a); Semper Classroom beside Semper on one phone;
   the legal pages' operator values (TD-36).
 - **Look it up; this list rots.** `gh pr list --state open`, [CHANGELOG.md](docs/ops/CHANGELOG.md), [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 

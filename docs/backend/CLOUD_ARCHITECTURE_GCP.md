@@ -248,10 +248,12 @@ bound it:
 
 - **Retired ids may not register.** `POST /v1/devices/register` answers
   `410 app_retired` (audited `DEVICE_REGISTER` / `DENIED`) to an `X-App-Id` in
-  `apps.RETIRED` (`com.indicvision.semper`, `com.indicvision.semper.materialtesting`)
+  `apps.RETIRED` (`com.indicvision.semper`, `com.indicvision.semper.materialtesting`,
+  and `com.sempermechanics.materialtesting`, which Semper Classroom succeeds with
+  the same signing key, [ADR-030](../adr/ADR-030-semper-classroom-app-identity.md))
   and writes nothing. Their other routes are served as before: they no longer
   replace a key, and the access log still has to show when none is left
-  (TD-176).
+  (TD-176, TD-330).
 - **The app takes its key back.** A signed call refused `bad_signature`
   registers again, the same id for the same account, and is sent once more
   (`DeviceKeyRecovery`, `data/net/SemperApiCalls.kt`). For that request the
@@ -264,18 +266,26 @@ bound it:
   `DEVICE_REBIND`; it spends one `device_register_bucket` token.
 
 Two apps with one signing key on one phone (debug builds of Semper and
-Material Testing) still take the slot from each other, at most once a minute
+Semper Classroom) still take the slot from each other, at most once a minute
 per app process; keying devices by app needs a migration of the shared
 database (TD-209).
 
 **One device per app, not per account** ([ADR-010](../adr/ADR-010-device-binding-per-app.md)).
-Semper and Material Testing share accounts, and Android gives apps signed with
+Semper and Semper Classroom share accounts, and Android gives apps signed with
 different keys different `ANDROID_ID`s, so the same phone is two device ids. Every app
 call carries `X-App-Id` (its `applicationId`; none means Semper, an unlisted
 one is `400 unknown_app`), and "the account's device" above means that app's:
-Semper's is `activeDeviceId`, Material Testing's `activeDeviceIdMaterialTesting`
+Semper's is `activeDeviceId`, Semper Classroom's `activeDeviceIdSemperClassroom`
 (`backend/app/apps.py`). The same suffix applies to the release hold and to
-the licence or seat lock (§20.10).
+the licence or seat lock (§20.10). Semper Classroom was Material Testing until
+2026-10 ([ADR-030](../adr/ADR-030-semper-classroom-app-identity.md)): until
+TD-330 its fields are also written under the old suffix (`…MaterialTesting`,
+`apps.written_fields`) and read from the old one only (`apps.read_field`):
+every backend, including one from before the rename, writes and deletes the
+old field, while the new one can be left stale. Its tag is stored as the old
+short name `materialtesting` (`apps.stored_name`), which a backend from before
+the rename reads, and read, compared and answered as `semperclassroom`
+(`apps.canonical`, `apps.same_app`).
 
 The same header tags each cloud session with the app that created it
 ([ADR-014](../adr/ADR-014-session-app-tag.md)): `GET /v1/sessions` lists the
@@ -534,12 +544,12 @@ name, and one named `Reference.png` collided with it. A restore takes
 `ref/Reference.png` as the reference, and `raw/Reference.png` only from an
 archive with no `ref/` entry (`RestoreUnpacker.destFor`). An app older than `/4`
 restores a `/4` backup **without its reference**: it puts `ref/Reference.png`
-loose in the session directory. Material Testing writes its own numbering
+loose in the session directory. Semper Classroom writes its own numbering
 (`/6`); a fork sync has to carry the `ref/` reader before its writer.
 
 `metadata.json` is the one file a backup can change after it completes: `PUT /v1/sessions/{sid}/metadata`
 writes the app's current metadata over the same Drive object and updates the file
-doc's size and checksums. Semper sends it after a rename, Material Testing also
+doc's size and checksums. Semper sends it after a rename, Semper Classroom also
 after a deflection or curve correction, made after the backup ([ADR-013](../adr/ADR-013-session-metadata-replace.md)).
 A non-blank string `name` in that body (trimmed, cut to 200 characters) also
 becomes the session doc's `name`, so `GET /v1/sessions` lists the new name; a
@@ -562,8 +572,11 @@ users/{uid}                       (uid = Google 'sub')
   role: "user" | "admin"
   access_status: "PENDING" | "APPROVED" | "SUSPENDED"
   activeDeviceId: string | null
-  activeDeviceIdMaterialTesting   (the same for Material Testing; every per-app
-                                   device field has this suffix, ADR-010)
+  activeDeviceIdSemperClassroom   (the same for Semper Classroom; every per-app
+                                   device field has this suffix, ADR-010.
+                                   Written beside activeDeviceIdMaterialTesting,
+                                   its name before ADR-030, which is the field
+                                   read until TD-330)
   driveFolderId                   (…/user/{uid} folder)
   maxSessions, maxFilesPerSession, maxFrames   (optional per-user quota overrides)
   # License terms, mirrored from licenses/{id} at activation so the read path
@@ -589,6 +602,9 @@ users/{uid}                       (uid = Google 'sub')
 
 devices/{deviceId}                (deviceId = client UUID)
   uid, publicKeyPem
+  app: "semper" | "materialtesting"   (the app that registered it, ADR-010;
+                                  Semper Classroom under its old name until
+                                  TD-330, as on sessions below)
   status: "ACTIVE" | "REVOKED" | "SUPERSEDED"
   revokedAt                       (set on REVOKED and SUPERSEDED)
   model, osVersion, appVersion
@@ -603,7 +619,12 @@ sessions/{sessionId}
                                   stored session with this device's id,
                                   whatever its uid: `count_device_sessions`, §7)
   app: "semper" | "materialtesting"   (the app that created it, from X-App-Id,
-                                  never the body — ADR-014. Absent on sessions
+                                  never the body — ADR-014. Semper Classroom
+                                  is stored under its old name until TD-330
+                                  (`apps.stored_name`, ADR-030), and read,
+                                  compared and listed as "semperclassroom";
+                                  TD-330's `rename_classroom_app.py --retag`
+                                  rewrites it. Absent on sessions
                                   from before the tag, which read as "semper"
                                   (`repo/sessions.session_app`) until
                                   `backend/scripts/tag_session_apps.py`
@@ -2338,15 +2359,20 @@ re-activated, no key is re-issued, and nothing is typed on the new device.
 
 **One lock per app** ([ADR-010](../adr/ADR-010-device-binding-per-app.md)).
 A licence or seat holds `deviceIdLock` for Semper and
-`deviceIdLockMaterialTesting` for Material Testing, and everything below is
+`deviceIdLockSemperClassroom` for Semper Classroom (written beside
+`deviceIdLockMaterialTesting`, the field read until TD-330, ADR-030), and everything below is
 per app: the registered phone, the release hold (`releasedDeviceId…`,
 `releasedAt…`) and the self-service cooldown (`deviceChangedAt…`). A staff or
 IT clear empties every app's lock and releases every app's phone, since the
 holder is changing phones. The holder's own clear moves only the app that
-asks (`X-App-Id`, or `?app=materialtesting` from the account page), against
+asks (`X-App-Id`, or `?app=` from the account page, which sends the old
+`materialtesting` until TD-330 so that a backend from before the rename
+understands it; `semperclassroom` is accepted too), against
 that app's cooldown. Responses and audit details carry each app's ids side by
-side: `previousDeviceId` / `previousDeviceIdMaterialTesting`,
-`releasedDeviceId` / `releasedDeviceIdMaterialTesting`.
+side: `previousDeviceId` / `previousDeviceIdSemperClassroom`,
+`releasedDeviceId` / `releasedDeviceIdSemperClassroom`, each Semper Classroom
+key also under its old `…MaterialTesting` name for a console from before the
+rename (`apps.spread`).
 
 **Only the registered phone takes the lock** (`devlock._may_bind`): the
 account's `activeDeviceId`, or, while nothing is registered, any device but a
@@ -2554,7 +2580,7 @@ Five decisions in it are worth keeping:
   like a smaller but valid archive.
 - **Every app's analyses, not one.** The bundle is not gated by the session's
   app tag ([ADR-014](../adr/ADR-014-session-app-tag.md)): a browser cannot send
-  `X-App-Id`, so it would always read as Semper and lose Material Testing's
+  `X-App-Id`, so it would always read as Semper and lose Semper Classroom's
   backups. The account page lists them all (`GET /v1/sessions?app=all`) with
   an App column.
 

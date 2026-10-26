@@ -159,7 +159,7 @@ def release_device(actor_uid: str, uid: str, device_id: str) -> dict:
         raise Refusal(errors.DEVICE_NOT_FOUND)
     repo.release_test_device(uid, device_id)
     _audit(actor_uid, "test_account_device_released", uid, {
-        "deviceId": device_id, "app": device.get("app") or apps.SEMPER,
+        "deviceId": device_id, "app": apps.canonical(device.get("app")),
     })
     return repo.row_of_test_account(user)
 

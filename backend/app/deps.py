@@ -162,7 +162,7 @@ def _authenticate(
     """
     claims: dict = _DEV_CLAIMS if settings.DEV_INSECURE_AUTH else {}
     app = _resolve_app(x_app_id)
-    request.state.app = app
+    request.state.app, request.state.app_id = app, x_app_id  # as sent: `apps.token_claim`
     if settings.DEV_INSECURE_AUTH:
         user = _DEV_USER
     else:
@@ -383,7 +383,7 @@ async def verified_device(
     app = getattr(request.state, "app", None) or apps.SEMPER
     if not _device_is_bound(dev, user, x_device_id, app):
         raise HTTPException(409, errors.DEVICE_NOT_ACTIVE)
-    if _device_app(dev) != app:
+    if not apps.same_app(_device_app(dev), app):
         # One signing key gives two apps one device id, and the record holds
         # the key of whichever registered last. A key registered under the
         # other app must not sign for this one, where the same id may be the
@@ -467,15 +467,16 @@ def _device_is_bound(dev: dict | None, user: dict, device_id: str, app: str) -> 
         dev
         and dev.get("uid") == user.get("uid")
         and dev.get("status") == statuses.DEVICE_ACTIVE
-        and (user.get(apps.field("activeDeviceId", app)) == device_id
+        and (apps.read_field(user, "activeDeviceId", app) == device_id
              or repo.test_account_of(user) is not None)
     )
 
 
 def _device_app(dev: dict) -> str:
     """The app `dev` was registered under. A record from before devices
-    named their app is Semper's, as every request without `X-App-Id` is."""
-    return dev.get("app") or apps.SEMPER
+    named their app is Semper's, as every request without `X-App-Id` is
+    (`apps.canonical`: `materialtesting` is Semper Classroom, ADR-030)."""
+    return apps.canonical(dev.get("app"))
 
 
 _CLIENT_NONCE = re.compile(r"t1\.(\d{9,11})\.[A-Za-z0-9_-]{22,86}")

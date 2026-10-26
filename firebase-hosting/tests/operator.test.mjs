@@ -730,16 +730,25 @@ test("New device asks, then clears the lock and says the next device takes it", 
 test("Device history is shown in the page, one move a line", async () => {
   await open({ routes: {
     [`GET /v1/admin/licenses/${IND.id}/device-history`]: () => json(200, { events: [
+      { ts: "2026-10-07T11:25Z", action: "bind", uid: "u1", detail: { deviceId: "dev-4", app: "materialtesting" } },
+      { ts: "2026-10-07T11:24Z", action: "bind", uid: "u1", detail: { deviceId: "dev-3", app: "semperclassroom" } },
       { ts: "2026-10-07T11:23Z", action: "bind", uid: "u1", detail: { deviceId: "dev-2", app: "semper" } },
-      { ts: "2026-10-07T11:21Z", action: "clear", uid: "staff", detail: { previousDeviceId: "dev-1" } },
+      { ts: "2026-10-07T11:22Z", action: "bind", uid: "u1", detail: { deviceId: "dev-5", app: "other" } },
+      { ts: "2026-10-07T11:21Z", action: "clear", uid: "staff", detail: {
+        previousDeviceId: "dev-1", previousDeviceIdMaterialTesting: "dev-0" } },
     ] }),
   } });
   rowButton("history", IND.id).click();
   await settle();
+  // The stored app is labelled by name, both of Semper Classroom's names
+  // included; one the page does not know is shown as it is.
   assert.deepEqual(alerts, [
     "Device history for SEMP-IND1\n\n" +
-    "2026-10-07T11:23Z  bind  by u1 (semper)  → dev-2\n" +
-    "2026-10-07T11:21Z  clear  by staff  left dev-1",
+    "2026-10-07T11:25Z  bind  by u1 (Semper Classroom)  → dev-4\n" +
+    "2026-10-07T11:24Z  bind  by u1 (Semper Classroom)  → dev-3\n" +
+    "2026-10-07T11:23Z  bind  by u1 (Semper)  → dev-2\n" +
+    "2026-10-07T11:22Z  bind  by u1 (other)  → dev-5\n" +
+    "2026-10-07T11:21Z  clear  by staff  left dev-1  left dev-0 (Semper Classroom)",
   ]);
   assert.equal(confirms.cards[0].removed, true);
 });

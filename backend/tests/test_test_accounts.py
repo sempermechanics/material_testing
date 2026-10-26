@@ -31,7 +31,7 @@ from key_helpers import _ec_pem
 DOMAIN = "qa.sempermechanics.com"
 QC_EMAIL = f"qc-1@{DOMAIN}"
 CI_EMAIL = f"ci@{DOMAIN}"
-MT = "materialtesting"
+MT = "semperclassroom"
 _FILE = {"name": "Session.zip", "role": "bundle", "bytes": 10, "sha256": "a" * 64}
 
 
@@ -506,7 +506,7 @@ async def test_releasing_the_bound_phone_drops_only_that_apps_binding(client, wo
     assert r.status_code == 200, r.text
     user = store["users"]["t-1"]
     assert "activeDeviceId" not in user
-    assert user["activeDeviceIdMaterialTesting"] == "and-phone-mt"
+    assert user["activeDeviceIdSemperClassroom"] == "and-phone-mt"
     assert not {"releasedDeviceId", "releasedAt"} & set(user)
     assert store["devices"]["and-phone-mt"]["status"] == "ACTIVE"
 
@@ -988,7 +988,8 @@ async def test_the_licence_lock_allows_the_device_cap(client, world):
     # The other app has its own room; a phone of one app is not the other's.
     assert repo.revalidate_device_lock(repo.get_user(uid), "and-phone-mt", MT)["mode"] == "licensed"
     lic = world["store"]._data["licenses"][created["licenseId"]]
-    assert lic["deviceIdLock"] == "" and not lic.get("deviceIdLockMaterialTesting")
+    assert lic["deviceIdLock"] == "" and not lic.get("deviceIdLockSemperClassroom")
+    assert not lic.get("deviceIdLockMaterialTesting")
 
 
 async def test_a_revoked_test_licence_is_still_demo(client, world):

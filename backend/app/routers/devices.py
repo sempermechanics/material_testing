@@ -21,7 +21,7 @@ def register_device(body: DeviceReg, request: Request, user=Depends(current_user
                      detail={"reason": "app_retired", "app": app})
         raise HTTPException(410, errors.APP_RETIRED)
     rate_limit.enforce(rate_limit.device_register_bucket, user["uid"])
-    active = user.get(apps.field("activeDeviceId", app))
+    active = apps.read_field(user, "activeDeviceId", app)
     tag = repo.test_account_of(user)  # Several phones, no hold and no mail (ADR-027).
     # A device-lock clear just released THIS phone for a new one; its upload
     # worker re-registers on `device_not_active`, which would hand the account
@@ -40,7 +40,7 @@ def register_device(body: DeviceReg, request: Request, user=Depends(current_user
     # bound to a different account (one account per device: `device_in_use`)
     # are checked inside the registration's transaction, so two phones
     # registering at once cannot both end up ACTIVE. Each app has its own
-    # binding (ADR-010): Material Testing on the phone Semper is registered on
+    # binding (ADR-010): Semper Classroom on the phone Semper is registered on
     # reports its own device id, and is not a conflict.
     try:
         registered = repo.register_device(user["uid"], body, app, step_up_eligible=eligible)
