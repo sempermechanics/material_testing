@@ -142,7 +142,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   outage as 503 (TD-250), audit-row expiry (TD-237), a test account's phone released on its
   own (TD-314), a staging round-trip device test (TD-313), ADR-025 phase 2's first part
   (`SessionRecord.extras`, empty here: the lab fields stay top-level until an extension
-  moves them) and engine v0.6.1, already here by #143. Before: `9d116f24` (#461, #462: **engine v0.6.0**, AKAZE + RANSAC seeding).
+  moves them) and engine v0.6.1, already here by #143; that merge (#144) set the gitlink to
+  0.2.3 (`1284edf`), put back to v0.6.1 by `claude/readiness-20261024-engine-pin` (MT-TE2-001). Before: `9d116f24` (#461, #462: **engine v0.6.0**, AKAZE + RANSAC seeding).
   Before: `14b279d6`, 2026-10-21,
   on `ccr-603fe346-1bw2fa` (merged as #141; not deployed): its #453 (`firebase-bom` 35), #457 (the
   review fixes and tech-debt rounds), #458 (the incremental reference), #459 (unit-test JVM

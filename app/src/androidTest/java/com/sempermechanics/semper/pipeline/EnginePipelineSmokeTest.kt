@@ -444,6 +444,64 @@ class EnginePipelineSmokeTest {
         }
     }
 
+    /**
+     * The incremental branch of [runBatchAnalysisBody] (`refUpdateInterval` >= 1):
+     * `initializeIncremental` → `computeIncrementalFrame` per frame →
+     * `releaseIncremental`. No other test calls those three, so an engine pin
+     * without them (MT-TE2-001: 0.2.3) only failed on a user's run. The reference
+     * moves every frame, and each frame's total is still from the first image.
+     */
+    @Test
+    fun incrementalBatchLoopWritesEveryFrameFromTheFirstImage() {
+        val ctx = InstrumentationRegistry.getInstrumentation().targetContext
+        val shifts = listOf(1f to 0f, 2f to 1f, 3f to 2f)
+        val ref = makeReference()
+        val inputs = File(ctx.cacheDir, "batch-incremental-test").apply {
+            deleteRecursively()
+            mkdirs()
+        }
+        val frames = shifts.mapIndexed { i, (dx, dy) ->
+            val file = File(inputs, "def_$i.png")
+            file.writeBytes(warp(ref, Matrix().apply { setTranslate(dx, dy) }).toPngBytes())
+            DeformedFrame(file.absolutePath, file.name)
+        }
+        val vm = AnalysisViewModel().apply {
+            edit {
+                it.copy(refBytes = ref.toPngBytes(), refSize = ImageSize(W, H), refName = "ref.png", deformedFrames = frames)
+            }
+        }
+        val spec = RunSpec.of(DicParams(subset = SUBSET, step = STEP, strainWindow = 15), Roi(0, 0, W, H), null, false, null)
+            .copy(refUpdateInterval = 1)
+        assertTrue(spec.incremental)
+        val ids = mutableListOf<String>()
+
+        try {
+            vm.cancelRequested = false
+            val run = BatchRun(spec, ctx.cacheDir, System.currentTimeMillis(), Job(), vm.snapshotRunInputs())
+            val outcome = vm.runBatchAnalysisBody(ctx, run) {}
+            ids += checkNotNull(outcome.sessionId)
+
+            assertEquals(RunStop.Finished, outcome.stop)
+            assertEquals(shifts.size, outcome.totalFrames)
+            assertTrue("the run's Home row was not saved", outcome.saved)
+            val batchDir = File(outcome.batchDirPath)
+            shifts.forEachIndexed { i, (dx, dy) ->
+                val data = checkNotNull(DicResult.decodeDatFile(SessionPaths.frameDat(batchDir, i))) {
+                    "frame $i has no readable .dat"
+                }
+                assertFieldMatchesWarp(
+                    SolveResult(data, FloatArray(0), data.size / DicResult.STRIDE, (W / STEP) * (H / STEP)),
+                    Matrix().apply { setTranslate(dx, dy) },
+                    tolPx = 0.25f,
+                    minCoverageFrac = 0.25f,
+                )
+            }
+        } finally {
+            forget(ctx, ids)
+            inputs.deleteRecursively()
+        }
+    }
+
     private fun forget(ctx: android.content.Context, ids: List<String>) = ids.forEach {
         SessionStore.forget(ctx, it)
         SessionStore.dirFor(ctx, it).deleteRecursively()

@@ -39,6 +39,12 @@ apps. The deploy and Firestore workflows only run in this repo
 4. An engine bump (the `engine` gitlink) means re-running its real-data checks
    (its `real_data_steel_tensile.py` and `real_data_pmma_bending.py` scripts); its JVM
    tests use arrays recorded on the old engine and stay green either way.
+5. Before pushing the merge, check the gitlink: `git ls-tree HEAD engine` must equal
+   `git ls-tree semperdic/main engine` unless the fork deliberately pins another
+   engine, and `python scripts/check_jni_parity.py` must pass. The sync of
+   2026-10-22 (material_testing #144) resolved the gitlink to 0.2.3 although both
+   parents pinned v0.6.1, so its incremental runs threw `UnsatisfiedLinkError`
+   (MT-TE2-001).
 
 ### The 2026-10 package move (ADR-015)
 
