@@ -125,10 +125,10 @@ data class EngineStats(
     val icgnMs: Float = 0f,
 ) {
     fun meshSeedingLabel(): String = when (meshSeedingQuality) {
-        2 -> "Full Seed Mesh"
-        1 -> "Sparse Seed Mesh"
-        0 -> "Fallback (RGDIC-only, no mesh)"
-        else -> "Unknown (legacy data)"
+        2 -> "Full mesh"
+        1 -> "Sparse mesh"
+        0 -> "No mesh (grown from neighbours only)"
+        else -> "Not recorded (older analysis)"
     }
 
     companion object {

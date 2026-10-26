@@ -705,7 +705,7 @@ a strip at the top, with the same progress and a Cancel.
 | This field | One PNG: current field and frame, annotated, composited to a 1280 px long edge |
 | All fields | Five PNGs for this frame, zipped; each stamp names the source image |
 | Animations | Single-setting only: five looping field GIFs on one whole-sequence scale, zipped |
-| Report | One PDF: every frame, plus a telemetry page |
+| Report | One PDF: every frame, plus an Engine details page (how the solver reached the results) |
 | Data | One CSV (version 2): `image,x_px,y_px,u_px,v_px,exx_strain,eyy_strain,exy_strain,znssd` (raw strain; the `#` stats rows give mε) — a sweep adds `subset_px, step_px, strain_window, vsg_px` |
 | Everything | One ZIP: raw photos + all fields + CSV + PDF; single-setting also includes the field GIFs |
 

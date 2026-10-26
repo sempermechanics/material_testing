@@ -32,6 +32,9 @@ import kotlin.math.sqrt
  */
 object ReportBuilder {
 
+    /** The report's one name: its cover, its page footers and its field images (readiness AE1-010). */
+    const val REPORT_NAME = "Semper Analysis Report"
+
     // The report's blocks: the five fields (FieldKind's table), then ZNSSD,
     // which follows Exy in a `.dat` point.
     private val FIELD_NAMES = FieldKind.entries.map { it.title } + "ZNSSD (Correlation Quality)"
