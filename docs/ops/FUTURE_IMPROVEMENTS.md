@@ -295,7 +295,7 @@ written to `audit_logs` with the token's id. A separate route tier in
 (`roster.py:335`, `:369`); staff suspend an account, which also revokes its
 refresh tokens (`backend/app/routers/admin.py:70-87`), best-effort until TD-214's
 IAM grant. A device that is offline keeps its signed entitlement until its
-`graceUntil` (`backend/app/entitlement_token.py:198-212`).
+`graceUntil` (`backend/app/entitlement_token.py:201-215`).
 
 **Proposal.** SCIM `active=false` (FI-18) or an IdP event webhook triggers the
 same seat revoke plus `revoke_sessions`. The documented SLA is the framework's:
@@ -311,8 +311,8 @@ online; ≤ grace period offline')."
 
 **Now.** The release gate is per app but not per institution:
 `MIN_SUPPORTED_VERSION_CODE` / `RECOMMENDED_VERSION_CODE` for Semper and the
-`_MATERIAL_TESTING` pair for Material Testing (`settings.release_gate(app)`,
-`backend/app/config.py:307-321`) go into every `/v1/config` answer for that app
+`_SEMPER_CLASSROOM` pair for Semper Classroom (`settings.release_gate(app)`,
+`backend/app/config.py:308-335`) go into every `/v1/config` answer for that app
 (`backend/app/routers/account.py:145-172`), and the app gates
 itself (`VersionGate.decide`,
 `app/src/main/java/com/sempermechanics/semper/data/policy/VersionGate.kt:33`).

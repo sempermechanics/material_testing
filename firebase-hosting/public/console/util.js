@@ -95,17 +95,40 @@ const SEAT_STATUS = {
 };
 
 /**
+ * Each app by its short name. Semper Classroom was Material Testing until
+ * 2026-10 (ADR-030), and devices, analyses and audit rows still say
+ * `materialtesting`, so both name it.
+ */
+export const APP_NAMES = {
+  semper: "Semper",
+  semperclassroom: "Semper Classroom",
+  materialtesting: "Semper Classroom",
+};
+
+/**
+ * Semper Classroom's `name` field from a record or response: the
+ * `…MaterialTesting` one it had before ADR-030, and only that one, as the
+ * backend reads it (`apps.read_field`). Every backend writes and deletes the
+ * old field, and every response this console reads carries it, so it is the
+ * current one until TD-330; a `…SemperClassroom` field on its own may be one
+ * a backend from before the rename left behind, stale. An audit row keeps
+ * the old name for good. Undefined when the old field is unset or empty.
+ */
+export function classroomField(doc, name) {
+  return doc?.[`${name}MaterialTesting`] || undefined;
+}
+
+/**
  * The devices a seat or licence is bound to, one per app (ADR-010), as short
- * escaped HTML: "abc123…" for Semper alone, with "Material Testing def456…"
+ * escaped HTML: "abc123…" for Semper alone, with "Semper Classroom def456…"
  * after it when that app is bound too. "" when neither is.
  */
 export function seatDevices(seat) {
   const short = (id) => `${esc(id.slice(0, 10))}…`;
   const parts = [];
   if (seat.deviceIdLock) parts.push(short(seat.deviceIdLock));
-  if (seat.deviceIdLockMaterialTesting) {
-    parts.push(`Material Testing ${short(seat.deviceIdLockMaterialTesting)}`);
-  }
+  const classroom = classroomField(seat, "deviceIdLock");
+  if (classroom) parts.push(`Semper Classroom ${short(classroom)}`);
   return parts.join("; ");
 }
 

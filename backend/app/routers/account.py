@@ -1,10 +1,10 @@
 import logging
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from .. import audit, entitlement_token, errors, repo, legal
+from .. import apps, audit, entitlement_token, errors, repo, legal
 from .. import observability as obs
 from .. import rate_limit
 from ..config import settings
@@ -154,6 +154,7 @@ def set_consents(
 
 @router.get("/v1/config")
 def app_config(
+    request: Request,
     user=Depends(current_user),
     app=Depends(request_app),
     x_device_id: str = Header(default=""),
@@ -177,7 +178,11 @@ def app_config(
         "killSwitches": list(settings.KILL_SWITCHES),
         "testAccount": _test_account(user),
     }
-    token = _entitlement(user, config, app, x_device_id)
+    # The token names the app as the calling build pins it (`apps.token_claim`):
+    # a Material Testing build from before the rename (ADR-030) refuses one
+    # that says `semperclassroom`. `current_user` kept the header as sent.
+    claim = apps.token_claim(getattr(request.state, "app_id", "")) or app
+    token = _entitlement(user, config, claim, x_device_id)
     if token:
         body["entitlement"] = token
     return body

@@ -1,8 +1,8 @@
 """Each app lists and restores its own cloud backups (ADR-014).
 
-Semper and Material Testing share accounts and this backend. Before the tag,
+Semper and Semper Classroom share accounts and this backend. Before the tag,
 each app's backups card and restore list showed the other's sessions, and
-Semper restoring a Material Testing backup silently dropped its test data.
+Semper restoring a Semper Classroom backup silently dropped its test data.
 A session is now tagged on create with the app that asked (`X-App-Id`), an
 untagged one reads as Semper's, `GET /v1/sessions` lists the asking app's
 unless `?app=` says otherwise, and the restore manifest answers only the app
@@ -18,8 +18,8 @@ from app import apps, audit, drive, statuses
 import repo_view as repo
 
 DEV_UID = "dev-user"  # deps._DEV_USER in DEV_INSECURE_AUTH mode
-MT = apps.MATERIAL_TESTING
-MT_HEADER = {"X-App-Id": "com.indicvision.semper.materialtesting"}
+MT = apps.SEMPER_CLASSROOM
+MT_HEADER = {"X-App-Id": "com.sempermechanics.semperclassroom"}
 SEMPER_HEADER = {"X-App-Id": "com.sempermechanics.semper"}
 _SHA = "a" * 64
 
@@ -51,8 +51,8 @@ def store(store, monkeypatch):
 
 @pytest.fixture
 def mixed(store):
-    """Tagged Semper, tagged Material Testing and untagged (Semper) sessions,
-    plus someone else's Material Testing one."""
+    """Tagged Semper, tagged Semper Classroom and untagged (Semper) sessions,
+    plus someone else's Semper Classroom one."""
     store._data["sessions"] = {
         "a-semper": _session(apps.SEMPER),
         "b-mt": _session(MT),
@@ -85,7 +85,12 @@ async def test_a_session_is_tagged_with_the_app_that_created_it(store, client):
     assert semper.status_code == 200 and mt.status_code == 200
     sessions = store._data["sessions"]
     assert sessions[semper.json()["sessionId"]]["app"] == apps.SEMPER
-    assert sessions[mt.json()["sessionId"]]["app"] == MT
+    # Stored by the old name, which a backend from before the rename lists too
+    # (`apps.stored_name`, TD-330); answered by the name of today.
+    assert sessions[mt.json()["sessionId"]]["app"] == apps.LEGACY_MATERIAL_TESTING
+    listed = await client.get("/v1/sessions", headers=MT_HEADER)
+    assert {s["sessionId"]: s["app"] for s in listed.json()["sessions"]} == {
+        mt.json()["sessionId"]: MT}
 
 
 async def test_the_tag_is_not_a_body_field(store, client):
@@ -122,13 +127,16 @@ async def test_no_header_lists_semper_and_untagged(mixed, client):
     assert [s["app"] for s in r.json()["sessions"]] == [apps.SEMPER, apps.SEMPER]
 
 
-async def test_material_testing_lists_only_its_own(mixed, client):
+async def test_semper_classroom_lists_only_its_own(mixed, client):
     r = await client.get("/v1/sessions", headers=MT_HEADER)
     assert _ids(r.json()) == ["b-mt", "d-mt"]
     assert {s["app"] for s in r.json()["sessions"]} == {MT}
 
 
 async def test_an_explicit_app_overrides_the_header(mixed, client):
+    r = await client.get("/v1/sessions?app=semperclassroom", headers=SEMPER_HEADER)
+    assert _ids(r.json()) == ["b-mt", "d-mt"]
+    # The old short name names the same app (ADR-030).
     r = await client.get("/v1/sessions?app=materialtesting", headers=SEMPER_HEADER)
     assert _ids(r.json()) == ["b-mt", "d-mt"]
     r = await client.get("/v1/sessions?app=semper", headers=MT_HEADER)
@@ -263,6 +271,7 @@ def backfill():
     store._data["devices"] = {
         "dev-semper": {"uid": "u1", "app": apps.SEMPER},
         "dev-mt": {"uid": "u1", "app": MT},
+        "dev-mt-old": {"uid": "u1", "app": apps.LEGACY_MATERIAL_TESTING},
         "dev-old": {"uid": "u1"},  # registered before ADR-010 wrote `app`
     }
     store._data["sessions"] = {
@@ -272,7 +281,7 @@ def backfill():
         "s4": {"uid": "u1", "deviceId": "dev-gone"},
         "s5": {"uid": "u1"},
         "s6": {"uid": "u1", "deviceId": "dev-mt", "app": apps.SEMPER},  # already tagged
-        "s7": {"uid": "u1", "deviceId": "dev-mt"},
+        "s7": {"uid": "u1", "deviceId": "dev-mt-old"},
     }
     return store
 
@@ -291,9 +300,12 @@ def test_backfill_dry_run_counts_and_writes_nothing(backfill):
 def test_backfill_attributes_by_the_sessions_device(backfill):
     tag_session_apps.tag_sessions(backfill, apply=True)
     tags = {sid: s.get("app") for sid, s in backfill._data["sessions"].items()}
+    # A device tagged by either name is Semper Classroom's, and its sessions
+    # are tagged with the stored name (`apps.stored_name`, TD-330).
+    old = apps.LEGACY_MATERIAL_TESTING
     assert tags == {
-        "s1": apps.SEMPER, "s2": MT, "s3": apps.SEMPER, "s4": apps.SEMPER,
-        "s5": apps.SEMPER, "s6": apps.SEMPER, "s7": MT,
+        "s1": apps.SEMPER, "s2": old, "s3": apps.SEMPER, "s4": apps.SEMPER,
+        "s5": apps.SEMPER, "s6": apps.SEMPER, "s7": old,
     }
 
 

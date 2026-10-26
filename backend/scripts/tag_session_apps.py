@@ -2,15 +2,16 @@
 """Stamp `app` on every cloud session that was written without one (ADR-014).
 
 `POST /v1/sessions` tags each new session with the app that asked
-(`semper` or `materialtesting`, from `X-App-Id`), and `GET /v1/sessions` lists
-only the asking app's. A session from before the tag reads as Semper's
-(`repo/sessions.session_app`), so a Material Testing backup left untagged
-would vanish from Material Testing's list. This finds those sessions and
+(`semper` or `semperclassroom`, `materialtesting` before ADR-030, from
+`X-App-Id`), and `GET /v1/sessions` lists only the asking app's. A session
+from before the tag reads as Semper's (`repo/sessions.session_app`), so a
+Semper Classroom backup left untagged would vanish from Semper Classroom's
+list. This finds those sessions and
 tags them.
 
 Attribution is the session's `deviceId`: `devices/{deviceId}.app` is
-`materialtesting` for a phone Material Testing registered, so its sessions
-are Material Testing's; anything else (`semper`, no `app`, no device
+`semperclassroom` (or the old `materialtesting`) for a phone Semper
+Classroom registered, so its sessions are Semper Classroom's; anything else (`semper`, no `app`, no device
 document, no `deviceId`) is Semper's. One device read per distinct device.
 
 What this cannot see: a Material Testing build from before it sent
@@ -45,10 +46,11 @@ PAGE = 400
 
 
 def app_for_device(device: dict | None) -> str:
-    """The app a session's device names: Material Testing only when the
-    device document says so, Semper otherwise."""
-    if (device or {}).get("app") == apps.MATERIAL_TESTING:
-        return apps.MATERIAL_TESTING
+    """The app a session's device names: Semper Classroom only when the
+    device document says so (by either name, `apps.same_app`), Semper
+    otherwise. Tagged with the stored name (`apps.stored_name`)."""
+    if apps.same_app((device or {}).get("app"), apps.SEMPER_CLASSROOM):
+        return apps.stored_name(apps.SEMPER_CLASSROOM)  # TD-330
     return apps.SEMPER
 
 
@@ -85,7 +87,7 @@ def tag_sessions(client, apply: bool) -> Counter:
             if dev is None:
                 counts["no_device"] += 1
             app = app_for_device(dev)
-            counts[app] += 1
+            counts[apps.canonical(app)] += 1
             if apply:
                 batch.update(doc.reference, {"app": app})
                 writes += 1
@@ -104,10 +106,10 @@ def main() -> int:
 
     counts = tag_sessions(firestore.Client(project=args.project), args.apply)
     verb = "tagged" if args.apply else "would tag"
-    untagged = counts[apps.SEMPER] + counts[apps.MATERIAL_TESTING]
+    untagged = counts[apps.SEMPER] + counts[apps.SEMPER_CLASSROOM]
     print(f"{counts['scanned']} session(s) scanned, {counts['already_tagged']} already tagged.")
     print(f"  {verb} {untagged}: {counts[apps.SEMPER]} {apps.SEMPER}, "
-          f"{counts[apps.MATERIAL_TESTING]} {apps.MATERIAL_TESTING}")
+          f"{counts[apps.SEMPER_CLASSROOM]} {apps.SEMPER_CLASSROOM}")
     if counts["no_device"]:
         print(f"  {counts['no_device']} had no device document (or no deviceId) and read as "
               f"{apps.SEMPER}.")

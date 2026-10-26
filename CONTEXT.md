@@ -152,8 +152,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Release blockers:** TD-229 (Play account; TD-226 App Check and TD-230/TD-231 follow it),
   TD-232 (Data safety answers ready; two owner decisions, then submit), TD-219's device checks,
   counsel on the Terms (TD-277).
-- **material_testing** merges this `main` (last `968637cb`, material_testing#144, 2026-10-22;
-  [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); it released `v1.4-beta.2` 2026-10-17.
+- **Semper Classroom** (`material_testing`; Material Testing until [ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md),
+  renamed by #484 2026-10-26, not deployed; old names aliased until TD-330) merges this `main` (last
+  `968637cb`, material_testing#144, 2026-10-22; [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); it released `v1.4-beta.2` 2026-10-17 as Material Testing.
 - **Readiness run 2026-10-24:** `claude/readiness-20261024` holds its fixes, not merged or
   deployed ([docs/ops/readiness/20261024/](docs/ops/readiness/20261024/BASELINE.md); open: TD-331–TD-344).
   Its backend changes need a deploy (the Admin's): lock bump, kill switches on `GET …/uploads` and
@@ -166,7 +167,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Owed.** A device smoke of the next release ([RELEASING.md](docs/ops/RELEASING.md) step 5);
   the on-device characterization at the 0.6.1 pin (TD-212); Pixel 6 benchmarks for #435;
   ADR-015's queued-work upgrade check; transfer notifications and AVI import on a device
-  ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a); Material Testing beside Semper on one phone;
+  ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a); Semper Classroom beside Semper on one phone;
   the legal pages' operator values (TD-36).
 - **Look it up; this list rots.** `gh pr list --state open`, [CHANGELOG.md](docs/ops/CHANGELOG.md), [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 

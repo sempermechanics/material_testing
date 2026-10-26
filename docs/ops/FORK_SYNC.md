@@ -1,9 +1,13 @@
 # material_testing: syncing and porting
 
 [material_testing](https://github.com/sempermechanics/material_testing) is a fork of
-this repo. It adds the tensile, bending and lab-report features, ships under its own
-app id (`com.indicvision.semper.materialtesting`, its ADR-009) and uses this repo's
-backend. It takes this `main` with a plain `git merge` on a `sync/semperdic-<sha>`
+this repo. It adds the tensile, bending and lab-report features, ships as **Semper
+Classroom** under its own app id (`com.sempermechanics.semperclassroom`,
+[ADR-030](../adr/ADR-030-semper-classroom-app-identity.md); the app was Material
+Testing, `com.sempermechanics.materialtesting` and before that
+`com.indicvision.semper.materialtesting`, its ADR-009) and uses this repo's
+backend. The repo is to be renamed `semper_classroom` (an owner step; GitHub
+redirects the old URL, so the `mat` remote keeps working). It takes this `main` with a plain `git merge` on a `sync/semperdic-<sha>`
 branch.
 
 In the week to 2026-10-01, nine changes were written twice, once in each repo: the
@@ -163,6 +167,32 @@ fork's own id change:
 Do not take this code under the old id: the prefs files (`semper_*`) and the
 Keystore alias (`SemperDeviceKeyEc`) are renamed, so an install that upgrades in
 place would find them empty and lose sign-in, settings and its device key.
+
+### The Semper Classroom rename (ADR-030, 2026-10)
+
+[ADR-030](../adr/ADR-030-semper-classroom-app-identity.md) renames Material Testing
+Semper Classroom. The backend half (short name `semperclassroom`, field suffix
+`SemperClassroom`, the old names read and mirrored until TD-330) lands here and
+deploys before the fork releases. On the fork, in the sync that takes it:
+
+1. Set `applicationId = "com.sempermechanics.semperclassroom"` and the app name to
+   Semper Classroom. Keep the release signing key (alias `materialtesting`): the
+   fingerprints in Firebase and `assetlinks.json` are the same. Register the new
+   app in Firebase (`indicvision-dic-app-auth`, with App Check) and take its
+   `google-services.json` client.
+2. Check that `EntitlementApp` (`data/account/entitlement/EntitlementPins.kt`) maps
+   the new id to `semperclassroom`, as `apps.token_claim` does; without it the
+   build pins its id and refuses every token as `WRONG_APP`. The old ids stay
+   mapped to `materialtesting`.
+3. The namespace and Kotlin package stay `com.sempermechanics.semper`: nothing
+   moves, and the prefs and Keystore names do not change. The new id is still a
+   new install, with empty storage; testers back up in Material Testing first,
+   since `com.sempermechanics.materialtesting` can no longer register a device
+   (`apps.RETIRED`).
+4. Release it. The owner then dry-runs and applies
+   `backend/scripts/rename_classroom_app.py` once the new backend serves all
+   traffic (ADR-030, Rollout order;
+   [FIRESTORE_SCHEMA_RUNBOOK](../backend/FIRESTORE_SCHEMA_RUNBOOK.md)).
 
 ### The naming scheme (2026-10)
 

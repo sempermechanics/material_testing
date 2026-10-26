@@ -117,8 +117,8 @@ export const ACCOUNT = {
   deleteAccount:
     "Delete your account from the app on your phone — in Semper, Settings → " +
     "Your data → Delete account. It erases every analysis and cloud backup, " +
-    "and removes the sign-in itself for both apps, Semper and Material " +
-    "Testing, since they share one account. It cannot be undone: signing " +
+    "and removes the sign-in itself for both apps, Semper and Semper " +
+    "Classroom, since they share one account. It cannot be undone: signing " +
     "in again with the same address starts a new, empty account.",
   // The "Redeem a claim code" card (account/claim.js), shown only while no
   // licence is attached. A claim code is how a reseller deal, joining an

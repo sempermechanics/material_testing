@@ -422,7 +422,7 @@ def _halt_criteria() -> str:
 
 def test_halt_criteria_read_metrics_that_carry_the_build():
     """TE6-007: a per-version criterion needs a metric labelled with appId and
-    appVersion (Material Testing numbers its builds from its own counter, so
+    appVersion (Semper Classroom numbers its builds from its own counter, so
     a bare appVersion matches both apps); semper_auth_denied has stage only."""
     criteria = _halt_criteria()
     named = set(re.findall(r"`(semper_[a-z_]+)`", criteria))

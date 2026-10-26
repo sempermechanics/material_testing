@@ -1246,7 +1246,7 @@ enrol an authenticator app if there is none. A **Delete your account** card says
 where deletion happens: in the app on the phone (Settings → Your data → Delete
 account), because it needs the phone's device signature. It erases every analysis
 and cloud backup and removes the sign-in itself for both apps, Semper and
-Material Testing, which share one account; signing in again with the same address
+Semper Classroom, which share one account; signing in again with the same address
 starts a new, empty account. Point a customer here before answering "am I
 licensed?" by hand.
 
@@ -1349,14 +1349,16 @@ Clearing the lock **is** the change: it releases the account's old phone, and
 the licence binds to the phone that registers next. Only the account's
 registered phone can take the lock, so a phone refused at sign-in cannot.
 
-**Semper and Material Testing each hold their own phone** (ADR-010). One
+**Semper and Semper Classroom each hold their own phone** (ADR-010). One
 person can use both apps on one phone, or each on a different phone, on one
 licence. Staff and IT **New device**, and the staff phone release below,
 move both apps at once. The holder moves one app at a time: **Use Semper on
-a different device** or **Use Material Testing on a different device** on
+a different device** or **Use Semper Classroom on a different device** on
 `/account`, or the same from inside that app, each with its own 30-day
-cooldown. Seats and the operator's user list show a Material Testing device
-as "Material Testing …" beside Semper's.
+cooldown. Seats and the operator's user list show a Semper Classroom device
+as "Semper Classroom …" beside Semper's. Semper Classroom was Material Testing
+until 2026-10 (ADR-030): a Material Testing build still installed is the same
+app to the account, and shares its phone and cooldown.
 
 **Demo on the phone they use.** An account whose lock was taken by another
 device before 2026-09-27 reads Demo on the phone it is registered on. One
@@ -1462,7 +1464,7 @@ with `{"email", "purpose": "qc" or "ci", "days", "maxDevices", "note"}`
 - `days` is 1 to 90 (30 when left out for QC). A CI account may leave it out
   and then never ends; give it a date anyway if it will not be needed for long.
 - `maxDevices` is how many phones per app may be signed in at once, 1 to 10
-  (default 3). Semper and Material Testing each count their own.
+  (default 3). Semper and Semper Classroom each count their own.
 - `note` says what it is for (who has it, which bench). Never put the password
   in it.
 

@@ -86,7 +86,7 @@ refused first, 403 `email_not_verified` (`licenses.py:236-237`). It runs the sam
 shared (`errors.STATUS`, `backend/app/errors.py:320-376`). A browser names no
 device, so no device lock is compared or bound
 (`backend/app/repo/activation.py:62-68`); the phone's next request binds it
-(`revalidate_device_lock`, `backend/app/repo/devlock.py:233`). It shares
+(`revalidate_device_lock`, `backend/app/repo/devlock.py:236`). It shares
 `license_activate_bucket` with the legacy route (`licenses.py:197`;
 `backend/app/rate_limit.py:123`, 0.2/s, burst 3) and declares it in the
 decorator, so a 429 leaves a signed request's nonce unspent. Each attempt logs
@@ -154,7 +154,7 @@ route, leaves its nonce unspent. The refusal is 503 `feature_paused` with
 `Retry-After: 300` (`:293`), logged `event="feature_paused"` with the switch and
 route template; `feature_paused` is in `CLIENT_BRANCHED`
 (`backend/app/errors.py:311-314`). `share` has no route and stays published only
-(`backend/app/config.py:322-335`). The app holds the work: an upload is
+(`backend/app/config.py:336-349`). The app holds the work: an upload is
 `UploadErrors.Kind.PAUSED` → retry (`data/cloud/UploadErrors.kt:60`;
 `data/cloud/UploadWorkOutcomes.kt:33`), a restore or download is
 `DownloadFailure.Paused` and says "paused", not "failed"

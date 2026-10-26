@@ -401,7 +401,8 @@ async def test_the_roster_exports_as_a_csv_that_imports_back(it, client):
     assert r.headers["content-disposition"] == f'attachment; filename="roster-{it.a}.csv"'
     assert r.headers["cache-control"] == "no-store"
     lines = r.text.splitlines()
-    assert lines[0].startswith("email,status,uid,deviceIdLock,")
+    # Semper Classroom's lock keeps its old column until TD-330 (ADR-030).
+    assert lines[0].startswith("email,status,uid,deviceIdLock,deviceIdLockMaterialTesting,")
     assert lines[1].startswith("ana@uni-a.edu,active,ana,")
     # An address that reads as a formula is defused for the spreadsheet.
     assert lines[2].startswith("'=cmd@uni-a.edu,invited,,")
@@ -649,6 +650,23 @@ def test_csv_cells_are_written_for_a_spreadsheet():
     assert roster_io._cell(3) == "3"
     assert roster_io.iso(None) == ""
     assert roster_io.iso("2026-01-01") == "2026-01-01"
+
+
+def test_the_roster_keeps_semper_classrooms_old_lock_column():
+    """IT's sheets are keyed on `deviceIdLockMaterialTesting`, and the old field
+    is the one every backend keeps current, so the column is read from it
+    until TD-330; a stale new field is not exported."""
+    assert roster_io.ROSTER_COLUMNS[3:5] == ["deviceIdLock", "deviceIdLockMaterialTesting"]
+    assert "deviceIdLockSemperClassroom" not in roster_io.ROSTER_COLUMNS
+    seat = {"email": "a@x.edu", "status": "active", "uid": "a", "deviceIdLock": "semper-1",
+            "deviceIdLockMaterialTesting": "classroom-1",
+            "deviceIdLockSemperClassroom": "stale"}
+    header, row, invite = roster_io.roster_csv(
+        [seat], [{"email": "b@x.edu", "createdAt": "2026-10-01"}]).splitlines()
+    assert header.split(",")[:5] == ["email", "status", "uid", "deviceIdLock",
+                                    "deviceIdLockMaterialTesting"]
+    assert row.split(",")[:5] == ["a@x.edu", "active", "a", "semper-1", "classroom-1"]
+    assert len(invite.split(",")) == len(roster_io.ROSTER_COLUMNS)
 
 
 def test_audit_range_reads_dates_and_instants():

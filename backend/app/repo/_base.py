@@ -289,7 +289,7 @@ def _active_devices(uid: str, app: str, *, exclude: str = "") -> list[str]:
     for snap in _stream(db().collection("devices").where("uid", "==", uid)):
         dev = snap.to_dict() or {}
         if (snap.id != exclude and dev.get("status") == statuses.DEVICE_ACTIVE
-                and (dev.get("app") or apps.SEMPER) == app):
+                and apps.same_app(dev.get("app"), app)):
             out.append(snap.id)
     return out
 

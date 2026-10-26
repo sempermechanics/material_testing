@@ -11,7 +11,7 @@
 import { api } from "./api.js";
 import { confirmInPage } from "./dialogs.js";
 import { explain } from "./messages.js";
-import { esc, seatCells, inviteCells } from "./util.js";
+import { esc, seatCells, inviteCells, classroomField } from "./util.js";
 
 /**
  * The roster of the licence at `base`: its summary, every seat and the
@@ -50,7 +50,7 @@ export function seatRow(seat) {
   return `
     <tr>${seatCells(seat)}
       <td class="actions">
-        ${seat.deviceIdLock || seat.deviceIdLockMaterialTesting
+        ${seat.deviceIdLock || classroomField(seat, "deviceIdLock")
           ? `<button class="secondary" data-act="clear" ${on} aria-label="New device for ${who}">New device</button>`
           : ""}
         ${seat.status === "active"
@@ -111,7 +111,7 @@ const STATUS_WORDS = { active: "active", disabled: "paused", revoked: "removed" 
 function entry(kind, item) {
   const email = String((kind === "seat" ? item.email || item.uid : item.email) || "");
   const status = kind === "seat" ? STATUS_WORDS[item.status] || String(item.status || "") : "invited";
-  const text = [email, status, item.deviceIdLock, item.deviceIdLockMaterialTesting]
+  const text = [email, status, item.deviceIdLock, classroomField(item, "deviceIdLock")]
     .filter(Boolean).join(" ").toLowerCase();
   return { kind, item, email: email.toLowerCase(), status, text };
 }

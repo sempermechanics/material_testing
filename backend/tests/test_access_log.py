@@ -92,13 +92,15 @@ async def test_access_log_names_the_app_id_each_call_sends(client, caplog, monke
     import fake_firestore
 
     fake_firestore.install(monkeypatch)
-    sent = ("com.sempermechanics.semper", "com.indicvision.semper", " com.sempermechanics.materialtesting ")
+    sent = ("com.sempermechanics.semper", "com.indicvision.semper",
+            " com.sempermechanics.materialtesting ", "com.sempermechanics.semperclassroom")
     with caplog.at_level(logging.INFO, logger="semper.access"):
         for app_id in sent:
             r = await client.get("/v1/me", headers={"X-App-Id": app_id})
             assert r.status_code == 200
     logged = [e["appId"] for e in _access_entries(caplog)]
-    assert logged == ["com.sempermechanics.semper", "com.indicvision.semper", "com.sempermechanics.materialtesting"]
+    assert logged == ["com.sempermechanics.semper", "com.indicvision.semper",
+                      "com.sempermechanics.materialtesting", "com.sempermechanics.semperclassroom"]
 
 
 async def test_access_log_records_an_unknown_app_id_as_unknown(client, caplog, monkeypatch):

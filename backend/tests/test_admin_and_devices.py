@@ -160,7 +160,7 @@ async def test_register_device_heals_same_device(store, client, monkeypatch):
 # mutations without ever meeting the second factor. The device now carries
 # `stepUpEligible` (the registering token proved a second factor), and only
 # such a device steps up for staff or institution IT.
-MT_APP = "com.sempermechanics.materialtesting"
+MT_APP = "com.sempermechanics.semperclassroom"
 
 
 @pytest.fixture
@@ -262,8 +262,9 @@ async def test_re_registering_without_a_second_factor_drops_eligibility(secure, 
 
 async def test_a_device_signs_only_for_the_app_it_registered_under(secure, client, monkeypatch):
     """Two apps of one account may report one device id (one signing key).
-    A key registered under Material Testing must not then sign as Semper,
-    where the same id is the bound phone: the device record names its app.
+    A key registered under Semper Classroom must not then sign as Semper,
+    where the same id is the bound phone: the device record names its app,
+    here by its name from before ADR-030.
     `bad_signature`, so a real phone in that spot registers again and
     resends (`DeviceKeyRecovery`), as it did when the key simply differed."""
     _token(monkeypatch, {"firebase": {"sign_in_second_factor": "totp"}})

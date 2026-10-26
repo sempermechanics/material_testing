@@ -174,6 +174,23 @@ test("each member row offers only what applies to that seat", async () => {
   assert.equal($("rows").querySelectorAll('[data-uid="u3"]').length, 0, "nothing to act on for a removed member");
 });
 
+test("a seat bound only on Semper Classroom offers New device, read from the old field", async () => {
+  // Every backend writes the old field (ADR-030, TD-330): a seat this one
+  // bound holds both, one not yet migrated only the old. A new field alone was
+  // left behind by a backend from before the rename that cleared the old: stale.
+  await open({ roster: { ...assigned, invites: [], seats: [
+    { uid: "u1", email: "ana@uni.edu", status: "active", deviceIdLockSemperClassroom: "sc-device-123",
+      deviceIdLockMaterialTesting: "sc-device-123" },
+    { uid: "u2", email: "ben@uni.edu", status: "active", deviceIdLockMaterialTesting: "mt-device-456" },
+    { uid: "u3", email: "cy@uni.edu", status: "active", deviceIdLockSemperClassroom: "stale-device-7" },
+  ] } });
+  assert.deepEqual(rows(), [
+    ["ana@uni.edu", "active", "—", "Semper Classroom sc-device-…", "New device Pause Remove"],
+    ["ben@uni.edu", "active", "—", "Semper Classroom mt-device-…", "New device Pause Remove"],
+    ["cy@uni.edu", "active", "—", "not yet", "Pause Remove"],
+  ]);
+});
+
 /* -------------------------------------------- filter, sort and pages */
 
 const cellsOf = (col) => rows().map((r) => r[col]);

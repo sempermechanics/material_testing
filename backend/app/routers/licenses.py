@@ -167,7 +167,8 @@ def unbind_device(
     user has legitimately just moved to.
 
     Moves one app's device (ADR-010): the app that asks, by `X-App-Id`, or
-    from a browser, which cannot send that header, `?app=materialtesting`.
+    from a browser, which cannot send that header, `?app=semperclassroom` (the
+    old `?app=materialtesting` names the same app, ADR-030).
     Each app has its own cooldown. No app named is Semper.
     """
     named = named_app(app, header_app)

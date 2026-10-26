@@ -7,6 +7,8 @@ material_testing `main` send the header (material_testing#90).
 **Date:** 2026-09-28
 **Deciders:** product owner, backend owner
 
+[2026-10-26: Material Testing is renamed Semper Classroom (`com.sempermechanics.semperclassroom`, short name `semperclassroom`, field suffix `SemperClassroom`); the old names below stay the stored ones (the `materialtesting` tag, the `*MaterialTesting` fields, which are the ones read) and are read as the new names until TD-330. See [ADR-030](ADR-030-semper-classroom-app-identity.md).]
+
 ## Context
 
 Material Testing became its own Android app on 2026-09-28

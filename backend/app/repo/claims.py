@@ -216,8 +216,7 @@ def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch
         if seat:
             if seat.get("status") == "disabled":
                 return "license_seat_disabled"
-            lock_field = apps.field("deviceIdLock", app)
-            locked_device = seat.get(lock_field) or ""
+            locked_device = apps.read_field(seat, "deviceIdLock", app) or ""
             if device_id and locked_device and locked_device != device_id:
                 return "license_device_mismatch"
             seat_patch = {"updatedAt": _base.firestore.SERVER_TIMESTAMP,
@@ -226,7 +225,7 @@ def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch
                 # Only when a device actually redeemed. IT adding a member
                 # passes no device, and must not wipe the lock of someone who
                 # already has one.
-                seat_patch[lock_field] = device_id
+                seat_patch.update(apps.written_fields("deviceIdLock", app, device_id))
             tx.update(seat_ref, seat_patch)
         else:
             # `maxSeats` caps the ROSTER on an assigned license, where holding
@@ -239,10 +238,12 @@ def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch
             floating = normalize_seating(lic.get("seating")) == SEATING_FLOATING
             if not floating and max_seats is not None and seats_used >= int(max_seats):
                 return "license_seats_exhausted"
-            locks = {apps.field("deviceIdLock", a): (carried_locks or {}).get(a) or ""
-                     for a in apps.ALL}
+            locks = {}
+            for a in apps.ALL:
+                locks.update(apps.written_fields(
+                    "deviceIdLock", a, (carried_locks or {}).get(a) or ""))
             if device_id:
-                locks[apps.field("deviceIdLock", app)] = device_id
+                locks.update(apps.written_fields("deviceIdLock", app, device_id))
             tx.set(seat_ref, {
                 "uid": uid,
                 "email": normalize_email(email),
