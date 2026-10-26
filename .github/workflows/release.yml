@@ -22,6 +22,16 @@ concurrency:
   group: release
   cancel-in-progress: false
 
+# The engine's Eigen submodule points at gitlab.com, which has refused clones
+# under load (2026-10-26). Every git command in every job, including
+# actions/checkout's submodule clones, fetches it from the GitHub mirror instead.
+# The gitlink pins the commit (Eigen 5.0.1, bc3b3987 at engine f072da0), so
+# the source is identical; a mirror without that commit fails the checkout.
+env:
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: url.https://github.com/eigen-mirror/eigen.git.insteadOf
+  GIT_CONFIG_VALUE_0: https://gitlab.com/libeigen/eigen.git
+
 jobs:
   # Green CI was previously only a manual checklist item in RELEASING.md, so a
   # red suite could still be signed and published. These three jobs and

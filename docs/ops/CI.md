@@ -398,6 +398,16 @@ repo bundles ancient `gradle-wrapper.jar` files that fail checksum validation,
 and those jobs check out submodules recursively. Our own wrapper is validated by
 tier 1 when tier 1 runs.
 
+**Eigen comes from GitHub, not gitlab.com.** The engine's `.gitmodules` points
+`third_party/eigen` at `gitlab.com/libeigen/eigen`, which refused clones under load
+on 2026-10-26 and failed `engine-host-sanitized` at checkout. `ci.yml` and
+`release.yml` set a workflow-level `url.<…>.insteadOf` via `GIT_CONFIG_COUNT` /
+`GIT_CONFIG_KEY_0` / `GIT_CONFIG_VALUE_0`. Every git command in every job, including
+`actions/checkout`'s recursive submodule clones, then fetches Eigen from
+`github.com/eigen-mirror/eigen`. The engine's gitlink still pins the commit (Eigen
+5.0.1, `bc3b3987`), so the source is identical; a mirror without it fails the
+checkout. Local clones still use gitlab.com. The engine-side fix is TD-348.
+
 **A new push cancels a PR's older run, never `main`'s.** CI's concurrency
 group is per branch, and `cancel-in-progress` is true only for `pull_request`
 events. On `main` a started run finishes its full matrix. GitHub keeps one
