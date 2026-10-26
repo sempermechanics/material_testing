@@ -24,7 +24,7 @@ const SEAT_PROSE = {
     "The removal did not land — this account is still licensed. " +
     "Remove the seat again to repair it.",
   no_checkin_since_revoke:
-    "Removed, but this account has not been back since. The device may " +
+    "Removed, but this account has not been back since. The phone may " +
     "still be running on the licence it cached.",
   checked_in: "Removed, and the account has been back since to hear it.",
 };

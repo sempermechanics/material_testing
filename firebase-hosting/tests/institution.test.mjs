@@ -165,7 +165,7 @@ test("no cap reads unlimited, and no invites adds nothing", async () => {
 test("each member row offers only what applies to that seat", async () => {
   await open();
   assert.deepEqual(rows(), [
-    ["ana@uni.edu", "active", "—", "device-abc…", "New device Pause Remove"],
+    ["ana@uni.edu", "active", "—", "device-abc…", "New phone Pause Remove"],
     ["ben@uni.edu", "paused", "—", "not yet", "Resume Remove"],
     ["cy@uni.edu", "removed", "—", "not yet", "add again to restore"],
     ["dee@uni.edu", "invited", "—", "joins at first sign-in", "Withdraw"],
@@ -174,7 +174,7 @@ test("each member row offers only what applies to that seat", async () => {
   assert.equal($("rows").querySelectorAll('[data-uid="u3"]').length, 0, "nothing to act on for a removed member");
 });
 
-test("a seat bound only on Semper Classroom offers New device, read from the old field", async () => {
+test("a seat bound only on Semper Classroom offers New phone, read from the old field", async () => {
   // Every backend writes the old field (ADR-030, TD-330): a seat this one
   // bound holds both, one not yet migrated only the old. A new field alone was
   // left behind by a backend from before the rename that cleared the old: stale.
@@ -185,8 +185,8 @@ test("a seat bound only on Semper Classroom offers New device, read from the old
     { uid: "u3", email: "cy@uni.edu", status: "active", deviceIdLockSemperClassroom: "stale-device-7" },
   ] } });
   assert.deepEqual(rows(), [
-    ["ana@uni.edu", "active", "—", "Semper Classroom sc-device-…", "New device Pause Remove"],
-    ["ben@uni.edu", "active", "—", "Semper Classroom mt-device-…", "New device Pause Remove"],
+    ["ana@uni.edu", "active", "—", "Semper Classroom sc-device-…", "New phone Pause Remove"],
+    ["ben@uni.edu", "active", "—", "Semper Classroom mt-device-…", "New phone Pause Remove"],
     ["cy@uni.edu", "active", "—", "not yet", "Pause Remove"],
   ]);
 });
@@ -215,7 +215,7 @@ test("a long roster shows a hundred rows at a time, and says how many there are"
   assert.equal($("rowCount").textContent, "Showing 230 of 230");
 });
 
-test("the filter narrows the roster by address, status or device", async () => {
+test("the filter narrows the roster by address, status or phone", async () => {
   await open();
   const filter = (text) => {
     $("rowFilter").value = text;
@@ -318,7 +318,7 @@ async function act(actName, uid, response = () => json(200, {}), confirm = null)
   await settle();
 }
 
-test("Hold, Resume and New device send their change and reload the roster", async () => {
+test("Hold, Resume and New phone send their change and reload the roster", async () => {
   for (const [actName, uid, body] of [
     ["hold", "u1", { enabled: false }],
     ["unhold", "u2", { enabled: true }],
@@ -344,7 +344,7 @@ test("Remove asks first, naming the member; declining sends nothing", async () =
   assert.deepEqual(sent(/DELETE/), [`DELETE ${SEATS}/u1`]);
 });
 
-test("New device asks first, naming the member; declining sends nothing", async () => {
+test("New phone asks first, naming the member; declining sends nothing", async () => {
   await act("clear", "u1", undefined, false);
   assert.deepEqual(sent(/PATCH/), []);
   assert.match(confirms.asked[0], /^Unbind ana@uni\.edu from the phone it is on\?/);
@@ -354,7 +354,7 @@ test("each row's buttons name the member they act on", async () => {
   await open();
   assert.equal(button("remove", "u1").getAttribute("aria-label"), "Remove ana@uni.edu");
   assert.equal(button("hold", "u1").getAttribute("aria-label"), "Pause ana@uni.edu");
-  assert.equal(button("clear", "u1").getAttribute("aria-label"), "New device for ana@uni.edu");
+  assert.equal(button("clear", "u1").getAttribute("aria-label"), "New phone for ana@uni.edu");
   assert.equal(button("unhold", "u2").getAttribute("aria-label"), "Resume ben@uni.edu");
   assert.equal($("rows").querySelector('button[data-invite="i1"]').getAttribute("aria-label"),
     "Withdraw the invitation to dee@uni.edu");

@@ -51,7 +51,7 @@ export function seatRow(seat) {
     <tr>${seatCells(seat)}
       <td class="actions">
         ${seat.deviceIdLock || classroomField(seat, "deviceIdLock")
-          ? `<button class="secondary" data-act="clear" ${on} aria-label="New device for ${who}">New device</button>`
+          ? `<button class="secondary" data-act="clear" ${on} aria-label="New phone for ${who}">New phone</button>`
           : ""}
         ${seat.status === "active"
           ? `<button class="secondary" data-act="hold" ${on} aria-label="Pause ${who}">Pause</button>`
@@ -82,7 +82,7 @@ const ACTIONS = {
 /** The confirmation an action asks for first, naming the member, or none. */
 const ASK = {
   clear: (who) => ({
-    title: `New device for ${who}`,
+    title: `New phone for ${who}`,
     message: `Unbind ${who} from the phone it is on?
 
 ` +

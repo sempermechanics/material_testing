@@ -83,7 +83,7 @@ test("the roster card shows the seat counts from the staff route", async () => {
   await openCard();
   assert.deepEqual(tiles(), [
     ["4 assigned", false], ["2 active in the last 7 days", false], ["1 paused", false],
-    ["2 invited", false], ["1 removed, device not told yet", true], ["3 seats ending within 30 days", true],
+    ["2 invited", false], ["1 removed, phone not told yet", true], ["3 seats ending within 30 days", true],
   ]);
   assert.deepEqual(sent(/summary/), [`GET ${STAFF}/summary`]);
 });
@@ -371,7 +371,7 @@ test("the desk's tools draw exactly what the institution page draws for the same
   const staffSent = sent(/lic-uni-1/).map((line) => line.replace(STAFF, "{root}"))
     .filter((line) => line !== "GET {root}");
 
-  assert.match(institution[0], /removed, device not told yet/);
+  assert.match(institution[0], /removed, phone not told yet/);
   assert.match(institution[2], /no seats left on this licence/);
   assert.match(institution[3], /INSTITUTION_SEAT_PATCH/);
   assert.deepEqual(desk, institution);

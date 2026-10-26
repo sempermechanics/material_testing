@@ -205,7 +205,7 @@ $("convertForm").addEventListener("submit", async (ev) => {
     $("convertCancel").textContent = "Done";
     $("convertHint").className = "muted";
     $("convertHint").textContent = out.claimedByUid
-      ? "The holder is on the new roster, on the same device."
+      ? "The holder is on the new roster, on the same phone."
       : "Nobody had signed in yet: the invitation moved to the new licence.";
     showLicence(out.license);
     refreshLicence(lic.id);

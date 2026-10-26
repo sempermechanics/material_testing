@@ -83,7 +83,7 @@ test("the seat counts show as tiles, the ones wanting attention marked", async (
   await open();
   assert.deepEqual(tiles(), [
     ["4 assigned", false], ["2 active in the last 7 days", false], ["1 paused", false],
-    ["2 invited", false], ["1 removed, device not told yet", true], ["0 seats ending within 30 days", false],
+    ["2 invited", false], ["1 removed, phone not told yet", true], ["0 seats ending within 30 days", false],
   ]);
   assert.deepEqual(sent(/summary/), [`GET ${L1}/summary`]);
 });

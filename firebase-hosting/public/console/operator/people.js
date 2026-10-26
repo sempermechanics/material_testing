@@ -18,8 +18,8 @@ export async function clearLicenceDevice(id) {
   // nothing is re-issued and nothing is typed at the customer's end.
   if (!(await confirmInPage({
     title: `Unbind ${labelOf(id)}`,
-    message: `Unbind ${labelOf(id)} from the device it is on?\n\n` +
-      "The next device they sign in on takes it. Their entitlement and " +
+    message: `Unbind ${labelOf(id)} from the phone it is on?\n\n` +
+      "The next phone they sign in on takes it. Their entitlement and " +
       "their analyses are untouched — this is not a revoke.",
     confirm: "Unbind",
   }))) return;
@@ -28,7 +28,7 @@ export async function clearLicenceDevice(id) {
       method: "PATCH",
       body: JSON.stringify({ clearDeviceLock: true }),
     });
-    setStatus(`${labelOf(id)} unbound — the next device to sign in takes it.`);
+    setStatus(`${labelOf(id)} unbound — the next phone to sign in takes it.`);
     showLicence(out);
   } catch (e) {
     setStatus(explain(e, {}, (text) => `Could not unbind: ${text}`), true);
@@ -59,13 +59,13 @@ export async function showDeviceHistory(id) {
     });
     // One move a line: the card keeps single line breaks.
     await tellInPage({
-      title: "Device history",
+      title: "Phone history",
       message: lines.length
-        ? `Device history for ${labelOf(id)}\n\n${lines.join("\n")}`
-        : `No device moves recorded for ${labelOf(id)} yet.`,
+        ? `Phone history for ${labelOf(id)}\n\n${lines.join("\n")}`
+        : `No phone moves recorded for ${labelOf(id)} yet.`,
     });
   } catch (e) {
-    setStatus(`Could not load device history: ${explain(e)}`, true);
+    setStatus(`Could not load phone history: ${explain(e)}`, true);
   }
 }
 
@@ -159,7 +159,7 @@ $("releasePhone").addEventListener("click", async () => {
     $("releaseEmail").value = "";
   } catch (e) {
     setStatus(`Could not release: ${explain(e, {
-      license_device_clear_required: "That account is licensed: use New device on its licence.",
+      license_device_clear_required: "That account is licensed: use New phone on its licence.",
     })}`, true);
   } finally {
     btn.disabled = false;

@@ -20,7 +20,7 @@ const TILES = [
   ["activeLast7Days", "active in the last 7 days", false],
   ["onHold", "paused", false],
   ["invited", "invited", false],
-  ["revocationPending", "removed, device not told yet", true],
+  ["revocationPending", "removed, phone not told yet", true],
   ["expiringWithin30Days", "seats ending within 30 days", true],
 ];
 

@@ -345,9 +345,9 @@ function licenceRow(lic) {
       <div class="menu">
         ${lic.kind === "institution"
           ? `<button class="secondary" data-verify="${esc(lic.id)}">Verify</button>`
-          : `<button class="secondary" data-device="${esc(lic.id)}">New device</button>`}
+          : `<button class="secondary" data-device="${esc(lic.id)}">New phone</button>`}
         ${convertButton}
-        <button class="secondary" data-history="${esc(lic.id)}">Devices</button>
+        <button class="secondary" data-history="${esc(lic.id)}">Phone history</button>
         <button class="danger" data-revoke="${esc(lic.id)}">Revoke</button>
         ${deleteButton}
       </div>

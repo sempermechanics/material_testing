@@ -220,7 +220,7 @@ test("a convert sends the cleaned fields, shows the new key once, and both rows 
   assert.equal($("convertedKey").textContent, "SEMP-LAB1-KEY-ONCE");
   assert.deepEqual([$("convertFields").hidden, $("convertedBox").hidden, $("convertSave").hidden], [true, false, true]);
   assert.equal($("convertCancel").textContent, "Done");
-  assert.deepEqual(hint("convertHint"), ["The holder is on the new roster, on the same device.", "muted"]);
+  assert.deepEqual(hint("convertHint"), ["The holder is on the new roster, on the same phone.", "muted"]);
   assert.deepEqual(status(), ["SEMP-IND1 is now institution licence SEMP-LAB1.", "muted"]);
   assert.deepEqual(sent(new RegExp(IND.id)), [CONVERT, `GET /v1/admin/licenses/${IND.id}`],
     "the old licence is read back: the convert revoked it");

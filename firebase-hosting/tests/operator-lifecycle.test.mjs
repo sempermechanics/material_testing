@@ -123,7 +123,7 @@ test("with Show revoked ticked, a revoked row stays, offering only Delete, and n
   await click(rowButton("revoke", IND.id));
   assert.deepEqual(status(), ["SEMP-IND1 revoked — its holder is on demo from their next request.", "muted"]);
   assert.deepEqual(rows().map((r) => [r[0], r[6], r[8]]), [["SEMP-IND1", "revoked", "Delete"], ["SEMP-UNI1", "redeemed",
-    "Edit Roster More Verify Devices Revoke Delete"]]);
+    "Edit Roster More Verify Phone history Revoke Delete"]]);
 });
 
 test("revoking the licence whose roster is open closes the roster; another licence leaves it", async () => {

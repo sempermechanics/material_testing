@@ -66,7 +66,7 @@ test("Verify says what IT intends, what is entitled, and which revokes have not 
     ["d@uni.edu", "active", "The account is on a different licence now. Occupies a seat here; entitles nobody.", "never"],
     ["e@uni.edu", "disabled", "brand_new_reason", "never"],
     ["f@uni.edu", "revoked",
-      "Removed, but this account has not been back since. The device may still be running on the licence it cached.",
+      "Removed, but this account has not been back since. The phone may still be running on the licence it cached.",
       "never"],
   ]);
   assert.deepEqual(pills(), ["pill ok", "pill warn", "pill off", "pill ok", "pill off", "pill off"]);

@@ -82,7 +82,7 @@ test("every roster action is in view at 768 px, without scrolling the table", as
   const { context, page } = await open(browser, PAGES[4], WIDTHS.tablet);
   const outside = await page.evaluate(() => {
     const wrap = document.querySelector("#rosterCard .wrap").getBoundingClientRect();
-    // A seat on a phone: the row with the most buttons (New device, Pause, Remove).
+    // A seat on a phone: the row with the most buttons (New phone, Pause, Remove).
     const row = document.querySelector('#rows button[data-act="clear"]').closest("tr");
     return [...row.querySelectorAll("td.actions button")]
       .map((b) => [b.textContent.trim(), b.getBoundingClientRect()])

@@ -1,6 +1,6 @@
 // Run: node --test "firebase-hosting/tests/*.test.mjs"
 // People and devices on the operator desk (console/operator/people.js), past
-// what operator.test.mjs pins: a refused New device, every part of a device
+// what operator.test.mjs pins: a refused New phone, every part of a device
 // history line and an empty or unreadable history, the accounts waiting for
 // approval (rows, Approve, Reload, failures), and releasing a phone from an
 // unlicensed account.
@@ -25,11 +25,11 @@ async function click(button) {
 
 /* ------------------------------------------------------------ licence */
 
-test("a refused New device says so", async () => {
+test("a refused New phone says so", async () => {
   await openDesk({ routes: { [`PATCH /v1/admin/licenses/${IND.id}`]: () => json(409, { detail: "license_revoked" }) } });
   confirms.answer(true);
   await click(rowButton("device", IND.id));
-  assert.match(confirms.asked[0], /^Unbind SEMP-IND1 from the device it is on\?\n\nThe next device they sign in on takes it\./);
+  assert.match(confirms.asked[0], /^Unbind SEMP-IND1 from the phone it is on\?\n\nThe next phone they sign in on takes it\./);
   assert.deepEqual(status(), ["Could not unbind: the server refused it (ref: license_revoked)", "muted err"]);
 });
 
@@ -71,7 +71,7 @@ test("a device history line names what was left, signed out and bound, per app",
   // Each move's time as every other time on the desk is shown (when): local,
   // its zone named, not the raw ISO string.
   assert.deepEqual(alerts, [
-    "Device history for SEMP-IND1\n\n" +
+    "Phone history for SEMP-IND1\n\n" +
     `${when("2026-10-07T11:21Z")}  clear  by staff  left dev-1  signed out dev-9  left sc-1 (Semper Classroom)\n` +
     `${when("2026-10-06T09:00Z")}  clear  by staff  left mt-1 (Semper Classroom)\n` +
     `${when("2026-10-05T09:00Z")}  clear  by staff\n` +
@@ -83,13 +83,13 @@ test("a device history line names what was left, signed out and bound, per app",
 test("no moves recorded says so; a history that cannot be read is reported", async () => {
   await openDesk({ routes: { [HISTORY]: () => json(200, {}) } });
   await click(rowButton("history", IND.id));
-  assert.deepEqual(alerts, ["No device moves recorded for SEMP-IND1 yet."]);
+  assert.deepEqual(alerts, ["No phone moves recorded for SEMP-IND1 yet."]);
 
   reset();
   await openDesk({ routes: { [HISTORY]: () => json(503, { detail: "unavailable" }) } });
   await click(rowButton("history", IND.id));
   assert.deepEqual(alerts, []);
-  assert.deepEqual(status(), ["Could not load device history: unavailable", "muted err"]);
+  assert.deepEqual(status(), ["Could not load phone history: unavailable", "muted err"]);
 });
 
 /* ---------------------------------------------------------- accounts */
@@ -249,7 +249,7 @@ test("a release with only a Semper Classroom phone, or none, says which", async 
 test("a refused release is explained, and the address stays for another try", async () => {
   for (const [reply, text] of [
     [() => json(409, { detail: "license_device_clear_required" }),
-      "Could not release: That account is licensed: use New device on its licence."],
+      "Could not release: That account is licensed: use New phone on its licence."],
     [() => json(429, { detail: "rate_limited" }), "Could not release: Too many requests just now — wait a moment and try again."],
     [() => json(404, { detail: "user_not_found" }), "Could not release: No Semper account has that address."],
     [offline, "Could not release: The server could not be reached — check your connection and try again."],

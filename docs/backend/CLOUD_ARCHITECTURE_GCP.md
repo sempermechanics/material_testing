@@ -1588,7 +1588,7 @@ post-deploy request stamped. The invite is still written for the case where no
 such account exists yet.
 
 **One licence per person.** A person is an address; the device is a lock on
-the licence they hold, changed in place (staff "New device", IT unlock, or
+the licence they hold, changed in place (staff "New phone", IT unlock, or
 self-service with its cooldown), never by issuing a second licence. Every
 grant path asks `repo/holders.licence_held_by` first and refuses before
 writing anything:
@@ -2406,7 +2406,7 @@ that is revoked or on hold, and an account that has moved to another licence
 all keep their binding. Each of those leaves the
 holder on Demo, and a Demo account changes phone only through staff (below).
 Until the guard was shared the release checked only the
-last of the three, so **New device** on a held seat let its member change phone
+last of the three, so **New phone** on a held seat let its member change phone
 on Demo.
 
 **The released phone is held off.** Every signed call from the old phone now
@@ -2432,7 +2432,7 @@ release a clear does (`repo.users.release_account_device`, sharing
 `_release_patch` and `_retire_device`): the old device retired, its id held off,
 audited as `ADMIN_DEVICE_RELEASE` with `releasedDeviceId`. An account on a live
 licence is refused with `409 license_device_clear_required`, since its lock
-would still name the old phone; **New device** moves both.
+would still name the old phone; **New phone** moves both.
 
 #### The half that is easy to miss
 
