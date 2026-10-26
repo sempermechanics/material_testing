@@ -4,8 +4,9 @@
  * its own sentence for the codes that mean something particular there, and
  * falls back to the sentences below for the ones any page can meet. Codes are
  * matched exactly — `scripts/check_console.py` fails a page that matches a
- * code the backend does not declare — and a code with no sentence anywhere
- * is shown as it came, so nothing is ever silently swallowed.
+ * code the backend does not declare. A code with no sentence anywhere is not
+ * the message: it follows a sentence as "(ref: <code>)", for support, so
+ * nothing is ever silently swallowed and nobody is shown only a code.
  */
 import { errorDetail } from "./util.js";
 
@@ -24,15 +25,62 @@ export const COMMON = {
 };
 
 /**
+ * Why something failed, for the codes no page has words of its own for: the
+ * platform's refusals, the route refusals pages share, and a fetch with no
+ * answer at all. Unlike COMMON these go through the page's fallback, which
+ * says what was being done: "Could not delete: The server could not be
+ * reached — …".
+ */
+export const REASONS = {
+  // Platform refusals any route can give (backend/app/main.py, deps.py).
+  internal_error: "Something went wrong on the server. Try again; if it keeps happening, tell Semper support.",
+  firestore_unreachable: "The server could not reach its database just now. Try again in a moment.",
+  feature_paused: "That is switched off for maintenance just now. Try again later.",
+  request_too_large: "That is too large to send in one go.",
+  // Route refusals no page has words of its own for.
+  empty_patch: "Nothing changed.",
+  user_not_found: "No Semper account has that address.",
+  invite_not_found: "That invitation is no longer open: it was withdrawn or claimed. Reload to see the roster.",
+  // No answer at all: fetch rejected (offline, DNS, the connection dropped).
+  network: "The server could not be reached — check your connection and try again.",
+};
+
+/**
+ * A refusal with no JSON — the gateway's, or a server that fell over — has
+ * only its status, which api.js makes the code `http_<status>`. By status.
+ */
+export const GATEWAY = {
+  500: REASONS.internal_error,
+  502: "The server did not answer — try again in a moment.",
+  503: "The server did not answer — try again in a moment.",
+  504: "The server did not answer — try again in a moment.",
+};
+
+/** A backend code (snake_case), as opposed to a message already in words. */
+const BARE_CODE = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/;
+
+/** Why `error` failed, in words, for `explain`'s fallback. */
+function reason(error, code, text) {
+  if (REASONS[code]) return REASONS[code];
+  if (error instanceof TypeError) return REASONS.network;
+  const gateway = /^http_(\d{3})$/.exec(code);
+  if (gateway && GATEWAY[gateway[1]]) return GATEWAY[gateway[1]];
+  // A code nobody wrote a sentence for: words, with the code kept for support.
+  return BARE_CODE.test(code) || gateway ? `the server refused it (ref: ${code})` : text;
+}
+
+/**
  * The sentence for `error` (an `ApiError`, or anything with a message):
  * the page's own for its code, else a common one, else `fallback` applied to
- * the raw text. A suffixed code (`device_change_too_soon: <instant>`) is
- * matched on the code alone.
+ * why it failed (`REASONS`, `GATEWAY`; "the server refused it (ref: <code>)"
+ * for a code with no sentence; the message itself when it is already words,
+ * as a validation 422's are). A suffixed code (`device_change_too_soon:
+ * <instant>`) is matched on the code alone.
  */
 export function explain(error, sentences = {}, fallback = (text) => text) {
   const text = String(error?.message ?? error ?? "");
   const code = error?.code ?? errorDetail(text).code;
-  return sentences[code] ?? COMMON[code] ?? fallback(text);
+  return sentences[code] ?? COMMON[code] ?? fallback(reason(error, code, text));
 }
 
 /**
@@ -48,13 +96,13 @@ export const ACCOUNT = {
     licence: "Licence",
     seating: "Seats",
     ends: "Ends",
-    graceEnds: "Grace period ends",
+    graceEnds: "After-expiry grace ends",
     lease: "Shared seat",
   },
   modes: { licensed: "Licensed", demo: "Demo" },
   kinds: { individual: "Individual", institution: "Institution" },
   seating: { assigned: "One seat each", floating: "Shared across the institution" },
-  noLicence: "None — this account is on the demo",
+  noLicence: "None — this account is on Demo",
   noEnd: "No end date",
   leaseHeld: (until) => `Held until ${until}`,
   leaseNone: "Not held right now",
@@ -62,7 +110,7 @@ export const ACCOUNT = {
   // the server, but does not need to on every launch.
   offline:
     "On a phone, licensed features keep working offline until the offline " +
-    "grace period ends; then the app falls back to the demo limits until it " +
+    "allowance runs out; then the app falls back to Demo limits until it " +
     "reconnects. Analyses you already have stay available either way.",
   // Deleting needs the phone's device signature, so it is done in the app.
   // One account signs in to both apps, so the sign-in goes for both.
@@ -102,7 +150,7 @@ export const ACCOUNT = {
         "Reload the page to see it.",
       seatsExhausted: "Every seat on that institution licence is taken. Ask your institution's " +
         "IT to free or add one.",
-      seatDisabled: "Your institution has put your seat on hold. Ask your institution's IT to " +
+      seatDisabled: "Your institution has paused your seat. Ask your institution's IT to " +
         "resume it.",
       deviceInUse: "Your phone is registered to another Semper account. Sign in with that " +
         "account, or email support@sempermechanics.com to release the phone.",

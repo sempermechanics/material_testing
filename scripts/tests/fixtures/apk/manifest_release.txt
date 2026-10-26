@@ -21,6 +21,15 @@ N: android=http://schemas.android.com/apk/res/android (line=2)
         A: http://schemas.android.com/apk/res/android:extractNativeLibs(0x010104ea)=false
         A: http://schemas.android.com/apk/res/android:networkSecurityConfig(0x01010527)=@0x7f160004
         A: http://schemas.android.com/apk/res/android:dataExtractionRules(0x0101063e)=@0x7f160001
+          E: meta-data (line=45)
+            A: http://schemas.android.com/apk/res/android:name(0x01010003)="firebase_crashlytics_collection_enabled" (Raw: "firebase_crashlytics_collection_enabled")
+            A: http://schemas.android.com/apk/res/android:value(0x01010024)=false
+          E: meta-data (line=48)
+            A: http://schemas.android.com/apk/res/android:name(0x01010003)="firebase_analytics_collection_enabled" (Raw: "firebase_analytics_collection_enabled")
+            A: http://schemas.android.com/apk/res/android:value(0x01010024)=false
+          E: meta-data (line=53)
+            A: http://schemas.android.com/apk/res/android:name(0x01010003)="google_analytics_adid_collection_enabled" (Raw: "google_analytics_adid_collection_enabled")
+            A: http://schemas.android.com/apk/res/android:value(0x01010024)=false
           E: activity (line=49)
             A: http://schemas.android.com/apk/res/android:name(0x01010003)="com.sempermechanics.semper.ui.splash.SplashActivity" (Raw: "com.sempermechanics.semper.ui.splash.SplashActivity")
             A: http://schemas.android.com/apk/res/android:exported(0x01010010)=true

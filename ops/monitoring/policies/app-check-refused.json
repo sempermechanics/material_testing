@@ -1,0 +1,43 @@
+{
+  "displayName": "semper: __SERVICE__ App Check refusing requests",
+  "documentation": {
+    "content": "AUTH_DENIED with stage app_check: APP_CHECK_MODE=enforce is refusing app requests (403 app_check_required). A broken App Check provider or a release without Play Integrity locks every phone out of the cloud. semper_app_check_failed shows which app and build. Runbook: ops/monitoring/README.md#app-check-refused",
+    "mimeType": "text/markdown"
+  },
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "AUTH_DENIED stage=app_check > 0 / 10 min",
+      "conditionThreshold": {
+        "filter": "metric.type=\"logging.googleapis.com/user/semper_auth_denied\" AND resource.type=\"cloud_run_revision\" AND metric.label.stage=\"app_check\"",
+        "aggregations": [
+          {
+            "alignmentPeriod": "600s",
+            "perSeriesAligner": "ALIGN_DELTA",
+            "crossSeriesReducer": "REDUCE_SUM",
+            "groupByFields": [
+              "resource.label.service_name"
+            ]
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 0,
+        "duration": "0s",
+        "trigger": {
+          "count": 1
+        }
+      }
+    }
+  ],
+  "alertStrategy": {
+    "autoClose": "86400s"
+  },
+  "severity": "ERROR",
+  "notificationChannels": [
+    "__NOTIFICATION_CHANNEL__"
+  ],
+  "userLabels": {
+    "app": "semper",
+    "managed_by": "ops-monitoring"
+  }
+}

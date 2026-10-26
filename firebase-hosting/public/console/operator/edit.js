@@ -107,6 +107,7 @@ $("editForm").addEventListener("submit", async (ev) => {
         `${lic.duration === "timed" ? ` instead of ${isoDay(lic.expiresAt)}` : " (it was perpetual)"}` +
         ", for everyone on it." +
         `\n\nType ${label} to confirm:`,
+      label: "Licence key",
       anchor: $("editHint"),
     });
     if (typed !== label) {

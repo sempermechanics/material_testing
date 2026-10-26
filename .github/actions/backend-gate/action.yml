@@ -25,15 +25,17 @@ runs:
         pip install -r requirements-test.txt
 
     # Covers what we depend on (secret scanning covers what we commit). Audits
-    # the pinned runtime set, not the test tooling. If a CVE lands with no
-    # fixed release, pin the advisory with --ignore-vuln rather than deleting
-    # the gate.
+    # the hashed lock the image installs (every transitive pin), not just the
+    # direct pins in requirements.txt: pyjwt, urllib3 and certifi advisories
+    # sat in the lock while the txt audit passed (readiness TE5-001). Not the
+    # test tooling. If a CVE lands with no fixed release, pin the advisory with
+    # --ignore-vuln rather than deleting the gate.
     - name: Audit dependencies
       shell: bash
       working-directory: backend
       run: |
         pip install pip-audit==2.10.1
-        pip-audit -r requirements.txt --strict
+        pip-audit -r requirements.lock --require-hashes --disable-pip --strict
 
     # scripts/ included deliberately: the migration runner and the ops scripts
     # are run by hand against production and were once linted nowhere.

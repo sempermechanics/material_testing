@@ -43,8 +43,10 @@ backend/      FastAPI on Cloud Run — routers in backend/app/routers/, Firestor
 firebase-hosting/  Auth continue URLs, asset links, generated legal pages
 ```
 
-Bump the engine by changing the `engine` gitlink. Its host / sanitizer / DICe suites run
-in the engine repo; this CI only proves the pin **links** (emulator x86_64, release arm64).
+Bump the engine by changing the `engine` gitlink, to a `v*` tag and never backwards
+(`engine-pin`). Its host / sanitizer / DICe suites run in the engine repo; this CI proves
+the pin **links** (emulator x86_64, release arm64) and reruns the host suite under
+ASan+UBSan at the pin (`engine-host-sanitized`).
 
 ## Runtime
 
@@ -134,9 +136,11 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **[Checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md) still open:** monitoring `--apply` (§5;
   no notification channel exists yet); staff/IT phones re-registering with TOTP, the 24 h log
   watch, ending the staging QC test account, and the erasure check (§6; the audit backfill, the
-  `expireAt` TTL and the locked `audit-trail` log bucket went in 2026-10-23). The posture check's 18 FAILs
-  ([gate](docs/ops/PRODUCTION_READINESS_GATE.md)) are console or `gcloud` changes. Optional and
-  unset: TD-215 (entitlement key), TD-309.
+  `expireAt` TTL and the locked `audit-trail` log bucket went in 2026-10-23). The posture check's FAILs (18 on
+  2026-10-22; 17 once 3.4's `CHECK_REVOKED_ON_STEP_UP` went live 2026-10-23, not re-run;
+  [gate](docs/ops/PRODUCTION_READINESS_GATE.md)) are console or `gcloud` changes. Optional and
+  unset: TD-215 (entitlement key), TD-309. Every Admin action is one table:
+  [gate § Admin actions](docs/ops/PRODUCTION_READINESS_GATE.md#admin-actions-external).
 - **App** `com.sempermechanics.semper` ([ADR-019](docs/adr/ADR-019-sempermechanics-app-id.md)).
   Latest release `v1.2-beta.4` (versionCode 1036, `33dce87d`, 2026-10-17, engine 0.4.2).
   On `main` since: **minSdk 30**, version gate, EMM config, AAB
@@ -148,11 +152,17 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Release blockers:** TD-229 (Play account; TD-226 App Check and TD-230/TD-231 follow it),
   TD-232 (Data safety answers ready; two owner decisions, then submit), TD-219's device checks,
   counsel on the Terms (TD-277).
-- **material_testing** merges this `main` (last `9d116f2`, material_testing#142, 2026-10-22;
+- **material_testing** merges this `main` (last `968637cb`, material_testing#144, 2026-10-22;
   [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); it released `v1.4-beta.2` 2026-10-17.
+- **Readiness run 2026-10-24** (`claude/readiness-20261024-merge`, not merged or deployed):
+  backend fixes waiting on a deploy (the lock's pyjwt/urllib3/certifi bump, kill switches on
+  `GET …/uploads` and `PUT …/metadata`, an audit-history outage as 503, the `/readyz` budget,
+  `--no-access-log`, the roster import codes, the quota wording); the deploy is the Admin's.
 - **CI.** Tiers follow the diff, coverage floors rise with every test PR
   ([TESTING.md](docs/app/TESTING.md#coverage-floors)), and `main` requires `CI OK`. Tier 3 signs
-  in to live staging, so a staging backend behind `main` fails it.
+  in to live staging, so a staging backend behind `main` fails it. Always-on gates now include
+  `engine-pin` and `console-a11y` (axe + Playwright); `engine-host-sanitized` follows Tier 3.
+  The backend's OpenAPI snapshot is rewritten with `UPDATE_OPENAPI_SNAPSHOT=1` ([ADR-029](docs/adr/ADR-029-api-contract-snapshot.md)).
 - **Owed.** A device smoke of the next release ([RELEASING.md](docs/ops/RELEASING.md) step 5);
   the on-device characterization at the 0.6.1 pin (TD-212); Pixel 6 benchmarks for #435;
   ADR-015's queued-work upgrade check; transfer notifications and AVI import on a device
@@ -170,7 +180,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - Restore on a new device has an order: sign in, let one authed request bind the lock, then restore — [§20.10](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - Licence terms are mirrored onto users, so editing a licence reaches nobody without `update_license`'s fan-out — [§20.6](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - Demo uploads silently; only retrieval is licence-gated. Gating `POST /v1/sessions` on the licence would loop old builds on 403; a kill switch refuses it with 503 `feature_paused`, which every build retries — [§20.3](docs/backend/CLOUD_ARCHITECTURE_GCP.md), [§20.14](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
-- Share has no backend route: the licence check and the signed token are its only gate, so a modified APK can share (accepted, TD-274). Anything that touches the cloud is checked by the server — [ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md).
+- Share has no backend route: the cached `/v1/config` licence is its only gate. A signed token can narrow it, never widen it, and none is issued until TD-215, so today the TLS-delivered cache alone decides, and a modified APK can share (accepted, TD-274). Anything that touches the cloud is checked by the server — [ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md).
 - Console CSP is `script-src 'self'` with no `'unsafe-inline'`: inline scripts never run — [§20.8](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - `check_console.py` requires `__API_BASE_URL__` / `__API_ORIGIN__` to stay placeholders; deploy through `scripts/deploy-console.sh` — [§20.8](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - `SCHEMA_VERSION` is 2 and every `campus` / `plan` skew fallback is temporary; retire in the stated order — [§20.5](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
@@ -182,5 +192,5 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - Viewer screens read `ViewerArgs.from(intent, …)`, never `intent.get…Extra(IntentKeys…)`; a new viewer field goes in `ViewerArgs`, its default and its `SessionRecord` mapping — [ADR-003](docs/adr/ADR-003-viewerargs-read-side.md).
 - A new wizard input must survive a kill: scalars go in `WizardState`'s Bundle, bytes and lists in `WizardDraft`; and `cacheDir/temp_deformed` is only safe from the janitor while the draft is live — [ADR-005](docs/adr/ADR-005-wizard-process-death.md).
 - After Compute, read the run's `RunSpec` (`BatchAnalysisOutcome.spec`) and the saved row its outcome carries (`.record`, opened through `ViewerArgs.of`), never the wizard's sliders or ROI vars: they stay editable and drift — [ADR-004](docs/adr/ADR-004-runspec.md).
-- Since engine 0.2.3 two runs of one build give bit-identical `.dat` whatever the thread count (TD-65), so a `.dat` hash can prove "engine unchanged" again and any run-to-run difference is a defect — `EnginePipelineSmokeTest.repeatSolveIsBitIdentical`, `engine/tests/integration/test_full_field_determinism.cpp`.
+- Since engine 0.2.3 two runs of one build on one device give bit-identical `.dat` (TD-65), so a `.dat` hash can prove "engine unchanged" on that device and any run-to-run difference there is a defect. Not across thread counts: the engine pins its threads to the core count and says invariance across them is no contract (`engine/tests/integration/test_full_field_contracts.cpp:437-441`); no test varies it — `EnginePipelineSmokeTest.repeatSolveIsBitIdentical`, `engine/tests/integration/test_full_field_determinism.cpp`.
 - `ConvergenceGate` is batch-only; a sweep runs its whole plan, smallest subset first — [ConvergenceGate.kt](app/src/main/java/com/sempermechanics/semper/ui/analysis/run/ConvergenceGate.kt).

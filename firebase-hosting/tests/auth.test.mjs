@@ -440,7 +440,8 @@ test("an account with no factor must enrol TOTP in the page before anything else
   input.value = "000000";
   card.querySelector(".confirm").click();
   await settle();
-  assert.match(card.querySelector(".feedback").textContent, /auth\/invalid-verification-code/);
+  assert.match(card.querySelector(".feedback").textContent, /^That code was not accepted\. /);
+  assert.doesNotMatch(card.querySelector(".feedback").textContent, /auth\//, "a sentence, not the code");
   assert.equal(card.querySelector(".confirm").disabled, false);
   assert.ok(!card.removed);
 

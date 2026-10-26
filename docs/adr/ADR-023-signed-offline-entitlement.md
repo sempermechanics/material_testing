@@ -12,8 +12,11 @@
 > decision 3's triggers: a first sign-in asks `/v1/config` again once the device
 > is registered, before Home opens (`EntitlementRefresh.afterSignIn`,
 > `app/src/main/java/com/sempermechanics/semper/data/account/entitlement/EntitlementRefresh.kt:81`),
-> and "Refresh licence" asks on demand. Share, which has no backend route, is
-> the one paid feature the token alone decides (TD-274).
+> and "Refresh licence" asks on demand. Share has no backend route, so no server
+> check decides it: the app shares when the cached `/v1/config` licenses it, and
+> a token can only narrow that (decision 7). With no token (none is issued until
+> a signing key exists, TD-215) or one that does not verify, share and the
+> offline licence rest on the TLS-delivered cache alone (TD-274).
 
 ## Context
 
@@ -39,19 +42,19 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
    of 30; ES256 verifies with the platform's own `Signature("SHA256withECDSA")`
    on every supported version and needs no new dependency on either side (the
    backend already pins `cryptography`).
-2. **The contract** (`backend/app/entitlement_token.py:8-43`, the app's
+2. **The contract** (`backend/app/entitlement_token.py:13-48`, the app's
    `data/account/entitlement/EntitlementVerifier.kt:53`):
    - header `{"alg":"ES256","kid":"<kid>","typ":"semper-ent+jws"}`; signature
-     JOSE raw `r‖s`, 64 bytes, not DER (`entitlement_token.py:115-124`);
+     JOSE raw `r‖s`, 64 bytes, not DER (`entitlement_token.py:120-129`);
    - claims `iss` = `semper-api`, `sub` (uid), `app`, `dev` (device id), `dkt`
      (base64url SHA-256 of the device key's DER SubjectPublicKeyInfo,
      `:102-111`), `mode`, `features` {`share`, `backup`, `maxAnalyses`}, `lic`,
      `iat`, `refreshAfter` = `iat` + 24 h, `graceUntil`, `exp` = `graceUntil`
      (`:210-242`);
    - `graceUntil` is `iat` + `ENTITLEMENT_OFFLINE_GRACE_DAYS` (default 14,
-     `backend/app/config.py:275`), capped for a licensed account at the
+     `backend/app/config.py:296`), capped for a licensed account at the
      licence's end plus its own grace (`licenseGraceEndsAt`) and, on a floating
-     seat, at the lease's end (`leaseExpiresAt`) (`entitlement_token.py:193-207`);
+     seat, at the lease's end (`leaseExpiresAt`) (`entitlement_token.py:198-212`);
    - `lic` is the licence id only while `mode` is `licensed`; a demo token
      carries `lic: null` and an uncapped grace (`:237`);
    - `mode` and `features` are read from the same resolved config the plain
@@ -59,7 +62,7 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
      rides in (`backend/app/routers/account.py:145-189`).
 3. **Delivery.** `GET /v1/config` adds `entitlement` when the service holds a
    key, the caller sent `X-Device-Id`, and that device is an active device of
-   this account with a registered key (`entitlement_token.py:269-302`). Anything
+   this account with a registered key (`entitlement_token.py:274-307`). Anything
    else omits the field and fails nothing (`routers/account.py:175-189`). After
    each floating-seat checkout or heartbeat the app fetches `/v1/config` again,
    so the token follows the lease; when that fetch fails it queues the one-off
@@ -76,9 +79,9 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
 4. **The key.** A P-256 private key in Secret Manager, mounted as
    `ENTITLEMENT_SIGNING_KEY` only when the repo variable
    `ENTITLEMENT_SIGNING_SECRET` names a secret that exists
-   (`.github/workflows/deploy-backend.yml:258-278`), never a plain env value or
+   (`.github/workflows/deploy-backend.yml:266-286`), never a plain env value or
    the repository. Its `kid` is `ENTITLEMENT_KID` (default `ent-1`,
-   `config.py:271`). Setup: [BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A8.
+   `config.py:292`). Setup: [BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A8.
 5. **Pinning and rotation by `kid`.** Release builds pin public keys from
    `SEMPER_ENTITLEMENT_PUBKEYS`, `kid:base64SPKI` entries separated by commas
    (`app/build.gradle.kts:88-93`; parsed by `EntitlementPins.parse`,
@@ -202,7 +205,7 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
 - minSdk 30: Android 7–10 phones can no longer install or update the app.
 - Release gate per app: `/v1/config` sends each app its own
   `minSupportedVersionCode` / `recommendedVersionCode`
-  (`settings.release_gate(app)`, `backend/app/config.py:293-300`), since Semper and
+  (`settings.release_gate(app)`, `backend/app/config.py:314-321`), since Semper and
   Material Testing number their builds separately.
 
 **Decision note (2026-10-18): account deletion and the shared Firebase user.**

@@ -827,7 +827,7 @@ also refuses when the device's stored analyses, every account's, reach the cap
 `409 device_quota_exceeded` that names neither the count nor the owners (its
 own code since TD-279, so the app does not lift it on the account's count). A
 session with no `deviceId` counts toward no device. `GET /v1/sessions`
-`quota.used` stays the account's count (`sessions.py:131`). A demo create costs
+`quota.used` stays the account's count (`backend/app/routers/sessions.py:98`). A demo create costs
 11 reads, not 9 ([request-volume.md](../perf/request-volume.md) Pass 4). After
 a staff device release, or a staff or IT licence lock clear, the phone no longer
 counts its previous holder's analyses: `forget_device_sessions` drops their
@@ -2723,7 +2723,7 @@ re-resolves the account (`get_or_create_user` → `ensure_entitlement`) and, wit
 
 **Kill switches are enforced.** `KILL_SWITCHES` is published on `/v1/config`
 *and* refused server-side by `deps.unless_paused`
-(`backend/app/deps.py:295-330`): after the token check, before the route's own
+(`backend/app/deps.py:301-336`): after the token check, before the route's own
 parameters, so a paused request reads nothing and leaves a signed request's
 nonce unspent. The answer is `503 feature_paused` with `Retry-After: 300`, logged
 `event="feature_paused"` with `switch` and `routeTemplate`. An upload keeps

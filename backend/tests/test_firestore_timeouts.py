@@ -239,7 +239,7 @@ def test_the_runtime_check_names_a_call_that_skipped_the_helpers(store):
     in UNTIMED. Simulate one from an `app.*` module's globals."""
     ref = _base.db().collection("users").document("u1")
     namespace = {"__name__": "app.repo.example", "ref": ref}
-    exec(compile("ref.get()", "app/repo/example.py", "exec"), namespace)
+    exec(compile("ref.get()", "app/repo/example.py", "exec"), namespace)  # noqa: S102 - a fixed one-line snippet, run as an app module
     try:
         assert fake_firestore.UNTIMED == [("get", "app.repo.example", 1)]
     finally:

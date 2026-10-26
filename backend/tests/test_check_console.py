@@ -140,13 +140,13 @@ def test_a_clean_tree_passes(checker, tree):
 
 
 def test_the_cli_exits_0_on_a_clean_tree_and_1_with_the_failures_listed(tree):
-    ok = subprocess.run([sys.executable, str(_SCRIPT), "--root", str(tree)],
+    ok = subprocess.run([sys.executable, str(_SCRIPT), "--root", str(tree)],  # noqa: S603 - argv is sys.executable and this repo's own script, no shell
                         capture_output=True, text=True, encoding="utf-8")
     assert ok.returncode == 0, ok.stderr
     assert "Console checks passed." in ok.stdout
 
     _edit(_console(tree, "operator", "page.js"), '$("go")', '$("gone")')
-    bad = subprocess.run([sys.executable, str(_SCRIPT), "--root", str(tree)],
+    bad = subprocess.run([sys.executable, str(_SCRIPT), "--root", str(tree)],  # noqa: S603 - argv is sys.executable and this repo's own script, no shell
                          capture_output=True, text=True, encoding="utf-8")
     assert bad.returncode == 1
     assert "Console checks failed" in bad.stderr
@@ -280,6 +280,82 @@ def test_a_code_the_backend_does_not_have_fails(checker, tree):
 
 def test_a_reconciliation_reason_counts_as_a_backend_code(checker, tree):
     _edit(_console(tree, "page.js"), '"known_code"', '"seat_gone"')
+    assert checker.run(str(tree)) == []
+
+
+# ---------------- 13: every code a console route names has words ----------
+def _router(tree: Path, name: str, body: str) -> None:
+    _write(tree / "backend" / "app" / "routers" / name,
+           "from fastapi import APIRouter, HTTPException\n\nfrom app import errors\n\n" + body)
+
+
+def _unworded(tree: Path) -> None:
+    _edit(tree / "backend" / "app" / "errors.py", 'KNOWN_CODE = "known_code"\n',
+          'KNOWN_CODE = "known_code"\nOTHER_CODE = "other_code"\n')
+
+
+def test_a_code_a_called_route_names_with_no_words_fails(checker, tree):
+    _unworded(tree)
+    _router(tree, "me.py", 'router = APIRouter()\n\n\n@router.get("/v1/me")\n'
+                           "def me():\n    raise HTTPException(404, errors.OTHER_CODE)\n")
+    found = checker.run(str(tree))
+    # Every console page calls GET /v1/me, and none has words for it.
+    assert len(found) == 4, found
+    assert all("'other_code' can come back from GET /v1/me" in f and "(ref: other_code)" in f
+               for f in found), found
+
+
+def test_a_code_with_words_on_the_page_passes(checker, tree):
+    _unworded(tree)
+    _router(tree, "me.py", 'router = APIRouter()\n\n\n@router.get("/v1/me")\n'
+                           "def me():\n    raise HTTPException(404, errors.KNOWN_CODE)\n")
+    _edit(_console(tree, "shared.js"), "export async function api",
+          'export const SAID = {\n  other_code: "Words for it.",\n};\nexport async function api')
+    assert checker.run(str(tree)) == []
+    _router(tree, "me.py", 'router = APIRouter()\n\n\n@router.get("/v1/me")\n'
+                           "def me():\n    raise HTTPException(404, errors.OTHER_CODE)\n")
+    assert checker.run(str(tree)) == []
+
+
+def test_a_code_named_by_a_helper_of_the_route_counts(checker, tree):
+    _unworded(tree)
+    _router(tree, "me.py", "router = APIRouter(prefix=\"/v1\")\n\n\ndef _refuse():\n"
+                           "    raise HTTPException(409, errors.OTHER_CODE)\n\n\n"
+                           '@router.get("/me")\ndef me():\n    _refuse()\n')
+    found = checker.run(str(tree))
+    assert len(found) == 4 and all("GET /v1/me" in f for f in found), found
+
+
+def test_a_route_the_consoles_do_not_call_is_not_read(checker, tree):
+    _unworded(tree)
+    # Another method on the same path (the app's), and another path.
+    _router(tree, "me.py", 'router = APIRouter()\n\n\n@router.delete("/v1/me")\n'
+                           "def gone():\n    raise HTTPException(409, errors.OTHER_CODE)\n\n\n"
+                           '@router.get("/v1/sessions")\n'
+                           "def sessions():\n    raise HTTPException(409, errors.OTHER_CODE)\n")
+    assert checker.run(str(tree)) == []
+
+
+def test_a_mounted_roster_route_is_matched_on_its_tail(checker, tree):
+    _unworded(tree)
+    _router(tree, "roster.py", "def roster_router():\n    router = APIRouter()\n\n"
+                               '    @router.post("/seats")\n    def add():\n'
+                               "        raise HTTPException(409, errors.OTHER_CODE)\n\n"
+                               "    return router\n")
+    _router(tree, "institutions.py", "from app.routers.roster import roster_router\n\n"
+                                     "router = APIRouter()\nrouter.include_router(roster_router(), "
+                                     'prefix="/v1/institutions/licenses/{license_id}")\n')
+    _edit(_console(tree, "institution", "page.js"), "export async",
+          'export const add = (root) => api(`${root}/seats`, { method: "POST" });\nexport async')
+    _one_failure(checker, tree, "institution",
+                 "'other_code' can come back from POST /v1/institutions/licenses/{license_id}/seats")
+
+
+def test_a_row_outcome_code_is_not_a_refusal(checker, tree):
+    _edit(tree / "backend" / "app" / "errors.py", 'KNOWN_CODE = "known_code"\n',
+          'KNOWN_CODE = "known_code"\nROSTER_ROW_UNPROCESSED = "roster_row_unprocessed"\n')
+    _router(tree, "me.py", 'router = APIRouter()\n\n\n@router.get("/v1/me")\n'
+                           "def me():\n    return {\"error\": errors.ROSTER_ROW_UNPROCESSED}\n")
     assert checker.run(str(tree)) == []
 
 

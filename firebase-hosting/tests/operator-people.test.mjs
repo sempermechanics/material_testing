@@ -10,6 +10,7 @@ import { test, reset, settle, json, net, confirms, alerts, sent, $, loadAuth, de
 import { IND, openDesk, status, tableRows, rowButton, offline, bodyOf, PENDING } from "./operator-desk.mjs";
 
 await loadAuth();
+const { when } = await import("../public/console/util.js");
 
 beforeEach(reset);
 afterEach(async () => {
@@ -29,7 +30,24 @@ test("a refused New device says so", async () => {
   confirms.answer(true);
   await click(rowButton("device", IND.id));
   assert.match(confirms.asked[0], /^Unbind SEMP-IND1 from the device it is on\?\n\nThe next device they sign in on takes it\./);
-  assert.deepEqual(status(), ["Could not unbind: license_revoked", "muted err"]);
+  assert.deepEqual(status(), ["Could not unbind: the server refused it (ref: license_revoked)", "muted err"]);
+});
+
+test("after a licence's row is redrawn, focus is back on that row", async () => {
+  await openDesk({ routes: { [`PATCH /v1/admin/licenses/${IND.id}`]: () => json(200, { ...IND, note: "moved" }) } });
+  const device = rowButton("device", IND.id);
+  device.focus();
+  device.closest("details").open = true;
+  confirms.answer(true);
+  await click(device);
+  // The menu closed when its item was chosen, and the row is a new element.
+  assert.equal(document.activeElement.localName, "summary");
+  assert.equal(document.activeElement.closest("tr").cells[0].textContent, "SEMP-IND1");
+  const edit = rowButton("edit", IND.id);
+  edit.focus();
+  $("filter").dispatch("input");
+  assert.equal(document.activeElement.dataset.edit, IND.id, "a redraw keeps the focused button");
+  assert.notEqual(document.activeElement, edit);
 });
 
 const HISTORY = `GET /v1/admin/licenses/${IND.id}/device-history?limit=30`;
@@ -44,11 +62,13 @@ test("a device history line names what was left, signed out and bound, per app",
     { ts: "2026-10-07T11:25Z", action: "bind", uid: "u1" },
   ] }) } });
   await click(rowButton("history", IND.id));
+  // Each move's time as every other time on the desk is shown (when): local,
+  // its zone named, not the raw ISO string.
   assert.deepEqual(alerts, [
     "Device history for SEMP-IND1\n\n" +
-    "2026-10-07T11:21Z  clear  by staff  left dev-1  signed out dev-9  left mt-1 (Material Testing)\n" +
-    "?  clear  by —  left dev-2\n" +
-    "2026-10-07T11:25Z  bind  by u1",
+    `${when("2026-10-07T11:21Z")}  clear  by staff  left dev-1  signed out dev-9  left mt-1 (Material Testing)\n` +
+    "—  clear  by —  left dev-2\n" +
+    `${when("2026-10-07T11:25Z")}  bind  by u1`,
   ]);
 });
 
@@ -134,7 +154,7 @@ test("a refused approval says why and leaves the button to press again", async (
   } });
   const approve = $("userRows").querySelector('button[data-approve="u2"]');
   await click(approve);
-  assert.deepEqual(status(), ["Could not approve: user_not_found", "muted err"]);
+  assert.deepEqual(status(), ["Could not approve: No Semper account has that address.", "muted err"]);
   assert.equal(approve.disabled, false);
   assert.deepEqual(sent(/users/), [PENDING, "POST /v1/admin/users/u2/approve"], "not re-read after a refusal");
 });
@@ -149,10 +169,20 @@ test("a click in the pending table off any Approve button sends nothing", async 
 
 const RELEASE = "POST /v1/admin/device-releases";
 
-async function release(email) {
+async function release(email, confirm = true) {
   $("releaseEmail").value = email;
+  if (email.trim()) confirms.answer(confirm);
   await click($("releasePhone"));
 }
+
+test("Release phone asks first, naming the account; declining sends nothing", async () => {
+  await openDesk();
+  await release("pat@lab.org", false);
+  assert.match(confirms.asked[0], /^Release the phone of pat@lab\.org\?/);
+  assert.deepEqual(sent(/device-releases/), []);
+  assert.equal($("releaseEmail").value, "pat@lab.org");
+  assert.equal($("releasePhone").disabled, false);
+});
 
 test("releasing a phone needs an address; nothing is sent without one", async () => {
   await openDesk();
@@ -191,8 +221,8 @@ test("a refused release is explained, and the address stays for another try", as
     [() => json(409, { detail: "license_device_clear_required" }),
       "Could not release: That account is licensed: use New device on its licence."],
     [() => json(429, { detail: "rate_limited" }), "Could not release: Too many requests just now — wait a moment and try again."],
-    [() => json(404, { detail: "user_not_found" }), "Could not release: user_not_found"],
-    [offline, "Could not release: Failed to fetch"],
+    [() => json(404, { detail: "user_not_found" }), "Could not release: No Semper account has that address."],
+    [offline, "Could not release: The server could not be reached — check your connection and try again."],
   ]) {
     reset();
     await openDesk({ routes: { [RELEASE]: reply } });

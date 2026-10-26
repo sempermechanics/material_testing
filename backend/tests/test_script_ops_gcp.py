@@ -13,6 +13,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -37,9 +38,12 @@ def _stub_path(tmp_path: Path) -> Path:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
     stub = _FIX / "stub_gcloud.py"
+    # The interpreter running the tests, not `env python3`: a test below
+    # shadows python3 on PATH.
+    body = stub.read_text(encoding="utf-8").split("\n", 1)[1]
     for name in ("gcloud", "curl"):
         target = bin_dir / name
-        target.write_text(stub.read_text(encoding="utf-8"), encoding="utf-8")
+        target.write_text(f"#!{sys.executable}\n{body}", encoding="utf-8")
         target.chmod(0o755)
     return bin_dir
 
@@ -59,7 +63,7 @@ def _run(tmp_path: Path, script: Path, scenario: str | Path, *args: str, state: 
         "STUB_STATE": str(tmp_path / state),
         "HOME": str(tmp_path),
     }
-    proc = subprocess.run(["bash", str(script), *args], capture_output=True, text=True, env=env, timeout=120)
+    proc = subprocess.run(["bash", str(script), *args], capture_output=True, text=True, env=env, timeout=120)  # noqa: S603,S607 - fixed bash and this repo's own script, no shell
     calls = log.read_text(encoding="utf-8").splitlines()
     return proc, calls
 
@@ -138,19 +142,52 @@ def test_posture_reports_each_failure(tmp_path):
     assert status == "UNKNOWN" and "PERMISSION_DENIED" in detail
 
 
+# The command paths check_gcp_posture.sh's gc() lets through, word for word
+# from the start of the call (TE6-010): the verb is matched where gcloud reads
+# it, not anywhere in the arguments.
+_READ_COMMANDS = (
+    "projects describe ", "projects get-iam-policy ", "alpha resource-manager liens list ",
+    "resource-manager tags bindings list ", "services api-keys list ", "auth print-access-token ",
+    "billing projects describe ", "billing budgets list ", "run services describe ",
+    "firestore databases describe ", "firestore backups schedules list ", "storage ls ",
+    "iam roles describe ",
+)
+
+
 def test_posture_only_reads(tmp_path):
-    """Every gcloud call is a describe / list / get-iam-policy / token print,
-    and curl is only ever a GET."""
+    """Every gcloud call starts with one of the read-only command paths, and
+    curl is only ever a GET."""
     _, calls = _run(tmp_path, _POSTURE, "posture_pass", *_ARGS)
-    read_verbs = {"describe", "list", "ls", "get-iam-policy", "print-access-token"}
+    assert any(c.startswith("gcloud ") for c in calls)
     for call in calls:
         words = call.split()
         if words[0] == "gcloud":
-            assert read_verbs & set(words), call
-            assert not {"create", "update", "delete", "set-iam-policy", "add-iam-policy-binding",
-                        "remove-iam-policy-binding", "patch"} & set(words), call
+            assert (call[len("gcloud "):] + " ").startswith(_READ_COMMANDS), call
         else:
             assert words[:2] == ["curl", "GET"], call
+
+
+@pytest.mark.parametrize("call", [
+    "run services update semper-api --update-env-vars APP_CHECK_MODE=off list",
+    "projects delete describe",
+    "projects delete demo-app-prod --format=json describe",
+    "--project demo-app-prod projects describe",
+    "storage rm gs://demo-backups/firestore/ ls",
+    "services api-keys delete key-1 list",
+])
+def test_posture_wrapper_matches_the_verb_position(tmp_path, call):
+    """TE6-010: a read verb anywhere in the arguments used to let a write
+    through (`gc projects delete describe` ran)."""
+    script = _POSTURE.read_text(encoding="utf-8")
+    probe = tmp_path / "probe.sh"
+    start = script.index("gc() {")
+    end = script.index("\n}\n", start) + 3
+    probe.write_text("set -euo pipefail\nWORK=$(mktemp -d)\n" + script[start:end]
+                     + f'gc {call}\necho "ran"\n', encoding="utf-8")
+    proc, calls = _run(tmp_path, probe, "posture_pass")
+    assert proc.returncode == 3, proc.stdout + proc.stderr
+    assert "refusing non-read-only gcloud call" in proc.stderr
+    assert calls == [] and "ran" not in proc.stdout
 
 
 def test_posture_backups_pass_on_a_recent_export_without_a_schedule(tmp_path):
@@ -216,6 +253,35 @@ def test_posture_wrapper_refuses_a_write(tmp_path):
     assert calls == [] and "ran" not in proc.stdout
 
 
+def test_posture_runs_where_python3_is_only_the_store_alias(tmp_path):
+    """TE6-017: under Git Bash on Windows `python3` is the Microsoft Store
+    alias (prints "Python was not found", exits 49) and the interpreter is
+    `python`; native argv conversion there is no place for multi-line `-c`
+    programs. Both are emulated: python3 fails, and python refuses any
+    argument holding a newline."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "python3").write_text("#!/bin/sh\necho 'Python was not found; run without arguments to install"
+                                     " from the Microsoft Store' >&2\nexit 49\n", encoding="utf-8")
+    (bin_dir / "python").write_text(
+        "#!/bin/sh\nnl='\n'\nfor a in \"$@\"; do\n  case \"$a\" in *\"$nl\"*)\n"
+        "    echo 'multi-line argument refused' >&2; exit 97 ;;\n  esac\ndone\n"
+        f"exec {sys.executable} \"$@\"\n", encoding="utf-8")
+    for name in ("python3", "python"):
+        (bin_dir / name).chmod(0o755)
+    stamp = (datetime.now(timezone.utc) - timedelta(hours=5)).strftime("%Y%m%dT%H%M%SZ")
+    scenario = _variant(tmp_path, {"schedules.json": []}, [{
+        "match": ["storage", "ls", "gs://demo-backups/firestore/demo-app-prod/"],
+        "stdout": f"gs://demo-backups/firestore/demo-app-prod/{stamp}/\n",
+    }])
+    proc, _ = _run(tmp_path, _POSTURE, scenario, *_ARGS, "--backup-bucket", "demo-backups")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    lines = _lines(proc.stdout)
+    assert {s for s, _ in lines.values()} == {"PASS"}, proc.stdout
+    assert "5 h old" in lines[("2.7-backup", "demo-app-prod")][1]
+    assert "refused" not in proc.stderr and "not found" not in proc.stderr
+
+
 def test_posture_requires_its_arguments(tmp_path):
     proc, calls = _run(tmp_path, _POSTURE, "posture_pass", "--app-project", "demo-app-prod")
     assert proc.returncode == 2
@@ -262,7 +328,7 @@ def test_monitoring_policies_are_well_formed(tmp_path):
         for cond in policy["conditions"]:
             threshold = cond["conditionThreshold"]["thresholdValue"]
             assert isinstance(threshold, (int, float)), path.name
-    assert len(names) == 8, "display names identify policies on update, so they must be unique"
+    assert len(names) == len(_POLICIES), "display names identify policies on update, so they must be unique"
     activation = json.loads((out / "policies" / "activation-anomaly.json").read_text(encoding="utf-8"))
     assert activation["conditions"][0]["conditionThreshold"]["thresholdValue"] == 7
     auth = json.loads((out / "policies" / "auth-denied-spike.json").read_text(encoding="utf-8"))
@@ -288,7 +354,9 @@ def test_monitoring_apply_creates_then_updates(tmp_path):
     assert "curl POST https://monitoring.googleapis.com/v3/projects/demo-app-prod/uptimeCheckConfigs" in text
     assert "services?serviceId=semper-api" in text
     assert "serviceLevelObjectives?serviceLevelObjectiveId=availability-995" in text
-    assert text.count("policies create") == 8
+    assert text.count("policies create") == len(_POLICIES)
+    assert text.count("curl POST https://monitoring.googleapis.com/v3/projects/demo-app-prod/uptimeCheckConfigs") \
+        == len(_UPTIME)
     assert text.count("monitoring dashboards create") == len(_DASHBOARDS)
     assert "monitoring dashboards update" not in text
     uptime = json.loads((tmp_path / "a" / "policies" / "uptime-readyz.json").read_text(encoding="utf-8"))
@@ -304,7 +372,7 @@ def test_monitoring_apply_creates_then_updates(tmp_path):
     assert again.returncode == 0, again.stdout + again.stderr
     text = "\n".join(calls)
     assert "metrics create" not in text and text.count("logging metrics update") == len(_METRICS)
-    assert "policies create" not in text and text.count("policies update") == 8
+    assert "policies create" not in text and text.count("policies update") == len(_POLICIES)
     assert "curl PATCH" in text and "curl POST" not in text
     assert "dashboards create" not in text and text.count("monitoring dashboards update") == len(_DASHBOARDS)
     # Each existing dashboard was updated by its own name with the etag it was
@@ -319,9 +387,142 @@ def test_monitoring_apply_creates_then_updates(tmp_path):
         assert board["mosaicLayout"]["tiles"], board["displayName"]
 
 
+def _policy_texts() -> dict[str, str]:
+    return {p.stem: p.read_text(encoding="utf-8") for p in sorted((_MON / "policies").glob("*.json"))}
+
+
+@pytest.mark.parametrize(("metric", "label_filter"), [
+    ("semper_revocation_check_failed", None),
+    ("semper_auth_denied", 'metric.label.stage=\\"app_check\\"'),
+    ("semper_devlock_drop", 'metric.label.stage=\\"mismatch\\"'),
+    ("semper_activation", 'metric.label.outcome=\\"refused\\"'),
+    ("semper_checkout", 'metric.label.outcome=\\"refused\\"'),
+])
+def test_halt_and_runbook_signals_have_an_alert(metric, label_filter):
+    """TE6-002: RELEASING's halt criteria and INCIDENT_RESPONSE name these
+    signals; each had a dashboard and no alert policy."""
+    hits = [name for name, text in _policy_texts().items()
+            for f in _filters(json.loads(text))
+            if f'logging.googleapis.com/user/{metric}\\"' in json.dumps(f["filter"])
+            and (label_filter is None or label_filter in json.dumps(f["filter"]))]
+    assert hits, f"no policy alerts on {metric} {label_filter or ''}"
+
+
+def test_checkout_refusal_alert_leaves_out_a_full_pool():
+    """`no_floating_seat` is a full pool, not an error (RELEASING halt criteria)."""
+    text = _policy_texts()["licensing-refusals"]
+    assert 'metric.label.errorCode!=\\"no_floating_seat\\"' in text
+
+
+def _halt_criteria() -> str:
+    text = (_REPO / "docs" / "ops" / "RELEASING.md").read_text(encoding="utf-8")
+    start = text.index("**Halt criteria.**")
+    return text[start:text.index("\n## ", start)]
+
+
+def test_halt_criteria_read_metrics_that_carry_the_build():
+    """TE6-007: a per-version criterion needs a metric labelled with appId and
+    appVersion (Material Testing numbers its builds from its own counter, so
+    a bare appVersion matches both apps); semper_auth_denied has stage only."""
+    criteria = _halt_criteria()
+    named = set(re.findall(r"`(semper_[a-z_]+)`", criteria))
+    assert {"semper_activation", "semper_checkout", "semper_devlock_drop", "semper_app_check_failed"} <= named
+    labels = _metric_labels()
+    for metric in named:
+        assert {"appId", "appVersion"} <= labels[metric], metric
+    assert "rising" not in criteria
+    assert "(appId, appVersion)" in criteria
+
+
+def test_devlock_halt_criterion_is_a_number():
+    criteria = _halt_criteria()
+    line = criteria[criteria.index("**Device-lock drops:**"):]
+    line = line[:line.index("\n- ")]
+    assert re.search(r"\*\*\d+\*\*", line), line
+    assert "7-day" in line
+
+
+def test_licensing_charts_the_refused_share_by_build():
+    """The activation / checkout criteria compare refused shares; the board
+    plots them per (appId, appVersion), checkout without a full pool."""
+    board = json.loads((_MON / "dashboards" / "licensing.json").read_text(encoding="utf-8"))
+    ratios = {}
+    for tile in board["mosaicLayout"]["tiles"]:
+        for ds in tile["widget"].get("xyChart", {}).get("dataSets", []):
+            ratio = ds["timeSeriesQuery"].get("timeSeriesFilterRatio")
+            if ratio:
+                ratios[_USER_METRIC.search(ratio["denominator"]["filter"]).group(1)] = ratio
+    assert set(ratios) == {"semper_activation", "semper_checkout"}
+    for metric, ratio in ratios.items():
+        assert 'metric.label.outcome="refused"' in ratio["numerator"]["filter"], metric
+        assert "metric.label.outcome" not in ratio["denominator"]["filter"], metric
+        for part in ("numerator", "denominator"):
+            assert ratio[part]["aggregation"]["groupByFields"] == ["metric.label.appId", "metric.label.appVersion"]
+            assert _USER_METRIC.search(ratio[part]["filter"]).group(1) == metric
+    for part in ("numerator", "denominator"):
+        assert 'metric.label.errorCode!="no_floating_seat"' in ratios["semper_checkout"][part]["filter"]
+
+
+def test_every_policy_runbook_anchor_exists():
+    """Each policy's documentation names a README section; it must exist."""
+    readme = (_MON / "README.md").read_text(encoding="utf-8")
+    headings = set(re.findall(r"^### ([a-z0-9-]+)$", readme, re.MULTILINE))
+    for name, text in _policy_texts().items():
+        anchors = re.findall(r"ops/monitoring/README\.md#([a-z0-9-]+)", text)
+        assert anchors, f"{name}: no runbook link"
+        assert set(anchors) <= headings, f"{name}: {set(anchors) - headings} not a README heading"
+
+
+def test_gateway_is_probed_from_outside(tmp_path):
+    """TE6-003: uptime and SLO watched the private run.app service only; the
+    path users take is API Gateway. /healthz (no JWT, security: []) goes
+    through to the backend with the gateway's SA; /v1/config without a token
+    is ESPv2's 401, and a 404 there is a route the config dropped."""
+    out = _dry_render(tmp_path, "--gateway-host", "semper-gw-x.an.gateway.dev")
+    healthz = json.loads((out / "uptime" / "gateway-healthz.json").read_text(encoding="utf-8"))
+    config = json.loads((out / "uptime" / "gateway-config.json").read_text(encoding="utf-8"))
+    for check, path in ((healthz, "/healthz"), (config, "/v1/config")):
+        assert check["monitoredResource"]["labels"]["host"] == "semper-gw-x.an.gateway.dev"
+        assert check["httpCheck"]["path"] == path and check["httpCheck"]["useSsl"] is True
+        # The gateway is public: no OIDC token, unlike the run.app check.
+        assert "serviceAgentAuthentication" not in check["httpCheck"]
+    assert healthz["httpCheck"]["acceptedResponseStatusCodes"] == [{"statusClass": "STATUS_CLASS_2XX"}]
+    assert config["httpCheck"]["acceptedResponseStatusCodes"] == [{"statusValue": 401}]
+    policy = json.loads((out / "policies" / "uptime-gateway.json").read_text(encoding="utf-8"))
+    filters = [c["conditionThreshold"]["filter"] for c in policy["conditions"]]
+    assert len(filters) == 2 and all("uptime_check/check_passed" in f for f in filters)
+    assert policy["severity"] == "CRITICAL"
+
+
+def test_monitoring_apply_looks_up_the_gateway_host(tmp_path):
+    proc, calls = _run(tmp_path, _APPLY, "monitoring_fresh", "--project", "demo-app-prod",
+                       "--notification-channel", "123", "--apply", "--out", str(tmp_path / "a"))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert any(c.startswith("gcloud api-gateway gateways describe semper-gw --location asia-northeast1")
+               for c in calls), calls
+    check = json.loads((tmp_path / "a" / "uptime" / "gateway-config.json").read_text(encoding="utf-8"))
+    assert check["monitoredResource"]["labels"]["host"] == "semper-gw-abc.an.gateway.dev"
+
+
+def test_monitoring_new_thresholds_come_from_flags(tmp_path):
+    out = _dry_render(tmp_path, "--devlock-mismatches-per-licence-per-hour", "9",
+                      "--licensing-refusals-per-hour", "33")
+    devlock = json.loads((out / "policies" / "devlock-mismatch.json").read_text(encoding="utf-8"))
+    assert devlock["conditions"][0]["conditionThreshold"]["thresholdValue"] == 9
+    assert devlock["conditions"][0]["conditionThreshold"]["aggregations"][0]["groupByFields"] == \
+        ["metric.label.licenseId"]
+    refusals = json.loads((out / "policies" / "licensing-refusals.json").read_text(encoding="utf-8"))
+    assert [c["conditionThreshold"]["thresholdValue"] for c in refusals["conditions"]] == [33, 33]
+    proc, _ = _run(tmp_path, _APPLY, "monitoring_fresh", "--project", "demo-app-prod", "--notification-channel", "1",
+                   "--licensing-refusals-per-hour", "many")
+    assert proc.returncode == 2
+
+
 # --- dashboards -------------------------------------------------------------
 
 _METRICS = sorted(p.stem for p in (_MON / "metrics").glob("*.yaml"))
+_POLICIES = sorted((_MON / "policies").glob("*.json"))
+_UPTIME = sorted((_MON / "uptime").glob("*.json"))
 _DASHBOARDS = sorted((_MON / "dashboards").glob("*.json"))
 _USER_METRIC = re.compile(r'logging\.googleapis\.com/user/([A-Za-z0-9_]+)')
 
@@ -545,6 +746,58 @@ def test_secret_check_requires_its_arguments(tmp_path):
     proc, calls = _run(tmp_path, _SECRET_CHECK, _iam_scenario(tmp_path, {}, {}), "demo-app-prod", "")
     assert proc.returncode == 2 and "usage:" in proc.stderr
     assert calls == []
+
+
+def _deploy_steps() -> list[dict]:
+    yaml = pytest.importorskip("yaml")
+    workflow = yaml.safe_load((_REPO / ".github" / "workflows" / "deploy-backend.yml").read_text(encoding="utf-8"))
+    return workflow["jobs"]["deploy"]["steps"]
+
+
+def _step(steps: list[dict], step_id: str) -> tuple[int, dict]:
+    return next((i, s) for i, s in enumerate(steps) if s.get("id") == step_id)
+
+
+def test_the_candidate_smoke_loads_an_app_route():
+    """TE6-004 (a): /readyz alone proves the container answers, not that the
+    routers and auth stack loaded. GET /v1/config with a non-Bearer forwarded
+    header is the app's own JSON 401 missing_bearer (no token verified, no
+    audit row); Cloud Run's IAM answers HTML, a missing route 404."""
+    _, smoke = _step(_deploy_steps(), "smoke")
+    run = smoke["run"]
+    assert '"${URL}/v1/config"' in run and "X-Forwarded-Authorization: smoke" in run
+    assert '.detail == "missing_bearer"' in run and '"401"' in run
+
+
+def test_a_post_promote_health_check_can_trigger_the_rollback():
+    """TE6-004 (b): after the promote nothing called the live service, so the
+    rollback could fire only when a gcloud describe failed."""
+    steps = _deploy_steps()
+    promote_at, _ = _step(steps, "promote")
+    health_at, health = _step(steps, "post_promote_health")
+    rollback_at = next(i for i, s in enumerate(steps) if s.get("name") == "Rollback traffic on post-promote failure")
+    assert promote_at < health_at < rollback_at
+    assert "continue-on-error" not in health
+    assert "steps.service_url.outputs.url" in health["env"]["URL"]
+    run = health["run"]
+    assert '"${URL}/readyz"' in run and '"${URL}/v1/config"' in run and "exit 1" in run
+    assert "failure() && steps.promote.outcome == 'success'" in steps[rollback_at]["if"]
+    # Every step between the promote and the health check must not hide a
+    # failure either, or the rollback never runs for it.
+    assert all("continue-on-error" not in s for s in steps[promote_at:health_at])
+
+
+def test_the_rollback_drill_fails_on_purpose_only_on_staging():
+    """TE6-004 (c): the D5 revision-rollback drill (TD-220) needs a deploy whose
+    post-promote check fails; never production."""
+    yaml = pytest.importorskip("yaml")
+    workflow = yaml.safe_load((_REPO / ".github" / "workflows" / "deploy-backend.yml").read_text(encoding="utf-8"))
+    on = workflow.get("on") or workflow.get(True)
+    drill = on["workflow_dispatch"]["inputs"]["rollback_drill"]
+    assert drill["type"] == "boolean" and drill["default"] is False
+    _, health = _step(_deploy_steps(), "post_promote_health")
+    assert "github.event.inputs.rollback_drill" in health["env"]["DRILL"]
+    assert '[ "$ENVIRONMENT" = "staging" ]' in health["run"]
 
 
 def test_the_deploy_runs_the_secret_check_before_mounting():

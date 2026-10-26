@@ -200,6 +200,7 @@
             <tbody id="licenceRows"></tbody>
           </table>
         </div>
+        <p id="demoNote" class="hint" hidden></p>
         <div class="row table-foot">
           <button id="loadMore" class="secondary" hidden>Load more</button>
         </div>
@@ -324,12 +325,22 @@
         <div class="row toolbar">
           <input id="memberEmail" type="email" placeholder="person@university.edu" aria-label="Member's email" />
           <button id="addMember">Add to roster</button>
-          <span id="rosterHint" class="muted"></span>
+          <span id="rosterHint" class="muted" aria-live="polite"></span>
+        </div>
+        <!-- Narrows, sorts and pages the rows already read (../roster.js). -->
+        <div class="row toolbar">
+          <input id="rosterFilter" type="search" placeholder="Filter by address, status or device"
+                 aria-label="Filter the roster" autocomplete="off" />
+          <span id="rosterCount" class="muted" aria-live="polite"></span>
         </div>
         <div class="wrap">
           <table>
-            <thead>
-              <tr><th>Member</th><th>Status</th><th>Seat</th><th>Device</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr>
+            <thead id="rosterHead">
+              <tr>
+                <th aria-sort="none"><button type="button" class="sort" data-sort="member">Member</button></th>
+                <th aria-sort="none"><button type="button" class="sort" data-sort="status">Status</button></th>
+                <th>Seat</th><th>Device</th><th class="actions"><span class="visually-hidden">Actions</span></th>
+              </tr>
             </thead>
             <tbody id="rosterRows"></tbody>
           </table>
@@ -346,11 +357,13 @@
             as it is. Up to 500 rows at a time. Anyone already on the roster
             is left as they are, so importing a file twice is harmless.
           </p>
+          <label for="rosterImportText" class="visually-hidden">Addresses to import</label>
           <textarea id="rosterImportText" rows="5" spellcheck="false" autocomplete="off"
                     placeholder="email&#10;ana@institution.edu&#10;ben@institution.edu"></textarea>
           <div class="row">
+            <label for="rosterImportFile" class="visually-hidden">CSV file</label>
             <input id="rosterImportFile" type="file" accept=".csv,text/csv,text/plain" />
-            <span class="muted" id="rosterImportPreview"></span>
+            <span class="muted" id="rosterImportPreview" aria-live="polite"></span>
             <span class="spacer"></span>
             <button id="rosterImportSubmit" disabled>Import</button>
           </div>

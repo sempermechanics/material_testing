@@ -5,7 +5,7 @@
 import { api } from "../api.js";
 import { confirmInPage, tellInPage } from "../dialogs.js";
 import { setStatus } from "../status.js";
-import { esc, seatDevices, placeholderRows, retryRow } from "../util.js";
+import { esc, seatDevices, placeholderRows, retryRow, when } from "../util.js";
 import { explain } from "../messages.js";
 import { $, labelOf } from "./state.js";
 import { showLicence } from "./licences.js";
@@ -49,7 +49,7 @@ export async function showDeviceHistory(id) {
       const prevMt = (e.detail && e.detail.previousDeviceIdMaterialTesting) || "";
       const app = (e.detail && e.detail.app) || "";
       const who = e.uid || "—";
-      return `${e.ts || "?"}  ${e.action}  by ${who}` +
+      return `${when(e.ts)}  ${e.action}  by ${who}` +
         (app ? ` (${app})` : "") +
         (prev ? `  left ${prev}` : "") +
         (released && released !== prev ? `  signed out ${released}` : "") +
@@ -64,7 +64,7 @@ export async function showDeviceHistory(id) {
         : `No device moves recorded for ${labelOf(id)} yet.`,
     });
   } catch (e) {
-    setStatus(`Could not load device history: ${e.message}`, true);
+    setStatus(`Could not load device history: ${explain(e)}`, true);
   }
 }
 
@@ -109,7 +109,7 @@ export async function loadUsers(started) {
       : '<tr><td colspan="4" class="muted">Nobody waiting.</td></tr>';
   } catch (e) {
     if (ticket !== usersLoad) return;
-    $("userRows").innerHTML = retryRow(4, `Could not load: ${e.message}`);
+    $("userRows").innerHTML = retryRow(4, `Could not load: ${explain(e)}`);
   } finally {
     if (ticket === usersLoad) $("reloadUsers").disabled = false;
   }
@@ -129,6 +129,16 @@ function showPendingCount(count, more) {
 $("releasePhone").addEventListener("click", async () => {
   const email = $("releaseEmail").value.trim();
   if (!email) return setStatus("Enter the account's email.", true);
+  // Signs the account's phone out and holds it off for a day, on a typed
+  // address: say whose before doing it.
+  if (!(await confirmInPage({
+    title: "Release phone",
+    message: `Release the phone of ${email}?
+
+` +
+      "It is signed out and cannot sign in again for 24 hours; the new phone can then sign in.",
+    confirm: "Release",
+  }))) return;
   const btn = $("releasePhone");
   btn.disabled = true;
   try {

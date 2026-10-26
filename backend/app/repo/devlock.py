@@ -189,7 +189,7 @@ def bind_device_lock(ref, device_id: str, app: str = apps.SEMPER) -> bool:
             # next request onward, which revalidate_device_lock will act on.
             return False
         if round_ + 1 < _BIND_ROUNDS:
-            time.sleep(random.uniform(0, _BIND_BACKOFF_S * 2 ** round_))
+            time.sleep(random.uniform(0, _BIND_BACKOFF_S * 2 ** round_))  # noqa: S311 - backoff jitter, not a secret
     raise DeviceLockContended()
 
 

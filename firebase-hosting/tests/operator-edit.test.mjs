@@ -131,7 +131,7 @@ test("the remaining edit refusals are explained in the dialog", async () => {
       "Seats, seating and IT contacts are for institution licences."],
     [IND, () => { $("editNote").value = "x"; }, () => json(429, { detail: "rate_limited" }),
       "Too many requests just now — wait a moment and try again."],
-    [IND, () => { $("editNote").value = "x"; }, offline, "Not saved: Failed to fetch"],
+    [IND, () => { $("editNote").value = "x"; }, offline, "Not saved: The server could not be reached — check your connection and try again."],
   ]) {
     reset();
     await openEdit(lic, { [`PATCH /v1/admin/licenses/${lic.id}`]: reply });
@@ -252,7 +252,7 @@ test("a refused convert is explained in the dialog, which stays as it was", asyn
     [() => json(409, { detail: "license_not_convertible" }), "Only an individual licensed key converts."],
     [() => json(403, { detail: "license_revoked" }), "This licence is revoked."],
     [() => json(409, { detail: "odd" }), "Not converted: odd"],
-    [offline, "Not converted: Failed to fetch"],
+    [offline, "Not converted: The server could not be reached — check your connection and try again."],
   ]) {
     reset();
     await openConvert({ [CONVERT]: reply });

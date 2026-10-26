@@ -30,7 +30,11 @@ export async function fetchRoster(base) {
   return { license: first.license || {}, seats, invites: first.invites || [] };
 }
 
-/** One member's row, with what can be done to them. */
+/**
+ * One member's row, with what can be done to them. Each button carries the
+ * member's address, so its confirmation and its name for a screen reader say
+ * who it acts on: on a long roster every row's button reads "Remove".
+ */
 export function seatRow(seat) {
   // A removed member holds nothing to hold, resume or unlock. Resume used to
   // be offered here and reactivated the seat without taking a slot back;
@@ -41,16 +45,18 @@ export function seatRow(seat) {
       <td class="actions muted">add again to restore</td>
     </tr>`;
   }
+  const who = esc(seat.email || seat.uid);
+  const on = `data-uid="${esc(seat.uid)}" data-email="${who}"`;
   return `
     <tr>${seatCells(seat)}
       <td class="actions">
         ${seat.deviceIdLock || seat.deviceIdLockMaterialTesting
-          ? `<button class="secondary" data-act="clear" data-uid="${esc(seat.uid)}">New device</button>`
+          ? `<button class="secondary" data-act="clear" ${on} aria-label="New device for ${who}">New device</button>`
           : ""}
         ${seat.status === "active"
-          ? `<button class="secondary" data-act="hold" data-uid="${esc(seat.uid)}">Hold</button>`
-          : `<button class="secondary" data-act="unhold" data-uid="${esc(seat.uid)}">Resume</button>`}
-        <button class="danger" data-act="remove" data-uid="${esc(seat.uid)}">Remove</button>
+          ? `<button class="secondary" data-act="hold" ${on} aria-label="Pause ${who}">Pause</button>`
+          : `<button class="secondary" data-act="unhold" ${on} aria-label="Resume ${who}">Resume</button>`}
+        <button class="danger" data-act="remove" ${on} aria-label="Remove ${who}">Remove</button>
       </td>
     </tr>`;
 }
@@ -60,22 +66,66 @@ export function inviteRow(invite) {
   return `
     <tr>${inviteCells(invite)}
       <td class="actions">
-        <button class="danger" data-invite="${esc(invite.id)}">Withdraw</button>
+        <button class="danger" data-invite="${esc(invite.id)}" data-email="${esc(invite.email)}"
+                aria-label="Withdraw the invitation to ${esc(invite.email)}">Withdraw</button>
       </td>
     </tr>`;
 }
 
 const ACTIONS = {
   clear: { method: "PATCH", body: { clearDeviceLock: true }, verb: "Unlocking" },
-  hold: { method: "PATCH", body: { enabled: false }, verb: "Holding" },
+  hold: { method: "PATCH", body: { enabled: false }, verb: "Pausing" },
   unhold: { method: "PATCH", body: { enabled: true }, verb: "Resuming" },
   remove: { method: "DELETE", verb: "Removing" },
+};
+
+/** The confirmation an action asks for first, naming the member, or none. */
+const ASK = {
+  clear: (who) => ({
+    title: `New device for ${who}`,
+    message: `Unbind ${who} from the phone it is on?
+
+` +
+      "The next phone they sign in on takes the seat. Their seat and their " +
+      "saved analyses are untouched.",
+    confirm: "Unbind",
+  }),
+  remove: (who) => ({
+    title: `Remove ${who}`,
+    message: `Remove ${who} from this licence?
+
+` +
+      "They drop to Demo the next time their phone checks in. Their " +
+      "saved analyses stay untouched.",
+    confirm: "Remove",
+  }),
+};
+
+/** Rows drawn at a time: a 500-seat roster is one table, but not one page of it. */
+export const PAGE_ROWS = 100;
+
+/** A seat's status as the Status cell words it, for the filter and the sort. */
+const STATUS_WORDS = { active: "active", disabled: "paused", revoked: "removed" };
+
+/** One roster line, seat or invite, with what the filter and sort read. */
+function entry(kind, item) {
+  const email = String((kind === "seat" ? item.email || item.uid : item.email) || "");
+  const status = kind === "seat" ? STATUS_WORDS[item.status] || String(item.status || "") : "invited";
+  const text = [email, status, item.deviceIdLock, item.deviceIdLockMaterialTesting]
+    .filter(Boolean).join(" ").toLowerCase();
+  return { kind, item, email: email.toLowerCase(), status, text };
+}
+
+const BY = {
+  member: (a, b) => a.email.localeCompare(b.email),
+  status: (a, b) => a.status.localeCompare(b.status) || a.email.localeCompare(b.email),
 };
 
 const ACT_ERRORS = {
   seat_revoked: "That member was removed. Add their address again to restore them.",
   license_revoked: "This licence has been revoked, so its seats cannot be changed.",
   seat_busy: "That seat changed while you were acting on it. Try again.",
+  seat_not_found: "That member is no longer on this licence. Reload to see the roster.",
 };
 
 /**
@@ -84,46 +134,69 @@ const ACT_ERRORS = {
  * licence again after a change (the page re-renders through `render`), and
  * `retry()` (default `reload`) answers the Retry of a failed load.
  * Returns `render(seats, invites)`, which fills `rows`.
+ *
+ * A roster runs to hundreds of rows, so it is drawn `PAGE_ROWS` at a time
+ * with Show more; `filter` (a text box) narrows it by address, status or
+ * device; each `button[data-sort]` in `head` sorts by its column, its <th>
+ * saying which way (aria-sort); `count` says how many are shown of how many.
+ * All three work on the rows already read; another licence opened starts
+ * them afresh.
  */
-export function wireRoster({ rows, email, add, base, report, reload, retry = reload }) {
+export function wireRoster({
+  rows, email, add, base, report, reload, retry = reload, filter = null, count = null, head = null,
+}) {
+  let all = [];
+  let shown = PAGE_ROWS;
+  let order = { key: "", dir: 1 };
+  let drawnFor = null; // the licence the rows are for
+  const sorters = head ? Array.from(head.querySelectorAll("button[data-sort]")) : [];
   // Each action takes the roster's path before it asks, so an answer given after
   // another roster was opened (or this one closed) still goes to the one asked on.
-  async function act(action, uid) {
+  async function act(action, uid, who) {
     const spec = ACTIONS[action];
     const root = base();
     if (!root) return;
-    if (action === "remove" && !(await confirmInPage({
-      title: "Remove member",
-      message: "Remove this member? Their saved analyses stay untouched.",
-      confirm: "Remove",
-    }))) {
-      return;
-    }
+    if (ASK[action] && !(await confirmInPage(ASK[action](who || uid)))) return;
     report(`${spec.verb}…`);
     try {
       await api(`${root}/seats/${encodeURIComponent(uid)}`,
         { method: spec.method, ...(spec.body ? { body: JSON.stringify(spec.body) } : {}) });
       await reload();
+      refocus((b) => b.dataset.uid === uid);
     } catch (e) {
       report(explain(e, ACT_ERRORS, (text) => `Could not complete that: ${text}`), true);
     }
   }
 
-  async function withdraw(inviteId) {
+  async function withdraw(inviteId, who) {
     const root = base();
     if (!root) return;
     if (!(await confirmInPage({
       title: "Withdraw invitation",
-      message: "Withdraw this invitation? Nobody has claimed it yet.",
+      message: `Withdraw the invitation to ${who || "this address"}?
+
+Nobody has claimed it yet.`,
       confirm: "Withdraw",
     }))) return;
     report("Withdrawing…");
     try {
       await api(`${root}/invites/${encodeURIComponent(inviteId)}`, { method: "DELETE" });
       await reload();
+      refocus(() => false);
     } catch (e) {
       report(explain(e, {}, (text) => `Could not withdraw: ${text}`), true);
     }
+  }
+
+  /**
+   * After a change the rows are rebuilt and the button that had focus is
+   * gone: put focus on the same member's row again (`mine` picks its
+   * button), or on the Add box when they left the roster, so a keyboard user
+   * carries on where they were rather than from the top of the page.
+   */
+  function refocus(mine) {
+    const again = Array.from(rows.querySelectorAll("button")).find(mine);
+    (again || email).focus();
   }
 
   async function addMember() {
@@ -150,8 +223,30 @@ export function wireRoster({ rows, email, add, base, report, reload, retry = rel
         member_already_licensed: `${address} already has a Semper licence of their own. ` +
           "Ask Semper support to move them onto this one.",
         license_seats_exhausted: "This licence has no seats left.",
-        license_seat_disabled: "That seat is on hold — resume it instead.",
+        license_seat_disabled: "That seat is paused — resume it instead.",
       }, (text) => `Could not add ${address}: ${text}`), true);
+    }
+  }
+
+  /** Draw the rows the filter, the sort and Show more leave. */
+  function draw() {
+    const q = filter ? filter.value.trim().toLowerCase() : "";
+    const matching = q ? all.filter((e) => e.text.includes(q)) : all.slice();
+    if (order.key) matching.sort((a, b) => BY[order.key](a, b) * order.dir);
+    const visible = matching.slice(0, shown);
+    const more = matching.length - visible.length;
+    rows.innerHTML = visible.map((e) => (e.kind === "seat" ? seatRow(e.item) : inviteRow(e.item))).join("") +
+      (more ? `<tr><td colspan="5"><button class="secondary" data-more>Show ${Math.min(more, PAGE_ROWS)} more</button></td></tr>` : "") ||
+      `<tr><td colspan="5" class="muted">${all.length ? "Nobody on the roster matches that filter." : "Nobody on this licence yet."}</td></tr>`;
+    if (count) {
+      count.textContent = !all.length ? ""
+        : q ? `Showing ${visible.length} of ${matching.length} matching, ${all.length} on the roster`
+          : `Showing ${visible.length} of ${all.length}`;
+    }
+    for (const button of sorters) {
+      const key = button.dataset.sort;
+      const way = order.key !== key ? "none" : order.dir > 0 ? "ascending" : "descending";
+      button.closest("th").setAttribute("aria-sort", way);
     }
   }
 
@@ -159,15 +254,45 @@ export function wireRoster({ rows, email, add, base, report, reload, retry = rel
   rows.addEventListener("click", (ev) => {
     const btn = ev.target.closest("button");
     if (!btn) return;
-    if (btn.dataset.act) act(btn.dataset.act, btn.dataset.uid);
-    else if (btn.dataset.invite) withdraw(btn.dataset.invite);
+    if (btn.dataset.act) act(btn.dataset.act, btn.dataset.uid, btn.dataset.email);
+    else if (btn.dataset.invite) withdraw(btn.dataset.invite, btn.dataset.email);
     else if ("retry" in btn.dataset) retry();
+    else if ("more" in btn.dataset) {
+      const first = shown;
+      shown += PAGE_ROWS;
+      draw();
+      // Carry on from the first row just shown, not the top of the page.
+      const row = rows.querySelectorAll("tr")[first];
+      const next = row && row.querySelector("button");
+      if (next) next.focus();
+    }
   });
   add.addEventListener("click", addMember);
   email.addEventListener("keydown", (e) => { if (e.key === "Enter") addMember(); });
+  if (filter) {
+    filter.addEventListener("input", () => {
+      shown = PAGE_ROWS;
+      draw();
+    });
+  }
+  for (const button of sorters) {
+    button.addEventListener("click", () => {
+      const key = button.dataset.sort;
+      order = { key, dir: order.key === key ? -order.dir : 1 };
+      draw();
+    });
+  }
 
   return function render(seats, invites) {
-    rows.innerHTML = seats.map(seatRow).concat(invites.map(inviteRow)).join("") ||
-      '<tr><td colspan="5" class="muted">Nobody on this licence yet.</td></tr>';
+    // Another licence: its own rows, unfiltered and unsorted, from the top.
+    const root = base();
+    if (root !== drawnFor) {
+      drawnFor = root;
+      shown = PAGE_ROWS;
+      order = { key: "", dir: 1 };
+      if (filter) filter.value = "";
+    }
+    all = seats.map((s) => entry("seat", s)).concat(invites.map((i) => entry("invite", i)));
+    draw();
   };
 }

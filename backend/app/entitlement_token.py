@@ -2,8 +2,13 @@
 
 `GET /v1/config` adds `entitlement`, a compact JWS the app verifies against
 public keys pinned in the build, so it can keep running its licence while
-offline for a bounded time and cannot be talked into more by an edited
-response or a copied token.
+offline for a bounded time. A verified token only ever narrows what the
+cached `/v1/config` grants (ADR-023 decision 7), so an edited response
+cannot widen past a token the app holds. A token that is absent or does not
+verify on the device (a copied one names another device's key, `dkt`) is no
+bound at all: the cache decides. With no signing key configured, no token is
+issued (TD-215), and the app's offline licence and share rest on the
+TLS-delivered, unsigned cache alone.
 
 The contract the Android verifier implements; change it only together with it:
 

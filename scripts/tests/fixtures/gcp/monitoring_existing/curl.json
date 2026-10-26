@@ -8,6 +8,14 @@
         {
           "name": "projects/demo-app-prod/uptimeCheckConfigs/semper-api-readyz-abc123",
           "displayName": "semper-api /readyz"
+        },
+        {
+          "name": "projects/demo-app-prod/uptimeCheckConfigs/semper-api-gateway-healthz-def456",
+          "displayName": "semper-api gateway /healthz"
+        },
+        {
+          "name": "projects/demo-app-prod/uptimeCheckConfigs/semper-api-gateway-config-ghi789",
+          "displayName": "semper-api gateway /v1/config (401)"
         }
       ]
     }

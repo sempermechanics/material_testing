@@ -18,7 +18,8 @@
 #   3.7  Data Access audit logs on for Firebase, rules, App Check, Firestore
 #
 # Only describe / list / ls / get-iam-policy calls and REST GETs (Identity
-# Toolkit config) are made; a wrapper refuses any other gcloud verb. UNKNOWN
+# Toolkit config) are made; a wrapper refuses any gcloud call that does not
+# start with one of those read-only command paths. UNKNOWN
 # means the call failed (permission, API off) and says why.
 #
 #   scripts/check_gcp_posture.sh --app-project indicvision-dic-app \
@@ -64,19 +65,21 @@ trap 'rm -rf "$WORK"' EXIT
 FAILS=0
 UNKNOWNS=0
 
-# gc ARGS...: gcloud, read-only verbs only. Output to stdout; on failure the
-# first stderr line is left in $WORK/err.
+# gc ARGS...: gcloud, read-only commands only. Output to stdout; on failure the
+# first stderr line is left in $WORK/err. The call must START with one of the
+# read-only command paths below, word for word: a read verb elsewhere in the
+# arguments (`gc projects delete describe`) is refused, as is any leading flag.
 gc() {
-  local verb=""
-  for a in "$@"; do
-    case "$a" in
-      describe|list|ls|get-iam-policy|print-access-token) verb=$a ;;
-    esac
-  done
-  if [ -z "$verb" ]; then
-    echo "refusing non-read-only gcloud call: gcloud $*" >&2
-    exit 3
-  fi
+  case "$* " in
+    'projects describe '*|'projects get-iam-policy '*|'alpha resource-manager liens list '*|\
+    'resource-manager tags bindings list '*|'services api-keys list '*|'auth print-access-token '*|\
+    'billing projects describe '*|'billing budgets list '*|'run services describe '*|\
+    'firestore databases describe '*|'firestore backups schedules list '*|'storage ls '*|\
+    'iam roles describe '*) ;;
+    *)
+      echo "refusing non-read-only gcloud call: gcloud $*" >&2
+      exit 3 ;;
+  esac
   gcloud "$@" 2>"$WORK/err"
 }
 
@@ -91,15 +94,39 @@ report() {
   esac
 }
 
+# A Python 3 that runs: python3, else python. Under Git Bash on Windows
+# `python3` is often only the Microsoft Store alias, which fails (TE6-017).
+PYTHON=""
+for c in python3 python; do
+  if command -v "$c" >/dev/null 2>&1 && "$c" -c 'import sys; sys.exit(sys.version_info < (3, 8))' >/dev/null 2>&1; then
+    PYTHON=$c
+    break
+  fi
+done
+if [ -z "$PYTHON" ]; then
+  echo "needs Python 3.8+ as python3 or python" >&2
+  exit 2
+fi
+
+# pyrun PROGRAM_FILE [ARGS...]: Python on a program file, never a multi-line
+# `-c` argument (native argv conversion on Windows is no place for one), with
+# UTF-8 I/O and LF output, so `read` sees no trailing \r.
+pyrun() {
+  PYTHONUTF8=1 "$PYTHON" "$@"
+}
+
 # py FILE SCRIPT [ARGS...]: run a short Python reading the JSON in FILE (as
 # `d`), printing "STATUS|detail".
 py() {
-  local file=$1 script=$2
+  local file=$1 script=$2 prog
   shift 2
-  python3 -c "import json,sys
-d=json.load(open(sys.argv[1]))
-args=sys.argv[2:]
-$script" "$file" "$@"
+  prog=$(mktemp "$WORK/py.XXXXXX")
+  {
+    printf '%s\n' 'import json,sys' 'sys.stdout.reconfigure(newline="\n")' \
+      'd=json.load(open(sys.argv[1]))' 'args=sys.argv[2:]'
+    printf '%s\n' "$script"
+  } >"$prog"
+  pyrun "$prog" "$file" "$@"
 }
 
 printf '%-22s %-8s %-28s %s\n' "item" "status" "scope" "detail"
@@ -296,9 +323,12 @@ case "$sched" in
     elif gc storage ls "gs://$BACKUP_BUCKET/firestore/$APP_PROJECT/" >"$WORK/exports.txt"; then
       latest=$(sed -n 's#.*/firestore/[^/]*/\([0-9]\{8\}T[0-9]\{6\}Z\)/\{0,1\}$#\1#p' "$WORK/exports.txt" | sort | tail -1)
       if [ -n "$latest" ]; then
-        age_h=$(python3 -c 'import datetime as t,sys
-s=t.datetime.strptime(sys.argv[1],"%Y%m%dT%H%M%SZ").replace(tzinfo=t.timezone.utc)
-print(int((t.datetime.now(t.timezone.utc)-s).total_seconds()//3600))' "$latest")
+        cat >"$WORK/age.py" <<'PY'
+import datetime as t, sys
+s = t.datetime.strptime(sys.argv[1], "%Y%m%dT%H%M%SZ").replace(tzinfo=t.timezone.utc)
+print(int((t.datetime.now(t.timezone.utc) - s).total_seconds() // 3600))
+PY
+        age_h=$(pyrun "$WORK/age.py" "$latest" | tr -d '\r')
         if [ "$age_h" -le 48 ]; then
           report "2.7-backup" PASS "$APP_PROJECT" "export gs://$BACKUP_BUCKET/firestore/$APP_PROJECT/$latest, ${age_h} h old; managed backups: $sched"
         else

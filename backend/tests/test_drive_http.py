@@ -21,7 +21,7 @@ from app import backoff, drive, errors
 from app.config import settings
 from app.observability import DependencyError
 
-TOKEN = "good-token"
+TOKEN = "good-token"  # noqa: S105 - a fake token
 FILES = f"{drive.API}/files"
 UPLOAD_MEDIA = "https://www.googleapis.com/upload/drive/v3/files/"
 
@@ -135,7 +135,7 @@ class FakeDrive:
                 return _response(404, {"error": {"code": 404}})
             item["content"] = data
             return _response(200, {"size": str(len(data)),
-                                   "md5Checksum": hashlib.md5(data).hexdigest()})
+                                   "md5Checksum": hashlib.md5(data, usedforsecurity=False).hexdigest()})
         if url == drive.UPLOAD and method == "POST":
             parent = body["parents"][0]
             if parent not in self.items:
@@ -181,7 +181,7 @@ class FakeDrive:
                     "parents": item["parents"]}
             if not item.get("folder"):
                 meta["size"] = str(len(item["content"]))
-                meta["md5Checksum"] = hashlib.md5(item["content"]).hexdigest()
+                meta["md5Checksum"] = hashlib.md5(item["content"], usedforsecurity=False).hexdigest()
             return _response(200, meta)
         raise AssertionError(f"FakeDrive has no route for {method} {url}")
 
@@ -568,7 +568,7 @@ def test_get_file_meta_reports_what_drive_recorded(fake):
     folder = fake.add("raw", fake.root)
     fid = fake.add("a.png", folder, folder=False, content=b"pixels")
     assert drive.get_file_meta(TOKEN, fid) == {
-        "size": 6, "md5": hashlib.md5(b"pixels").hexdigest(), "parents": [folder],
+        "size": 6, "md5": hashlib.md5(b"pixels", usedforsecurity=False).hexdigest(), "parents": [folder],
     }
 
 
@@ -619,7 +619,7 @@ def test_init_resumable_into_a_missing_folder_raises(fake):
 def test_replace_content_overwrites_in_place_and_reports_size_and_md5(fake):
     fid = fake.add("metadata.json", fake.root, folder=False, content=b"{}")
     out = drive.replace_content(TOKEN, fid, b'{"k": 1}')
-    assert out == {"size": 8, "md5": hashlib.md5(b'{"k": 1}').hexdigest()}
+    assert out == {"size": 8, "md5": hashlib.md5(b'{"k": 1}', usedforsecurity=False).hexdigest()}
     assert fake.items[fid]["content"] == b'{"k": 1}'
     _method, _url, kw = fake.calls[-1]
     assert kw["headers"]["Content-Type"] == "application/json"
@@ -673,3 +673,14 @@ def test_ping_maps_a_token_or_network_failure_to_unreachable(fake, monkeypatch):
     with pytest.raises(DependencyError) as err:
         drive.ping()
     assert err.value.code == errors.DRIVE_UNREACHABLE
+
+
+def test_a_retry_loop_with_no_attempts_is_refused(monkeypatch):
+    """The loop's own guard is a raise, not an assert, so `python -O` keeps it
+    (readiness TE5-010, ruff S101)."""
+    def no_http():
+        raise AssertionError("no attempt should be made")
+
+    monkeypatch.setattr(drive, "http", no_http)
+    with pytest.raises(ValueError, match="max_attempts must be at least 1"):
+        drive._request_with_retry("GET", drive.API, max_attempts=0)

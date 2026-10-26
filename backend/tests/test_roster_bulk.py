@@ -5,6 +5,7 @@ Mostly over HTTP at institution IT's tier, where the scoping matters: IT for
 their own licence only, staff for any, everyone else refused. The staff tier
 runs on the dev bypass (`deps._DEV_USER` is an admin).
 """
+import copy
 import json
 import logging
 import time
@@ -15,7 +16,7 @@ from google.api_core import exceptions as google_exceptions
 
 import fake_firestore
 import repo_view as repo
-from app import audit, deps, errors, roster_io
+from app import audit, deps, errors, licenses, roster_io
 from app.config import settings
 from app.routers import roster
 from refusals import attempt_add
@@ -257,8 +258,8 @@ async def test_five_hundred_rows_are_taken_and_five_hundred_and_one_refused(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("text,code", [
-    ('email\n"unterminated@uni-a.edu\n', "roster_import_malformed"),
-    ('"a@uni-a.edu"x\n', "roster_import_malformed"),
+    ('email\n"unterminated@uni-a.edu\n', "roster_import_malformed: line 2"),
+    ('"a@uni-a.edu"x\n', "roster_import_malformed: line 1"),
     ("\n\n  \n", "roster_import_empty"),
     ("email\n", "roster_import_empty"),
     ("name,mail\nAna,Ana\n", "roster_import_no_email_column"),
@@ -267,6 +268,36 @@ async def test_a_file_that_cannot_be_read_is_refused_whole(it, client, text, cod
     r = await _import(client, it, text)
     assert r.status_code == 400, r.text
     assert r.json()["detail"] == code
+    assert f"licenses/{it.a}/seats" not in it._data
+    assert [a["action"] for a in it.audited] == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("text,line", [
+    # A stray character after a closing quote, on line 3.
+    ('email\na@uni-a.edu\n"b@uni-a.edu"x\nc@uni-a.edu\n', 3),
+    # A quote opened on line 3 and never closed: the reader only fails at the
+    # end of the file, but the record it was reading began on line 3.
+    ('email\na@uni-a.edu\n"open@uni-a.edu\nb@uni-a.edu\nc@uni-a.edu\n', 3),
+])
+async def test_a_malformed_file_names_the_line_to_fix(it, client, text, line):
+    """The code before the colon is unchanged, so a console that reads the
+    code (errorDetail) still matches it; the line is the suffix, as
+    device_change_too_soon carries its instant (readiness AE2-008)."""
+    r = await _import(client, it, text)
+    assert r.status_code == 400, r.text
+    assert r.json()["detail"] == f"roster_import_malformed: line {line}"
+    assert f"licenses/{it.a}/seats" not in it._data
+
+
+@pytest.mark.asyncio
+async def test_an_oversized_file_is_refused_with_a_code(it, client):
+    """Over MAX_IMPORT_CHARS the refusal is a code the console can word, 413
+    like too many rows, not pydantic's 422 sentence (readiness AE2-008)."""
+    text = "email\n" + "a" * roster_io.MAX_IMPORT_CHARS
+    r = await _import(client, it, text)
+    assert r.status_code == 413, r.text
+    assert r.json() == {"detail": "roster_import_too_large"}
     assert f"licenses/{it.a}/seats" not in it._data
     assert [a["action"] for a in it.audited] == []
 
@@ -302,6 +333,29 @@ async def test_it_reaches_its_own_licence_only(it, client, method, path, body):
     assert f"licenses/{it.b}/seats" not in it._data
     own = await client.request(method, f"{it.base}{path}", json=body, headers=it.bearer)
     assert own.status_code == 200, own.text
+
+
+@pytest.mark.asyncio
+async def test_it_cannot_add_to_or_withdraw_from_another_institutions_roster(it, client):
+    """The two roster writes the sweep above leaves out (readiness TE3-004):
+    adding a member and withdrawing an invite on licence B both 404 for A's IT,
+    and nothing under B is written or removed."""
+    invite = licenses.invite_id("new@uni-b.edu")
+    it._data.setdefault("licenseInvites", {})[invite] = {
+        "licenseId": it.b, "email": "new@uni-b.edu"}
+    before = copy.deepcopy(it._data)
+
+    add = await client.post(f"/v1/institutions/licenses/{it.b}/seats",
+                            json={"email": "x@uni-b.edu"}, headers=it.bearer)
+    assert add.status_code == 404, add.text
+    assert add.json()["detail"] == "license_not_found"
+    drop = await client.delete(f"/v1/institutions/licenses/{it.b}/invites/{invite}",
+                               headers=it.bearer)
+    assert drop.status_code == 404, drop.text
+    assert drop.json()["detail"] == "license_not_found"
+
+    assert it._data == before
+    assert it.audited == []
 
 
 @pytest.mark.asyncio
