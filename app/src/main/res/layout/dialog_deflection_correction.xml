@@ -2,6 +2,7 @@
 <!-- Bending Results' Adjust deflection (ViewerDeflectionCorrection):
      δ = scale × δ measured + bias, for the session. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
@@ -21,7 +22,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="12dp"
-        android:hint="@string/deflection_scale_hint">
+        android:hint="@string/deflection_scale_hint"
+        app:boxStrokeColor="@color/input_box_stroke">
 
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/etDeflectionScale"
@@ -35,7 +37,8 @@
         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="@string/deflection_bias_hint">
+        android:hint="@string/deflection_bias_hint"
+        app:boxStrokeColor="@color/input_box_stroke">
 
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/etDeflectionBias"
