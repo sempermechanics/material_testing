@@ -195,8 +195,13 @@ class FontScaleLayoutTest {
     }
 
     @Test
-    fun `the deformed frames' range names both files in full at font scale 1`() {
-        val ctx = context(1f)
+    fun `the deformed frames' range names both files in full at font scale 1`() = assertRangeInFull(1f)
+
+    @Test
+    fun `the deformed frames' range names both files in full at font scale 2`() = assertRangeInFull(2f)
+
+    private fun assertRangeInFull(fontScale: Float) {
+        val ctx = context(fontScale)
         prepare = { root ->
             root.findViewById<View>(R.id.defCard).visibility = View.VISIBLE
             root.findViewById<TextView>(R.id.tvDefName).text = "4 deformed frames"
