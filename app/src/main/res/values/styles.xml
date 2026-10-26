@@ -44,12 +44,13 @@
         <item name="rippleColor">@color/ripple_sky</item>
     </style>
 
-    <!-- Outlined, one line high: a quiet action beside a section title -->
+    <!-- Outlined, one line high: a quiet action beside a section title. Drawn about
+         28dp tall inside a 48dp touch target (the insets; readiness MT-AE1-001). -->
     <style name="Widget.Semper.Button.Outlined.Compact">
-        <item name="android:minHeight">0dp</item>
+        <item name="android:minHeight">48dp</item>
         <item name="android:minWidth">0dp</item>
-        <item name="android:insetTop">0dp</item>
-        <item name="android:insetBottom">0dp</item>
+        <item name="android:insetTop">10dp</item>
+        <item name="android:insetBottom">10dp</item>
         <item name="android:paddingTop">4dp</item>
         <item name="android:paddingBottom">4dp</item>
         <item name="android:paddingStart">12dp</item>
