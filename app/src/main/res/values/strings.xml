@@ -1233,7 +1233,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="beta_notice_title">Beta notice</string>
     <!-- Says what terms_checkbox_improve_hint and settings_improve_summary say: optional,
          ticked at the Terms with the choice to untick, withdrawable (readiness AE1V-016). -->
-    <string name="beta_notice_body">Semper is in beta. \"Use data to improve Semper\" was ticked when you accepted the Terms, and you could untick it. While it is on, the images, results and reports you back up may be used to test and tune the engine.\n\nYou can turn it off any time in Settings \u2192 Your data: that stops future use and removes your data from improvement datasets within 30 days. Crash reports and usage data are sent only if you agree to them. You can access, update or delete your data at any time.</string>
+    <string name="beta_notice_body">Semper Classroom is in beta. \"Use data to improve Semper\" was ticked when you accepted the Terms, and you could untick it. While it is on, the images, results and reports you back up may be used to test and tune the engine.\n\nYou can turn it off any time in Settings \u2192 Your data: that stops future use and removes your data from improvement datasets within 30 days. Crash reports and usage data are sent only if you agree to them. You can access, update or delete your data at any time.</string>
     <string name="beta_notice_ack">I understand</string>
 
     <!-- Session/analysis quota limit screen -->
