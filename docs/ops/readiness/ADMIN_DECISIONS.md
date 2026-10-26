@@ -70,6 +70,26 @@ verified from the screenshots, uiautomator dumps and source. Ids renumbered `AE1
 | AE1V-006 → AE1-006, AE1V-009 → TE5-002, AE1V-013 → AE1-019 | — | duplicates; the earlier decisions apply |
 | Visual P2/P3 (AE1V-011, -014, -015, -016, -018, -020, -021) | P2, P3 | "Fix all now" |
 
-### Checkpoint 2 — acceptance
+### Checkpoint 2 — acceptance (2026-10-26)
 
-_Pending._
+Asked with AskUserQuestion after the Phase 5 fresh re-verify. The re-verify ran on the
+readiness head `2ebe7a2a`, with main's #484 merged in, and covered 102 fix ids: 84
+VERIFIED, 10 REOPENED, 6 NEEDS_ADMIN, 2 NEEDS_DEVICE. Answers verbatim.
+
+| Finding(s) | Re-verify | Decision (verbatim) |
+|---|---|---|
+| The 84 VERIFIED fixes | VERIFIED | "Accept all 84 (Recommended)" |
+| AE3-002, AE1-004, AE1-007, AE1-009, AE1V-021, TE1-006 | REOPENED (small, in repo) | "Rework now (Recommended)" |
+| AE1-011, AE1-010, TE2-002, TE2-004 | REOPENED (partial; the rest is large or in the engine repo) | "Accept partial + TD rows (Recommended)": AE1-011 → TD-345; AE1-010: the PDF report is English-only by decision; TE2-002 → TD-346; TE2-004 → TD-347 and TD-326 |
+| New in the after screenshots: the ROI info pill covers the top handles at font scale 2.0; Save graph looks enabled on the lattice's empty state | — | "Fix in the rework batch (Recommended)": new P3 findings AE1V-022, AE1V-023 |
+
+Not asked at this checkpoint: NEEDS_ADMIN items wait on owner decisions or Admin actions.
+- AE3-003 → TD-340/TD-341.
+- AE1-017 → TD-342.
+- AE1V-016 → TD-343.
+- TE6-002 and TE6-003: `apply-monitoring.sh --apply`.
+- TE2-005 → TD-327.
+
+NEEDS_DEVICE items:
+- TE1-003 → TD-344.
+- TE2-003: the arm64 smoke.
