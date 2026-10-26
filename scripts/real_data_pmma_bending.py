@@ -12,6 +12,9 @@ every image. Two steps sit around one manual app run
   compare  read the app's .dat files and compare them, point by point, with
            the authors' field for the same images: deflection at the tapped
            load point, displacement, and strain
+  truth    write the ground truth the app's bundled example ships with
+           (truth_deflection.csv): the authors' deflection in the probe
+           circle at every deformed frame, and both E values from it
 
 The authors' field is referenced to image 0 and the app's to image 32, so
 both are compared as increments from image 32, at the authors' points carried
@@ -24,6 +27,7 @@ Needs numpy; `prep` also needs Pillow. Run by hand, never in CI.
 Usage:
   python scripts/real_data_pmma_bending.py prep --data DIR --out DIR
   python scripts/real_data_pmma_bending.py compare --data DIR --dat DIR [--taps 1170,39,611] [--windows 15,45,95]
+  python scripts/real_data_pmma_bending.py truth --data DIR --out DIR [--taps 1170,39,611]
 """
 from __future__ import annotations
 
@@ -99,6 +103,19 @@ def truth(field: np.ndarray, ref: np.ndarray) -> dict[str, np.ndarray]:
         "u": inc(COL_U), "v": inc(COL_V), "exx": inc(COL_EXX), "eyy": inc(COL_EYY),
         "exy": -0.5 * inc(COL_EXY), "down_mm": -inc(COL_V_MM),  # world V is up
     }
+
+
+def probe_circle(taps: tuple[float, float, float]) -> tuple[float, float, float]:
+    """BeamDeflection's probe: centre between the taps, radius half the thickness."""
+    x0, top, bottom = taps
+    return x0, (top + bottom) / 2, max((bottom - top) / 2, MIN_PROBE_RADIUS_PX)
+
+
+def authors_delta_mm(t: dict[str, np.ndarray], circle: tuple[float, float, float]) -> float:
+    """The authors' world deflection in mm, averaged over their points in the probe circle."""
+    cx, cy, radius = circle
+    near = (t["px"] - cx) ** 2 + (t["py"] - cy) ** 2 <= radius**2
+    return float(t["down_mm"][near].mean())
 
 
 class Grid:
@@ -177,7 +194,8 @@ def compare(data: Path, dat: Path, taps: tuple[float, float, float], windows: li
     x0, top, bottom = taps
     thickness_px = bottom - top
     mm_per_px = THICKNESS_MM / thickness_px
-    cx, cy, radius = x0, (top + bottom) / 2, max(thickness_px / 2, MIN_PROBE_RADIUS_PX)
+    circle = probe_circle(taps)
+    cx, cy, radius = circle
     print(f"taps x {x0:g}, y {top:g} / {bottom:g}: {thickness_px:g} px, {mm_per_px:.5f} mm/px")
 
     comps = ("u", "v", "exx", "eyy", "exy")
@@ -208,9 +226,8 @@ def compare(data: Path, dat: Path, taps: tuple[float, float, float], windows: li
                     win_errs[w][c].append(f[m] - t[c][m])
             p = grid.points
             near_app = (p[:, 0] - cx) ** 2 + (p[:, 1] - cy) ** 2 <= radius**2
-            near_truth = (t["px"] - cx) ** 2 + (t["py"] - cy) ** 2 <= radius**2
             # Taps are straight down (BeamTapPlacement), so "down" is image v.
-            rows.append((k + 1, n, log[n][1], p[near_app, 3].mean() * mm_per_px, t["down_mm"][near_truth].mean()))
+            rows.append((k + 1, n, log[n][1], p[near_app, 3].mean() * mm_per_px, authors_delta_mm(t, circle)))
 
     print("\nframe image  load N   app d mm  authors d mm   exx RMSE ue")
     for (fr, n, w, d_app, d_true), e in zip(rows, errs["exx"]):
@@ -245,6 +262,26 @@ def compare(data: Path, dat: Path, taps: tuple[float, float, float], windows: li
             for c in ("exx", "eyy", "exy")))
 
 
+def write_truth(data: Path, out: Path, taps: tuple[float, float, float]) -> None:
+    circle = probe_circle(taps)
+    mm_per_px = THICKNESS_MM / (taps[2] - taps[1])
+    rows = ["Frame,Image,Load (N),Authors' deflection (mm)"]
+    loads, deltas = [], []
+    with zipfile.ZipFile(data / ARCHIVE) as z:
+        log = log_rows(z)
+        ref = authors_field(z, REF_IMAGE)
+        for k, n in enumerate(IMAGES, 1):
+            d = authors_delta_mm(truth(authors_field(z, n), ref), circle)
+            loads.append(log[n][1])
+            deltas.append(d)
+            rows.append(f"{k},{n},{log[n][1]:.1f},{d:.5f}")
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "truth_deflection.csv").write_text("\n".join(rows) + "\n", newline="")
+    mean_e, slope_e = modulus(np.array(loads), np.array(deltas), mm_per_px)
+    print(f"{len(rows) - 1} rows in {out / 'truth_deflection.csv'}; authors' E from the graph "
+          f"{slope_e:.3f} GPa, average E {mean_e:.3f} GPa, deflection at the peak {deltas[-1]:.3f} mm")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -257,9 +294,17 @@ def main() -> None:
     c.add_argument("--taps", default=",".join(f"{v:g}" for v in TAPS),
                    help="load point x, top y, bottom y in reference pixels (the session's loadPoint)")
     c.add_argument("--windows", default="", help="strain windows to recompute strain at, e.g. 15,45,95")
+    t = sub.add_parser("truth")
+    t.add_argument("--data", type=Path, required=True, help=f"folder with the Zenodo {ARCHIVE}")
+    t.add_argument("--out", type=Path, required=True)
+    t.add_argument("--taps", default=",".join(f"{v:g}" for v in TAPS),
+                   help="load point x, top y, bottom y in reference pixels")
     args = parser.parse_args()
     if args.cmd == "prep":
         prep(args.data, args.out)
+    elif args.cmd == "truth":
+        x0, top, bottom = (float(v) for v in args.taps.split(","))
+        write_truth(args.data, args.out, (x0, top, bottom))
     else:
         x0, top, bottom = (float(v) for v in args.taps.split(","))
         windows = [int(v) for v in args.windows.split(",") if v]

@@ -33,22 +33,24 @@ import java.io.IOException
  * test type stays on the Intent (not consumed): a recreation after process
  * death re-reads it, and the view model is authoritative once set. On a
  * [firstOpen] from Home's Re-run of a lab test, its dimensions and taps go in
- * before the load card reads them (TD-280).
+ * before the load card reads them (TD-280); so do a bundled example's
+ * dimensions (Try it, ADR-031).
  *
  * @return that Re-run's lab test, whose typed masses go onto the frames once
- *   they are copied ([LabRerun.applyLoadsTo]); null otherwise
+ *   they are copied ([LabRerun.applyLoadsTo]); null otherwise, an example included
  */
 internal fun StaticAnalysisActivity.openLabTest(firstOpen: Boolean): LabRerun? {
     TestType.fromWire(intent.getStringExtra(IntentKeys.TEST_TYPE))?.let { type ->
         viewModel.editLab { it.copy(testType = type) }
     }
-    val rerun = if (firstOpen && intent.hasExtra(IntentKeys.RERUN_SESSION_ID)) {
+    val isRerun = intent.hasExtra(IntentKeys.RERUN_SESSION_ID)
+    val lab = if (firstOpen && (isRerun || intent.hasExtra(IntentKeys.EXAMPLE_ID))) {
         LabRerun.from(intent)?.also { it.applyTo(viewModel) }
     } else {
         null
     }
     setupLoadCard()
-    return rerun
+    return lab.takeIf { isRerun }
 }
 
 /**

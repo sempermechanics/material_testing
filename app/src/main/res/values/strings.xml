@@ -1497,4 +1497,39 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="license_refresh_individual">Licensed (Semper licence)</string>
     <string name="license_refresh_demo">Still on the demo</string>
     <string name="license_refresh_unreachable">Couldn\'t reach Semper — will retry</string>
+
+    <!-- Bundled example sets (ExamplesActivity, ADR-031) -->
+    <string name="examples_title">Example data</string>
+    <string name="examples_open_action">Example data</string>
+    <string name="examples_try_from_sheet">No photos yet? Try an example with published data</string>
+    <string name="examples_intro">Real tests published by their authors, with the answers they measured. Try one in a new analysis, or save it to your phone and run it like your own photos. Each set keeps its own licence; the credit is on its page.</string>
+    <string name="examples_badge_works">Works</string>
+    <string name="examples_badge_fails">Expected to fail</string>
+    <string name="examples_meta_fmt">%1$s · %2$d photos</string>
+    <string name="examples_licence_line_fmt">%1$s · %2$s</string>
+    <string name="examples_setup_fmt">%1$s, %2$d deformed frames, %3$d × %4$d px.</string>
+    <string name="examples_setup_tensile_fmt">Area %1$.1f mm², load along %2$s.</string>
+    <string name="examples_setup_bending_fmt">Span L %1$.0f mm, width b %2$.0f mm, depth t %3$.0f mm.</string>
+    <string name="examples_setup_span_placeholder">The span is not published; 700 mm is a placeholder, so E is only indicative.</string>
+    <string name="examples_setup_load_log_fmt">Load log: %1$s, in %2$s.</string>
+    <string name="examples_setup_taps_fmt">Tap the beam\'s edges under the load: x ≈ %1$d px, top y ≈ %2$d, bottom y ≈ %3$d.</string>
+    <string name="examples_expected">What to expect</string>
+    <string name="examples_expected_row_fmt">%1$s: %2$s (%3$s)</string>
+    <string name="examples_source_dataset">the authors\' measurement</string>
+    <string name="examples_source_app">an earlier run of this app</string>
+    <string name="examples_credit">Credit and licence</string>
+    <string name="examples_credit_fmt">%1$s, “%2$s”, %3$s, %4$d. %5$s. Licence: %6$s.\nChanged: %7$s\nThe set keeps its own licence. No endorsement by the authors is implied.</string>
+    <string name="examples_open_source">Original data</string>
+    <string name="examples_open_licence">Licence</string>
+    <string name="examples_try">Try it</string>
+    <string name="examples_save">Save to phone</string>
+    <string name="examples_saving_fmt">Saving %1$s</string>
+    <string name="examples_saved_title">Saved to your phone</string>
+    <string name="examples_saved_body_fmt">The photos, the load log, the expected results and the credit are in %1$s. Pick them from there in a new analysis.</string>
+    <string name="examples_save_failed_title">Couldn\'t save the example</string>
+    <string name="examples_save_failed_body_fmt">The files could not be written (%1$s). Free some space and try again.</string>
+    <string name="examples_too_many_frames_title">Too many frames for this account</string>
+    <string name="examples_too_many_frames_body_fmt">This example has %1$d frames and this account allows %2$d. Raise the frame limit in Settings, or save the example to your phone and pick fewer frames.</string>
+    <string name="licences_title">Credits &amp; licences</string>
+    <string name="licences_examples">Example data</string>
 </resources>

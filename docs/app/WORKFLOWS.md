@@ -267,6 +267,32 @@ session is saved with no test type, like one made before test types existed.
 | [ ] 3b.8 | Pick **2D DIC**, pick photos | The wizard is Semper's: no load card; the strain window starts at 5 points and its ⓘ reads as Semper's; **Compute** needs only the reference and a deformed frame |
 | [ ] 3b.9 | Finish a 2D DIC run | The viewer opens on the looping summary, not **Results**; ⓘ has no **Test type** row; Share has no **Lab report**; the CSV is `# semper_csv_version,1` with no load or stress columns |
 | [ ] 3b.10 | Pick **Bending**, then tap the strain window's ⓘ on step 2 | Semper's text, then a sentence on why bending starts at 9 points |
+| [ ] 3b.11 | Tap **+**, then **No photos yet? Try an example with published data** under the three tests | The sheet closes and **Example data** (§3c) opens |
+
+### 3c. Example data — `ExamplesActivity`
+
+The five sets bundled in the APK ([ADR-031](../adr/ADR-031-bundled-example-data.md)),
+from the **+** sheet (§3b.11) or Settings → Help (§4.26c). Each card: title,
+**Works** or **Expected to fail**, photo count, summary, licence and authors.
+A tap opens its sheet: the setup Try it will fill in, what to expect (the
+authors' values and an earlier app run, labelled), the credit, **Original
+data**, **Licence**, **Try it** and **Save to phone**.
+
+| # | Action | Expected |
+|---|---|---|
+| [ ] 3c.1 | Open **Example data** | Five cards in order: Steel strip in tension, PMMA beam in 3-point bending, Concrete beam (expected to fail), Carbon-fibre plate with a hole, Sub-pixel shift |
+| [ ] 3c.2 | Tap **PMMA beam** | Its sheet: Bending, 33 deformed frames, 2380 × 1228 px; span 75, width 12, depth 31 mm; load log `pmma_loads.csv` in N; tap hint x ≈ 1170, y ≈ 39 / 611; E from the graph ≈ 1.98 GPa; credit with doi:10.5281/zenodo.1172068, CC BY 4.0, what was changed, "No endorsement…" |
+| [ ] 3c.3 | Tap **Original data**, then **Licence** | doi.org opens the Zenodo record; the CC BY 4.0 deed opens |
+| [ ] 3c.4 | Tap **Try it** | The wizard opens as Bending with the reference, 33 frames, the load log paired (33 rows, N), L/b/t filled and the ROI drawn; the beam's edges are still to tap |
+| [ ] 3c.5 | Tap the edges at the hinted spots, Compute | E from the graph near 2.0 GPa; the run counts toward the analysis limit like any other |
+| [ ] 3c.6 | **Steel** → Try it → Compute | Tensile, area 12.5 mm², axis x, 40 frames, kN log paired; E near 150 GPa |
+| [ ] 3c.7 | **Concrete** → Try it → taps → Compute | "Stopped early" after frame 2 |
+| [ ] 3c.8 | **Carbon-fibre plate** → Try it → Compute | 2D DIC, no load card, ROI drawn; V around −0.6 px |
+| [ ] 3c.9 | With the frame limit at 10 (§4.25), Try it on Steel | "Too many frames for this account"; the wizard does not open |
+| [ ] 3c.10 | **Save to phone** on any set | A progress dialog, then "Saved to your phone" naming `Download/Semper examples/<set>/`; Files shows the photos, the log, README.md, CREDIT.txt (and LICENSE.DICe for the DICe sets) |
+| [ ] 3c.11 | Save the same set again | It finishes at once; nothing is duplicated |
+| [ ] 3c.12 | Cancel a save part-way | The dialog closes; no half-written file is left in the folder |
+| [ ] 3c.13 | Tap **Credits & licences** at the top | §4.26d |
 
 ## 4. Settings
 
@@ -354,8 +380,10 @@ data**.
 | [ ] 4.23 | Drag the **Max frames** slider | Value label tracks in steps of 10 from 10 up to the ceiling. 500 is the compile-time fallback and the backend default; the live ceiling comes from remote config, so a backend can lower it |
 | [ ] 4.24 | Tap the ⓘ next to it | Explains the cost of more frames |
 | [ ] 4.25 | Set it to 20, then import 40 frames in an analysis | Only the first 20 are kept, with a "capped" toast |
-| [ ] 4.26 | Expand **Help & support** | Five actions: **Open Manual**, Report a bug, Request a feature, **Send feedback**, Email support — plus the support address, selectable and copyable |
+| [ ] 4.26 | Expand **Help & support** | Seven actions: **Open Manual**, **Example data**, **Credits & licences**, Report a bug, Request a feature, **Send feedback**, Email support — plus the support address, selectable and copyable |
 | [ ] 4.26a | Tap **Open Manual** | The hosted manual opens in a browser |
+| [ ] 4.26c | Tap **Example data** | §3c |
+| [ ] 4.26d | Tap **Credits & licences** | Each example set's credit (authors, title, DOI or link, licence, what was changed), then the full DICe BSD-3-Clause, Eigen MPL-2.0 and OpenCV Apache-2.0 texts; selectable |
 | [ ] 4.26b | Tap **Send feedback** | Mail app opens to support@, subject "Semper Classroom feedback (v… / …)", body carrying app version, device model, Android level and build type — no account address needed |
 | [ ] 4.27 | Tap **Email support** | Mail app opens to support@, subject "Semper Classroom support request", body carrying account, device ID, app version and device model |
 | [ ] 4.28 | Same with no mail app installed | "No email app found…" toast naming the address; no crash |
@@ -1261,9 +1289,11 @@ verified, both are live; §1.13a covers the in-app reset form it opens.
   there (§10). `POST_NOTIFICATIONS` is declared but never requested, so on Android 13+
   the outcomes show only after the user allows notifications in system settings;
   terminal failures still surface in-app either way.
-- **No open-source licenses screen.** Privacy Policy and Terms of Service are
-  linked from the About dialog and open the hosted pages in a browser; there is
-  no in-app licence attribution list.
+- **The licences screen covers the example data and the engine only.**
+  Credits & licences (§4.26d) shows the example sets' credits and the DICe,
+  OpenCV and Eigen licences; the AndroidX, Firebase and OkHttp notices are not
+  listed yet (TD-331). Privacy Policy and Terms of Service are linked from the
+  About dialog and open the hosted pages in a browser.
 - **Crash reporting is opt-in and off until accepted.** Crashlytics collection
   is disabled in the manifest and enabled only after the first-run prompt or the
   Settings toggle, so a user who never answers sends nothing.

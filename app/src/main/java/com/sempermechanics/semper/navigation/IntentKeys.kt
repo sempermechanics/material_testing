@@ -25,6 +25,22 @@ object IntentKeys {
      */
     const val TEST_TYPE = "TEST_TYPE"
 
+    // ── ExamplesActivity's Try it → StaticAnalysisActivity (ADR-031)
+    /**
+     * The bundled example set the wizard was opened on. Left on the Intent,
+     * like [TEST_TYPE]: it tells the first open to take the set's dimensions.
+     */
+    const val EXAMPLE_ID = "EXAMPLE_ID"
+
+    /** IntArray(4): the example's ROI, x, y, width, height in reference pixels; consumed once. */
+    const val EXAMPLE_ROI = "EXAMPLE_ROI"
+
+    /** IntArray(2): the example reference's width and height, which the ROI belongs to; consumed once. */
+    const val EXAMPLE_IMAGE_SIZE = "EXAMPLE_IMAGE_SIZE"
+
+    /** The machine-load log to read on open, as if picked on the load card; consumed once. */
+    const val PICKED_LOAD_CSV_URI = "PICKED_LOAD_CSV_URI"
+
     // ── Mechanical test → ResultViewerActivity
     /** Specimen cross-section in mm²; 0 when not entered. */
     const val CROSS_SECTION_MM2 = "CROSS_SECTION_MM2"
