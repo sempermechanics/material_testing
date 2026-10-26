@@ -133,6 +133,20 @@ class SealedRecordStoreTest {
     }
 
     @Test
+    fun `a record a newer build sealed reads as no token, not tampering, and is resealed`() {
+        // readiness TE1-004: it read as tampered, i.e. demo while offline.
+        val disk = saved()
+        val newer = "{\"v\":2,\"token\":\"t\"}".toByteArray()
+        disk.stored = Base64Url.encode(newer) + "." + Base64Url.encode(disk.tagger.tag(newer))
+
+        assertEquals(StoredEntitlement.Nothing, SealedRecordStore.load(disk))
+        assertEquals(TokenStatus.NotUsed, statusOf(disk))
+        // The next /v1/config seals it in this build's version, under the same key.
+        assertTrue(SealedRecordStore.save(disk, record))
+        assertEquals(StoredEntitlement.Sealed(record), SealedRecordStore.load(disk))
+    }
+
+    @Test
     fun `a lost Keystore key reads as no token and drops the record`() {
         val disk = saved()
         disk.key = null

@@ -52,7 +52,9 @@ interface EntitlementDisk {
  * - a lost Keystore key leaves the same, and reads the same.
  *
  * Only a key with neither record nor mark, a record whose MAC does not match
- * its key, or a record this build cannot parse reads as tampered.
+ * its key, or a record this build cannot parse reads as tampered. A record
+ * with a good MAC that a newer build wrote reads as no token; the next save
+ * overwrites it in this build's version (readiness TE1-004).
  */
 object SealedRecordStore {
 
@@ -73,6 +75,7 @@ object SealedRecordStore {
             StoreReading.UNSEAL -> when (val unsealed = SealedEntitlement.unseal(checkNotNull(text), disk.tagger)) {
                 is SealedEntitlement.Unsealed.Ok -> StoredEntitlement.Sealed(unsealed.record)
                 SealedEntitlement.Unsealed.Tampered -> StoredEntitlement.Tampered
+                SealedEntitlement.Unsealed.Newer -> StoredEntitlement.Nothing
             }
         }
     }

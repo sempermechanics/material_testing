@@ -109,7 +109,11 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
      **tampered**; a record with no key (a lost Keystore key, a clear cut
      short) and a key with the mark but no record (a crash mid-seal) read as
      **no token** and are tidied away, so neither drops a licensed user to Demo
-     (TD-265, closed 2026-10-18).
+     (TD-265, closed 2026-10-18). A record whose MAC matches but whose `v` is
+     above this build's (a phone that went back a version) also reads as **no
+     token**, and the next save reseals it; a format bump must keep reading v1,
+     which `SealedEntitlementTest` pins with a committed record
+     (`app/src/test/resources/entitlement/sealed_v1.txt`, readiness TE1-004).
 7. **What narrows to Demo, and what is ignored.** Only four things drop the
    account to Demo entitlements (`TokenStatus.Lapsed`; `EntitlementPolicy.bound`,
    `EntitlementPolicy.kt:91-105`): a sealed record that was altered or deleted
