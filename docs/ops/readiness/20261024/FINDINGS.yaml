@@ -4694,7 +4694,7 @@
   title: The Details sheet's histogram labels are still monospace, off the app's type scale
   type: defect
   severity: P3
-  criterion: 'AE-1: text uses the app's type scale (TextAppearance.Semper.*); numbers may use tabular figures, not a monospace face.'
+  criterion: 'AE-1: text uses the app''s type scale (TextAppearance.Semper.*); numbers may use tabular figures, not a monospace face.'
   evidence:
   - docs/ops/readiness/20261024/screens/after/sheet_settingsused_360_light_fs1.png
   reproduce: Open a result's Details sheet and look at the histogram's axis labels.
