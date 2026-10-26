@@ -47,13 +47,15 @@ class ForceDarkContrastTest {
 
     /** [color] as force dark draws it: [darken] for a background, else as content. */
     private fun forced(@ColorInt color: Int, darken: Boolean): Int {
-        if (!night) return color
         val lab = DoubleArray(3)
         ColorUtils.colorToLAB(color, lab)
         val inverted = min(110.0 - lab[0], 100.0)
-        val moves = if (darken) inverted < lab[0] else inverted > lab[0]
-        if (!moves) return color
-        return ColorUtils.setAlphaComponent(ColorUtils.LABToColor(inverted, lab[1], lab[2]), Color.alpha(color))
+        val moves = night && if (darken) inverted < lab[0] else inverted > lab[0]
+        return if (moves) {
+            ColorUtils.setAlphaComponent(ColorUtils.LABToColor(inverted, lab[1], lab[2]), Color.alpha(color))
+        } else {
+            color
+        }
     }
 
     private fun background(@ColorInt color: Int) = forced(color, darken = true)
