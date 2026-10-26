@@ -47,7 +47,11 @@ class AuthRoutingMessageTest {
 
     @Test
     fun `the app's own sign-in route still shows its reason`() {
-        val own = AuthRoute.signInIntent(ApplicationProvider.getApplicationContext(), "Session expired.", devBypass = false)
+        val own = AuthRoute.signInIntent(
+            ApplicationProvider.getApplicationContext(),
+            "Session expired.",
+            devBypass = false,
+        )
 
         assertEquals("Session expired.", open(own))
     }
