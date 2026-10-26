@@ -18,7 +18,7 @@ chunk own?" here.
 | **cloud** | Upload, API, restore, quota, account deletion | `cloud/ApiDtosContractTest`, `ApiErrorMappingTest`, `UploadResumableTest`, `DicUploadWorkerOutcomesTest`, `RestoreAndImportSafetyTest`, `RestoreStartTest`, `CloudBackupListingTest`, `QuotaGateTest`, `AccountDeletionTest`, `SessionEverythingExporterTest`, `data/cloud/SessionUploadBundlerTest` | `data/cloud/SessionUploadBundlerDeviceTest` |
 | **settings** | Settings sections, contacting support, account deletion | `settings/AnalysisEntriesTest`, `HelpSupportSectionTest`, `DeleteAccountReauthTest`, `AccountDeletionDeathTest`, `AppSettingsMigrateTest` | — |
 | **analytics** | Consent-gated Firebase Analytics events | `diagnostics/SemperAnalyticsTest` | — |
-| **upgrade** | Prefs / session index forward compatibility | (covered in settings + session) | `upgrade/PrefsUpgradeSmokeTest` |
+| **upgrade** | Prefs / session index forward compatibility | `upgrade/UpgradeFrom1036Test`: v1.2-beta.4's index and preference files (fixtures derived from its source at 33dce87d by `src/test/resources/upgrade/1036/make_fixture.py`, not captured from a device) | `upgrade/PrefsUpgradeSmokeTest` |
 | **e2e** | Wizard chrome smoke (Next + toolbar; Back / Compute / instruction GONE on step 1) | — | `AnalysisWizardSmokeTest` |
 | **pipeline** | JNI + native runtime | — | `pipeline/EnginePipelineSmokeTest` |
 | **benchmark** | Startup / screen / viewer-scrub Macrobenchmarks; hot-path microbenchmarks | — | `:app` androidTest `benchmark/HotPathMicroBenchmark`, `:benchmark` module (both in CI's `tier-benchmark`: label `benchmark` / workflow_dispatch / a PR touching a hot path) |
