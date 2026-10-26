@@ -94,6 +94,20 @@ judged sound the colour guard's exemption for files that write output (`*Export.
 | TE1-006: the quota card, the seat check and the clock re-seal still read on main | "Rework once more (Recommended)" |
 | The ROI info pill cuts its values at font scale 2.0 (follow-up to AE1V-023); the Details histogram labels are monospace (AE1V-025, P3) | "Fix in the same batch (Recommended)" |
 
+Round 2's wrapping pill left the ROI canvas about 82 dp tall at font scale 2.0 on a
+360×800 dp phone; round 1 had left about 210 dp. Asked 2026-10-26:
+
+| Finding | Decision (verbatim) |
+|---|---|
+| AE1V-023: the canvas height at font scale 2.0 | "One more small fix (Recommended)": the pill reserves the lines its current mode needs, the bottom bar drops the hidden Manual fields in Draw mode, and the canvas resizes only on a mode switch |
+
+The third re-verify, at `2363b12b`, found AE1V-023 and AE1V-025 VERIFIED, with Draw mode
+at about 256 dp. It reopened two items:
+- AE3-002: two support-mail lines still said "device", so it went back to rework under
+  the rule above.
+- TE1-006: its code passes for Home, and the reopening was only about TD-338's list of
+  the calls left on main. The lead corrected that list in `111f8060`.
+
 Not asked at this checkpoint: NEEDS_ADMIN items wait on owner decisions or Admin actions.
 - AE3-003 → TD-340/TD-341.
 - AE1-017 → TD-342.
