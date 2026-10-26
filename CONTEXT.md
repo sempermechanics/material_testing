@@ -114,13 +114,13 @@ emulator (`scripts/micro_ab.py`, [TESTING.md](docs/app/TESTING.md)); the phone-r
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-24)
+## Current state (2026-10-26)
 
-- **Deployed.** Backend from `187f4870` (2026-10-24; #482 on top of #466–#468): Cloud Run
-  `semper-api` (`semper-api-40063322039-1`, gateway config `v202610230501-112`) and staging
-  `semper-api-staging` (`semper-api-staging-39948110403-1`, `v202610221243-110`)
-  ([CHANGELOG](docs/ops/CHANGELOG.md)). Hosting is from `000575b0` (2026-10-23, the operator desk
-  redesign, #478) with `/privacy` and `/terms` held at `b940cc29`. Live: licensing
+- **Deployed.** Backend from `46ac8b5e` (2026-10-26; #484, the Semper Classroom rename, on top of
+  #482): Cloud Run `semper-api` (`semper-api-40300681201-1`, gateway config `v202610230501-112`)
+  and staging `semper-api-staging` (`semper-api-staging-40299991596-1`, `v202610221243-110`)
+  ([CHANGELOG](docs/ops/CHANGELOG.md)). Hosting is from `46ac8b5e` (2026-10-26) with `/privacy` and
+  `/terms` held at `b940cc29`. Live: licensing
   ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)), device binding per app
   ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md)), sessions tagged by app
   ([ADR-014](docs/adr/ADR-014-session-app-tag.md)), consoles on `app.sempermechanics.com`
@@ -130,7 +130,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Legal pages held:** #474's text (the demo-upload sentences in Privacy §2.3 and Terms
   §6.1, retention values) waits on counsel (TD-277). A Hosting deploy from `main` publishes
   it, so until counsel signs off, deploy Hosting from a worktree with those two pages taken
-  from `b940cc29` ([checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md) §4).
+  from `b940cc29` ([checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md) §4). A plain `main` deploy
+  on 2026-10-26 published them until the same day's redeploy; compare the live pages after every
+  Hosting deploy.
 - **[Checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md) still open:** monitoring `--apply` (§5;
   no notification channel exists yet); staff/IT phones re-registering with TOTP, the 24 h log
   watch, ending the staging QC test account, and the erasure check (§6; the audit backfill, the
@@ -150,8 +152,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   counsel on the Terms (TD-277).
 - **material_testing** merges this `main` (last `9d116f2`, material_testing#142, 2026-10-22;
   [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); it released `v1.4-beta.2` 2026-10-17 as Material Testing,
-  now being renamed **Semper Classroom** (`claude/semper-classroom-upstream`, not merged; rollout
-  order in [ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md), aliases until TD-330).
+  and is now **Semper Classroom** ([ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md),
+  #484, deployed 2026-10-26; aliases until TD-330). Owed before its release: the Firebase app for
+  `com.sempermechanics.semperclassroom`, the fork's sync and build, the new repo variables; then
+  `rename_classroom_app.py`.
 - **CI.** Tiers follow the diff, coverage floors rise with every test PR
   ([TESTING.md](docs/app/TESTING.md#coverage-floors)), and `main` requires `CI OK`. Tier 3 signs
   in to live staging, so a staging backend behind `main` fails it.
