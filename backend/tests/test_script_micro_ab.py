@@ -287,3 +287,29 @@ def test_main_run_mode_needs_both_apks_in_each_folder(ab, tmp_path, monkeypatch,
     assert ab.main(["micro_ab.py", "--a", str(a), "--b", str(b), "--out", str(tmp_path / "ab")]) == 2
     assert f"{b} is missing app-debug-androidTest.apk" in capsys.readouterr().out
     assert device.calls == []
+
+
+def test_build_app_id_reads_the_folder_or_falls_back(ab, tmp_path):
+    assert ab.build_app_id(tmp_path, "org.fallback") == "org.fallback"
+    (tmp_path / "app-id.txt").write_text("org.example.old\n", encoding="utf-8")
+    assert ab.build_app_id(tmp_path, "org.fallback") == "org.example.old"
+    (tmp_path / "app-id.txt").write_text("org.one\norg.two\n", encoding="utf-8")
+    assert ab.build_app_id(tmp_path, "org.fallback") == "org.fallback"
+
+
+def test_main_run_mode_runs_each_build_under_its_own_app_id(ab, tmp_path, monkeypatch):
+    # A PR that renames the app (ADR-030): its base installs and runs under the old id.
+    a, b = _apks(tmp_path / "apks")
+    (a / "app-id.txt").write_text("org.example.old\n", encoding="utf-8")
+    (b / "app-id.txt").write_text("org.example.new\n", encoding="utf-8")
+    device = FakeDevice()
+    monkeypatch.setattr(ab.subprocess, "run", device)
+    code = ab.main(["micro_ab.py", "--a", str(a), "--b", str(b), "--out", str(tmp_path / "ab"),
+                    "--package", "org.example"])
+    assert code == 0
+    runners = [c[-1].split()[-1] for c in device.calls if "am instrument" in c[-1]]
+    assert runners == [f"org.example.{build}.test/androidx.test.runner.AndroidJUnitRunner"
+                       for build in ("old", "new", "new", "old")]
+    uninstalled = [c[-1] for c in device.calls if "uninstall" in c]
+    assert uninstalled[:2] == ["org.example.old.test", "org.example.old"]
+    assert uninstalled[2:4] == ["org.example.new.test", "org.example.new"]
