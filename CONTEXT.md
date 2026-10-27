@@ -191,7 +191,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   pairs (BSD-3) in `app/src/main/assets/examples/` (~80 MB), with ground truth and credits;
   Try it / Save to phone / Credits & licences. Terms §4.6 merged upstream (semperdic-app #487),
   not yet synced here or deployed to Hosting; the website's Examples page merged (semper-website
-  #13). Owed: that sync and deploy, the device pass §3c, TD-57–TD-59.
+  #13). The §3c device pass ran on a Galaxy S22 on 2026-10-27; its fixes and TD-59's
+  new numbers merged 2026-10-27 (#154). Owed: that sync and deploy, TD-57, TD-58.
 - **Rename to Semper Classroom ([ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md)):** merged
   2026-10-26 (#147, `f25ebd01`), not released; still owed: the upstream deploy and the owner's Firebase app registration.
 - **Play submission ([gate](docs/ops/PRODUCTION_READINESS_GATE.md#google-play-submission-semper-classroom)):**
@@ -203,8 +204,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   dry-run on PRs; heavy tiers wait for `tier1-static` only. Two unit-test workers reproduce TD-54, so it stays one.
 - **TD numbers restarted at TD-1 ([ADR-032](docs/adr/ADR-032-own-td-numbers.md)):** branch
   `claude/renumber-play-td` (#155). Open rows TD-1–TD-61, other cited numbers TD-62–TD-252, next free
-  TD-253; a sync runs upstream diffs through `scripts/td_numbers.py translate` first. #153 and #154
-  cite old numbers until they take it.
+  TD-253; a sync runs upstream diffs through `scripts/td_numbers.py translate` first. #153 cites old
+  numbers until it takes main.
 - **CI fixes after main's failures on 2026-10-26:** merged as #152 (2026-10-27). Submodule
   checkout no longer needs GitLab when Eigen's pin is cached (`checkout-submodules`), and
   `PdfReportGeneratorTest` reads its statuses without a race.

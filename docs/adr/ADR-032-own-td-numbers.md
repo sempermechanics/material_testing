@@ -53,12 +53,13 @@ A number that isn't in the map becomes `semperdic-app's TD-n`.
   upstream number gets a row and a number here only if this repo carries it.
 - `git log -S'TD-n'` finds a row's history from 2026-10-27 on. For earlier history,
   search its old number from the map.
-- Open PRs written before the restart (#153, #154) cite old numbers and are
-  translated when they merge main.
+- PRs written before the restart cite old numbers. #154 merged first, and its
+  references were translated when #155 took main (its TD-333 closed TD-59). #153 is
+  translated when it takes main.
 
 ## Action items
 
-- [ ] Merge the restart before the next sync, then run #153 and #154 through
-      `translate` when they take it.
+- [ ] Merge the restart before the next sync, then run #153 through `translate`
+      when it takes main.
 - [ ] semperdic-app: replace its next-free note's "in both" with a pointer to this
       record (sempermechanics/semperdic-app#495).

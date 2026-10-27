@@ -95,7 +95,13 @@ class ExampleAssetProvider : ContentProvider() {
             .appendPath(file)
             .build()
 
-        /** The MIME type of an example file, from its extension. */
+        /**
+         * The MIME type of an example file, from its extension. An extension
+         * with no type of its own (`LICENSE.DICe`) is a generic binary: MediaStore
+         * renames a `text/plain` download to end in `.txt`, so Save to phone would
+         * write `LICENSE.DICe.txt` and, not finding `LICENSE.DICe` on the next
+         * save, a second copy beside it (seen on a Galaxy S22, Android 16).
+         */
         fun mimeTypeOf(name: String): String = when (name.substringAfterLast('.', "").lowercase()) {
             "png" -> "image/png"
             "jpg", "jpeg" -> "image/jpeg"
@@ -103,7 +109,8 @@ class ExampleAssetProvider : ContentProvider() {
             "csv" -> "text/csv"
             "json" -> "application/json"
             "md" -> "text/markdown"
-            else -> "text/plain"
+            "txt" -> "text/plain"
+            else -> "application/octet-stream"
         }
     }
 }

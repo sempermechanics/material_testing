@@ -88,7 +88,7 @@
       "label": "E from the graph",
       "value": "2.00 GPa",
       "source": "app",
-      "note": "An earlier run of this app"
+      "note": "Engine 0.6.1; average E 2.10 GPa"
     }
   ],
   "truth_file": "truth_deflection.csv",

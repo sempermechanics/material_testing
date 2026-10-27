@@ -31,11 +31,11 @@ steps, in kN, one row per deformed frame.
 
 ## Expected
 
-| | App (earlier run) | The dataset's own measurement |
+| | App (engine 0.6.1) | The dataset's own measurement |
 |---|---:|---:|
-| E, frames 1–26 (6.5–238.8 MPa) | **149.6 GPa**, R² 0.9955 | 157.5 GPa (two gauge points, 60 mm apart) |
-| Peak stress | 435.5 MPa, frame 38 | 435.5 MPa, step 509 |
-| Frames on the curve | 40 of 40 | |
+| E, frames 1–26 (6.5–238.8 MPa) | **148.9 GPa**, R² 0.9952 | 157.5 GPa (two gauge points, 60 mm apart) |
+| Peak stress | 435.5 MPa, frame 38 (off the curve: no strain there) | 435.5 MPa, step 509 |
+| Frames on the curve | 35 of 40 | |
 
 Both E values sit well below the handbook value for this steel (about
 220 GPa), including the authors' own 3D measurement. That is typical of camera

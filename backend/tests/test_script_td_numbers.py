@@ -1,7 +1,7 @@
 """`scripts/td_numbers.py`: semperdic-app's TD numbers turned into this repo's (ADR-032).
 
 `translate` is tested on a small map, and the real map is checked to be the one
-the 2026-10-27 restart wrote: every register row is TD-1..TD-61, in old order.
+the 2026-10-27 restart wrote: the register's rows came first, TD-1..TD-61, in old order.
 """
 from __future__ import annotations
 
@@ -20,6 +20,8 @@ _SCRIPT = _REPO / "scripts" / "td_numbers.py"
 pytestmark = pytest.mark.skipif(not _SCRIPT.is_file(), reason="scripts/ not present (backend-only checkout)")
 
 _MAP = {214: 9, 215: 10, 260: 198, 312: 54, 139: 141}
+# The register rows on 2026-10-27, which took TD-1..TD-61.
+_ROWS = 61
 
 
 @pytest.fixture(scope="module")
@@ -71,12 +73,13 @@ def test_the_map_puts_the_register_rows_first(td):
         rows = list(csv.DictReader(fh))
     assert [int(r["old"][3:]) for r in rows] == olds
     # New numbers rise with the old ones within each block: rows, then the rest.
+    first, rest = olds[:_ROWS], olds[_ROWS:]
+    assert first == sorted(first) and rest == sorted(rest)
+    # Rows close and leave gaps, but every open one is from that first block or later.
     register = (_REPO / "docs" / "ops" / "TECH_DEBT.md").read_text(encoding="utf-8")
     row_ids = [int(n) for n in re.findall(r"^\|\s*TD-(\d+)\s*\|", register, re.M)]
-    assert row_ids == list(range(1, len(row_ids) + 1))
-    first = olds[: len(row_ids)]
-    rest = olds[len(row_ids):]
-    assert first == sorted(first) and rest == sorted(rest)
+    assert row_ids == sorted(row_ids)
+    assert all(n <= _ROWS or n > len(mapping) for n in row_ids)
 
 
 def test_translate_reads_stdin_and_reports_on_stderr(td, tmp_path, monkeypatch, capsys):

@@ -85,6 +85,8 @@ class ExampleAssetProviderTest {
         assertEquals("image/tiff", ExampleAssetProvider.mimeTypeOf("a.tiff"))
         assertEquals("application/json", ExampleAssetProvider.mimeTypeOf("example.json"))
         assertEquals("text/markdown", ExampleAssetProvider.mimeTypeOf("README.md"))
-        assertEquals("text/plain", ExampleAssetProvider.mimeTypeOf("LICENSE.DICe"))
+        assertEquals("text/plain", ExampleAssetProvider.mimeTypeOf("CREDIT.txt"))
+        // Not text/plain: MediaStore would save it as LICENSE.DICe.txt, and a second save would duplicate it.
+        assertEquals("application/octet-stream", ExampleAssetProvider.mimeTypeOf("LICENSE.DICe"))
     }
 }
