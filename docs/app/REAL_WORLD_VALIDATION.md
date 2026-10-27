@@ -559,6 +559,31 @@ there instead: `EnginePipelineSmokeTest.repeatSolve_bitIdentical`, through
 semperdic-app's debug build of the same engine, gave the same bytes on nine
 solves (TD-65).
 
+## Try it on a Galaxy S22 (2026-10-27)
+
+Galaxy S22+ (`SM-S906U1`), Android 16, debug build (arm64) of `main` at
+`5b3b3948`, engine 0.6.1, signed in to a QC test account. Each bundled set was
+run through Try it ([WORKFLOWS §3c](WORKFLOWS.md#3c-example-data--examplesactivity))
+with the settings it fills in; only the bending taps were added, at the hinted
+spots.
+
+| Set | Settings Try it set | Frames | Solve | Result |
+|---|---|---|---:|---|
+| Steel | ROI 1960 × 297 at (20, 69); subset 19; step 5; window 5 points | 40, 35 on the curve | 18 s | E **148.9 GPa** over frames 1–26, R² 0.9952; Rp0.2 305.6 MPa; peak 435.50 MPa at frame 38, off the curve |
+| PMMA | ROI 2259 × 509 at (59, 69); subset 27; step 5; window 9 points; taps 571 px (0.0543 mm/px) | 33 of 33 | 65 s | E from the graph **2.00 GPa** (690.22 kg/mm, R² 0.9993); average E **2.10 GPa** |
+| Concrete | ROI 2250 × 1080; taps 1141 px (0.1314 mm/px) | **2 of 7**, stopped early | — | "Stopped at frame 2", as expected |
+| CFRP open hole | ROI 320 × 950 at (40, 40); subset 17; step 5 | 1 of 1 | about 1 s | U −0.21 to −0.04 px; V −0.87 to −0.41 px (DICe: −0.92 to −0.39, median −0.63) |
+
+- **Steel** matches the Pixel 6's and the emulator's ΔL / L₀ runs above to the
+  digit. Its `example.json` and README carried the 2026-09-23 region-mean value,
+  149.6 GPa (TD-351); they now carry this run's.
+- **PMMA** is the authors' 1.98 / 2.09 GPa within 1 %, as on the Pixel.
+- **Solve times** are this phone's own reference, not a comparison: the Pixel 6
+  rows above are older engines, and the S22's PMMA run (65 s) is slower than the
+  Pixel's 44 s on 0.2.2.
+- `ExampleDatasetsDeviceTest` passed here as on the emulator: both DICe pairs
+  within 0.1 px of their known shift.
+
 ## Case 3 — reinforced concrete beam in 3-point bending: expected to fail
 
 ### The data

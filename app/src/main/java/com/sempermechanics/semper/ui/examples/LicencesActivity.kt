@@ -67,10 +67,34 @@ class LicencesActivity : AppCompatActivity() {
             files.forEach { name ->
                 text.inSpans(StyleSpan(Typeface.BOLD)) { append(name.removeSuffix(".txt")) }
                 text.append("\n")
-                text.append(assets.open("$LICENCES_DIR/$name").use { it.readBytes().decodeToString() }.trim())
+                text.append(reflow(assets.open("$LICENCES_DIR/$name").use { it.readBytes().decodeToString() }))
                 text.append("\n\n")
             }
             return text
         }
+
+        /**
+         * A plain-text licence laid out for a phone. The files are wrapped at
+         * about 80 columns, so shown as they are every line ends in a stray word
+         * on a narrow screen. Each paragraph (lines between blank lines) becomes
+         * one line the TextView wraps itself. A file that is a source comment
+         * (DICe's: every line starts `//`) loses the slashes, and rule lines
+         * (`****`, `====`, `----`) go. The words are unchanged.
+         */
+        internal fun reflow(licence: String): String {
+            val lines = licence.lines()
+            val commented = lines.filter { it.isNotBlank() }.all { it.trimStart().startsWith("//") }
+            return lines
+                .map { if (commented) it.trimStart().removePrefix("//") else it }
+                .filterNot { RULE.matches(it.trim()) }
+                .joinToString("\n")
+                .split(PARAGRAPH_BREAK)
+                .map { paragraph -> paragraph.lines().map(String::trim).filter(String::isNotEmpty).joinToString(" ") }
+                .filter(String::isNotEmpty)
+                .joinToString("\n\n")
+        }
+
+        private val RULE = Regex("""[*=\-]{4,}""")
+        private val PARAGRAPH_BREAK = Regex("""\n\s*\n""")
     }
 }
