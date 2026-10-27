@@ -1,4 +1,4 @@
-"""`scripts/check_swallowed_cancellation.py`: ADR-018's cancellation rule as a CI check (TD-171).
+"""`scripts/check_swallowed_cancellation.py`: ADR-018's cancellation rule as a CI check (TD-169).
 
 Each test copies Kotlin fixtures (`fixtures/cancellation/`) into a small
 repository under a temporary directory and runs the check against it: a broad
@@ -112,8 +112,8 @@ class AllowlistTest(_Repo):
     def test_listed_findings_pass(self) -> None:
         self.allow(
             "data/AccountLoader.kt | load | runCatching | fetchMe | never-cancelled scope (ADR-018)\n"
-            "data/AccountLoader.kt | loadOrNull | catch Exception | fetchMe | reason (TD-171)\n"
-            "data/AccountLoader.kt | waitThenLoad | catch Throwable | delay | reason (TD-171)\n"
+            "data/AccountLoader.kt | loadOrNull | catch Exception | fetchMe | reason (TD-169)\n"
+            "data/AccountLoader.kt | waitThenLoad | catch Throwable | delay | reason (TD-169)\n"
         )
         failures, _, covered = check.check(self.root)
         self.assertEqual(failures, [])
@@ -121,10 +121,10 @@ class AllowlistTest(_Repo):
 
     def test_an_entry_that_matches_nothing_must_go(self) -> None:
         self.allow(
-            "data/AccountLoader.kt | load | runCatching | fetchMe | reason (TD-171)\n"
-            "data/AccountLoader.kt | loadOrNull | catch Exception | fetchMe | reason (TD-171)\n"
-            "data/AccountLoader.kt | waitThenLoad | catch Throwable | delay | reason (TD-171)\n"
-            "data/Gone.kt | gone | runCatching | fetchMe | reason (TD-171)\n"
+            "data/AccountLoader.kt | load | runCatching | fetchMe | reason (TD-169)\n"
+            "data/AccountLoader.kt | loadOrNull | catch Exception | fetchMe | reason (TD-169)\n"
+            "data/AccountLoader.kt | waitThenLoad | catch Throwable | delay | reason (TD-169)\n"
+            "data/Gone.kt | gone | runCatching | fetchMe | reason (TD-169)\n"
         )
         failures = self.failures()
         self.assertEqual(len(failures), 1, failures)
@@ -142,10 +142,10 @@ class AllowlistTest(_Repo):
     def test_a_reason_may_hold_a_pipe(self) -> None:
         entries, problems = check.read_allowlist(self.root / check.ALLOWLIST)
         self.assertEqual((entries, problems), ([], []))
-        self.allow("a.kt | f | runCatching | g | one | two (TD-171)\n")
+        self.allow("a.kt | f | runCatching | g | one | two (TD-169)\n")
         entries, problems = check.read_allowlist(self.root / check.ALLOWLIST)
         self.assertEqual(problems, [])
-        self.assertEqual(entries[0].reason, "one | two (TD-171)")
+        self.assertEqual(entries[0].reason, "one | two (TD-169)")
 
 
 class CommandLineTest(unittest.TestCase):

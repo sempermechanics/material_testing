@@ -13,7 +13,7 @@ import java.io.File
 
 /**
  * The CSV's two sections stay apart whichever order the appender is driven in
- * (TD-66): the upload bundle decodes each frame once and so interleaves
+ * (TD-94): the upload bundle decodes each frame once and so interleaves
  * [AnalysisCsvWriter.Appender.appendFieldStats] with
  * [AnalysisCsvWriter.Appender.append], yet must produce the same file as the
  * share-sheet [AnalysisCsvWriter.write].

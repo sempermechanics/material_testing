@@ -38,8 +38,8 @@ import java.util.concurrent.TimeUnit
  * alone, expedited, retried with backoff a bounded number of times
  * ([EntitlementRefresh.afterAttempt]). It is queued when the entitlement
  * token's `refreshAfter` has passed on start or return to the foreground
- * ([foregroundCheck], TD-264), and when the fetch after a seat
- * checkout fails (TD-266).
+ * ([foregroundCheck], TD-210), and when the fetch after a seat
+ * checkout fails (TD-212).
  *
  * Not a substitute for the in-process heartbeat ([SeatHeartbeat]): WorkManager
  * is inexact and must not be the only renew path while the app is open.

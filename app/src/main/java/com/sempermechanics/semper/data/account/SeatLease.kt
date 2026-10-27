@@ -72,7 +72,7 @@ object SeatLease {
      * After a seat checkout or heartbeat went through: fetch `/v1/config` for
      * the token that follows the new lease, and when that fetch fails, queue
      * the one-off refresh, which retries with backoff a bounded number of
-     * times ([LicenseConfigWorker.refreshNow], TD-266). Without it the old
+     * times ([LicenseConfigWorker.refreshNow], TD-212). Without it the old
      * token lapses at the old lease's end and an online seat holder runs as
      * demo until the next periodic refresh.
      */

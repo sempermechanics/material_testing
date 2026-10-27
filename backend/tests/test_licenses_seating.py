@@ -281,7 +281,7 @@ def test_re_inviting_to_the_same_licence_is_a_no_op(store):
 
 
 def test_a_starved_invite_claim_mints_no_demo_key(store, monkeypatch):
-    """TD-33: a claim that lost every attempt to contention, with nobody
+    """TD-71: a claim that lost every attempt to contention, with nobody
     winning, used to fall through to the Demo mint. The Demo `licenseId` then
     short-circuited every later claim, so the invite stayed pending for good.
     The request is now served unlicensed (Demo limits) and the next one claims.

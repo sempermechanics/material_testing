@@ -31,7 +31,7 @@ import java.io.File
 /**
  * [RunSpec] (ADR-004): the engine gets exactly what it got before the spec
  * existed, and the viewer a run opens shows the settings its saved session
- * records (TD-61).
+ * records (TD-90).
  */
 @RunWith(RobolectricTestRunner::class)
 class RunSpecTest {
@@ -100,7 +100,7 @@ class RunSpecTest {
         assertEquals(sweep, spec.sweep)
     }
 
-    // --------------------------------------------------------------- TD-61
+    // --------------------------------------------------------------- TD-90
 
     private fun savedRecord(settings: SessionRecordSettings) = sessionRecord(
         id = "f0f0406f-8c2",
@@ -135,7 +135,7 @@ class RunSpecTest {
 
     @Test
     fun `the lab test reaches a result opened right after a run, as Home would open it`() {
-        // TD-301, TD-305: a run's result and Home both open ViewerArgs.of the
+        // TD-237, TD-241: a run's result and Home both open ViewerArgs.of the
         // saved row, so the lab test must ride the row: one LabSession, the
         // record's own, and the loads the run recorded.
         val geometry = SpecimenGeometry(80f, 10.5f, 4f, BeamEdgeTaps(100f, 40f, 112f, 90f))

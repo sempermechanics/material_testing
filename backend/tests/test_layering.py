@@ -1,4 +1,4 @@
-"""TD-293: routers answer requests and call services for multi-step flows;
+"""TD-230: routers answer requests and call services for multi-step flows;
 `deps.py` holds identity and device attestation, `step_up.py` the step-up
 tiers on top of them."""
 import ast
@@ -58,7 +58,7 @@ def test_step_up_builds_on_deps_and_not_the_reverse():
 
 def test_services_do_not_import_routers():
     """Services sit under the routers: a router calls a service, never the
-    reverse, so the order routers load in cannot matter (TD-54)."""
+    reverse, so the order routers load in cannot matter (TD-86)."""
     offenders = []
     for path in sorted((APP / "services").glob("*.py")):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):

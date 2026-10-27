@@ -23,7 +23,7 @@ on:
 
 # A new push cancels a PR's older run. On main a started run finishes (the full
 # matrix, ~20 min): cancelling there meant a busy day of merges never finished
-# Tier 3 / 5 on main at all (TD-97). GitHub still keeps only the newest pending
+# Tier 3 / 5 on main at all (TD-115). GitHub still keeps only the newest pending
 # run per group, so a burst of merges runs the one in flight and the latest.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -152,21 +152,21 @@ jobs:
       - name: Readiness framework fully mapped
         run: python scripts/check_framework_coverage.py
 
-      # ADR-015's ~500-line file guide (TD-292). Reads files, no Gradle, so it
+      # ADR-015's ~500-line file guide (TD-229). Reads files, no Gradle, so it
       # runs here on every event rather than behind Tier 1's app filter. Fused
       # hot loops are not counted; the files allowed over the budget, and the
       # most lines each may reach, are in scripts/kotlin_file_size_allowlist.txt.
       - name: Main Kotlin files within ADR-015's size budget
         run: python scripts/check_kotlin_file_size.py
 
-      # ADR-016 rule 1 (TD-291): no network call or WorkManager enqueue on a
+      # ADR-016 rule 1 (TD-228): no network call or WorkManager enqueue on a
       # screen's lifecycleScope, which a rotation cancels. A source heuristic,
       # not a lint rule; the triaged exceptions, each with its reason, are in
       # scripts/activity_scope_allowlist.txt, and a stale entry fails.
       - name: No user work on a screen's lifecycleScope (ADR-016)
         run: python scripts/check_activity_scope_work.py
 
-      # ADR-018 (TD-171): no broad catch or runCatching around a suspend call
+      # ADR-018 (TD-169): no broad catch or runCatching around a suspend call
       # that swallows CancellationException. detekt's
       # SuspendFunSwallowedCancellation needs type resolution, which detekt
       # 1.23.8 cannot do here, so this is a source heuristic too; the triaged
@@ -292,7 +292,7 @@ jobs:
           # A file matches a filter on any of its patterns unless a '!' pattern
           # excludes it. The default ('some') made a '!' pattern match every file
           # outside what it names, so a docs-only PR ran Tier 1 (material_testing
-          # TD-96). No filter has one since app/src/main/cpp/ was deleted; this
+          # TD-114). No filter has one since app/src/main/cpp/ was deleted; this
           # keeps the next one meaning what it says.
           predicate-quantifier: 'some-with-excludes'
           filters: |
@@ -302,7 +302,7 @@ jobs:
               # test_wire_contracts.py reads the same files).
               - 'contracts/**'
               # The benchmark module builds with the app; without it a
-              # benchmark-only PR ran nothing once TD-96 was fixed.
+              # benchmark-only PR ran nothing once TD-114 was fixed.
               - 'benchmark/**'
               - 'gradle/**'
               - '*.gradle.kts'
@@ -378,7 +378,7 @@ jobs:
               - 'gradle/libs.versions.toml'
             # What HotPathMicroBenchmark times, the benchmark itself and its
             # gate: a PR touching one runs the benchmark job, whose A/B against
-            # the PR's base fails a slowdown (TD-199).
+            # the PR's base fails a slowdown (TD-187).
             hot_path:
               - 'app/src/main/java/com/sempermechanics/semper/report/**'
               - 'app/src/main/java/com/sempermechanics/semper/field/DicResult.kt'
@@ -448,7 +448,7 @@ jobs:
               dependabot/npm_and_yarn/*) rules=true ;;
               dependabot/gradle/*) app=true ;;
               # The backend image. Tier 4 runs on the runner's Python, not the
-              # image, but it is the nearest proof and beats gates-only (TD-68).
+              # image, but it is the nearest proof and beats gates-only (TD-95).
               dependabot/docker/*) backend=true ;;
               dependabot/github_actions/*) ;; # gates only
               *)
@@ -490,7 +490,7 @@ jobs:
               emulator=true
               release_build=true
             fi
-            # A hot-path change on a PR is timed against its base (TD-199).
+            # A hot-path change on a PR is timed against its base (TD-187).
             # Not on main: the A/B needs a PR's base, and the PR already ran it.
             if [ "$FILTER_HOT_PATH" = "true" ] && [ "$EVENT_NAME" = "pull_request" ]; then
               benchmark=true
@@ -628,14 +628,14 @@ jobs:
         run: python3 scripts/ci_test_report.py app/build/test-results/testDebugUnitTest
 
       # A worker that exits with no failing test says nothing in the Gradle
-      # output; its crash file, heap dump, GC log and last output do (TD-312).
+      # output; its crash file, heap dump, GC log and last output do (TD-54).
       - name: Report what ended the unit-test JVM
         if: failure()
         run: >
           python3 scripts/ci_test_crash_report.py
           app/build/test-crash app/build/test-results/testDebugUnitTest
 
-      # koverVerify enforces the bounds in app/build.gradle.kts (TD-38);
+      # koverVerify enforces the bounds in app/build.gradle.kts (TD-74);
       # koverLog prints the measured number so a raise has evidence.
       - name: Kotlin coverage floor
         run: >
@@ -704,11 +704,11 @@ jobs:
           df -h /
 
       # FirebaseAuthIntegrationTest signs the CI test account in to the app's
-      # Firebase project (TD-200). StagingRoundTripDeviceTest backs up one file
+      # Firebase project (TD-188). StagingRoundTripDeviceTest backs up one file
       # to staging with the staff CI test account (STAGING_TEST_*, ADR-027;
-      # TD-313) and deletes it. Without the secrets (a fork's or Dependabot's
+      # TD-248) and deletes it. Without the secrets (a fork's or Dependabot's
       # PR) the arguments are left out and those cases skip. Through Gradle an
-      # argument is cut at its first comma (TD-86): the passwords have none.
+      # argument is cut at its first comma (TD-106): the passwords have none.
       - name: Run instrumented tests on emulator
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         env:
@@ -960,7 +960,7 @@ jobs:
       # versionCode 1, below every release: this APK is signed with the release
       # key, so with the run number (hundreds, against release.yml's tens) it
       # installed over a release and Android then refused every real release
-      # until an uninstall (TD-148 in material_testing; docs/ops/RELEASING.md).
+      # until an uninstall (TD-149 in material_testing; docs/ops/RELEASING.md).
       - name: Build signed release APK
         env:
           SIGNING_KEYSTORE: ${{ secrets.KEYSTORE_BASE64 != '' && 'app/release.keystore' || '' }}
@@ -1088,7 +1088,7 @@ jobs:
           test -n "$APP_ID" && test "$(printf '%s\n' "$APP_ID" | wc -l)" -eq 1
           echo "APP_ID=$APP_ID" >> "$GITHUB_ENV"
 
-      # The micro A/B's two builds (TD-199): the PR's base (A) and the PR (B),
+      # The micro A/B's two builds (TD-187): the PR's base (A) and the PR (B),
       # each a debug app APK and its androidTest APK. Both build in this
       # checkout, base first, so the PR's build is the one left in app/build
       # and the base's native objects are reused where the engine is the same.
@@ -1146,7 +1146,7 @@ jobs:
       #   numbers are relative, not absolutes. It goes through `am instrument`,
       #   not connectedDebugAndroidTest: an instrumentation argument passed
       #   through Gradle arrives cut at its first comma (only EMULATOR was
-      #   suppressed, TD-86), and API 34 raises ACTIVITY-MISSING and
+      #   suppressed, TD-106), and API 34 raises ACTIVITY-MISSING and
       #   NOT-AOT-COMPILED too. `am instrument` exits 0 on test failures, so the
       #   grep on its summary line is the pass/fail.
       # - On a PR the last line runs the micro A/B (scripts/micro_ab.py): A B B A

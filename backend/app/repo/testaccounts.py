@@ -107,7 +107,7 @@ def licences_of_test_account(user: dict) -> list[str]:
 
 
 def release_test_device(uid: str, device_id: str) -> None:
-    """Release one ACTIVE phone of the test account `uid` (TD-314), in one
+    """Release one ACTIVE phone of the test account `uid` (TD-249), in one
     transaction: the device REVOKED and stamped `staffReleased`, so
     `register_device` refuses it for this account from then on, and the
     app's `activeDeviceId` dropped when it names this phone. Not the release
@@ -187,7 +187,7 @@ def row_of_test_account(user: dict, now=None) -> dict:
         "note": tag.get("note") or "",
         "createdAt": tag.get("createdAt"),
         # Every app's phones: the console shows how many are in use, and
-        # each one with its release (TD-314).
+        # each one with its release (TD-249).
         "activeDevices": len(devices),
         "devices": devices,
         "status": status_of_test_account(user, now),

@@ -342,7 +342,7 @@ test("an address is also searched on the backend, after a pause in typing", asyn
     mock.timers.tick(1);
     await settle();
     assert.deepEqual(labels(), ["SEMP-FAR1"], "a licence on no loaded page is found");
-    // TD-244: the address goes in the body, never in a URL a log records.
+    // TD-203: the address goes in the body, never in a URL a log records.
     assert.deepEqual(JSON.parse(net.requests.find((r) => r.method === "POST").body),
       { q: "far@else.org", limit: 50, include_demo: false, include_revoked: false });
     assert.deepEqual(net.requests.filter((r) => r.url.includes("else.org")), []);

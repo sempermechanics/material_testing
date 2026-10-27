@@ -165,6 +165,6 @@ adb shell am instrument -w -e class com.indicvision.semper.benchmark.HotPathMicr
 # results: adb pull /sdcard/Android/media/com.indicvision.semper (*-benchmarkData.json)
 ```
 Through `connectedDebugAndroidTest -P …suppressErrors=…` the list arrives cut at its first
-comma, so only `EMULATOR` is suppressed and every case fails (TD-86); see
+comma, so only `EMULATOR` is suppressed and every case fails (TD-106); see
 [TESTING.md](../app/TESTING.md) for the current command.
 Run the same on `a2af8e7` (with the harness files copied on top) for the baseline column.

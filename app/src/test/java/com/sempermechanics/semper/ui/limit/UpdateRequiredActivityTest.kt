@@ -59,7 +59,7 @@ class UpdateRequiredActivityTest {
 
     @Test
     fun `Update opens the release download page on a sideloaded build`() {
-        // TD-268: no installer recorded (adb, or a downloaded APK) is not Play.
+        // TD-214: no installer recorded (adb, or a downloaded APK) is not Play.
         screen.findViewById<View>(R.id.btnUpdateApp).performClick()
         val started = shadowOf(screen).nextStartedActivity
         assertEquals(Intent.ACTION_VIEW, started.action)

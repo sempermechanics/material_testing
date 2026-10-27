@@ -507,7 +507,7 @@ class ViewerArgsTest {
 
     @Test
     fun `a lab session round-trips the Intent as one value, in the keys it always had`() {
-        // TD-301: every field set off its default, so a dropped or swapped extra shows.
+        // TD-237: every field set off its default, so a dropped or swapped extra shows.
         val lab = LabSession(
             testType = "tensile",
             crossSectionMm2 = 19.63f,

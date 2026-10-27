@@ -1,4 +1,4 @@
-"""Seat documents carry `schemaVersion` (TD-254).
+"""Seat documents carry `schemaVersion` (TD-205).
 
 FIRESTORE_SCHEMA_RUNBOOK.md: every newly written server-owned document
 includes it. Every seat write stamps it: the claim that creates the seat, a
@@ -36,7 +36,7 @@ def _user(store, uid):
 
 
 def _unstamp(store, license_id, uid):
-    """A seat as written before TD-254."""
+    """A seat as written before TD-205."""
     _seats(store, license_id)[uid].pop("schemaVersion", None)
 
 

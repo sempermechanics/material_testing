@@ -97,7 +97,7 @@ documentation and/or other materials".
 - A new set needs `example.json`, `README.md` and `CREDIT.txt`, plus its licence
   file if the licence asks for one. `ExampleCatalogTest` fails without them.
 - The app now has a licences screen. The AndroidX, Firebase and OkHttp
-  Apache-2.0 notices are still missing from it (TD-349).
+  Apache-2.0 notices are still missing from it (TD-57).
 - semperdic-app has none of this until it is ported. ADR-025's
   `materialTesting` flavour would own the lab sets; the DICe sets and the
   screens suit both apps.

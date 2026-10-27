@@ -98,7 +98,7 @@ class HotPathMicroBenchmark {
     }
 
     /**
-     * The viewer's render for a frame shown on its own photo (ADR-011, TD-175):
+     * The viewer's render for a frame shown on its own photo (ADR-011, TD-173):
      * each cell drawn as the quad through its displaced corners. Timed on
      * [displacedFrame], not [oneFrame], whose drift would warp most of the map
      * off the canvas.

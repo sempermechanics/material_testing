@@ -1,4 +1,4 @@
-"""TD-294, ADR-026: a whole-licence revoke or a terms edit records what is
+"""TD-231, ADR-026: a whole-licence revoke or a terms edit records what is
 left to fan out on the licence, in the licence's own write, and a Cloud Task
 scheduled before that write finishes it if the call dies part-way."""
 import logging

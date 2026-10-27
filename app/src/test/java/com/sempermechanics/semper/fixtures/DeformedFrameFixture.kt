@@ -13,7 +13,7 @@ import kotlin.math.abs
 
 /**
  * A frame whose points all moved [U] px to the right, with a reference photo
- * and the frame's own photo in two flat colours, for the TD-139 export tests:
+ * and the frame's own photo in two flat colours, for the TD-141 export tests:
  * each export of a frame must draw what the viewer draws (ADR-011).
  *
  * The grid spans x [X0]..[X0] + 11·[STEP] at the reference and [U] px further

@@ -1,7 +1,7 @@
 """Append-only audit trail. Best-effort: never break a request on a log failure.
 
 The row is built here; it is written and read in `repo/audit_log.py`, and
-mirrored to Cloud Logging as one `audit_row` line (TD-237): a log sink routes
+mirrored to Cloud Logging as one `audit_row` line (TD-199): a log sink routes
 those to a bucket whose retention policy is locked, the copy that no project
 role can edit or delete. Firestore's copy is the one the consoles read."""
 import json
@@ -29,7 +29,7 @@ def address_tag(address: str | None) -> str:
 
     Audit rows survive account erasure by design, so they must not hold
     addresses ([FIRESTORE_DATA_PROTECTION.md], "Account-erasure audit
-    policy"; TD-242). The tag still lets a reader who already knows an
+    policy"; TD-201). The tag still lets a reader who already knows an
     address match it, which is what an investigation needs."""
     return obs.short_hash(address)
 

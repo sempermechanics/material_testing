@@ -32,7 +32,7 @@ import org.robolectric.shadows.ShadowToast
 
 /**
  * The limit screen when the device half of the demo cap holds the stop
- * (TD-279): it says the phone is full, hides the account's counter, and its
+ * (TD-219): it says the phone is full, hides the account's counter, and its
  * Re-check keeps the screen up rather than reporting room the next upload
  * refuses.
  */

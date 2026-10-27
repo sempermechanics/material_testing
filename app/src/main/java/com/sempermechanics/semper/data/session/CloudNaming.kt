@@ -40,7 +40,7 @@ object CloudNaming {
      * analysis's [name] as `GET /v1/sessions` lists it, read as a restore reads
      * it ([restoredName]), so the list shows the name the restored row will
      * have. A backup made without one (an older app, or a backend from before
-     * TD-208) lists a blank name and goes by its [specimen].
+     * TD-195) lists a blank name and goes by its [specimen].
      */
     fun listedName(name: String?, specimen: String?): String =
         if (name.isNullOrBlank()) specimen.orEmpty() else restoredName(name, specimen)

@@ -438,7 +438,7 @@ class RestoreWorkersTest {
         }
 
         assertEquals(ListenableWorker.Result.retry(), runRestore(cloudRestorer))
-        assertEquals("the retried failure keeps what arrived (TD-307)", half.toLong(), bundlePart.length())
+        assertEquals("the retried failure keeps what arrived (TD-243)", half.toLong(), bundlePart.length())
 
         assertEquals(ListenableWorker.Result.success(), runRestore(cloudRestorer))
         assertEquals("the retry starts from the bytes the failure kept", half.toLong(), resumedFrom)

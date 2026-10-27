@@ -160,7 +160,7 @@ internal class HomeNewAnalysis(
     private fun openRerun(record: SessionRecord, picked: PickedReference?) {
         val intent = Intent(activity, StaticAnalysisActivity::class.java)
             .putExtra(IntentKeys.RERUN_SESSION_ID, record.id)
-        // A tensile or bending analysis re-runs as one, not as plain DIC (TD-280).
+        // A tensile or bending analysis re-runs as one, not as plain DIC (TD-220).
         LabRerun.of(record)?.putOn(intent)
         if (picked != null) {
             intent.putExtra(IntentKeys.RERUN_REFERENCE_PATH, picked.file.absolutePath)

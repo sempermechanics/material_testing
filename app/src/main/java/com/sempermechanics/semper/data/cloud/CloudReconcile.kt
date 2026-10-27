@@ -60,7 +60,7 @@ internal object CloudReconcile {
     /**
      * This app's listing, plus the rows [repairRows] must [Listing.keep] SYNCED
      * although this app's list lacks them: a row restored from the other app's
-     * backup (ADR-014, TD-153) is backed up there, and repairing it would
+     * backup (ADR-014, TD-152) is backed up there, and repairing it would
      * upload it again as a second session. Only when some SYNCED row is missing
      * is the whole account listed, once, to tell the two apart.
      */

@@ -36,7 +36,7 @@ def add_audit_row(row: dict) -> None:
     """Append one row to `audit_logs`, its `ts` stamped by the server.
 
     `expireAt` is when the row's retention ends (`AUDIT_RETENTION_DAYS` from
-    now, TD-237): the Firestore TTL policy on `audit_logs.expireAt` deletes it
+    now, TD-199): the Firestore TTL policy on `audit_logs.expireAt` deletes it
     then. It is set here, as the row is added, so the row is never rewritten
     to carry it. Raises on failure; `audit.record` decides that a lost row
     never fails the request."""

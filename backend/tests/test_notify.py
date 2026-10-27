@@ -133,7 +133,7 @@ def test_retries_on_transient_status(configured, monkeypatch):
     assert attempts["n"] == 3
 
 
-# ---------------- a new device on the account (TD-295) ----------------
+# ---------------- a new device on the account (TD-232) ----------------
 @pytest.fixture
 def security_mail(configured, monkeypatch):
     monkeypatch.setattr(settings, "NOTIFY_SECURITY_FROM", "Semper security <security@sempermechanics.com>")
@@ -151,7 +151,7 @@ def test_a_new_device_mails_its_holder(security_mail, sent, caplog):
     assert payload["from"] == "Semper security <security@sempermechanics.com>"
     assert "Pixel 8" in payload["text"] and "Semper" in payload["subject"]
     assert kwargs["headers"]["Idempotency-Key"] == "device-registered:uid-1:phone-1"
-    # TD-242: no address in the logs.
+    # TD-201: no address in the logs.
     assert "holder@uni.edu" not in caplog.text
 
 

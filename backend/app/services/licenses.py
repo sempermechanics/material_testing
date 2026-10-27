@@ -1,4 +1,4 @@
-"""The staff licence flows behind `routers/admin.py` (TD-293): minting a key
+"""The staff licence flows behind `routers/admin.py` (TD-230): minting a key
 of either kind, and how an audit row records the IT contacts."""
 from fastapi import HTTPException
 
@@ -9,7 +9,7 @@ from ..models import AdminLicenseCreate
 
 def admin_email_detail(admin_emails) -> dict:
     """`adminEmails` as an audit detail holds it: hashed, with the count
-    (TD-242). Audit rows outlive account erasure and must hold no address."""
+    (TD-201). Audit rows outlive account erasure and must hold no address."""
     emails = list(admin_emails or [])
     return {"adminEmailHashes": audit.address_tags(emails), "adminEmailCount": len(emails)}
 

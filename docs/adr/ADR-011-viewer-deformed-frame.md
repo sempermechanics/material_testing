@@ -43,7 +43,7 @@ frame's own photo:
 - A sweep shows its one deformed photo under every node.
 
 `generateHeatmapIndices`, which fed the summary GIF and the report, was left
-unchanged here; the GIF bytes stayed pinned. TD-139 (2026-10-13) then moved
+unchanged here; the GIF bytes stayed pinned. TD-141 (2026-10-13) then moved
 the exports onto the screen's picture: see As built.
 
 ## Options considered
@@ -63,7 +63,7 @@ wrong, and it looks more wrong than A.
 |-----------|------------|
 | Complexity | Medium: a second rasterizer, a per-frame photo decode, a displaced probe lookup |
 | Cost | One display-size decode per settled frame, off the main thread |
-| Risk | The GIF and report still drew on the reference (TD-139, closed 2026-10-13) |
+| Risk | The GIF and report still drew on the reference (TD-141, closed 2026-10-13) |
 
 ### D: A viewer toggle, reference by default
 
@@ -83,7 +83,7 @@ Rejected by the app owner.
 - As first built, the summary GIF (`SummaryAnimation.kt:249`), the PNG export
   (`ShareCenter.kt:388` in material_testing; `FieldImageExport.kt:52` here) and
   the report heatmap (`ReportBuilder.kt:209`) still drew on the reference.
-  TD-139; closed by the As-built note below.
+  TD-141; closed by the As-built note below.
 - Restored sessions need the deformed originals to show their frames this
   way. They already restore them (`docs/perf/backup-restore-split.md`).
 
@@ -91,10 +91,10 @@ Rejected by the app owner.
 
 - [x] Deformed render, per-frame photo, displaced probe, fit box, tests
       (`DeformedHeatmapTest`).
-- [x] TD-139: decide whether the GIF and exports follow. The app owner decided
+- [x] TD-141: decide whether the GIF and exports follow. The app owner decided
       all three follow the screen (2026-10-13).
 
-## As built (TD-139, 2026-10-13)
+## As built (TD-141, 2026-10-13)
 
 Every export of a frame draws what the viewer draws for it.
 

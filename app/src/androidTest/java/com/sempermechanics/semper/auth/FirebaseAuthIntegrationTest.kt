@@ -18,7 +18,7 @@ import org.junit.runner.RunWith
 /**
  * Real Firebase Auth: email/password sign-in, an ID token and its refresh, against
  * the app's own project. CI's Tier 3 passes the CI test account from the
- * `FIREBASE_TEST_EMAIL` / `FIREBASE_TEST_PASSWORD` secrets (TD-200); without them
+ * `FIREBASE_TEST_EMAIL` / `FIREBASE_TEST_PASSWORD` secrets (TD-188); without them
  * (a local run, a fork's PR) every case skips.
  */
 @RunWith(AndroidJUnit4::class)

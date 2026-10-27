@@ -3,7 +3,7 @@ package com.sempermechanics.semper.ui.limit
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** TD-268: a Play install updates from Play; anything else from the release page. */
+/** TD-214: a Play install updates from Play; anything else from the release page. */
 class UpdateSourceTest {
 
     private val id = "com.sempermechanics.semperclassroom"

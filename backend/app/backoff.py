@@ -5,7 +5,7 @@ import math
 
 # Same ceiling as the exponential fallback. An upstream that asks for longer
 # (Retry-After: 3600) would otherwise park a request thread, or the single
-# notify worker, for that long (TD-52); past the cap the attempt fails and the
+# notify worker, for that long (TD-84); past the cap the attempt fails and the
 # caller's own retry takes over.
 MAX_DELAY_S = 16.0
 

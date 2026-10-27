@@ -915,7 +915,7 @@ Write above that block; leave it in place.
 - No spatial calibration — pixels only.
 - Coach marks show once and cannot be replayed.
 - Approval never polls.
-- Credits & licences (Settings → Help) covers the example data and the engine's DICe, OpenCV and Eigen licences only; the AndroidX and Firebase notices are not listed yet (TD-349).
+- Credits & licences (Settings → Help) covers the example data and the engine's DICe, OpenCV and Eigen licences only; the AndroidX and Firebase notices are not listed yet (TD-57).
 - ROI shapes are rectangle and square only. -->
 
 ---

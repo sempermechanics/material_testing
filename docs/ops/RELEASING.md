@@ -59,7 +59,7 @@ Check the R8 mapping reached Crashlytics (the release build uploads it); the wor
   a new tag is created at that commit by `publish` (`target_commitish`).
 - `main`'s CI also builds a `release-apk` signed with the release key, at
   **versionCode 1**, so it can never install over a release. Until 2026-10-01 it
-  used CI's run number (671 by then in semperdic-app, against its release workflow's 35; here in the 250s against 4 for `v1.2-beta.3`, TD-148), so a
+  used CI's run number (671 by then in semperdic-app, against its release workflow's 35; here in the 250s against 4 for `v1.2-beta.3`, TD-149), so a
   tester who installed it was refused every later release until they
   uninstalled, which deletes analyses that are not in the cloud. The 1000 base
   puts releases above every number CI ever used, so those phones update again.
@@ -135,7 +135,7 @@ which the backend may later gate (for this app, `MIN_SUPPORTED_VERSION_CODE_SEMP
 
 Readiness items 1.1, 6.3 and Part D5
 ([READINESS_FRAMEWORK_2026-10.md](READINESS_FRAMEWORK_2026-10.md)). Nothing here
-has been rehearsed: there is no Play listing or closed track yet (TD-229, TD-231).
+has been rehearsed: there is no Play listing or closed track yet (TD-23, TD-25).
 Play does not allow a staged rollout for an app's first production release, and a
 staged percentage never rises by itself. Start on the internal testing track: it
 has no review delay, and the pre-launch report needs a track. What the first
@@ -242,7 +242,7 @@ pins traffic to that revision by name, and every lever above then has a trap:
    change. Once `main` is fixed, a normal deploy returns the service to
    `--to-latest`.
 
-**Drill on staging, 2026-10-22** (TD-220), with a debug build at versionCode 100
+**Drill on staging, 2026-10-22** (TD-15), with a debug build at versionCode 100
 pointed at `semper-api-staging`, signed in as a QC test account on an Android 14
 and an Android 12 emulator; each step is a `deploy-backend.yml` run from `main`
 with `gateway_mode=dry-run`:
@@ -273,7 +273,7 @@ minutes of the last reconcile reuse the cached `/v1/config`
 (`data/cloud/CloudSync.kt:412`, `RECONCILE_MIN_INTERVAL_MS`), and **Refresh
 licence** fetches it at once. Lifting a lever reaches phones the same way, so
 allow that long before calling a rollback done. The Semper Classroom pair and
-`ENTITLEMENT_OFFLINE_GRACE_DAYS` were not moved (TD-220).
+`ENTITLEMENT_OFFLINE_GRACE_DAYS` were not moved (TD-15).
 
 ## CI-based release (workflow_dispatch)
 
@@ -349,7 +349,7 @@ fails.
    page-size rule; or ships no `.so` at all), loses a consent default (`<application>` meta-data
    `firebase_crashlytics_collection_enabled`, `firebase_analytics_collection_enabled`
    and `google_analytics_adid_collection_enabled` must be present and `false`;
-   no `AD_ID` or `ACCESS_ADSERVICES_*` permission, TD-232), or R8's
+   no `AD_ID` or `ACCESS_ADSERVICES_*` permission, TD-26), or R8's
    `mapping.txt` is missing, empty, or renames no `com.sempermechanics.semper`
    class (an identity mapping, as `-dontobfuscate` writes; `--mapping` is
    required). It
@@ -357,10 +357,10 @@ fails.
    `SEMPER_API_CERT_PINS` secret was empty. It also **warns** when no
    entitlement key (`kid:<P-256 SPKI>`) is compiled in, i.e.
    `SEMPER_ENTITLEMENT_PUBKEYS` was empty: the build then ignores signed tokens
-   and trusts its cached licence with no offline bound (ADR-023, TD-215). The
+   and trusts its cached licence with no offline bound (ADR-023, TD-10). The
    workflow turns that warning into a failure (`--require-entitlement-pins`)
    as soon as the `SEMPER_ENTITLEMENT_PUBKEYS` variable is set, or when
-   `SEMPER_REQUIRE_ENTITLEMENT_PINS` is `true`. **Once TD-215 lands** (the
+   `SEMPER_REQUIRE_ENTITLEMENT_PINS` is `true`. **Once TD-10 lands** (the
    signing key is live and the pubkeys variable set), also set
    `SEMPER_REQUIRE_ENTITLEMENT_PINS=true` on the `release` environment, so a
    cleared pubkeys variable cannot ship a key-less build quietly. Both are unset
@@ -404,7 +404,7 @@ deobfuscation key — publishing it would undo the obfuscation for everyone — 
 without it a field stack trace from that build is unreadable, and it cannot be
 regenerated afterwards. The build passes `-PuploadCrashlyticsMapping=true`, so
 the Crashlytics Gradle plugin uploads the mapping to Firebase and field crashes
-stay readable there for the life of the project (TD-40). The 90-day workflow
+stay readable there for the life of the project (TD-76). The 90-day workflow
 artifact is only the fallback for a manual `retrace`. Local builds never upload.
 
 ### `publish`
@@ -428,7 +428,7 @@ Creates the **GitHub Release** with the APK and the AAB attached, gated on the
 |----------|-------------|
 | `SEMPER_API_BASE_URL` | HTTPS base URL of the API Gateway (preferred) or Cloud Run service |
 | `SEMPER_ENTITLEMENT_PUBKEYS` | Public key(s) the app verifies signed entitlements with, passed to Gradle as env. Public material, so a variable, not a secret. Set, it also makes the APK inspection require an entitlement key in the build (step 5) |
-| `SEMPER_REQUIRE_ENTITLEMENT_PINS` | Optional, `true` once TD-215 is live: the APK inspection fails a release with no entitlement key compiled in, whatever `SEMPER_ENTITLEMENT_PUBKEYS` holds |
+| `SEMPER_REQUIRE_ENTITLEMENT_PINS` | Optional, `true` once TD-10 is live: the APK inspection fails a release with no entitlement key compiled in, whatever `SEMPER_ENTITLEMENT_PUBKEYS` holds |
 | `SEMPER_RELEASE_CERT_SHA256` | Optional here (the workflow defaults to the release certificate of every release so far, step 5); set only to rotate the signing key deliberately. A fork must set it to its own release certificate |
 
 ### Backend staging / production

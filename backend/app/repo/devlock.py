@@ -103,7 +103,7 @@ def _test_lock_verdict(user: dict, tag: dict, device_id: str, app: str) -> _Lock
     its devices ACTIVE for `app` is licensed, and so is a phone not yet
     registered while the account holds fewer than `maxDevices` for the app,
     as an unbound lock lets a first phone through. A phone staff released
-    from this account (`staff_released_from`, TD-314) is not one of those: it
+    from this account (`staff_released_from`, TD-249) is not one of those: it
     may never come back, so it is a mismatch. Anything else is a mismatch,
     Demo for that request only. Nothing is bound or written: the licence's
     `deviceIdLock` stays empty, and registration (`repo.register_device`) is
@@ -176,7 +176,7 @@ def bind_device_lock(ref, device_id: str, app: str = apps.SEMPER) -> bool:
         snap = _get(ref, tx)
         if not snap.exists or _held(snap):
             return False
-        # A seat or an individual licence; both are stamped (TD-254). Both
+        # A seat or an individual licence; both are stamped (TD-205). Both
         # the new field and the old one (ADR-030).
         tx.update(ref, {**apps.written_fields("deviceIdLock", app, device_id),
                         "schemaVersion": SCHEMA_VERSION})
@@ -322,7 +322,7 @@ def _devlock_drop(user: dict, stage: str) -> None:
     licence or seat ended, stored) or `mismatch` (this device is not the
     locked one, this request only).
 
-    `uid` is given explicitly (TD-245): this runs inside `current_user`
+    `uid` is given explicitly (TD-204): this runs inside `current_user`
     before it binds the request's uid, so the bound value is not there yet."""
     obs.log_event(log, logging.INFO, "devlock_drop", uid=user.get("uid") or None,
                   licenseId=user.get("licenseId"), stage=stage, outcome="demo")

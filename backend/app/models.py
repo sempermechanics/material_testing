@@ -102,7 +102,7 @@ class FileSpec(BaseModel):
 
 class SessionCreate(BaseModel):
     specimen: str = Field(min_length=1, max_length=200)
-    # The analysis's own name, which the backup list shows (TD-208). Optional:
+    # The analysis's own name, which the backup list shows (TD-195). Optional:
     # an older app sends none, and its sessions are listed by `specimen`.
     name: str = Field(default="", max_length=200)
     files: List[FileSpec] = Field(min_length=1, max_length=5000)
@@ -175,7 +175,7 @@ class UserConfigPatch(BaseModel):
     mode: Optional[Literal["demo", "licensed"]] = None
 
     #: An unknown key is a 422, not silently dropped: the pre-rename `plan`
-    #: patch was retired (TD-45), and an operator who still sends it must hear
+    #: patch was retired (TD-4), and an operator who still sends it must hear
     #: that the mode did not change rather than get a 200 that changed nothing.
     model_config = ConfigDict(extra="forbid")
 
@@ -234,7 +234,7 @@ class AdminLicenseCreate(BaseModel):
     (list/clear-device/enable-disable/revoke). `maxSeats` is an optional hard
     cap; omitted means unlimited.
 
-    The pre-rename `"campus"` spelling is refused (422) since TD-45 retired it.
+    The pre-rename `"campus"` spelling is refused (422) since TD-4 retired it.
     """
     kind: Literal["individual", "institution"] = "individual"
     #: Orthogonal to `kind`. `timed` requires a future `expiresAt`; `perpetual`
@@ -462,7 +462,7 @@ class AdminLicenseUpdate(BaseModel):
 
 
 class AdminLicenseSearch(BaseModel):
-    """`POST /v1/admin/licenses/search`: the desk's search, in a body (TD-244).
+    """`POST /v1/admin/licenses/search`: the desk's search, in a body (TD-203).
 
     The same fields and limits as `GET /v1/admin/licenses`'s query, so the
     two answer alike; an address in a body stays out of every request log

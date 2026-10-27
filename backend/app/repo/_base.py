@@ -49,7 +49,7 @@ _TX_ATTEMPTS = 10
 # Firestore caps a write batch at 500 operations.
 _BATCH_LIMIT = 400
 
-# ---------------- per-call deadlines (TD-197) ----------------
+# ---------------- per-call deadlines (TD-185) ----------------
 # Without these the client's GAPIC defaults apply: 60 s for a get or a write,
 # 300 s for a query or `get_all`, and the retry keeps going on
 # DEADLINE_EXCEEDED. The JSON routes' gateway deadline is 60 s
@@ -168,7 +168,7 @@ def _run_tx(body: Callable[[Any], T], *, on_contended: Callable[[], T]) -> T:
     If every attempt lost to contention, answer `on_contended()` instead — each
     caller decides what losing means (deny, re-read, fail closed). Anything
     else propagates. One copy of the try/except the ten transactions used to
-    repeat (TD-53); the transaction is created here so its attempt budget is
+    repeat (TD-85); the transaction is created here so its attempt budget is
     `_TX_ATTEMPTS` everywhere.
     """
     try:
@@ -266,7 +266,7 @@ def max_test_devices(tag: dict) -> int:
     return max(1, min(TEST_ACCOUNT_MAX_DEVICES, wanted))
 
 
-#: Stamped on a test-account phone staff released on its own (TD-314,
+#: Stamped on a test-account phone staff released on its own (TD-249,
 #: `repo.testaccounts.release_test_device`): that phone may not register for
 #: the same account again, so it cannot take back the place it gave up.
 STAFF_RELEASED = "staffReleased"

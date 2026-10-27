@@ -243,7 +243,7 @@ def erasure_status(uid: str = Depends(token_uid), x_device_id: str = Header(defa
 
     Token-only (`token_uid`): any route behind `current_user` re-creates a
     profile for the erased uid, and mails support when it is pending, which is
-    what the app's earlier device-signed probe did (TD-206). The answer names
+    what the app's earlier device-signed probe did (TD-193). The answer names
     only the caller's own device, so it tells a token holder nothing about
     anyone else. Rate-limited in the handler: `rate_limited` goes through
     `current_user`.

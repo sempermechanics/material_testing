@@ -101,7 +101,7 @@ internal fun AnalysisViewModel.undoFailedBatch(
  * A batch run in [session] that threw after it committed its results but
  * before the wizard followed its frames ([repointDeformedPathsOnMain]): in the
  * "Saving…" post, the stale-frame prune, or Re-run's keep past the
- * `IOException` it catches itself (TD-285). The commit had moved the frames
+ * `IOException` it catches itself (TD-225). The commit had moved the frames
  * into the session while the wizard still named [launched], so it is undone
  * as one that threw before its commit is ([undoFailedBatch]), its committed
  * results first ([RunSession.dropResults]): each image goes back from

@@ -31,7 +31,7 @@ import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
 
 /**
- * TD-168: a run that ends while the wizard is in the background must still
+ * TD-166: a run that ends while the wizard is in the background must still
  * tear its chrome down and open its result when the wizard comes back, and
  * only once. The outcomes used to be a no-replay `SharedFlow`, collected
  * only while the screen was started, so an outcome with no collector was

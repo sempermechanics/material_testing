@@ -30,7 +30,7 @@ import java.io.File
 import java.io.IOException
 
 /**
- * TD-150, TD-152 / ADR-013: a rename, a deflection correction (bending) or a
+ * TD-150, TD-151 / ADR-013: a rename, a deflection correction (bending) or a
  * curve correction (tensile) made after the backup reaches the cloud copy's
  * metadata.json, so a restore brings it back.
  */

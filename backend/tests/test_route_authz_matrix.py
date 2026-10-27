@@ -52,7 +52,7 @@ ANY_STATUS = "any-status"
 TASK = "cloud-task"
 # A verified ID token and nothing more: no profile is read or created. Only the
 # erasure check, which must ask about an erased account without re-creating it
-# (TD-206), and which answers about the caller's own device alone.
+# (TD-193), and which answers about the caller's own device alone.
 TOKEN_ONLY = "token-only"  # noqa: S105 - an auth tier name
 # Institution IT self-service: membership in adminEmails plus dashboard MFA
 # (institution_admin_stepup). Membership is checked before MFA so a foreign
@@ -703,7 +703,7 @@ async def test_device_routes_reject_a_bare_id_token(attacker, client, method, pa
 #
 # The resume list carries Drive capability URLs. An ID-token-only read was
 # accepted during the fleet migration (device_or_legacy_reader, behind
-# REQUIRE_ATTESTED_UPLOADS); retired 2026-09-26 (TD-45). These pin that the
+# REQUIRE_ATTESTED_UPLOADS); retired 2026-09-26 (TD-4). These pin that the
 # route is now plainly device-attested, on a session the caller owns.
 
 def _owned_session(attacker):

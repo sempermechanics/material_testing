@@ -68,7 +68,7 @@
         "type": "object"
       },
       "AdminLicenseCreate": {
-        "description": "Ops mint for a licensed key.\n\n`kind=\"individual\"` (the default, and the only shape before institution\nlicensing existed) requires both `emailLock` and `deviceIdLock` — one\nseat, redeemed by exactly one email on exactly one device.\n\n`kind=\"institution\"` mints an institution key instead: no email/device\nlock at mint time. Membership is decided per-activation by `domainLock` (a\nverified-email domain match — see repo.activate_license), and\n`adminEmails` names the institution IT contacts who may manage seats via\n`backend/app/routers/institutions.py`\n(list/clear-device/enable-disable/revoke). `maxSeats` is an optional hard\ncap; omitted means unlimited.\n\nThe pre-rename `\"campus\"` spelling is refused (422) since TD-45 retired it.",
+        "description": "Ops mint for a licensed key.\n\n`kind=\"individual\"` (the default, and the only shape before institution\nlicensing existed) requires both `emailLock` and `deviceIdLock` — one\nseat, redeemed by exactly one email on exactly one device.\n\n`kind=\"institution\"` mints an institution key instead: no email/device\nlock at mint time. Membership is decided per-activation by `domainLock` (a\nverified-email domain match — see repo.activate_license), and\n`adminEmails` names the institution IT contacts who may manage seats via\n`backend/app/routers/institutions.py`\n(list/clear-device/enable-disable/revoke). `maxSeats` is an optional hard\ncap; omitted means unlimited.\n\nThe pre-rename `\"campus\"` spelling is refused (422) since TD-4 retired it.",
         "properties": {
           "adminEmails": {
             "items": {
@@ -218,7 +218,7 @@
       },
       "AdminLicenseSearch": {
         "additionalProperties": false,
-        "description": "`POST /v1/admin/licenses/search`: the desk's search, in a body (TD-244).\n\nThe same fields and limits as `GET /v1/admin/licenses`'s query, so the\ntwo answer alike; an address in a body stays out of every request log\nthat records the URL (uvicorn's, Cloud Run's, API Gateway's). `q` is\nrequired here, and an empty one pages the listing as the GET does.",
+        "description": "`POST /v1/admin/licenses/search`: the desk's search, in a body (TD-203).\n\nThe same fields and limits as `GET /v1/admin/licenses`'s query, so the\ntwo answer alike; an address in a body stays out of every request log\nthat records the URL (uvicorn's, Cloud Run's, API Gateway's). `q` is\nrequired here, and an empty one pages the listing as the GET does.",
         "properties": {
           "include_demo": {
             "default": false,
@@ -1170,7 +1170,7 @@
     },
     "/v1/admin/device-releases": {
       "post": {
-        "description": "Free an account's registered phone so a new one can register (TD-126).\n\nFor a Demo account, on request: it has no licence lock to clear, and the app\ntells a phone refused at registration to ask an admin. By email, since that\nis what the request arrives with. An account on a live licence is 409\n`license_device_clear_required`: **New device** on its licence moves both\nbindings. `releasedDeviceId` is \"\" when nothing was registered.\n\nReleases every app's phone (ADR-010); `releasedDeviceIdSemperClassroom`\nnames the Semper Classroom one (mirrored as `releasedDeviceIdMaterialTesting`\nfor a console from before ADR-030).",
+        "description": "Free an account's registered phone so a new one can register (TD-131).\n\nFor a Demo account, on request: it has no licence lock to clear, and the app\ntells a phone refused at registration to ask an admin. By email, since that\nis what the request arrives with. An account on a live licence is 409\n`license_device_clear_required`: **New device** on its licence moves both\nbindings. `releasedDeviceId` is \"\" when nothing was registered.\n\nReleases every app's phone (ADR-010); `releasedDeviceIdSemperClassroom`\nnames the Semper Classroom one (mirrored as `releasedDeviceIdMaterialTesting`\nfor a console from before ADR-030).",
         "operationId": "admin_release_account_device_v1_admin_device_releases_post",
         "parameters": [
           {
@@ -1279,7 +1279,7 @@
     },
     "/v1/admin/licenses": {
       "get": {
-        "description": "Licences, newest first. System Demo keys are left out unless\n`include_demo`, and test-account licences unless `include_test`\n(ADR-027); revoked licences are left out when `include_revoked` is\nfalse. `q` searches by exact address, domain or key prefix instead of\npaging (see `repo.list_licenses`).\n\n`q` here is deprecated (TD-244): it puts an address in the URL, which\nrequest logs keep. `POST /v1/admin/licenses/search` takes it in a body.\nIt is still served for one release, with a warning that names the caller\nand never the value.",
+        "description": "Licences, newest first. System Demo keys are left out unless\n`include_demo`, and test-account licences unless `include_test`\n(ADR-027); revoked licences are left out when `include_revoked` is\nfalse. `q` searches by exact address, domain or key prefix instead of\npaging (see `repo.list_licenses`).\n\n`q` here is deprecated (TD-203): it puts an address in the URL, which\nrequest logs keep. `POST /v1/admin/licenses/search` takes it in a body.\nIt is still served for one release, with a warning that names the caller\nand never the value.",
         "operationId": "admin_list_licenses_v1_admin_licenses_get",
         "parameters": [
           {
@@ -1527,7 +1527,7 @@
     },
     "/v1/admin/licenses/search": {
       "post": {
-        "description": "The licence search with its terms in the body, so an address never\nreaches a URL (TD-244). A read: the ordinary admin token, the admin\nbucket and the answer of `GET /v1/admin/licenses`, whose query fields\nthe body repeats.",
+        "description": "The licence search with its terms in the body, so an address never\nreaches a URL (TD-203). A read: the ordinary admin token, the admin\nbucket and the answer of `GET /v1/admin/licenses`, whose query fields\nthe body repeats.",
         "operationId": "admin_search_licenses_v1_admin_licenses_search_post",
         "parameters": [
           {
@@ -3809,7 +3809,7 @@
     },
     "/v1/admin/test-accounts/{uid}/devices/{device_id}/release": {
       "post": {
-        "description": "Release one ACTIVE phone of the account so another can take its place\n(TD-314); the released phone may not register for this account again.\nAnswers the account's row. 404 `user_not_found` for a uid that is not a\ntest account, `device_not_found` for a device that is not one of its\nACTIVE phones.",
+        "description": "Release one ACTIVE phone of the account so another can take its place\n(TD-249); the released phone may not register for this account again.\nAnswers the account's row. 404 `user_not_found` for a uid that is not a\ntest account, `device_not_found` for a device that is not one of its\nACTIVE phones.",
         "operationId": "release_test_account_device_v1_admin_test_accounts__uid__devices__device_id__release_post",
         "parameters": [
           {
@@ -6293,7 +6293,7 @@
     },
     "/v1/licenses/activate": {
       "post": {
-        "description": "Redeem a Professional (or re-entered) key locked to this email and device\n(the device of the app that asks, ADR-010).\n\nKept, unchanged, for compatibility with any installed caller. There are\nno runtime licence keys: the account is the anchor, and a code is\nredeemed on the web account page (`POST /v1/me/claim`, below), which\nruns this same `repo.activate_license`. No released build ever offered\na key field (v1.2-beta.4 carries an `activateLicense` client with no\ncaller), and current builds do not call this route. Retire it with\nTD-278.",
+        "description": "Redeem a Professional (or re-entered) key locked to this email and device\n(the device of the app that asks, ADR-010).\n\nKept, unchanged, for compatibility with any installed caller. There are\nno runtime licence keys: the account is the anchor, and a code is\nredeemed on the web account page (`POST /v1/me/claim`, below), which\nruns this same `repo.activate_license`. No released build ever offered\na key field (v1.2-beta.4 carries an `activateLicense` client with no\ncaller), and current builds do not call this route. Retire it with\nTD-52.",
         "operationId": "activate_license_v1_licenses_activate_post",
         "parameters": [
           {
@@ -7023,7 +7023,7 @@
     },
     "/v1/me/erasure": {
       "get": {
-        "description": "Whether the account this phone was registered to has been erased.\n\nFor an account deletion whose `DELETE /v1/me` was sent and never answered\n(the app's process died): the next start asks here before it wipes the\nphone. Erased is \"this phone's device record is gone, or someone else's\":\nthe erase deletes the account's device records, and nothing else ever\ndoes (a superseded or revoked device keeps its record with another\nstatus), so an admin's device reset does not read as an erase.\n\nToken-only (`token_uid`): any route behind `current_user` re-creates a\nprofile for the erased uid, and mails support when it is pending, which is\nwhat the app's earlier device-signed probe did (TD-206). The answer names\nonly the caller's own device, so it tells a token holder nothing about\nanyone else. Rate-limited in the handler: `rate_limited` goes through\n`current_user`.",
+        "description": "Whether the account this phone was registered to has been erased.\n\nFor an account deletion whose `DELETE /v1/me` was sent and never answered\n(the app's process died): the next start asks here before it wipes the\nphone. Erased is \"this phone's device record is gone, or someone else's\":\nthe erase deletes the account's device records, and nothing else ever\ndoes (a superseded or revoked device keeps its record with another\nstatus), so an admin's device reset does not read as an erase.\n\nToken-only (`token_uid`): any route behind `current_user` re-creates a\nprofile for the erased uid, and mails support when it is pending, which is\nwhat the app's earlier device-signed probe did (TD-193). The answer names\nonly the caller's own device, so it tells a token holder nothing about\nanyone else. Rate-limited in the handler: `rate_limited` goes through\n`current_user`.",
         "operationId": "erasure_status_v1_me_erasure_get",
         "parameters": [
           {
@@ -7961,7 +7961,7 @@
     },
     "/v1/sessions/{sid}/uploads": {
       "get": {
-        "description": "What still needs uploading for a session — the resume path.\n\nAn interrupted upload re-reads this instead of calling POST /v1/sessions\nagain, so it continues into the same session/Drive folder rather than\ncreating a duplicate.\n\nDevice-signed, not merely token-authenticated: the response carries Drive\nresumable upload URIs, which are bearer capabilities to write into the\nuser's Drive folder. Every other endpoint that mints or consumes those URIs\n(POST /v1/sessions, POST /v1/files/{id}/complete) requires attestation, so a\nstolen ID token alone must not be able to recover them here either. (An\nID-token-only read was accepted during the fleet migration; retired\n2026-09-26 after 30 days of logs showed no such caller — TD-45.)",
+        "description": "What still needs uploading for a session — the resume path.\n\nAn interrupted upload re-reads this instead of calling POST /v1/sessions\nagain, so it continues into the same session/Drive folder rather than\ncreating a duplicate.\n\nDevice-signed, not merely token-authenticated: the response carries Drive\nresumable upload URIs, which are bearer capabilities to write into the\nuser's Drive folder. Every other endpoint that mints or consumes those URIs\n(POST /v1/sessions, POST /v1/files/{id}/complete) requires attestation, so a\nstolen ID token alone must not be able to recover them here either. (An\nID-token-only read was accepted during the fleet migration; retired\n2026-09-26 after 30 days of logs showed no such caller — TD-4.)",
         "operationId": "session_uploads_v1_sessions__sid__uploads_get",
         "parameters": [
           {

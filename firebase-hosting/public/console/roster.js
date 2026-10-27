@@ -2,7 +2,7 @@
  * the institution page (IT, `/v1/institutions/licenses/{id}`) and on the
  * operator desk (Semper staff, `/v1/admin/licenses/{id}`). The two used to
  * carry their own copies, and they drifted: the desk offered fewer actions
- * and called routes that refused staff (TD-191).
+ * and called routes that refused staff (TD-182).
  *
  * The page owns the elements and what goes around the table (the licence
  * summary, where messages land); this module owns the rows, what each button

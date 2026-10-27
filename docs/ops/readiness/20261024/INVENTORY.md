@@ -107,19 +107,19 @@ and the [gate](../../PRODUCTION_READINESS_GATE.md):
 
 | Id | Action |
 |---|---|
-| TD-229 | Create / link the Play developer account; add the Play app-signing SHA-256 to the Firebase Android app |
-| TD-226 | App Check `off` → `monitor` once a Play build is the fleet (after TD-229) |
-| TD-230 / TD-231 | Play listing and pre-launch report; rehearse the staged rollout |
-| TD-232 / TD-317 | Two owner decisions, then submit the Play Data safety form; Privacy Policy omits Analytics and App Check |
-| TD-215 | Create the entitlement signing key in Secret Manager and grant the runtime SA |
-| TD-214 | Accept `CHECK_REVOKED_ON_STEP_UP`; `roles/firebaseauth.admin` for `indic-api@` on the Auth project |
-| TD-277 | Counsel review of the Terms and Privacy Policy |
-| TD-36 | Fill the 10 bracketed operator fields (name, address, Grievance Officer, region) in the legal pages |
-| TD-217 | Create a notification channel and run `scripts/apply-monitoring.sh --apply` |
-| TD-221–TD-225 | Liens, `Prod` tag, owners through groups; API-key restrictions; Auth providers / enumeration; budgets; Data Access audit logs |
-| TD-227 | Record the production Firestore location |
-| TD-252 | Crashlytics velocity alerts and routing |
-| TD-309 | Resend sender and repository variable for new-device mail |
-| TD-240 | Commission the MASVS-mapped penetration test |
-| TD-248 / TD-209 | Separate staging project (deferred); staging shares the production Firestore |
+| TD-23 | Create / link the Play developer account; add the Play app-signing SHA-256 to the Firebase Android app |
+| TD-21 | App Check `off` → `monitor` once a Play build is the fleet (after TD-23) |
+| TD-24 / TD-25 | Play listing and pre-launch report; rehearse the staged rollout |
+| TD-26 / TD-55 | Two owner decisions, then submit the Play Data safety form; Privacy Policy omits Analytics and App Check |
+| TD-10 | Create the entitlement signing key in Secret Manager and grant the runtime SA |
+| TD-9 | Accept `CHECK_REVOKED_ON_STEP_UP`; `roles/firebaseauth.admin` for `indic-api@` on the Auth project |
+| TD-51 | Counsel review of the Terms and Privacy Policy |
+| TD-3 | Fill the 10 bracketed operator fields (name, address, Grievance Officer, region) in the legal pages |
+| TD-12 | Create a notification channel and run `scripts/apply-monitoring.sh --apply` |
+| TD-16–TD-20 | Liens, `Prod` tag, owners through groups; API-key restrictions; Auth providers / enumeration; budgets; Data Access audit logs |
+| TD-22 | Record the production Firestore location |
+| TD-40 | Crashlytics velocity alerts and routing |
+| TD-245 | Resend sender and repository variable for new-device mail |
+| TD-32 | Commission the MASVS-mapped penetration test |
+| TD-36 / TD-7 | Separate staging project (deferred); staging shares the production Firestore |
 | Checklist §6–§7 | Staff phones re-registering with TOTP, 24 h log watch, erasure check, end the staging QC account, release builds with entitlement public keys, device smoke, raise the minimum version |

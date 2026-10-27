@@ -35,7 +35,7 @@ class SweepStudyRunnerProgressTest {
     private val native = SemperEngine.solver
     private val cancelToEngine = AnalysisCancel.toEngine
 
-    /** A JVM test has no `semper_core`: the cancel flag stays on this side (TD-200). */
+    /** A JVM test has no `semper_core`: the cancel flag stays on this side (TD-188). */
     @Before
     fun noNativeCancel() {
         AnalysisCancel.toEngine = {}

@@ -30,7 +30,7 @@ internal class RoiViewport {
     private var fitWidth = 0f
     private var fitHeight = 0f
 
-    /** Finger travel an edge stopped during this pan, per axis, in view px (TD-146). */
+    /** Finger travel an edge stopped during this pan, per axis, in view px (TD-147). */
     private var slackX = 0f
     private var slackY = 0f
 
@@ -92,7 +92,7 @@ internal class RoiViewport {
     }
 
     /**
-     * A lift's correction back to where the fingers really are (TD-142). The
+     * A lift's correction back to where the fingers really are (TD-144). The
      * last move can run a few px past the fingers; if an edge stopped that
      * overshoot, the photo never made it, so the correction first gives back
      * the stopped travel and does not pull the photo off the edge.

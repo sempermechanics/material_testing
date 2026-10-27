@@ -23,7 +23,7 @@ import org.robolectric.RobolectricTestRunner
 import java.io.File
 
 /**
- * [SessionRecord.extras] and the legacy-key reader (ADR-025, TD-298). A
+ * [SessionRecord.extras] and the legacy-key reader (ADR-025, TD-235). A
  * 2026-10 Material Testing `index.json` keeps eight lab fields at the top level
  * of each row; with an extension naming them, they move under `extras` and
  * survive a write, with the same meaning. Semper, with no extension, reads and

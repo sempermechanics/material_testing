@@ -81,7 +81,7 @@ def test_iter_unprovisioned_files_yields_only_files_with_no_uri(store):
     }
     out = list(repo.iter_unprovisioned_files("s1"))
     assert [f["fileId"] for f in out] == ["s1_a", "s1_d"]
-    # The declared hash rides along: provisioning answers it in the upload target (TD-281).
+    # The declared hash rides along: provisioning answers it in the upload target (TD-221).
     assert out[0] == {"fileId": "s1_a", "name": "a", "role": "raw", "sizeBytes": 10, "sha256": "sha-a"}
 
 
@@ -225,7 +225,7 @@ def test_a_contended_status_write_on_an_erased_session_is_a_no_op(store, contend
 
 
 def test_a_contended_provisioning_start_still_stamps_the_session(store, contended):
-    """TD-296: losing the transaction still stamps `updatedAt`, so the delete
+    """TD-233: losing the transaction still stamps `updatedAt`, so the delete
     guard sees the retry running."""
     store._data["sessions"] = {"s1": {"uid": "u1", "status": statuses.SESSION_PROVISIONING,
                                       "updatedAt": datetime(2020, 1, 1)}}

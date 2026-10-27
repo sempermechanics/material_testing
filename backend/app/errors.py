@@ -31,7 +31,7 @@ NONCE_INVALID_OR_REPLAYED = "nonce_invalid_or_replayed"
 DEVICE_CONFLICT = "device_conflict"
 DEVICE_IN_USE = "device_in_use"
 #: 409 from `POST /v1/devices/register`: staff released this phone from this
-#: test account (TD-314, ADR-027), and it may not take its place back. Builds
+#: test account (TD-249, ADR-027), and it may not take its place back. Builds
 #: before it read any 409 there as `device_conflict`.
 DEVICE_RELEASED = "device_released"
 DEVICE_NOT_ACTIVE = "device_not_active"
@@ -54,7 +54,7 @@ SESSION_NOT_FOUND = "session_not_found"
 SESSION_QUOTA_EXCEEDED = "session_quota_exceeded"
 # 409 from `POST /v1/sessions` when a demo account's own count has room but
 # this device's stored analyses, every account's, are at the demo cap
-# (TD-279). Its own code because a re-check of the account's count cannot
+# (TD-219). Its own code because a re-check of the account's count cannot
 # clear it: the app holds this stop until an upload succeeds or an analysis
 # is deleted, rather than reporting room the next upload refuses.
 DEVICE_QUOTA_EXCEEDED = "device_quota_exceeded"
@@ -82,7 +82,7 @@ METADATA_TOO_LARGE = "metadata_too_large"
 # --- admin -----------------------------------------------------------------
 USER_NOT_FOUND = "user_not_found"
 #: A staff phone release on an account whose live licence still holds the
-#: device lock: **New device** on the licence moves both bindings (TD-126).
+#: device lock: **New device** on the licence moves both bindings (TD-131).
 LICENSE_DEVICE_CLEAR_REQUIRED = "license_device_clear_required"
 EMPTY_PATCH = "empty_patch"
 #: 403 from `POST /v1/admin/test-accounts` (ADR-027): `TEST_ACCOUNT_DOMAINS`
@@ -267,7 +267,7 @@ READYZ_FAILED = "readyz_failed"
 # never reported as `license_device_mismatch`.
 DEVICE_LOCK_CONTENDED = "device_lock_contended"
 # 503 from the browser step-up when this instance has spent its Firebase Auth
-# Admin budget (`rate_limit.auth_admin_bucket`, TD-239) and cannot ask whether
+# Admin budget (`rate_limit.auth_admin_bucket`, TD-200) and cannot ask whether
 # the token was revoked. Nothing is wrong with the caller's token, so it is
 # never `invalid_token`; it carries Retry-After and the caller tries again.
 AUTH_CHECK_BUSY = "auth_check_busy"

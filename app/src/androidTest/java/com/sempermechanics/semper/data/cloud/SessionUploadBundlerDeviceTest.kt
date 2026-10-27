@@ -24,7 +24,7 @@ import java.nio.ByteOrder
  * Upload staging with the report renderer, which needs the platform's
  * PdfDocument: one PDF and five field maps per readable frame, sweep labels
  * made path-safe, and the scratch PDF gone afterwards. The CSV's two sections
- * stay apart with rendering running between frames (TD-66); the rest of the
+ * stay apart with rendering running between frames (TD-94); the rest of the
  * CSV and progress contract is JVM-tested in SessionUploadBundlerTest.
  */
 @RunWith(AndroidJUnit4::class)

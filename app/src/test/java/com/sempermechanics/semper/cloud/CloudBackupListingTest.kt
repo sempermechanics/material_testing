@@ -106,7 +106,7 @@ class CloudBackupListingTest {
     }
 
     @Test
-    fun `a backup with the analysis's name is offered by it, and one without by its reference (TD-208)`() {
+    fun `a backup with the analysis's name is offered by it, and one without by its reference (TD-195)`() {
         CloudBackupListing.record(
             context,
             listOf(

@@ -1,5 +1,5 @@
 # Network calls and enqueues allowed on a screen's lifecycleScope, checked by
-# scripts/check_activity_scope_work.py (TD-291, ADR-016 rule 1).
+# scripts/check_activity_scope_work.py (TD-228, ADR-016 rule 1).
 #
 #   path (under app/src/main/java/com/sempermechanics/semper/) | function | call | reason
 #
@@ -15,13 +15,13 @@
 # the recreated screen, or the user's next tap, asks again.
 
 ui/auth/PendingApprovalActivity.kt | checkStatusAgain | refreshStatus | Status read behind the "check again" button; a rotation stops it and the next tap repeats it, nothing is written (ADR-016 amendment: a repeated refresh)
-ui/home/HomeCloudCheck.kt | queue | CloudSync.reconcile | Home's list refresh (moved out of HomeActivity for TD-290), the example the ADR-016 amendment names; every onResume requests it again
+ui/home/HomeCloudCheck.kt | queue | CloudSync.reconcile | Home's list refresh (moved out of HomeActivity for TD-227), the example the ADR-016 amendment names; every onResume requests it again
 ui/settings/SettingsAnalysesSection.kt | analysesRefresh | CloudRestore.listCompleted | The analyses list read; a recreated Settings loads it again (ADR-016 amendment: a repeated refresh)
 
 # ── Enqueues that cannot be lost by a cancel ─────────────────────────────────
 
-ui/settings/SettingsCloudSection.kt | maybeOfferBackfill | CloudSync.enqueueUpload | The enqueue runs in the confirm dialog's click handler, not in the coroutine that showed the dialog; nothing on the scope enqueues (TD-291 heuristic: lambdas are not told apart)
+ui/settings/SettingsCloudSection.kt | maybeOfferBackfill | CloudSync.enqueueUpload | The enqueue runs in the confirm dialog's click handler, not in the coroutine that showed the dialog; nothing on the scope enqueues (TD-228 heuristic: lambdas are not told apart)
 ui/home/BackupBadgeActions.kt | enqueueBackup | CloudSync.enqueueUpload | The PENDING stamp is on disk before the enqueue, and the next reconcile re-queues a PENDING row (data/cloud/CloudReconcile.kt repairRows, requeue); ADR-016 rule 3 holds for the upload itself
 ui/settings/SettingsAnalysesSection.kt | startBackup | CloudSync.enqueueUpload | Same as Home's Back up: PENDING stamped first, re-queued by the next reconcile (CloudReconcile.repairRows); ADR-016 rule 3 holds for the upload itself
 ui/home/SessionSelectionController.kt | promptRename | SessionMetadataSync.enqueue | Rename and enqueue run on Dispatchers.IO with no suspension point between them, and metadataStale is on disk for the next reconcile to re-send (ADR-013, ADR-016)
-ui/settings/SettingsYourDataSection.kt | observeConsent | setImprovementConsent | A false positive: the match is SettingsViewModel.setImprovementConsent in the switch listener that showConsent installs; the send itself runs on viewModelScope (ADR-016 rule 1, TD-291 heuristic: lambdas are not told apart)
+ui/settings/SettingsYourDataSection.kt | observeConsent | setImprovementConsent | A false positive: the match is SettingsViewModel.setImprovementConsent in the switch listener that showConsent installs; the send itself runs on viewModelScope (ADR-016 rule 1, TD-228 heuristic: lambdas are not told apart)

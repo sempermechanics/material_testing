@@ -159,7 +159,7 @@ internal class ViewerSummaryController(
      * not re-scan. A batch run writes the [FieldRangesStore] sidecar, and then the pass
      * decodes nothing. Without it (older or restored sessions) the pass decodes and
      * range-scans **every frame**, about 1 MB of garbage per frame at 19 200 points,
-     * which set the 150-frame heap (TD-87).
+     * which set the 150-frame heap (TD-107).
      */
     fun start() {
         if (host.batchFiles.isEmpty()) return

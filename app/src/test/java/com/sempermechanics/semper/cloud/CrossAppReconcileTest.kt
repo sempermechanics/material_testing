@@ -28,7 +28,7 @@ import org.robolectric.RobolectricTestRunner
 import java.io.IOException
 
 /**
- * TD-153: a row restored from the other app's backup (ADR-014) is SYNCED, but
+ * TD-152: a row restored from the other app's backup (ADR-014) is SYNCED, but
  * this app's listing does not show it. The reconcile asks the whole account
  * (`?app=all`) before it repairs, so such a row stays SYNCED and is not
  * uploaded again as a duplicate.

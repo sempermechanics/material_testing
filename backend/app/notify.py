@@ -7,8 +7,8 @@ enqueues; Resend failures never alter the caller's HTTP status.
 Two kinds, each with its own sender and de-duplication key: an access request
 to support (`access_request`, once per uid, from `NOTIFY_FROM`), and a new
 device on an account to its holder (`device_registered`, once per uid and
-device, from `NOTIFY_SECURITY_FROM`; TD-295). No address is ever logged
-(TD-242).
+device, from `NOTIFY_SECURITY_FROM`; TD-232). No address is ever logged
+(TD-201).
 """
 from __future__ import annotations
 
@@ -226,7 +226,7 @@ def device_registered(uid: str, address: str, device_id: str, app: str, *,
     `address` is the account's verified address (`repo.verified_address`);
     without one nothing is sent. Once per (uid, device): a key heal of the
     same device is not a new device, and the route does not call this for
-    it. Off while `NOTIFY_SECURITY_FROM` is unset (TD-295).
+    it. Off while `NOTIFY_SECURITY_FROM` is unset (TD-232).
     """
     if not address:
         return

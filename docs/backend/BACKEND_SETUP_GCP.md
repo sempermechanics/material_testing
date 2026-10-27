@@ -110,7 +110,7 @@ index on `uid` for `seats` and `deleted_seats`: account erasure finds every seat
 an account held with a collection-group query (`_seats_of`,
 `backend/app/repo/account.py:156-183`), and a collection-group query has no
 automatic index. Without it that query fails, erasure blanks the current
-licence's seat only and logs `erasure_seat_scan_failed` (TD-271). Every other query the backend and the consoles run is a single-field equality or
+licence's seat only and logs `erasure_seat_scan_failed` (TD-47). Every other query the backend and the consoles run is a single-field equality or
 `array-contains`, optionally ordered by `__name__`, and Firestore serves those
 from its automatic single-field indexes — do not add `field + __name__` entries
 to the file; the index API refuses them ("this index is not necessary") and
@@ -321,7 +321,7 @@ gs://run-sources-$PROJECT-$REGION --format='value(lifecycle_config)'` shows the 
 
 ### A8. Licensing: the Auth admin grant and the entitlement signing key
 
-Both are owed in production as of 2026-10-18 (TD-214, TD-215 in
+Both are owed in production as of 2026-10-18 (TD-9, TD-10 in
 [TECH_DEBT.md](../ops/TECH_DEBT.md)). Until they are done the backend runs as
 before: no signed entitlement is issued, refresh-token revocation and Auth-user
 deletion are attempted and reported as not done in the audit row, and the
@@ -430,7 +430,7 @@ Everything above is required (or near enough). These are the rest of what
 
 | Variable | Default | What it does |
 |---|---|---|
-| `DEMO_MAX_ANALYSES` | `25` | How many analyses an **unlicensed** user may keep in the cloud. **Not** overridable per user: `resolve_user_config` applies it to every demo account and ignores a `maxSessions` override (`backend/app/repo/user_config.py`, the `else` branch of `resolve_user_config`). Lifting one demo account's cap means attaching a licence (decided 2026-09-23, TD-28) |
+| `DEMO_MAX_ANALYSES` | `25` | How many analyses an **unlicensed** user may keep in the cloud. **Not** overridable per user: `resolve_user_config` applies it to every demo account and ignores a `maxSessions` override (`backend/app/repo/user_config.py`, the `else` branch of `resolve_user_config`). Lifting one demo account's cap means attaching a licence (decided 2026-09-23, TD-69) |
 | `LICENSED_MAX_SESSIONS_PER_USER` | `999` | The same ceiling for a **licensed** user. The first positive value wins, in this order: the per-user `maxSessions` override, then the licence's `maxAnalyses` (mirrored onto the user as `licenseMaxAnalyses`), then this variable — so an override of 999 beats a key's cap of 100, and a key's cap of 2000 beats this default. It is **not** "whichever is tighter". Whatever wins is then floored at `DEMO_MAX_ANALYSES` (`repo/user_config.py`, `resolve_user_config`): a licence never gives fewer analyses than demo, and a licence `maxAnalyses` below it is refused at mint and PATCH (`models.py`, `_analysis_cap`) |
 | `ADMIN_WEB_MFA_ENABLED` | `1` | Whether browser dashboards may act via MFA at all. `0` restores attestation-only admin — every state change then needs the phone |
 | `ADMIN_WEB_REAUTH_SECONDS` | `900` | How old a console sign-in may be and still authorise an ordinary state change. Sudo mode, not a session length |
@@ -442,7 +442,7 @@ Everything above is required (or near enough). These are the rest of what
 | `TASKS_PROVISION_WORKERS` | `8` | Fan-out when the provisioning task opens resumable sessions: how many of one session's calls run at once on the process-wide Drive pool (64 workers, the size of the Drive connection pool) |
 | `INLINE_PROVISION_MAX_FILES` | `8` | Manifests this small provision inside `POST /v1/sessions` instead of through the queue. `0` sends everything through Cloud Tasks |
 | `CLIENT_NONCE_WINDOW_SECONDS` | `120` | How far a device-minted `t1.` nonce's timestamp may be from server time ([CLOUD_ARCHITECTURE_GCP.md §3](CLOUD_ARCHITECTURE_GCP.md)). `0` refuses client nonces, so every signed call fetches a challenge |
-| `AUDIT_RETENTION_DAYS` | `365` | How long an `audit_logs` row is kept (TD-237, owner decision 2026-10-22): each new row is written with `expireAt` = now + this, which the TTL policy on `audit_logs.expireAt` deletes ([FIRESTORE_DATA_PROTECTION.md](FIRESTORE_DATA_PROTECTION.md)). Leave unset; it must match the `audit-trail` log bucket's locked retention, and a change moves only rows written after it |
+| `AUDIT_RETENTION_DAYS` | `365` | How long an `audit_logs` row is kept (TD-199, owner decision 2026-10-22): each new row is written with `expireAt` = now + this, which the TTL policy on `audit_logs.expireAt` deletes ([FIRESTORE_DATA_PROTECTION.md](FIRESTORE_DATA_PROTECTION.md)). Leave unset; it must match the `audit-trail` log bucket's locked retention, and a change moves only rows written after it |
 | `APP_CHECK_MODE` | `off` | `off` / `monitor` / `enforce`. Whether a caller sending `X-Device-Id` must also carry a valid Firebase App Check token. Roll out through `monitor` — see [AUTH_SETUP.md §3.2](AUTH_SETUP.md). A value outside the three fails startup. **Never `enforce` while a build without App Check is still installed** — every request from it would 403 |
 | `LICENSE_GRACE_DAYS_DEFAULT` | `14` | Grace applied at mint time when the request names none. A licence already stored without `graceDays` reads as zero, so changing this never reinstates an expired account |
 | `LICENSE_LEASE_HOURS` · `LICENSE_LEASE_HEARTBEAT_MINUTES` | `8` · `30` | Floating-seat lease length and how often the app renews it. A crashed client parks a seat for at most the lease |
@@ -454,7 +454,7 @@ Everything above is required (or near enough). These are the rest of what
 | `ENTITLEMENT_KID` | `ent-1` | The key's id in the token header; the app pins keys by it |
 | `ENTITLEMENT_OFFLINE_GRACE_DAYS` | `14` | How long a token lets the app keep its entitlement offline, capped at a timed licence's end plus grace and a floating lease's end |
 | `MIN_SUPPORTED_VERSION_CODE` · `RECOMMENDED_VERSION_CODE` | `0` · `0` | Semper's release gate, published on `/v1/config` to Semper builds only; the app blocks new runs and cloud calls below the minimum and nudges below the recommended. The server refuses nothing on them. `0` = no gate |
-| `MIN_SUPPORTED_VERSION_CODE_SEMPER_CLASSROOM` · `RECOMMENDED_VERSION_CODE_SEMPER_CLASSROOM` | `0` · `0` | The same pair for Semper Classroom builds, which number their versionCodes separately (`settings.release_gate(app)`, `backend/app/config.py:308-335`). Each unset one falls back to its pre-rename name, `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` / `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING` (`_env_int_renamed`, `backend/app/config.py:18`; [ADR-030](../adr/ADR-030-semper-classroom-app-identity.md), until TD-330) |
+| `MIN_SUPPORTED_VERSION_CODE_SEMPER_CLASSROOM` · `RECOMMENDED_VERSION_CODE_SEMPER_CLASSROOM` | `0` · `0` | The same pair for Semper Classroom builds, which number their versionCodes separately (`settings.release_gate(app)`, `backend/app/config.py:308-335`). Each unset one falls back to its pre-rename name, `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` / `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING` (`_env_int_renamed`, `backend/app/config.py:18`; [ADR-030](../adr/ADR-030-semper-classroom-app-identity.md), until TD-56) |
 | `KILL_SWITCHES` | empty | Features switched off fleet-wide: any of `backup`, `share`, `restore`, `upload`, **space-separated**. An unknown name is logged and ignored (`backend/app/config.py:28-44`). Published on `/v1/config` and enforced by the backend (`backend/app/config.py:336-349`; `deps.unless_paused`, `backend/app/deps.py:301-336`): `upload` or `backup` refuse `POST /v1/sessions` and `POST /v1/files/{id}/complete`; `restore` refuses `GET /v1/files/{id}/content` and `GET /v1/sessions/{sid}/bundle`; each answers 503 `feature_paused` with `Retry-After: 300`, logged `event="feature_paused"`. `share` is the app's own export and is published only. A change is a new revision |
 | `CONSOLE_ORIGINS` | `https://app.sempermechanics.com https://indicvision-dic-app-auth.firebaseapp.com` | Browser origins the API answers CORS for. The dashboards live on Firebase Hosting, never on the gateway host, so every console call is cross-origin and preflighted; an origin missing here renders a page whose every button silently does nothing. Exact origins, **space-separated** (the deploy action splits its `env_vars` on commas, so a comma-separated value is truncated), no wildcard. The phone sends no `Origin` and is unaffected. The gateway must also carry `allowCors` (step 3 below) or the preflight never reaches Cloud Run |
 
@@ -462,7 +462,7 @@ Everything above is required (or near enough). These are the rest of what
 > read.** The first was the single cloud cap for every user, defaulting to 4;
 > `mode` now selects between `DEMO_MAX_ANALYSES` and
 > `LICENSED_MAX_SESSIONS_PER_USER` instead (the second, its pre-rename name,
-> stopped seeding the licensed default on 2026-09-26, TD-45). An unlicensed user gets
+> stopped seeding the licensed default on 2026-09-26, TD-4). An unlicensed user gets
 > `DEMO_MAX_ANALYSES` — six times the old ceiling at the default — so **set that
 > variable deliberately before deploying** rather than inheriting it.
 >
@@ -502,7 +502,7 @@ Everything above is required (or near enough). These are the rest of what
 **Upload targets are always attested.** `GET /v1/sessions/{sid}/uploads` returns
 Drive upload capability URLs and requires a device signature unconditionally.
 The `REQUIRE_ATTESTED_UPLOADS` flag that held an ID-token-only window open was
-retired on 2026-09-26 (TD-45; CLOUD_ARCHITECTURE_GCP.md §20.5 shim 2): the
+retired on 2026-09-26 (TD-4; CLOUD_ARCHITECTURE_GCP.md §20.5 shim 2): the
 backend no longer reads it and [`deploy-backend.yml`](../../.github/workflows/deploy-backend.yml)
 no longer pins it. Keep the GitHub var at `1` until no redeploy of a commit
 older than the retirement is plausible — that older workflow still passes it,
@@ -538,13 +538,13 @@ a fresh non-admin, non-domain account: mail should land in support@ within
 seconds, and `gcloud run services logs read semper-api --region $REGION` should
 carry no `access-request mail` warning.
 
-**New-device mail to the holder (optional, TD-295).** Set `NOTIFY_SECURITY_FROM`
+**New-device mail to the holder (optional, TD-232).** Set `NOTIFY_SECURITY_FROM`
 to a verified Resend sender (for example `Semper security <security@yourdomain.com>`)
 and each account's holder is mailed, at their verified address, when a new device
 registers to the account: once per account and device, never for a key heal of
 the device already bound. Unset, that mail is off; the access-request mail is
 unaffected. `deploy-backend.yml` passes it from the `NOTIFY_SECURITY_FROM` repo
-variable, like `NOTIFY_FROM` (TD-309): verify the sender in Resend, then set the
+variable, like `NOTIFY_FROM` (TD-245): verify the sender in Resend, then set the
 variable and redeploy.
 
 > `--no-allow-unauthenticated` keeps Cloud Run private: only the service

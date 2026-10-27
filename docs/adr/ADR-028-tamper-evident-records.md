@@ -1,10 +1,10 @@
 # ADR-028: Tamper-evident measurement records
 
-**Status:** Accepted (the product owner's decision to build TD-247, 2026-10-22). Merged in #471;
+**Status:** Accepted (the product owner's decision to build TD-35, 2026-10-22). Merged in #471;
 checked on emulators 2026-10-23 (below); not released yet.
 **Date:** 2026-10-22
 **Deciders:** product owner, app owner
-**Register:** TD-247 (closed by this record)
+**Register:** TD-35 (closed by this record)
 
 Paths are from `app/src/main/java/com/sempermechanics/semper/` unless they start at the
 repository root.

@@ -1,7 +1,7 @@
 # ADR-016: Work that must outlive the Activity has one home per kind
 
 **Status:** Accepted, built (quality program, #311–#331). Amended 2026-10-19: a
-static check for rule 1, proposed and then built as a source check in CI (TD-291);
+static check for rule 1, proposed and then built as a source check in CI (TD-228);
 see [Amendments](#amendments)
 **Date:** 2026-10-03
 **Deciders:** app owner
@@ -151,12 +151,12 @@ time, a `StateFlow`, and a consume.
   process finishes the wipe and sign-out (`AccountDeletionRun.resumeInterrupted`).
   An erase that never answered is settled by asking `GET /v1/me/erasure`
   (`CloudErase.probeErasedAccount`), which reads the ID token alone so the
-  question does not re-create the erased profile (TD-206): wiped only when
+  question does not re-create the erased profile (TD-193): wiped only when
   the account is known gone, asked again at the next start when there is no
   answer. Tests: `AccountDeletionDeathTest`, `test_account_deletion_probe.py`.
 - The wizard's run outcome was a `SharedFlow` with no replay, collected only
   while the wizard was started, so an outcome emitted while it was in the
-  background was dropped (TD-168). It is now held until consumed
+  background was dropped (TD-166). It is now held until consumed
   (`PendingOutcome`); test: `RunOutcomeDeliveryTest`.
 
 ## Action items
@@ -167,9 +167,9 @@ time, a `StateFlow`, and a consume.
    (`ErasureWatch`, `AccountDeletionRun.kt:243-267`, #329).
 3. [x] `SignOutRun` with live-screen tracking and the `Unclaimed` outcome
    (#316, #329).
-4. [x] TD-165: persist the deletion stage and finish the wipe at startup
+4. [x] TD-163: persist the deletion stage and finish the wipe at startup
    (`AccountDeletionMarker`, `AccountDeletionRun.resumeInterrupted`).
-5. [x] TD-168: the wizard's run outcome is held in the ViewModel until a
+5. [x] TD-166: the wizard's run outcome is held in the ViewModel until a
    screen consumes it (`PendingOutcome`).
 
 ## Amendments
@@ -211,9 +211,9 @@ default detekt rules). Findings are never baselined (CLAUDE.md). A refresh that 
 next `onResume` repeats anyway, such as Home's list refresh, is not a request the
 user can lose, so it is suppressed with that reason given. The cites above are at
 `763ed7a`, before the fix: #457 moved Home's restore to `HomeViewModel` and sign-in
-to `AuthViewModel` (U7, U8). The check itself is TD-291.
+to `AuthViewModel` (U7, U8). The check itself is TD-228.
 
-**2026-10-19, the check is built (TD-291).** It is a Python source check,
+**2026-10-19, the check is built (TD-228).** It is a Python source check,
 `scripts/check_activity_scope_work.py`, not the lint or detekt rule proposed above:
 it needs no rules module and runs in seconds on every event, in CI's `legal-pages`
 job ([CI.md](../ops/CI.md)). It reads `ui/` and flags:

@@ -48,7 +48,7 @@ DEMOTED = "demoted"
 
 
 #: What reconciliation reads of a seat and of its holder, and all it fetches
-#: of either (TD-198): a user document also holds consents, terms and the
+#: of either (TD-186): a user document also holds consents, terms and the
 #: device lock, none of which a roster report needs. `licenseGraceDays` and
 #: `licenseExpiresAt` feed `_expiry_state`; `mode` and `plan`, `_license_mode`.
 SEAT_FIELDS = ("uid", "email", "status", "revokedAt", "updatedAt")
@@ -92,7 +92,7 @@ def reconcile_institution_seats(license_id: str) -> dict:
 
     Costs one read per seat, which is why it is admin-tier and on demand
     rather than a field on any hot path. The holders come back in one batched
-    `get_all` rather than one round trip per seat (TD-62).
+    `get_all` rather than one round trip per seat (TD-91).
     """
     lic_snap = _get(db().collection("licenses").document(license_id))
     if not lic_snap.exists:

@@ -25,7 +25,7 @@ import java.util.zip.ZipFile
 
 /**
  * The reference has its own archive entry, `ref/Reference.png`, so a deformed
- * frame the user named `Reference.png` backs up and restores as a frame (TD-163).
+ * frame the user named `Reference.png` backs up and restores as a frame (TD-161).
  * Staging runs for real here, from a staging dir whose reports are already
  * baked, so no report pass runs.
  */

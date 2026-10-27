@@ -1,4 +1,4 @@
-"""`scripts/startup_ab.py`: the interleaved A/B startup comparison (TD-135).
+"""`scripts/startup_ab.py`: the interleaved A/B startup comparison (TD-6).
 
 Analysis is held on small macrobenchmark JSON files laid out as pulled rounds
 (`1-A/`, `2-B/`, ...). Run mode is driven through a fake `adb` (and, for the

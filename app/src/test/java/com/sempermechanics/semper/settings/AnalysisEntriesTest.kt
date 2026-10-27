@@ -139,7 +139,7 @@ class AnalysisEntriesTest {
     }
 
     @Test
-    fun `a cloud-only row takes the analysis's name, and the reference's when the backup has none (TD-208)`() {
+    fun `a cloud-only row takes the analysis's name, and the reference's when the backup has none (TD-195)`() {
         val entries = AnalysisEntries.merge(
             records = listOf(record("local-1", name = "Sweep")),
             cloud = listOf(

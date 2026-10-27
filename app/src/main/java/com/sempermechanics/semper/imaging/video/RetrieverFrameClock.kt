@@ -7,7 +7,7 @@ import kotlinx.coroutines.CancellationException
 import timber.log.Timber
 
 /**
- * The clip times of the frames the retriever rung gets back (TD-207).
+ * The clip times of the frames the retriever rung gets back (TD-194).
  * `getFrameAtTime` returns a frame near the time asked for and cannot say
  * which, so this reads the video track's sample times with a [MediaExtractor]
  * walk, as the key-frame lookup does, and answers with the one the retriever

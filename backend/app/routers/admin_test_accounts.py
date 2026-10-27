@@ -68,7 +68,7 @@ def reset_test_account_password(uid: Uid, response: Response,
 def release_test_account_device(uid: Uid, device_id: DeviceId,
                                 ctx=Depends(attested_or_mfa_admin_fresh)):
     """Release one ACTIVE phone of the account so another can take its place
-    (TD-314); the released phone may not register for this account again.
+    (TD-249); the released phone may not register for this account again.
     Answers the account's row. 404 `user_not_found` for a uid that is not a
     test account, `device_not_found` for a device that is not one of its
     ACTIVE phones."""

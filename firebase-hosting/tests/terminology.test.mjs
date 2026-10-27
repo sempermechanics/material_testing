@@ -143,7 +143,7 @@ test("the consoles use one word per concept", () => {
 
 // The hosted pages outside the consoles that an account holder lands on (the
 // email-link sign-in, the password reset, the 404) follow the same rules.
-// /privacy and /terms are legal text, held for counsel (TD-277), so not here.
+// /privacy and /terms are legal text, held for counsel (TD-51), so not here.
 const PUBLIC = fileURLToPath(new URL("../public/", import.meta.url));
 const LANDING = ["404.html", "finishSignIn", "finishReset"];
 

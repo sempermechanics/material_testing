@@ -334,7 +334,7 @@ happened. The filter narrows the loaded rows at once, and an email, domain or
 key prefix is also searched on the backend, so a licence on a page nobody
 loaded is found. The search is `POST /v1/admin/licenses/search` with
 `{"q", "limit", "page_token"}` in the body, never `?q=` on the list: an
-address in a URL lands in every request log on the way (TD-244). Its answer
+address in a URL lands in every request log on the way (TD-203). Its answer
 has the list's shape; the desk reads up to ten pages of it. One licence per person: the backend refuses an
 individual mint for an address that already holds or is promised a live
 licence (`409 email_already_licensed: <id>`), and the desk puts that licence

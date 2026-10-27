@@ -252,7 +252,7 @@ _FIRESTORE_OUTAGES = (gexc.ServiceUnavailable, gexc.DeadlineExceeded)
 def _is_firestore_outage(exc: BaseException) -> bool:
     """`UNAVAILABLE` or `DEADLINE_EXCEEDED` from a Firestore call, raw or as
     the `RetryError` api-core raises when the retry window runs out on one
-    (TD-250). Anything else stays a 500."""
+    (TD-38). Anything else stays a 500."""
     if isinstance(exc, gexc.RetryError):
         exc = exc.cause
     return isinstance(exc, _FIRESTORE_OUTAGES)
@@ -323,5 +323,5 @@ def served_routes(application: FastAPI):
 
 
 # The access log classifies by declared template, not by guessing which path
-# segments are ids (TD-44).
+# segments are ids (TD-79).
 obs.register_routes(route.path_format for route in served_routes(app))

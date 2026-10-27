@@ -16,7 +16,7 @@ import java.math.BigDecimal
 import java.math.MathContext
 
 /**
- * The lab test a Home Re-run copies along with the photos (TD-280): the test
+ * The lab test a Home Re-run copies along with the photos (TD-220): the test
  * type, the dimensions and beam-edge taps, and bending's typed hanger masses.
  * Home has the record in hand, so it rides the wizard's Intent
  * ([putOn] / [from]) and is in the view model before the load card is built

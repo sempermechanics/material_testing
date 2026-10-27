@@ -1,4 +1,4 @@
-"""`scripts/check_kotlin_file_size.py`: ADR-015's file-size budget (TD-292).
+"""`scripts/check_kotlin_file_size.py`: ADR-015's file-size budget (TD-229).
 
 Each test builds a small repository under a temporary directory, with Kotlin
 files of known length, and runs the check against it through `--root` (or its
@@ -127,23 +127,23 @@ class HotLoopTest(_Repo):
 class AllowlistTest(_Repo):
     def test_an_allowlisted_file_may_sit_at_its_ceiling(self) -> None:
         self.write("data/cloud/Big.kt", _kotlin(506))
-        self.allow("data/cloud/Big.kt | 506 | split pending, TD-292\n")
+        self.allow("data/cloud/Big.kt | 506 | split pending, TD-229\n")
         self.assertEqual(self.failures(), [])
 
     def test_an_allowlisted_file_that_grows_fails(self) -> None:
         self.write("data/cloud/Big.kt", _kotlin(507))
-        self.allow("data/cloud/Big.kt | 506 | split pending, TD-292\n")
+        self.allow("data/cloud/Big.kt | 506 | split pending, TD-229\n")
         [failure] = self.failures()
         self.assertIn("past its allowlisted ceiling of 506", failure)
 
     def test_an_entry_back_within_the_budget_must_go(self) -> None:
         self.write("data/cloud/Big.kt", _kotlin(480))
-        self.allow("data/cloud/Big.kt | 506 | split pending, TD-292\n")
+        self.allow("data/cloud/Big.kt | 506 | split pending, TD-229\n")
         [failure] = self.failures()
         self.assertIn("within the budget; remove its entry", failure)
 
     def test_an_entry_for_a_missing_file_must_go(self) -> None:
-        self.allow("data/cloud/Gone.kt | 506 | split pending, TD-292\n")
+        self.allow("data/cloud/Gone.kt | 506 | split pending, TD-229\n")
         [failure] = self.failures()
         self.assertIn("data/cloud/Gone.kt does not exist", failure)
 
@@ -154,7 +154,7 @@ class AllowlistTest(_Repo):
         self.assertIn("names no TD- or ADR- pointer", failure)
 
     def test_a_malformed_entry_fails(self) -> None:
-        self.allow("data/cloud/Big.kt 506 TD-292\n")
+        self.allow("data/cloud/Big.kt 506 TD-229\n")
         [failure] = self.failures()
         self.assertIn("expected `path | max lines | reason`", failure)
 

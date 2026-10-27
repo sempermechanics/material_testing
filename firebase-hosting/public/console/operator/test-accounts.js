@@ -1,6 +1,6 @@
 /* The Test accounts card (ADR-027): sign-ins for QC staff and CI, created
  * here with a generated password, listed, and per account extended, given a
- * new password, one phone released (TD-314: its place is free, and that
+ * new password, one phone released (TD-249: its place is free, and that
  * phone cannot register for the account again), or ended now.
  *
  * Every change is held to the revoke window (`attested_or_mfa_admin_fresh`),

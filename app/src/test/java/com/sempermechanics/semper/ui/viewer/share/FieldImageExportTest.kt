@@ -24,7 +24,7 @@ import java.io.File
 
 /**
  * The field PNG export draws a frame the way the viewer draws it (ADR-011,
- * TD-139): on the frame's own photo with the map at the displaced positions,
+ * TD-141): on the frame's own photo with the map at the displaced positions,
  * the map being [VisualizationEngine.generateFrameHeatmap], the viewer's own
  * render; on the reference with the reference-position map when the photo is
  * gone. Native graphics, so the composite is really drawn.

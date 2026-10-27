@@ -16,7 +16,7 @@ object AnalysisCancel {
      *
      * A JVM test has no `semper_core`; it swaps in a no-op here so it can
      * destroy the wizard, whose `onDestroy` cancels, and restores this after
-     * (TD-200).
+     * (TD-188).
      */
     @VisibleForTesting
     internal var toEngine: (Boolean) -> Unit = { SemperNativeLib.setCancelRequested(it) }

@@ -1,6 +1,6 @@
 # ADR-023: A signed, time-limited entitlement the app verifies offline
 
-**Status:** Accepted, built (backend and app); not yet live: no signing key is provisioned (TD-215)
+**Status:** Accepted, built (backend and app); not yet live: no signing key is provisioned (TD-10)
 **Date:** 2026-10-18
 **Deciders:** app owner
 **Framework items:** 4.1, 4.3, 3.5, 6.4; Part B ([READINESS_FRAMEWORK_2026-10.md](../ops/READINESS_FRAMEWORK_2026-10.md))
@@ -15,8 +15,8 @@
 > and "Refresh licence" asks on demand. Share has no backend route, so no server
 > check decides it: the app shares when the cached `/v1/config` licenses it, and
 > a token can only narrow that (decision 7). With no token (none is issued until
-> a signing key exists, TD-215) or one that does not verify, share and the
-> offline licence rest on the TLS-delivered cache alone (TD-274).
+> a signing key exists, TD-10) or one that does not verify, share and the
+> offline licence rest on the TLS-delivered cache alone (TD-49).
 
 ## Context
 
@@ -75,7 +75,7 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
    when the stored token is past `refreshAfter` or has lapsed
    (`LicenseConfigWorker.foregroundCheck`, an `AppForeground` listener, `:121-139`;
    `EntitlementRefresh.refreshDue`, `data/account/entitlement/EntitlementRefresh.kt:57`), so `refreshAfter` is a server-side lever; the 4-hour periodic
-   refresh stays (TD-264, TD-266, closed 2026-10-18).
+   refresh stays (TD-210, TD-212, closed 2026-10-18).
 4. **The key.** A P-256 private key in Secret Manager, mounted as
    `ENTITLEMENT_SIGNING_KEY` only when the repo variable
    `ENTITLEMENT_SIGNING_SECRET` names a secret that exists
@@ -115,7 +115,7 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
      **tampered**; a record with no key (a lost Keystore key, a clear cut
      short) and a key with the mark but no record (a crash mid-seal) read as
      **no token** and are tidied away, so neither drops a licensed user to Demo
-     (TD-265, closed 2026-10-18). A record whose MAC matches but whose `v` is
+     (TD-211, closed 2026-10-18). A record whose MAC matches but whose `v` is
      above this build's (a phone that went back a version) also reads as **no
      token**, and the next save reseals it; a format bump must keep reading v1,
      which `SealedEntitlementTest` pins with a committed record
@@ -131,7 +131,7 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
    `LicenseEntitlements.isSeatRequiredToStart`, `data/account/LicenseEntitlements.kt:138-140`).
    While a token is lapsed the quota card and the limit screen show the cap
    enforced, not the server's `maxSessions` (`LicenseEntitlements.shownAnalysisCap`,
-   `:224`; TD-263, closed 2026-10-18). A token that
+   `:224`; TD-209, closed 2026-10-18). A token that
    fails verification on the device (a `kid` this build does not pin, a bad
    signature, the wrong `app` or `dev` or `dkt`, or a device key that cannot be
    read) is treated as **no token** (`TokenStatus.NotUsed`,
@@ -169,7 +169,7 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
   written in Node.js, and Semper has no Functions. Request replay is already
   refused by single-use device-signed nonces (`consume_nonce`,
   `backend/app/repo/devices.py:133`; `backend/tests/test_device_auth.py:130`, `:172`).
-- **Cloud KMS signing now.** Deferred (TD-236): it keeps the private key out of
+- **Cloud KMS signing now.** Deferred (TD-30): it keeps the private key out of
   the process but adds a KMS call per issued token; Secret Manager with one
   accessor meets item 3.5's wording.
 
@@ -181,7 +181,7 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
   `leaseExpiresAt` bounds that.
 - The clock rules are not tamper-proof on a rooted device. Deleting the HMAC
   key, with or without the sealed record, reads as "no token" and falls back to
-  the cached config (TD-261, accepted). Since decision 6 reads a lost key as no
+  the cached config (TD-46, accepted). Since decision 6 reads a lost key as no
   token rather than tampering, deleting the key alone now does the same as
   deleting both; that is the price of not dropping a licensed user to Demo when
   the Keystore loses a key. `exp` and revocation at the next check-in are the
@@ -189,7 +189,7 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
 - A token that does not verify is ignored rather than refused (decision 7), so
   an unverifiable token gives the same result as no token: the cached config,
   bounded by the server at the next online request.
-- The private key is in the service's memory (TD-236).
+- The private key is in the service's memory (TD-30).
 
 ## Consequences
 
@@ -213,7 +213,7 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
 (`backend/app/services/account.py:124`). Semper and Material Testing sign in to the
 same Auth project, so this removes the sign-in for both apps. That matches the
 erase itself, which is account-wide: it removes the sessions, files and devices of
-both apps, and (since 2026-10-18, TD-243) the account's `auth_links` rows and the
+both apps, and (since 2026-10-18, TD-202) the account's `auth_links` rows and the
 address on every seat it held (`backend/app/repo/account.py:206-244`). The app's
 delete confirmation says the sign-in goes for both apps
 (`delete_account_body`, `app/src/main/res/values/strings.xml:346`). Recorded as intended, not as
@@ -225,14 +225,14 @@ debt.
 - [x] App verification, grace, clock rollback and sealed state (2026-10-18).
 - [x] First CI Tier 1 run on the branch compiles and passes the app side: CI run
       39158239853 on `ae4c24a` (Tier 1, 3, 4, 5 and rules). The follow-up branch's
-      first run is still owed (TD-219).
-- [ ] Provision the key and the pinned public key (TD-215).
+      first run is still owed (TD-14).
+- [ ] Provision the key and the pinned public key (TD-10).
 - [ ] Later work: key attestation verified server-side, a Play Integrity verdict
-      at activation and check-in, device recall (TD-234); anti-tamper detection
-      with graded responses (TD-235); KMS signing (TD-236); device
-      acknowledgement of revocation (TD-238).
+      at activation and check-in, device recall (TD-28); anti-tamper detection
+      with graded responses (TD-29); KMS signing (TD-30); device
+      acknowledgement of revocation (TD-31).
 - [x] Residuals left by the 2026-10-18 review, closed the same day on
       `claude/readiness-followups-jhfhj9`: quota screens while a token is
-      lapsed (TD-263), `refreshAfter` unread (TD-264), a lost key or unflushed
-      write reading as tampered (TD-265), floating-seat refresh after a
-      heartbeat (TD-266). Their tests first run in that branch's Tier 1 (TD-219).
+      lapsed (TD-209), `refreshAfter` unread (TD-210), a lost key or unflushed
+      write reading as tampered (TD-211), floating-seat refresh after a
+      heartbeat (TD-212). Their tests first run in that branch's Tier 1 (TD-14).

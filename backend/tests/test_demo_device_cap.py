@@ -48,7 +48,7 @@ async def test_another_accounts_analyses_on_this_device_fill_the_demo_cap(demo, 
 
     assert r.status_code == 409, r.text
     detail = r.json()["detail"]
-    # Its own code (TD-279): the account's count has room, so the app must
+    # Its own code (TD-219): the account's count has room, so the app must
     # not read this as the account cap that a re-check can clear.
     assert detail.startswith("device_quota_exceeded: ")
     # Nothing about the other account: no uid, no address, not even its count.
@@ -142,7 +142,7 @@ def test_count_device_sessions_counts_every_account_less_failed(demo):
 
 
 async def test_after_a_staff_release_the_next_holder_is_not_held_by_the_last(demo, client, monkeypatch):
-    """TD-276 acceptance: a phone released by staff and registered by a second
+    """TD-218 acceptance: a phone released by staff and registered by a second
     account does not count the first account's analyses toward its demo cap."""
     demo._data["users"]["old-holder"] = {
         "email": "old@lab.org", "access_status": "APPROVED", "mode": "demo",

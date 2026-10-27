@@ -12,7 +12,7 @@ private const val DEFAULT_UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024
  * docs/backend/CLOUD_ARCHITECTURE_GCP.md for the full API.
  */
 
-/** GET /v1/me/erasure: whether this phone's account was erased (TD-206). */
+/** GET /v1/me/erasure: whether this phone's account was erased (TD-193). */
 @Serializable
 data class ErasureStatus(val erased: Boolean)
 
@@ -272,7 +272,7 @@ data class PendingUploadDto(
     val sizeBytes: Long = 0,
     /**
      * The sha256 the file was declared with; only bytes that hash to it may
-     * resume into [uploadUrl] (TD-281). Null from a backend older than the
+     * resume into [uploadUrl] (TD-221). Null from a backend older than the
      * field, whose pending uploads are matched by size alone.
      */
     val sha256: String? = null,

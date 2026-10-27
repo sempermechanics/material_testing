@@ -139,7 +139,7 @@ throttling and passes. Failures alone mean the runtime account lost
 `gcloud projects get-iam-policy indicvision-dic-app-auth --flatten=bindings
 --filter='bindings.members:serviceAccount:indic-api@indicvision-dic-app.iam.gserviceaccount.com'`,
 restore it, or set `CHECK_REVOKED_ON_STEP_UP=false` and redeploy as the stopgap
-(TD-214; [RELEASING.md](../../docs/ops/RELEASING.md) "Rollback levers" on how a
+(TD-9; [RELEASING.md](../../docs/ops/RELEASING.md) "Rollback levers" on how a
 redeploy reaches a rolled-back service).
 
 ### devlock-mismatch

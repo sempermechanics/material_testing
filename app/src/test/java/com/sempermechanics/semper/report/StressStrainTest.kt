@@ -108,7 +108,7 @@ class StressStrainTest {
     @Test
     fun `the peak stress counts a loaded frame with no strain, but the curve's peak does not`() {
         // Frame 2 carries the highest load, but its field has no accepted point
-        // (a band left the picture), so it has no strain and no point (TD-147).
+        // (a band left the picture), so it has no strain and no point (TD-148).
         val fields = listOf(field(0.001f, 0f), field(0.002f, 0f), field(0.003f, 0f, accepted = false))
 
         val curve = StressStrain.build(
@@ -299,7 +299,7 @@ class StressStrainTest {
 
     @Test
     fun `a tilted beam tapped in the editor reads its strain along the beam and its true thickness`() {
-        // TD-310. The editor keeps a pair tapped square to a 10° or 30° beam as
+        // TD-246. The editor keeps a pair tapped square to a 10° or 30° beam as
         // tapped, so the probe is the one above: 1.000 mε (numpy, the same lattice
         // and section) and 10 mm over 100 px.
         listOf(10.0, -10.0, 30.0).forEach { degrees ->

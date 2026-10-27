@@ -12,7 +12,7 @@ target-version = "py312"
 # to making those markers meaningful.
 select = ["E4", "E7", "E9", "F", "BLE", "S"]
 # Every deliberate broad except carries `# noqa: BLE001` (20 as of 2026-09-23,
-# after TD-53 folded ten transaction-contention blocks into `_run_tx`), so
+# after TD-85 folded ten transaction-contention blocks into `_run_tx`), so
 # enabling BLE does not fail them. Every bandit false positive carries
 # `# noqa: Sxxx - <reason>` on its line; there is no baseline.
 
@@ -21,5 +21,5 @@ select = ["E4", "E7", "E9", "F", "BLE", "S"]
 "tests/**" = ["S101"]
 # The repository-root ops scripts, linted from here by the backend gate
 # (`ruff check ... ../scripts/`), are not yet triaged for S: 30 findings at
-# the 2026-10-24 merge, TD-321 (readiness TE5-010). Their other rules still apply.
+# the 2026-10-24 merge, TD-254 (readiness TE5-010). Their other rules still apply.
 "../scripts/**" = ["S"]

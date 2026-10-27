@@ -102,7 +102,7 @@ object AccountCache {
      * clear the account's forced stop; the hard stop itself is recomputed live by
      * `SessionQuota.blocked` from used vs the [AppRemoteConfig] ceiling. The
      * device's stop stays: these are the account's numbers, and room in them
-     * says nothing about the device's (TD-279).
+     * says nothing about the device's (TD-219).
      */
     fun setQuota(context: Context, used: Int, localCount: Int = 0) {
         prefs(context).edit {

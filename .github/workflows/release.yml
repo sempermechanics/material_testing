@@ -69,7 +69,7 @@ jobs:
       - uses: ./.github/actions/setup-android-build
 
       # Tier 1's checks, not just its tests: a release must not sign what CI
-      # would have stopped (TD-43). compileReleaseKotlin is left to
+      # would have stopped (TD-78). compileReleaseKotlin is left to
       # build-release, whose R8 build compiles it anyway.
       - name: Android unit tests and quality gates
         run: >
@@ -244,7 +244,7 @@ jobs:
       # consent defaults (collection off, no AD_ID permission), an R8 mapping
       # that renames app classes (readiness A1.5; MASWE-0067 / MASWE-0089).
       # Warns, without failing, when no certificate pin was compiled in.
-      # Entitlement keys (TE4-001): a warning while TD-215 is open. Once the
+      # Entitlement keys (TE4-001): a warning while TD-10 is open. Once the
       # signing key is live SEMPER_ENTITLEMENT_PUBKEYS is set, and from then a
       # release that compiled none fails here; SEMPER_REQUIRE_ENTITLEMENT_PINS
       # =true keeps that on should the pubkeys variable be cleared by mistake
@@ -347,7 +347,7 @@ jobs:
       # Deliberately NOT attached to the GitHub release: it is the deobfuscation
       # key, and publishing it would undo the obfuscation for everyone. The
       # durable copy is Crashlytics (-PuploadCrashlyticsMapping=true above,
-      # TD-40); this artifact is the 90-day fallback for a manual retrace.
+      # TD-76); this artifact is the 90-day fallback for a manual retrace.
       - name: Upload R8 mapping
         uses: actions/upload-artifact@v7
         with:

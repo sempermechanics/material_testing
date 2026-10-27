@@ -109,7 +109,7 @@ class MediaPickerSheetTest {
     fun tearDown() {
         // A sheet left showing keeps its grid's RecyclerView, and with it the
         // Activity, registered with the main thread's GapWorker for the rest
-        // of the suite (TD-199). Destroying the Activity does not dismiss it.
+        // of the suite (TD-187). Destroying the Activity does not dismiss it.
         ShadowDialog.getShownDialogs().forEach { it.dismiss() }
         screen.close()
     }

@@ -29,7 +29,7 @@ class BeamTapPlacementTest {
 
     @Test
     fun aSecondTapOffTheVerticalKeepsItsX() {
-        // A beam tilted 5.6° in the photo, tapped square to itself (TD-310).
+        // A beam tilted 5.6° in the photo, tapped square to itself (TD-246).
         val m = BeamTapPlacement.place(Marks(Mark(100f, 20f)), 137f, 400f)
         assertEquals(Mark(137f, 400f), m.bottom)
         assertEquals(Mark(100f, 20f), m.top)

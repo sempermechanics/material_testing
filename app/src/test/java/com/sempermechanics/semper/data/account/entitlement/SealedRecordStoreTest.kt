@@ -10,7 +10,7 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
 /**
- * TD-265: the write order of the sealed record, its first-seal mark and its
+ * TD-211: the write order of the sealed record, its first-seal mark and its
  * key, with a process death simulated at every step. A non-malicious event
  * (a crash, a lost Keystore key) must read as no token, so a licensed user
  * keeps the cached config instead of dropping to demo; only an edited record

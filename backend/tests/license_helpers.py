@@ -1,6 +1,6 @@
 """Helpers shared by the test_licenses_*.py files.
 
-Split out of the single 2,500-line test_licenses.py (TD-55). Each helper
+Split out of the single 2,500-line test_licenses.py (TD-87). Each helper
 used by only one file stayed in that file; these are the ones two or more
 share, and what they call."""
 

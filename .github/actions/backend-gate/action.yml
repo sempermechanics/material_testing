@@ -1,7 +1,7 @@
 name: Backend gate
 description: >
   The backend check CI, Release and Deploy all run, so none of them ships what
-  another would have stopped (TD-43): Python 3.12 (the runtime's), the hashed
+  another would have stopped (TD-78): Python 3.12 (the runtime's), the hashed
   lock the image installs, a dependency audit, ruff over app, tests and the ops
   scripts, and pytest with the coverage floor. CI's tier 4 adds the lock
   coverage check and the Firestore emulator tier on top.

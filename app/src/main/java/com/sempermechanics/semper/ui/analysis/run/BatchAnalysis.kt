@@ -65,7 +65,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     onProgress: (BatchProgressUpdate) -> Unit,
 ): BatchAnalysisOutcome {
     val spec = run.spec
-    // The images as they were at launch: the wizard's fields are Main's (TD-173).
+    // The images as they were at launch: the wizard's fields are Main's (TD-171).
     val reference = run.inputs.reference
     val frames = run.inputs.frames
     // Admitted here, the run saves its session even if the cap fills meanwhile.

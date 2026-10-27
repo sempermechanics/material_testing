@@ -282,7 +282,7 @@ def _sessions_from(store, uid, device, n=2):
 
 
 def test_a_staff_clear_stops_the_old_phone_counting_the_holders_analyses(store):
-    """TD-276: the phone may go to someone else, whose demo it would hold."""
+    """TD-218: the phone may go to someone else, whose demo it would hold."""
     store._data["users"] = {}
     license_id = _licensed(store)
     repo.revalidate_device_lock(store._data["users"]["solo-1"], "and-mt", MT)

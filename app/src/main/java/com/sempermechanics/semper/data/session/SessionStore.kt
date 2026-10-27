@@ -49,13 +49,13 @@ object SessionStore {
      * The primary index's rows as this process last parsed or wrote them,
      * keyed by the file's path, length and modified time; read and set under
      * [lock]. A change then parses the file at most once, not two or three
-     * times (TD-284), and a write knows the primary it promotes to `.bak`
+     * times (TD-224), and a write knows the primary it promotes to `.bak`
      * parsed without parsing it again. A file changed behind the store's back
      * no longer matches its key and is parsed afresh.
      */
     private var parsed: ParsedIndex? = null
 
-    /** How many times an index file has been decoded: tests pin "once per change" (TD-284). */
+    /** How many times an index file has been decoded: tests pin "once per change" (TD-224). */
     @VisibleForTesting
     internal var indexParses = 0
         private set
@@ -216,7 +216,7 @@ object SessionStore {
      * Saves the tensile curve's scale and bias from Results. Like [rename] it
      * leaves the sync state alone. A session with a cloud copy, or one on its
      * way, is marked [SessionRecord.metadataStale] when the correction
-     * changes, so [SessionMetadataSync] re-sends its metadata.json (TD-152).
+     * changes, so [SessionMetadataSync] re-sends its metadata.json (TD-151).
      */
     @WorkerThread
     fun setCurveCorrection(context: Context, id: String, correction: CurveCorrection) = update(context, id) {

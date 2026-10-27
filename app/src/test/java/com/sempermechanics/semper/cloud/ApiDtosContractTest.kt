@@ -142,7 +142,7 @@ class ApiDtosContractTest {
         assertEquals("metadata", u.role)
         assertEquals(2048L, u.sizeBytes)
         assertEquals(33554432, u.chunkSize)
-        // The declared hash, which the resume matches the staged bytes on (TD-281).
+        // The declared hash, which the resume matches the staged bytes on (TD-221).
         assertEquals(64, u.sha256?.length)
         assertNull(resp.provisionError)
     }
@@ -271,7 +271,7 @@ class ApiDtosContractTest {
 
     @Test
     fun `a pending upload from a backend that sends no hash decodes a null hash`() {
-        // Before TD-281 the pending list carried no sha256; the resume then
+        // Before TD-221 the pending list carried no sha256; the resume then
         // matches on role, name and size alone.
         val resp = json.decodeFromString<SessionUploadsResponse>(
             """{"sessionId":"s","uploads":[{"fileId":"f","uploadUrl":"u","sizeBytes":3}]}""",

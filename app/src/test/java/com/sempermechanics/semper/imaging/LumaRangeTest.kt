@@ -8,7 +8,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
- * Limited-range video luma stretched to full range (TD-134): a frame decoded from
+ * Limited-range video luma stretched to full range (TD-137): a frame decoded from
  * an MP4 must reach the engine at the contrast an MJPEG of the same scene has.
  */
 class LumaRangeTest {

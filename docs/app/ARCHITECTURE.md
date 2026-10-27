@@ -266,7 +266,7 @@ goes to the system chooser directly. Save graph still takes the Share check
 (`ShareCenter.access` / `blockedMessage`, greyed and explained like the viewer's Share).
 
 Every export of a frame draws what the viewer draws for it
-([ADR-011](../adr/ADR-011-viewer-deformed-frame.md), TD-139). The field PNGs
+([ADR-011](../adr/ADR-011-viewer-deformed-frame.md), TD-141). The field PNGs
 (`FieldImageExport.renderAnnotated`) and the report's field images
 (`ReportBuilder.buildReport`, from `ViewerReportFactory` and the cloud bundle)
 look up the frame's own photo as the viewer does (`deformedImagePath`), decode it

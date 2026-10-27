@@ -22,7 +22,7 @@ import org.robolectric.RobolectricTestRunner
 /**
  * The Details sheet's histogram labels are set in the app's type scale, the caption
  * the sheet's other small text uses, not monospace (readiness AE1V-025). Their
- * decimals are TD-342's and stay as they are.
+ * decimals are TD-268's and stay as they are.
  */
 @RunWith(RobolectricTestRunner::class)
 class FieldHistogramViewTest {
@@ -71,7 +71,7 @@ class FieldHistogramViewTest {
             val captionPx = context.resources.getDimension(R.dimen.text_caption)
             assertEquals("'${label.text}' size", captionPx, label.size, 0.01f)
         }
-        // The decimals are unchanged (TD-342): the labels still read as before.
+        // The decimals are unchanged (TD-268): the labels still read as before.
         assertTrue(labels.map { it.text }.toString(), labels.any { it.text.endsWith(" %") })
     }
 }

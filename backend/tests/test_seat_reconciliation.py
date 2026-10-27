@@ -150,7 +150,7 @@ def test_a_demoted_holder_who_has_not_been_back_is_not_yet_confirmed(store):
 def test_the_holders_next_request_confirms_the_revoke_despite_the_throttle(
     store, monkeypatch,
 ):
-    """TD-23: the check-in has to register on the request, not an hour later.
+    """TD-64: the check-in has to register on the request, not an hour later.
 
     `lastSeenAt` is throttled to `_LAST_SEEN_THROTTLE`, and this read asks its
     question of exactly that field. Without a checkpoint, a holder seen five

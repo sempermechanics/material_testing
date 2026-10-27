@@ -123,7 +123,7 @@ class SeatLeaseTest {
 
     @Test
     fun `the config fetch after a checkout tells a failed call from one never made`() = runBlocking {
-        // TD-266: only a call that was made and failed queues the retrying
+        // TD-212: only a call that was made and failed queues the retrying
         // refresh (EntitlementRefresh.retryAfterCheckout); no backend or no
         // sign-in has nothing to retry.
         api.enabled = false

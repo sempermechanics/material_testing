@@ -25,7 +25,7 @@ import javax.imageio.stream.MemoryCacheImageInputStream
 
 /**
  * The summary GIF draws every frame in the deformed configuration, as the
- * viewer draws a frame on its own photo (ADR-011, TD-139): each frame's palette
+ * viewer draws a frame on its own photo (ADR-011, TD-141): each frame's palette
  * indices are [VisualizationEngine.generateDeformedHeatmapIndices], cropped to
  * one box that also takes in where the points moved to. Read back with the
  * JDK's GIF reader. Robolectric for the jet palette.

@@ -6,7 +6,7 @@
 # deploy-backend.yml runs this before mounting ENTITLEMENT_SIGNING_KEY. A
 # revision whose runtime SA cannot read a mounted secret never starts: the
 # deploy stops, traffic stays on the previous revision, and every later deploy
-# fails the same way until the grant is made (TD-269). Failing here names the
+# fails the same way until the grant is made (TD-215). Failing here names the
 # missing grant instead.
 #
 # Reads the secret's IAM policy, then the project's (a project-level grant

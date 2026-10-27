@@ -113,7 +113,7 @@ object AccountDeletionRun {
             // and refuse every later start. [scope] is never cancelled, so a
             // CancellationException caught here (a cancelled Firebase Task, say)
             // is a failure like any other; the check only rethrows a real
-            // cancellation of this work (TD-171). What the user is told depends
+            // cancellation of this work (TD-169). What the user is told depends
             // on whether the cloud erase had gone through.
             val outcome = try {
                 delete(app, api).toOutcome()
@@ -133,7 +133,7 @@ object AccountDeletionRun {
     }
 
     /**
-     * Finishes a deletion an earlier process did not live to finish (TD-165).
+     * Finishes a deletion an earlier process did not live to finish (TD-163).
      * `SemperApp` calls this once per process; it reads the marker off the main
      * thread and does nothing when none is owed.
      *

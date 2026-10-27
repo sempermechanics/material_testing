@@ -405,7 +405,7 @@ def test_an_unverified_address_is_no_address():
     assert repo.verified_address({"emailVerified": True}) == ""
 
 
-# ---------------- the seat's copy of the address (TD-297) ----------------
+# ---------------- the seat's copy of the address (TD-234) ----------------
 def _seated_member(monkeypatch, store):
     """`u1` signed in as old@uni.edu and seated on an institution licence."""
     monkeypatch.setattr(repo.settings, "ADMIN_EMAILS", set())

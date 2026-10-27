@@ -3,7 +3,7 @@
  *
  * The roster cells live here because the operator desk and the institution
  * page each had their own copy, and the copies drifted: the desk showed an
- * expired floating lease as "until <past time>" (TD-50). Both pages now render
+ * expired floating lease as "until <past time>" (TD-82). Both pages now render
  * the same four cells and add only their own action buttons.
  */
 
@@ -110,7 +110,7 @@ export const APP_NAMES = {
  * `…MaterialTesting` one it had before ADR-030, and only that one, as the
  * backend reads it (`apps.read_field`). Every backend writes and deletes the
  * old field, and every response this console reads carries it, so it is the
- * current one until TD-330; a `…SemperClassroom` field on its own may be one
+ * current one until TD-56; a `…SemperClassroom` field on its own may be one
  * a backend from before the rename left behind, stale. An audit row keeps
  * the old name for good. Undefined when the old field is unset or empty.
  */
@@ -178,7 +178,7 @@ export function errorDetail(detail) {
  * left out by the backend unless asked for, so a page holds the licences
  * anyone sold instead of one Demo key per account. A search is not a list:
  * it is `licenceSearchBody`, sent as a POST, so the address searched for is
- * never in a URL (TD-244).
+ * never in a URL (TD-203).
  */
 export function licenceListPath({ limit, showDemo = false, showRevoked = false, pageToken = "" }) {
   const params = new URLSearchParams({ limit: String(limit) });

@@ -210,7 +210,7 @@ def _past(days):
     ({"mode": "licensed", "licenseSeating": "floating", "leaseExpiresAt": _past(1)}, ""),
 ])
 def test_config_names_the_licence_only_while_it_entitles(store, monkeypatch, user, prefix):
-    """TD-145: the app shows "Licensed as …" whenever `licensePrefix` is set,
+    """TD-146: the app shows "Licensed as …" whenever `licensePrefix` is set,
     so a Demo key, a lapsed licence or a floating seat with no lease sends none."""
     _limit_env(monkeypatch)
     cfg = repo.resolve_user_config({"uid": "u1", "licensePrefix": "SEMP-AB12", **user})
@@ -260,7 +260,7 @@ async def test_admin_patch_user_config(client, monkeypatch):
     {"plan": "professional", "maxSessions": 90},
 ])
 async def test_admin_patch_refuses_the_retired_plan_key(client, monkeypatch, body):
-    """The pre-rename `plan` patch was retired (TD-45). It is a 422 — never a
+    """The pre-rename `plan` patch was retired (TD-4). It is a 422 — never a
     200 that silently left the mode, or anything else sent with it, unchanged."""
     store = fake_firestore.install(monkeypatch)
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)

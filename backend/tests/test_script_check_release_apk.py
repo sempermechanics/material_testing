@@ -422,7 +422,7 @@ def _dex_with(*strings: str) -> dict[str, bytes]:
 
 def test_entitlement_pins_warn_while_none_is_compiled_in(apk):
     """TE4-001: with SEMPER_ENTITLEMENT_PUBKEYS empty the app trusts its
-    unsigned /v1/config cache with no offline bound (TD-215). WARN today, like
+    unsigned /v1/config cache with no offline bound (TD-10). WARN today, like
     cert-pins; a release built without the key after it is live must not go
     out unnoticed."""
     res = _by_check(apk.evaluate(_facts(apk, dex=_dex_with(_PIN)), expected_min_sdk=30,
@@ -450,7 +450,7 @@ def test_entitlement_pins_fail_when_required(apk):
 
 def test_release_workflow_requires_entitlement_pins_only_once_the_key_is_live():
     """The flag is passed from repo variables, never unconditionally, so no
-    release fails while TD-215 is open (Admin decision 2026-10-24)."""
+    release fails while TD-10 is open (Admin decision 2026-10-24)."""
     workflow = (_REPO / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
     step = workflow[workflow.index("- name: Inspect release APK hardening"):]
     step = step[:step.index("\n      - ")]

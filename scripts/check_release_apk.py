@@ -43,7 +43,7 @@ Checks (FAIL exits 1; WARN is reported and does not fail):
                     `kid:<P-256 SPKI base64>` entitlement key is in the dex,
                     i.e. SEMPER_ENTITLEMENT_PUBKEYS was empty at build: the
                     app then trusts its unsigned /v1/config cache with no
-                    offline bound (ADR-023, TD-215)
+                    offline bound (ADR-023, TD-10)
   signing-key       with --signer-sha256: the signer's certificate equals
                     --expected-signer-sha256 (FAIL otherwise: the build would
                     not install over the released ones); WARN with no pin,
@@ -623,7 +623,7 @@ def evaluate(facts: ApkFacts, *, expected_min_sdk: int | None, debug_names: set[
         mb = facts.size / 1_000_000
         status = "FAIL" if mb > APK_BUDGET_MB else "PASS"
         results.append(Result("apk-size", status, f"{mb:.1f} MB (budget {APK_BUDGET_MB} MB)"))
-    # entitlement pins (TE4-001): WARN while TD-215 is open, FAIL once the
+    # entitlement pins (TE4-001): WARN while TD-10 is open, FAIL once the
     # release workflow asks for them (the key is live).
     entries = {m.group(0) for data in facts.dex.values() for m in ENTITLEMENT_PIN_RE.finditer(data)}
     if entries:
@@ -633,7 +633,7 @@ def evaluate(facts: ApkFacts, *, expected_min_sdk: int | None, debug_names: set[
         results.append(Result("entitlement-pins", "FAIL" if require_entitlement_pins else "WARN",
                               "no kid:SPKI entitlement key in the dex: SEMPER_ENTITLEMENT_PUBKEYS was empty "
                               "at build, so signed tokens are ignored and the cached licence has no offline "
-                              "bound (TD-215)"))
+                              "bound (TD-10)"))
 
     # Signing-key continuity (TE1-007): an update installs only over a build
     # signed with the same certificate. assetlinks.json lists two for Semper,
@@ -656,7 +656,7 @@ def evaluate(facts: ApkFacts, *, expected_min_sdk: int | None, debug_names: set[
 
     # Consent defaults (TE5-005): diagnostics stay off until the user opts in
     # (AppSettings.diagnosticsEnabled), the advertising ID is never collected,
-    # and its permissions stay removed (TD-232). A manifest merge can undo any
+    # and its permissions stay removed (TD-26). A manifest merge can undo any
     # of these silently; an absent flag means the SDK's default, which is on.
     meta = {el.attrs.get("android:name"): el.attrs.get("android:value")
             for el in app.children if el.name == "meta-data"}
@@ -762,7 +762,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--debug-src", type=Path, default=REPO / "app" / "src" / "debug")
     ap.add_argument("--aapt2", help="path to aapt2 (default: $AAPT2, PATH, newest build-tools)")
     ap.add_argument("--require-entitlement-pins", action="store_true",
-                    help="entitlement-pins FAILs instead of WARNs when no key is compiled in (once TD-215 is live)")
+                    help="entitlement-pins FAILs instead of WARNs when no key is compiled in (once TD-10 is live)")
     ap.add_argument("--signer-sha256", help="the APK signer's certificate SHA-256 (apksigner --print-certs)")
     ap.add_argument("--expected-signer-sha256",
                     help="the release certificate's SHA-256 (hex or colon form); a different signer FAILs")

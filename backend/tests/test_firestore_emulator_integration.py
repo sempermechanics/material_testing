@@ -909,7 +909,7 @@ def test_the_export_pairs_each_session_with_its_own_files(emulator_repo):
 
 
 def test_projected_listings_page_and_reconcile_against_the_real_store(emulator_repo):
-    """TD-198: `select()` and `get_all(field_paths=...)` as Firestore answers
+    """TD-186: `select()` and `get_all(field_paths=...)` as Firestore answers
     them. A projected snapshot still positions the next page (the per-app
     scan's cursor is one), and a holder that holds none of the projected
     fields still exists: Firestore returns it with no fields, not as missing."""
@@ -940,7 +940,7 @@ def test_projected_listings_page_and_reconcile_against_the_real_store(emulator_r
 
 
 def test_a_revoke_killed_part_way_is_finished_against_the_real_store(emulator_repo, monkeypatch):
-    """TD-294 / ADR-026 with Firestore's own ArrayUnion, DELETE_FIELD and
+    """TD-231 / ADR-026 with Firestore's own ArrayUnion, DELETE_FIELD and
     transaction: the marker is written with the revoke, survives the crash,
     merges a later edit's op, and the task's finish clears it."""
     from app.repo import license_admin

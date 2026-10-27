@@ -143,7 +143,7 @@ open class UploadWorkerHarness {
         zip(File(staging, "Session.zip"), "raw/Reference.png")
         zip(File(staging, "Extras.zip"), "csv/analysis_data.csv")
         File(staging, ".bundles_done").createNewFile()
-        // The staging a run under [cloudSessionId] declared to it (TD-282).
+        // The staging a run under [cloudSessionId] declared to it (TD-222).
         if (cloudSessionId.isNotBlank()) bind(cloudSessionId)
 
         val record = SessionRecord(
@@ -196,7 +196,7 @@ open class UploadWorkerHarness {
         ),
     )
 
-    /** [uploads] as a backend that answers each file's declared sha256 lists them: the staged file's (TD-281). */
+    /** [uploads] as a backend that answers each file's declared sha256 lists them: the staged file's (TD-221). */
     protected fun hashed(uploads: List<PendingUploadDto>): List<PendingUploadDto> =
         uploads.map { it.copy(sha256 = Digests.sha256Hex(File(staging, it.name))) }
 

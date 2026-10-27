@@ -13,7 +13,7 @@
 # whichever `firebase` is first on PATH: needs Node >= 20 and npm. From
 # PowerShell, `bash` may resolve to WSL (Node 12 there); run this from Git Bash.
 #
-# Why pinned (TD-316): every live composite index is stored with
+# Why pinned (TD-250): every live composite index is stored with
 # `density: SPARSE_ALL` and a trailing `__name__` field in the direction of its
 # last field, which the indexes file leaves implicit. The CLI must normalise one
 # side to the other. 13.x drops the live `__name__`; 15.x keeps it and appends
@@ -32,7 +32,7 @@
 # The indexes file also declares the TTL policies (challenges.expireAt,
 # deleted_licenses.purgeAt, deleted_seats.purgeAt, audit_logs.expireAt) as
 # fieldOverrides; a deploy creates any that are missing, so audit_logs.expireAt
-# waits until the TD-246 backfill has run (DEPLOY_CHECKLIST_2026-10.md §6). The CLI
+# waits until the TD-34 backfill has run (DEPLOY_CHECKLIST_2026-10.md §6). The CLI
 # counts each live TTL policy as a field override and refuses, in
 # non-interactive mode, to leave one that the file omits. Never add --force
 # here; it deletes every live override the file does not declare, TTL included.

@@ -129,7 +129,7 @@ class LabReportTest {
 
     @Test
     fun `a peak off the curve is reported with its frame, and the table has no break point`() {
-        // The steel case of TD-147: the highest load came after the last point.
+        // The steel case of TD-148: the highest load came after the last point.
         val base = labCurve()
         val points = base.points.take(12)
         val curve = base.copy(

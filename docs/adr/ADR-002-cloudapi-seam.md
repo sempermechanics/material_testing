@@ -14,8 +14,8 @@ its base URL is `BuildConfig.SEMPER_API_BASE_URL`, with an `https` `require`.
 So nothing that talks to the backend can be unit-tested with a fake:
 `AuthRepository` (sign-in, terms, config, device registration), `SeatLease`
 (floating-seat checkout/renew/release), `CloudSync`, and the Settings cloud
-export all go straight to the real client. TD-25 recorded this, and the cloud
-export's cancel bug (TD-41) went unnoticed partly because of it. The user has
+export all go straight to the real client. TD-66 recorded this, and the cloud
+export's cancel bug (TD-77) went unnoticed partly because of it. The user has
 decided cloud flows are verified by JVM fakes rather than on a device, which
 makes this seam a prerequisite.
 
@@ -115,7 +115,7 @@ more classes need fakes; nothing in A blocks it.
 3. [x] `FakeCloudApi` + `FakeTokens` in `app/src/test/…/cloud/`;
        `AuthRepositoryTest` (14), `CloudSeamTest` (13: seat refresh, reconcile
        verdicts, erase order, export success / failure / cancel).
-4. [x] Close TD-25.
+4. [x] Close TD-66.
 
 ## As built (2026-09-23)
 

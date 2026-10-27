@@ -10,7 +10,7 @@ import kotlin.coroutines.cancellation.CancellationException
  * worker is stopped. Caught, that cancellation turns into an ordinary failure:
  * the caller logs an error, shows "failed", and — worse — carries on running
  * work nobody wants any more. This rethrows cancellation and wraps everything
- * else exactly as `runCatching` does (TD-41).
+ * else exactly as `runCatching` does (TD-77).
  *
  * Inline, so the block may call suspend functions from any suspending caller.
  */

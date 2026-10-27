@@ -41,7 +41,7 @@ object ApiErrors {
 
     /**
      * Staff released this phone from this test account, and it may not take its
-     * place back (409 from `POST /v1/devices/register`; TD-314).
+     * place back (409 from `POST /v1/devices/register`; TD-249).
      */
     const val DEVICE_RELEASED = "device_released"
 
@@ -96,7 +96,7 @@ object ApiErrors {
 
     /**
      * A demo account's own count has room, but this device's stored analyses,
-     * every account's, are at the demo cap (409, TD-279). Re-checking the
+     * every account's, are at the demo cap (409, TD-219). Re-checking the
      * account's count cannot lift it, so it holds its own stop
      * ([AccountCache.setDeviceLimitReached]).
      */

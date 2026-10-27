@@ -101,7 +101,7 @@ class SessionUploadBundlerTest {
 
         val lines = csv.readLines()
         assertEquals(1, lines.count { it.startsWith("image,") })
-        // TD-66: both frames' stats rows sit above the point section, not among it.
+        // TD-94: both frames' stats rows sit above the point section, not among it.
         val header = lines.indexOfFirst { it.startsWith("image,") }
         assertTrue(lines.subList(0, header).count { it.startsWith("# c.png,") } > 0)
         assertTrue(lines.subList(header, lines.size).none { it.startsWith("#") })

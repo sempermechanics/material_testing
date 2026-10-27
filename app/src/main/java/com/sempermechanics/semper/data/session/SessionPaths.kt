@@ -83,7 +83,7 @@ object SessionPaths {
     /**
      * The `.dat` behind each planned frame of a sorted listing; a frame the batch
      * skipped has none. Anything indexed by planned frame (a machine load per
-     * frame, a curve point) reads its field through this, not by position (TD-91).
+     * frame, a curve point) reads its field through this, not by position (TD-110).
      */
     fun datByPlannedFrame(datFiles: List<File>): Map<Int, File> =
         plannedFrameIndices(datFiles).zip(datFiles).distinctBy { it.first }.toMap()

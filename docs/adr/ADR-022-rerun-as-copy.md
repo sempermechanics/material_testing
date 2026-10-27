@@ -17,7 +17,7 @@ re-run whose first frame kept nothing rewrote or dropped the row
 (`BatchAnalysis.afterUnsavedRerun`, `UnsavedRerun.kt`). The wizard stayed under
 the viewer, so the viewer's Back went back into it. After a run the wizard
 pointed at the session's own `raw_deformed/`, so sorting the frames renamed the
-saved analysis's images (TD-211).
+saved analysis's images (TD-197).
 
 To start a new analysis from an old one the user had to pick the reference and
 every frame again and re-enter the settings: the session keeps only a
@@ -55,7 +55,7 @@ display-size (≤ 1080 px) `reference.png`, and the mask was never written.
    (`AnalysisViewModel.applyRerun`, `WizardParamFields.applyRerun`,
    `SweepSetupController.showRerun`), landing on Parameters, or the sweep page
    for a sweep. Saving is a normal new analysis, with normal unique naming.
-4. **TD-211.** `FrameOrderHelper.reprefixTempFiles` renames only frames in the
+4. **TD-197.** `FrameOrderHelper.reprefixTempFiles` renames only frames in the
    import cache, so a sort never renames a session's files.
 
 ## Fallback: an analysis without `rerun/` (2026-10-15, owner decision)
@@ -86,7 +86,7 @@ restored) is re-run by picking its reference again:
 ## Options considered
 
 - **Re-open the saved session's wizard and fork on Compute.** Keeps one flow,
-  but the wizard would point at a saved session's files again (TD-211's
+  but the wizard would point at a saved session's files again (TD-197's
   cause) and needs the full-size reference, which was not kept anyway.
 - **Rebuild from the session's own files.** No extra storage, but the
   reference is a display copy and the mask is missing, so the re-run would not
