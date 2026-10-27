@@ -12,7 +12,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 /**
- * TD-173: a run's images are frozen when it is launched, so what the wizard
+ * TD-171: a run's images are frozen when it is launched, so what the wizard
  * does to its fields afterwards (a new pick, a reorder, a cleared reference)
  * never reaches the run solving on the native thread.
  */

@@ -178,7 +178,7 @@ class SettingsRotationTest {
         val vm = viewModelOf(controller.get())
         val api = FakeCloudApi().apply { onSetImprovementConsent = { _, _ -> throw IOException("refused") } }
         val repo = AuthRepository(context, api, FakeTokens(), signedIn = { true })
-        // The real repository (TD-306), held on the main thread until it answers,
+        // The real repository (TD-242), held on the main thread until it answers,
         // so one idle() delivers the outcome.
         vm.sendConsent = { granted -> runBlocking { repo.setImprovementConsent(granted) } }
         val switch = controller.get().findViewById<CompoundButton>(R.id.switchImprovementConsent)

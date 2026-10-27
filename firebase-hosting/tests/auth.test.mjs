@@ -133,7 +133,7 @@ test("a second reauth_required after the step-up is a refusal, not a loop", asyn
 });
 
 test("auth_check_busy (503) is a refusal to retry later: no step-up, no sign-out, no second send", async () => {
-  // The backend's Auth Admin budget is spent (TD-239): the sign-in is fine.
+  // The backend's Auth Admin budget is spent (TD-200): the sign-in is fine.
   signIn(readyUser());
   net.reply(json(503, { detail: "auth_check_busy" }));
   const e = await rejection(auth.api("/v1/admin/licenses/L1/revoke", { method: "POST" }));

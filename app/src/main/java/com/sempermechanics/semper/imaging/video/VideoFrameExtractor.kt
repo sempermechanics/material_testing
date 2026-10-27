@@ -240,7 +240,7 @@ object VideoFrameExtractor {
      * come from a [android.media.MediaExtractor] of their own, uniform when it finds
      * fewer than two. `getFrameAtTime` cannot report the time of the frame it
      * returns, so each frame is timed from a [RetrieverFrameClock] sample walk
-     * (TD-207); the time asked for only when that walk finds no samples.
+     * (TD-194); the time asked for only when that walk finds no samples.
      * Internal so the device test can force this rung.
      */
     @VisibleForTesting

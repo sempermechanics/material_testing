@@ -12,7 +12,7 @@
 
 material_testing kept Semper's `applicationId` (`com.indicvision.semper`) when
 it forked from `semperdic-app`. A lab build therefore replaced Semper on a phone
-and took over its analyses, sign-in, licence state and upload queue (TD-133).
+and took over its analyses, sign-in, licence state and upload queue (TD-136).
 It also could not ship: a release has to be signed with Semper's key to install
 over Semper, and Android refuses it anyway, because this repo's workflow run
 number (the `versionCode`) is far below Semper's, which makes it a downgrade.

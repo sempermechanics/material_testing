@@ -5,14 +5,14 @@ Play Console → **App content → Data safety**, in the form's own order, for r
 item 8.4 ([READINESS_FRAMEWORK_2026-10.md](../ops/READINESS_FRAMEWORK_2026-10.md)).
 Every answer is checked against the code, the merged release manifest, the SDK
 inventory, [DATA_MAP.md](DATA_MAP.md) and [PRIVACY_POLICY.md](PRIVACY_POLICY.md).
-**Not submitted** (TD-232): the operator copies these into the Play Console and
+**Not submitted** (TD-26): the operator copies these into the Play Console and
 submits. Answers marked **OWNER DECISION** need the owner first; everything else
 is ready to copy. This file is **not rendered** to Hosting
 (`scripts/render_legal_pages.py` renders only the Privacy Policy and the Terms).
 
 ## Before you start
 
-1. **Submit with a build that has the TD-232 manifest change.** The CI release APK
+1. **Submit with a build that has the TD-26 manifest change.** The CI release APK
    of `main` at `968637cb` declares `com.google.android.gms.permission.AD_ID`
    (and the Privacy Sandbox `ACCESS_ADSERVICES_AD_ID` /
    `ACCESS_ADSERVICES_ATTRIBUTION`), all merged in by Firebase Analytics
@@ -91,7 +91,7 @@ feedback mail, which the user sends from their own app
 | Do you provide a way for users to request that some or all of their data is deleted, without requiring them to delete their account? | **Yes** | Each cloud analysis can be deleted (`DELETE /v1/sessions/{id}`, `data/net/SemperApi.kt:397-399`); turning diagnostics off deletes queued crash reports (`diagnostics/Diagnostics.kt:76-77`); privacy requests by mail (Privacy Policy §10) |
 
 **Security practices badges** (if the form shows them): *Independent security
-review*: **No** (TD-240). *Families policy*: not applicable (adults only, Privacy
+review*: **No** (TD-32). *Families policy*: not applicable (adults only, Privacy
 Policy §8).
 
 ## Step 2 — Data types
@@ -166,9 +166,9 @@ Notes for the reviewer of these answers:
   content are **Required**, not optional.
 - **Email address**: Firebase Auth sends the sign-in-link and password-reset
   mails; the backend mails support on a new pending account and, when
-  `NOTIFY_SECURITY_FROM` is set (it is not, TD-309), the holder on a new device.
+  `NOTIFY_SECURITY_FROM` is set (it is not, TD-245), the holder on a new device.
   None of these is marketing, so *Developer communications* is not ticked.
-- **Approximate location** is not mentioned in the Privacy Policy (TD-317).
+- **Approximate location** is not mentioned in the Privacy Policy (TD-55).
 
 ## OWNER DECISION
 
@@ -192,7 +192,7 @@ Notes for the reviewer of these answers:
    for its own purposes are off. These live in the Firebase and Analytics consoles,
    not in this repository. Confirm and record the date here; if any is on, those
    three types are **Shared** (purpose Analytics) and the Privacy Policy needs a
-   line (TD-317).
+   line (TD-55).
 
 ## Gate items this answers
 

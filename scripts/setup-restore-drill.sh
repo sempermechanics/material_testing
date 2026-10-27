@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time setup for the Firestore restore drill (TD-156).
+# One-time setup for the Firestore restore drill (TD-155).
 #
 # Creates the throwaway drill project, its Firestore database and identity,
 # gives that identity read access to the backup bucket, and sets the five

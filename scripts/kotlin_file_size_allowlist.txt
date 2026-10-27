@@ -1,5 +1,5 @@
 # Main Kotlin files allowed over ADR-015's 500-line budget, checked by
-# scripts/check_kotlin_file_size.py (TD-292).
+# scripts/check_kotlin_file_size.py (TD-229).
 #
 #   path (under app/src/main/java/com/sempermechanics/semper/) | max lines | reason
 #

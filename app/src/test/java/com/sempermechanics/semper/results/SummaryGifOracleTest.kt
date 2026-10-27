@@ -21,7 +21,7 @@ import java.nio.ByteOrder
  *
  * The whole path runs: `.dat` decode, the fit box (widened to where the points
  * moved), the deformed-configuration heatmap render to palette indices (ADR-011,
- * TD-139: regenerated 2026-10-13 when the GIF moved off the reference
+ * TD-141: regenerated 2026-10-13 when the GIF moved off the reference
  * configuration), the jet palette and the LZW encoder. The
  * other GIF tests check a round trip and that the encoder agrees with itself;
  * these fail on any change to the bytes a user receives, including one that

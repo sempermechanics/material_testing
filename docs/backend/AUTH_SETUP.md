@@ -88,7 +88,7 @@ host + path. Builds before that constant changed use
 `https://indicvision-dic-app-auth.firebaseapp.com/finishSignIn`; the manifest
 keeps a filter for that host too, `AuthActivity` accepts links on either
 (`AUTH_HOSTS`), and both hosts belong to the same Hosting site, so the same
-`assetlinks.json` verifies both. Retiring the old host is TD-29.
+`assetlinks.json` verifies both. Retiring the old host is TD-1.
 
 **Procedure of record** (Digital Asset Links, deploy, `adb` verify): see
 [`firebase-hosting/README.md`](../../firebase-hosting/README.md). That folder

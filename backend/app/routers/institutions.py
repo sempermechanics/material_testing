@@ -9,7 +9,7 @@ narrower surface scoped to exactly the license(s) that name them.
 
 Routes are served under `/v1/institutions/*` only. The pre-rename
 `/v1/campus/*` aliases were retired on 2026-09-26 after 30 days with no
-request to them (TD-45; docs/backend/CLOUD_ARCHITECTURE_GCP.md §20.5).
+request to them (TD-4; docs/backend/CLOUD_ARCHITECTURE_GCP.md §20.5).
 
 Auth is `current_user` (ID token, APPROVED) plus a *verified* email present
 in that specific license's `adminEmails`, **plus** the same browser step-up

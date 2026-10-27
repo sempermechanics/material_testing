@@ -36,7 +36,7 @@ the order of [§8](#8-the-prs-and-their-merge-order).
   (the denominator changed; see [§1.7](#17-coverage)).
 - **About 60 bugs fixed**, 11 of them ranked high before work began; almost
   every one has a regression test.
-- **18 items deferred**, each a [TECH_DEBT](TECH_DEBT.md) row (TD-158 to TD-175).
+- **18 items deferred**, each a [TECH_DEBT](TECH_DEBT.md) row (TD-156 to TD-173).
 
 The decisions the program made are ADR-015 (as amended) to ADR-018:
 [package layout](../adr/ADR-015-package-layout.md),
@@ -465,24 +465,24 @@ from any one PR.
 
 | Row | What was left | Next step | Found in |
 |---|---|---|---|
-| TD-158 | After a 308, the next upload chunk starts at the end of what was sent, not where Drive says it stopped | Read `Range` on every 308 and rewind | #324 |
-| TD-159 | The gateway spec declares no `page_token` on the uploads and files listings | A gateway deploy, when the user decides | #324 |
-| TD-160 | A base URL with a port turns off the backend-only headers and the certificate pins | Compare host and port, or strip the port | #324's review |
-| TD-161 | A redirect to another host keeps the backend's headers | Strip them when the host changes, or stop following redirects | #324's review |
-| TD-162 | The ROI studio's readout can be 1 px off the ROI it saves | Show the size of the ROI that is saved | #324's review |
-| TD-163 | A frame named exactly `Reference.png` collides with the reference in the upload archive | A format decision | #326 |
-| TD-164 | Skipped nodes from old sweep backups read as strain-window failures | A nullable skip code, with a model and `metadata.json` change | #326 |
-| TD-165 | Account deletion is lost if the process dies between the cloud erase and the phone wipe | Persist the stage; finish from a startup hook | #329 |
-| TD-166 | A failed backup WorkManager still keeps is announced again by each new Home | A backup failure ledger | #329 |
-| TD-167 | Two quota rules disagree on whether another analysis may start | A product decision, then one function | #329 |
-| TD-168 | A wizard run that ends while the wizard is in the background loses its outcome | Replay or hold the outcome ([ADR-016](../adr/ADR-016-work-that-outlives-the-activity.md)) | #330 |
-| TD-169 | Two strain-window defaults: 15 px for readers, 21 px in the wizard | Decide; changing it changes what old records show | #318, #328, #330 |
-| TD-170 | Three ways to swap a dispatcher in tests | Constructor parameters; retire the mutable globals | the program's review |
-| TD-171 | detekt does not check cancellation handling | Enable the rule with type resolution in CI | the program's review |
-| TD-172 | The noise-floor files (871 lines) have no production caller | Wire them into import, or delete them | the program's review |
-| TD-173 | The rest of `RunSpec`: the batch loop still reads its inputs from the view model | Freeze the inputs into `BatchRun` at Compute | the program's review |
-| TD-174 | The periodic licence refresh is scheduled on some config paths only | One enqueue wherever the config is recorded | the program's review |
-| TD-175 | No benchmark covers the deformed-frame heatmap | A micro case and a scrub run with photos | #328's review |
+| TD-156 | After a 308, the next upload chunk starts at the end of what was sent, not where Drive says it stopped | Read `Range` on every 308 and rewind | #324 |
+| TD-157 | The gateway spec declares no `page_token` on the uploads and files listings | A gateway deploy, when the user decides | #324 |
+| TD-158 | A base URL with a port turns off the backend-only headers and the certificate pins | Compare host and port, or strip the port | #324's review |
+| TD-159 | A redirect to another host keeps the backend's headers | Strip them when the host changes, or stop following redirects | #324's review |
+| TD-160 | The ROI studio's readout can be 1 px off the ROI it saves | Show the size of the ROI that is saved | #324's review |
+| TD-161 | A frame named exactly `Reference.png` collides with the reference in the upload archive | A format decision | #326 |
+| TD-162 | Skipped nodes from old sweep backups read as strain-window failures | A nullable skip code, with a model and `metadata.json` change | #326 |
+| TD-163 | Account deletion is lost if the process dies between the cloud erase and the phone wipe | Persist the stage; finish from a startup hook | #329 |
+| TD-164 | A failed backup WorkManager still keeps is announced again by each new Home | A backup failure ledger | #329 |
+| TD-165 | Two quota rules disagree on whether another analysis may start | A product decision, then one function | #329 |
+| TD-166 | A wizard run that ends while the wizard is in the background loses its outcome | Replay or hold the outcome ([ADR-016](../adr/ADR-016-work-that-outlives-the-activity.md)) | #330 |
+| TD-167 | Two strain-window defaults: 15 px for readers, 21 px in the wizard | Decide; changing it changes what old records show | #318, #328, #330 |
+| TD-168 | Three ways to swap a dispatcher in tests | Constructor parameters; retire the mutable globals | the program's review |
+| TD-169 | detekt does not check cancellation handling | Enable the rule with type resolution in CI | the program's review |
+| TD-170 | The noise-floor files (871 lines) have no production caller | Wire them into import, or delete them | the program's review |
+| TD-171 | The rest of `RunSpec`: the batch loop still reads its inputs from the view model | Freeze the inputs into `BatchRun` at Compute | the program's review |
+| TD-172 | The periodic licence refresh is scheduled on some config paths only | One enqueue wherever the config is recorded | the program's review |
+| TD-173 | No benchmark covers the deformed-frame heatmap | A micro case and a scrub run with photos | #328's review |
 
 Also left on purpose, not as rows: the viewer's file-safe export name keeps
 its 60-character cap rather than `SessionNaming`'s 40, because changing it
@@ -541,9 +541,9 @@ interleaved `scripts/startup_ab.py` is the tool for them.
 
 **What held in both rounds, whichever build ran first:** warm start's first
 frame is about 13 ms slower (+22 %), `generateHeatmap` about 1 ms (+5 %) and
-`buildReport` about 5 ms (+2.3 %) slower. They are recorded as TD-177. Nothing
+`buildReport` about 5 ms (+2.3 %) slower. They are recorded as TD-175. Nothing
 else moved past run-to-run noise. These runs are not gate references
-(TD-155): several steps ended at thermal status 1 and the builds used the old
+(TD-154): several steps ended at thermal status 1 and the builds used the old
 app id. The raw JSON is kept outside the repo
 (`pixel_backups/semper-bench-oriole-2026-10-05`).
 

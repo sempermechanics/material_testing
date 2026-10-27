@@ -152,7 +152,7 @@ def test_the_handler_check_is_found_when_present():
     ("GET", "/v1/sessions?verify=true", "session_verify_bucket", {}),
 ])
 async def test_an_unsigned_429_says_when_to_retry(client, monkeypatch, method, path, bucket, headers):
-    """TD-54: the in-handler limits used to answer a bare 429. The app honours
+    """TD-86: the in-handler limits used to answer a bare 429. The app honours
     `Retry-After`, and without it backs off less than a slow bucket refills."""
     fake_firestore.install(monkeypatch)
     monkeypatch.setattr(getattr(rate_limit, bucket), "allow", lambda key: False)

@@ -58,7 +58,7 @@ jobs:
       - uses: ./.github/actions/setup-android-build
 
       # Tier 1's checks, not just its tests: a release must not sign what CI
-      # would have stopped (TD-43). compileReleaseKotlin is left to
+      # would have stopped (TD-78). compileReleaseKotlin is left to
       # build-release, whose R8 build compiles it anyway.
       - name: Android unit tests and quality gates
         run: >
@@ -262,7 +262,7 @@ jobs:
       # Deliberately NOT attached to the GitHub release: it is the deobfuscation
       # key, and publishing it would undo the obfuscation for everyone. The
       # durable copy is Crashlytics (-PuploadCrashlyticsMapping=true above,
-      # TD-40); this artifact is the 90-day fallback for a manual retrace.
+      # TD-76); this artifact is the 90-day fallback for a manual retrace.
       - name: Upload R8 mapping
         uses: actions/upload-artifact@v7
         with:

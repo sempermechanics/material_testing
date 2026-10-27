@@ -235,7 +235,7 @@ object StressStrain {
         /**
          * The peak (ultimate) stress to report: the highest over every frame
          * with a load, including one left off the curve because a band had
-         * left the picture (TD-147). A curve made from points alone falls
+         * left the picture (TD-148). A curve made from points alone falls
          * back to [peak].
          */
         val peakStress: Peak?

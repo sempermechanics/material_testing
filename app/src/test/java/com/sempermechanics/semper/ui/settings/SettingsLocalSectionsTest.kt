@@ -114,7 +114,7 @@ class SettingsLocalSectionsTest {
     @Test
     fun `a held licence that is not active shows no licence row`() {
         // An older backend sends the prefix of a revoked, lapsed or unseated
-        // key while the account runs as demo (TD-145).
+        // key while the account runs as demo (TD-146).
         AppRemoteConfig.apply(context, AppConfigDto(mode = "demo", maxSessions = 5, licensePrefix = "SEMP-DEMO"))
         open()
 

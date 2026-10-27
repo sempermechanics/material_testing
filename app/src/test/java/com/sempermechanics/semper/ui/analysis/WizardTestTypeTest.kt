@@ -30,7 +30,7 @@ import org.robolectric.shadows.ShadowDialog
  * starts wider.
  *
  * Every wizard is destroyed after the test, with the engine's cancel swapped
- * for a no-op meanwhile, as in [WizardRestorePreviewTest] (TD-200).
+ * for a no-op meanwhile, as in [WizardRestorePreviewTest] (TD-188).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)

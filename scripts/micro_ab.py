@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare two builds' hot-path microbenchmarks on one device, interleaved (TD-199).
+"""Compare two builds' hot-path microbenchmarks on one device, interleaved (TD-187).
 
 A fixed-nanosecond gate cannot hold on CI: the emulator is not the Pixel 6 the
 real-device references were taken on (``benchmark/gates.json``), and its speed

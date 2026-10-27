@@ -20,7 +20,7 @@ from refusals import attempt
 # ====================================================== rename compatibility
 # The campus→institution / plan→mode rename. The wire-level shims for ops and
 # IT tooling (the /v1/campus/* aliases, kind="campus" at mint) were retired on
-# 2026-09-26 (TD-45); these pin that the old input is now refused. Stored
+# 2026-09-26 (TD-4); these pin that the old input is now refused. Stored
 # documents still read either spelling — that shim waits on migration 002.
 
 @pytest.mark.asyncio

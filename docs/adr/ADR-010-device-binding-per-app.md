@@ -7,7 +7,7 @@ material_testing `main` send the header (material_testing#90).
 **Date:** 2026-09-28
 **Deciders:** product owner, backend owner
 
-[2026-10-26: Material Testing is renamed Semper Classroom (`com.sempermechanics.semperclassroom`, short name `semperclassroom`, field suffix `SemperClassroom`); the old names below stay the stored ones (the `materialtesting` tag, the `*MaterialTesting` fields, which are the ones read) and are read as the new names until TD-330. See [ADR-030](ADR-030-semper-classroom-app-identity.md).]
+[2026-10-26: Material Testing is renamed Semper Classroom (`com.sempermechanics.semperclassroom`, short name `semperclassroom`, field suffix `SemperClassroom`); the old names below stay the stored ones (the `materialtesting` tag, the `*MaterialTesting` fields, which are the ones read) and are read as the new names until TD-56. See [ADR-030](ADR-030-semper-classroom-app-identity.md).]
 
 ## Context
 
@@ -103,7 +103,7 @@ support, and nothing is migrated.
   share one id and one public key: whichever registered last holds it. Since
   2026-10-10 retired ids may not register (`410 app_retired`) and a call
   refused `bad_signature` registers again once (`DeviceKeyRecovery`); keying
-  devices by app is TD-209.
+  devices by app is TD-7.
 - A new signing key is a new phone. `ANDROID_ID` is scoped to the key, so a
   release build installed over a debug or locally built one sends a
   different device id and sign-in fails as already linked until that app's
@@ -165,11 +165,11 @@ notice needs a recipient, template and key of its own. The `DEVICE_REGISTER` /
 
 ## Action items
 
-- [x] Phase 0: request-scoped mismatch (#279); TD-137.
-- [x] Phase 1: `X-App-Id` from the app (`AppIdHeader`); TD-138.
+- [x] Phase 0: request-scoped mismatch (#279); TD-139.
+- [x] Phase 1: `X-App-Id` from the app (`AppIdHeader`); TD-140.
 - [x] Phase 2: per-app fields and cooldown (`apps.py`, `repo/devlock.py`,
-      `repo/devices.py`, `repo/seats.py`, `repo/users.py`); TD-138.
-- [x] Phase 3: consoles and docs; TD-138.
+      `repo/devices.py`, `repo/seats.py`, `repo/users.py`); TD-140.
+- [x] Phase 3: consoles and docs; TD-140.
 - [x] Deploy the backend (2026-09-28, `deploy-backend.yml` run 36419849032).
 - [x] Deploy the consoles (2026-09-28, from `0c3946f7`).
 - [x] Merge this repository's `main` into material_testing so its builds send
@@ -184,4 +184,4 @@ notice needs a recipient, template and key of its own. The `DEVICE_REGISTER` /
 - [x] Mail the holder when a new device registers: `notify.device_registered`,
       from `routers/devices.py` after the registration commits, once per
       account and device, to the verified address; off until
-      `NOTIFY_SECURITY_FROM` is set (TD-295).
+      `NOTIFY_SECURITY_FROM` is set (TD-232).

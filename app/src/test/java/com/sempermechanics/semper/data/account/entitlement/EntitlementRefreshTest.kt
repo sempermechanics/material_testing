@@ -5,7 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** TD-264 (`refreshAfter` asks for a fetch) and TD-266 (a failed fetch after a checkout is retried, bounded). */
+/** TD-210 (`refreshAfter` asks for a fetch) and TD-212 (a failed fetch after a checkout is retried, bounded). */
 class EntitlementRefreshTest {
 
     private val tokens = TestTokens()

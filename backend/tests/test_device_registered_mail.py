@@ -1,4 +1,4 @@
-"""TD-295: a new device on an account mails its holder, at the verified
+"""TD-232: a new device on an account mails its holder, at the verified
 address, once; the same device registering again (a key heal) does not."""
 import pytest
 

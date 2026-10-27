@@ -49,7 +49,7 @@ beside the new one while a deploy shifts traffic, or again after a rollback.
   `assetlinks.json` lists the new package with the same fingerprints.
 - **Backend short name** `semperclassroom` (was `materialtesting`) and **field
   suffix** `SemperClassroom` (was `MaterialTesting`), in `backend/app/apps.py`.
-  Until TD-330 the old names stay the stored truth, because every backend,
+  Until TD-56 the old names stay the stored truth, because every backend,
   this one and one from before the rename, reads and writes them:
   - **Tags are stored under the old name.** `apps.stored_name` gives
     `materialtesting` for Semper Classroom, and it is what `devices/{id}.app`
@@ -65,7 +65,7 @@ beside the new one while a deploy shifts traffic, or again after a rollback.
   - **`apps.written_fields` writes both**, the new field and the old one as a
     mirror, the way migration `002_rename_campus_to_institution` kept `plan`
     beside `mode`. A Firestore sentinel (`DELETE_FIELD`, `SERVER_TIMESTAMP`)
-    goes to both. So the new fields fill as accounts change, ready for TD-330
+    goes to both. So the new fields fill as accounts change, ready for TD-56
     to read.
   - **Responses and audit details spread both keys** (`apps.spread`, through
     `written_fields`), so a console from before the rename still finds
@@ -85,7 +85,7 @@ beside the new one while a deploy shifts traffic, or again after a rollback.
   and the same device id; the old app registering beside the new one would
   replace its key on `devices/{id}`, and every signed call from the new app
   would fail `bad_signature`, as on 2026-10-10 with the `com.indicvision.*` ids
-  (TD-209). A retired id is refused only at `POST /v1/devices/register`
+  (TD-7). A retired id is refused only at `POST /v1/devices/register`
   (`410 app_retired`); its other calls are served as before, and the access log
   names it (`apps.logged_application_id`), so the log shows when no build sends
   it any more.
@@ -103,9 +103,9 @@ beside the new one while a deploy shifts traffic, or again after a rollback.
   was deleted are counted and listed. The old fields are never modified or
   deleted, and audit and event rows are never touched. `--retag` also rewrites
   the `app` tag on `devices/` and `sessions/` from `materialtesting` to
-  `semperclassroom`; it is TD-330's first step, not this rename's. The backend
+  `semperclassroom`; it is TD-56's first step, not this rename's. The backend
   is correct without the script; it makes the new fields complete, so that
-  TD-330 can move reads to them. Re-running it is a no-op.
+  TD-56 can move reads to them. Re-running it is a no-op.
 - **Repo.** `sempermechanics/material_testing` is renamed
   `sempermechanics/semper_classroom` (an owner step on GitHub, which redirects the
   old URL, so remotes and links keep working).
@@ -114,7 +114,7 @@ beside the new one while a deploy shifts traffic, or again after a rollback.
     and are never rewritten;
   - the stored tags, the old fields as the read truth and the mirror, the roster
     column, the console's `?app=materialtesting`, the `materialtesting` alias,
-    the old ids and the `*_MATERIAL_TESTING` fallback, until TD-330 removes them;
+    the old ids and the `*_MATERIAL_TESTING` fallback, until TD-56 removes them;
   - history: the CHANGELOG, dated checklists and earlier ADRs keep the names they
     were decided under.
 
@@ -125,33 +125,33 @@ beside the new one while a deploy shifts traffic, or again after a rollback.
   `*MaterialTesting` (a device release, a lock clear) and leaves
   `*SemperClassroom` holding the old value. Reading the new field first, or at
   all, would read that stale value and bind or refuse the wrong phone. Handled:
-  `read_field` reads only the old field until TD-330, and the script's prune
+  `read_field` reads only the old field until TD-56, and the script's prune
   deletes a new field whose old twin is gone.
 - **H2. A previous backend does not know `semperclassroom`.** A device tagged
   `semperclassroom` reads there as an unknown app (`bad_signature` on every
   signed call from that phone), and a session so tagged is hidden from its list.
   Handled: tags are stored as `materialtesting` (`stored_name`) and turned into
   `semperclassroom` only on read, compare and response; the retag moved behind
-  `--retag`, as TD-330's first step.
+  `--retag`, as TD-56's first step.
 
 ## Options considered
 
 | Option | Why not |
 |--------|---------|
-| Keep `materialtesting` as an internal tag and rename only what users see (ADR-019 kept `indic.*` wire formats this way) | Rejected by the owner, who wants the name gone from stored data. Unlike a wire format, the tag and the suffix can be rewritten by a script, and the alias makes that safe to do late (TD-330). |
+| Keep `materialtesting` as an internal tag and rename only what users see (ADR-019 kept `indic.*` wire formats this way) | Rejected by the owner, who wants the name gone from stored data. Unlike a wire format, the tag and the suffix can be rewritten by a script, and the alias makes that safe to do late (TD-56). |
 | A hard cutover: rename the fields and the tag in one migration, no dual read | Old builds and unmigrated accounts break. Between the deploy and the script, a backend that reads only the new field sees an empty slot and binds a second phone; a backend instance still on the old code, during a rollout or a rollback, misses every change; a console from before the rename shows every Semper Classroom device as missing; and a build pinning `materialtesting` refuses a token that names `semperclassroom`. |
 | Read the new field, with the old one as a fallback, and store `semperclassroom` at once | A previous backend serving beside this one leaves the new field stale (H1) and reads the new tag as an unknown app (H2), so a mixed or rolled-back fleet disagrees. |
-| A new suffix with no copy (new writes only) | When TD-330 moves reads to the new field, every account not written since the deploy would read it empty, which is the hard cutover for reads, and one a previous backend touched would read it stale. The script makes the new fields equal the old ones before that. |
+| A new suffix with no copy (new writes only) | When TD-56 moves reads to the new field, every account not written since the deploy would read it empty, which is the hard cutover for reads, and one a previous backend touched would read it stale. The script makes the new fields equal the old ones before that. |
 
 ## Trade-offs
 
-- Every per-app write for Semper Classroom is two fields until TD-330. It is the
+- Every per-app write for Semper Classroom is two fields until TD-56. It is the
   same Firestore write, so it costs no extra operation, only a few bytes.
 - The guarantee is that every backend, before and after the rename, reads and
   writes the old names, so a mixed or rolled-back fleet stays consistent. It is
   not that the new fields are current: a previous backend can leave one stale
   (H1), and only the script, run once no previous backend can serve, makes them
-  current. So nothing reads them until TD-330, and every Semper Classroom write
+  current. So nothing reads them until TD-56, and every Semper Classroom write
   goes through `apps.written_fields`, not a bare `apps.field` key, so the old
   field is never left behind.
 - The header is still a claim until App Check enforces the token's `app_id`
@@ -180,7 +180,7 @@ covers both.
    `--apply`, once the new backend serves all traffic and rolling back past it
    is ruled out.
 
-`--retag`, and moving reads and tags to the new names, belong to TD-330, not to
+`--retag`, and moving reads and tags to the new names, belong to TD-56, not to
 this rollout.
 
 ## Consequences
@@ -203,7 +203,7 @@ this rollout.
   consoles deployed in step 3 label the app Semper Classroom and still send
   `?app=materialtesting`. The backend accepts `?app=semperclassroom` too
   (`apps.from_name`).
-- TD-330 retags, moves reads and tags to the new names, and then removes the
+- TD-56 retags, moves reads and tags to the new names, and then removes the
   alias, mirrors and fallbacks, once no build sends
   `com.sempermechanics.materialtesting` and no previous backend can serve.
 
@@ -227,5 +227,5 @@ this rollout.
 - [ ] Dry-run, then `--apply`, the script once the new backend serves all
       traffic and rollback past it is ruled out (owner).
 - [ ] Rename the GitHub repo `material_testing` to `semper_classroom` (owner).
-- [ ] TD-330: retag, move reads and tags to the new names, then remove the
+- [ ] TD-56: retag, move reads and tags to the new names, then remove the
       alias, the mirrors and the fallbacks.

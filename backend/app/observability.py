@@ -76,7 +76,7 @@ def normalize_route_template(path: str) -> str:
 
 # Declared route templates, registered by main.py once the routers are
 # included. Matching the request against these is what keeps a static segment
-# such as `activate` from collapsing to `{id}` (TD-44); the regex above is only
+# such as `activate` from collapsing to `{id}` (TD-79); the regex above is only
 # the fallback for a path no route declares (a 404).
 _PARAM = re.compile(r"\{[^/{}]+\}")
 _ROUTES: list[tuple[re.Pattern[str], str]] = []
@@ -122,7 +122,7 @@ def routed_template(scope) -> str | None:
     router's own route, unprefixed, in `scope["route"]`). A route whose own
     pattern matches the whole path (one declared on the app) is used as it
     is. Anything else is left to `route_template`, so a FastAPI that moves the
-    context costs a re-match, never a wrong template (TD-198).
+    context costs a re-match, never a wrong template (TD-186).
     """
     fastapi_scope = scope.get("fastapi")
     context = fastapi_scope.get("effective_route_context") if isinstance(fastapi_scope, dict) else None

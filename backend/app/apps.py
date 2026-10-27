@@ -20,7 +20,7 @@ Semper Classroom was Material Testing until 2026-10 ([ADR-030]). Its short
 name was `materialtesting` and its suffix `MaterialTesting`. A backend from
 before the rename knows only those, and one can serve beside this one while a
 deploy shifts traffic, or again after a rollback. So the old names stay the
-stored truth until TD-330 retires them:
+stored truth until TD-56 retires them:
 
 - `stored_name` is the short name written to `devices/{id}.app` and
   `sessions/{sid}.app`: still `materialtesting`, which every backend reads;
@@ -31,7 +31,7 @@ stored truth until TD-330 retires them:
   so it is always current, while a new field a previous backend did not
   delete may be stale;
 - `written_fields` writes both, so the new fields fill as accounts change, and
-  `scripts/rename_classroom_app.py` fills the rest before TD-330 moves reads
+  `scripts/rename_classroom_app.py` fills the rest before TD-56 moves reads
   and tags to the new names.
 
 The header is a claim until App Check enforces the token's `app_id`. A
@@ -57,7 +57,7 @@ ALL = (SEMPER, SEMPER_CLASSROOM)
 
 _LEGACY_NAMES = {LEGACY_MATERIAL_TESTING: SEMPER_CLASSROOM}
 
-#: The short name stored for each app while TD-330 is open (`stored_name`).
+#: The short name stored for each app while TD-56 is open (`stored_name`).
 _STORED_NAMES = {SEMPER_CLASSROOM: LEGACY_MATERIAL_TESTING}
 
 #: Both apps moved from `com.indicvision.*` to `com.sempermechanics.*`
@@ -87,7 +87,7 @@ _TOKEN_CLAIM_BY_APPLICATION_ID = {
 #: signed call from the new app then failed `bad_signature` (2026-10-10).
 #: Semper Classroom is signed with Material Testing's key, so its old id is
 #: retired with the rename. Its other calls are served as before, so the access
-#: log still shows when no build sends an old id (TD-176, TD-330).
+#: log still shows when no build sends an old id (TD-174, TD-56).
 RETIRED = frozenset({
     "com.indicvision.semper",
     "com.indicvision.semper.materialtesting",
@@ -131,7 +131,7 @@ def token_claim(value: str | None) -> str | None:
 def logged_application_id(value: str | None) -> str:
     """The `X-App-Id` header as the access log records it: the id when this
     backend knows it, `none` when absent, `unknown` otherwise. The header is
-    caller text, so only a listed id reaches the log (TD-176: it shows when no
+    caller text, so only a listed id reaches the log (TD-174: it shows when no
     build sends a `com.indicvision.*` id any more)."""
     value = (value or "").strip()
     if not value:
@@ -152,7 +152,7 @@ def canonical(value: str | None) -> str:
 
 def stored_name(app: str) -> str:
     """The short name to store on a record for `app`: Semper Classroom's old
-    name while TD-330 is open, since a backend from before the rename reads
+    name while TD-56 is open, since a backend from before the rename reads
     `semperclassroom` as an unknown app (`bad_signature` on its device, its
     sessions hidden from it)."""
     app = canonical(app)
@@ -189,7 +189,7 @@ def read_field(doc: dict | None, name: str, app: str, default=None):
     is the old field alone: every backend writes and deletes it, this one
     (`written_fields`) and one from before the rename, so it is always current.
     The new field is not read, since a previous backend that deleted the old
-    one left the new one behind, stale. TD-330 moves reads to the new field
+    one left the new one behind, stale. TD-56 moves reads to the new field
     once no previous backend can serve."""
     doc = doc or {}
     return doc.get(legacy_field(name, app) or field(name, app), default)
@@ -197,7 +197,7 @@ def read_field(doc: dict | None, name: str, app: str, default=None):
 
 def written_fields(name: str, app: str, value) -> dict:
     """The update that sets `name` for `app` to `value`: the new field and,
-    while TD-330 is open, the old one as a mirror. `value` may be a Firestore
+    while TD-56 is open, the old one as a mirror. `value` may be a Firestore
     sentinel (`DELETE_FIELD`, `SERVER_TIMESTAMP`); both fields get it."""
     out = {field(name, app): value}
     old = legacy_field(name, app)

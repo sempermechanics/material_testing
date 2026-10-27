@@ -35,7 +35,7 @@ class ApiHostInterceptorTest {
 
     @Test
     fun `a call to a base url with a port is intercepted`() {
-        // The fake backend listens on a random port, so its base URL always has one (TD-160).
+        // The fake backend listens on a random port, so its base URL always has one (TD-158).
         val interceptor = Counting(ApiHost.of(server.url("/").toString()))
         call(interceptor)
         assertEquals(1, interceptor.calls)

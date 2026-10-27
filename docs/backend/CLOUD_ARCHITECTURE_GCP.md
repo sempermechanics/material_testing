@@ -253,7 +253,7 @@ bound it:
   the same signing key, [ADR-030](../adr/ADR-030-semper-classroom-app-identity.md))
   and writes nothing. Their other routes are served as before: they no longer
   replace a key, and the access log still has to show when none is left
-  (TD-176, TD-330).
+  (TD-174, TD-56).
 - **The app takes its key back.** A signed call refused `bad_signature`
   registers again, the same id for the same account, and is sent once more
   (`DeviceKeyRecovery`, `data/net/SemperApiCalls.kt`). For that request the
@@ -268,7 +268,7 @@ bound it:
 Two apps with one signing key on one phone (debug builds of Semper and
 Semper Classroom) still take the slot from each other, at most once a minute
 per app process; keying devices by app needs a migration of the shared
-database (TD-209).
+database (TD-7).
 
 **One device per app, not per account** ([ADR-010](../adr/ADR-010-device-binding-per-app.md)).
 Semper and Semper Classroom share accounts, and Android gives apps signed with
@@ -279,7 +279,7 @@ Semper's is `activeDeviceId`, Semper Classroom's `activeDeviceIdSemperClassroom`
 (`backend/app/apps.py`). The same suffix applies to the release hold and to
 the licence or seat lock (§20.10). Semper Classroom was Material Testing until
 2026-10 ([ADR-030](../adr/ADR-030-semper-classroom-app-identity.md)): until
-TD-330 its fields are also written under the old suffix (`…MaterialTesting`,
+TD-56 its fields are also written under the old suffix (`…MaterialTesting`,
 `apps.written_fields`) and read from the old one only (`apps.read_field`):
 every backend, including one from before the rename, writes and deletes the
 old field, while the new one can be left stale. Its tag is stored as the old
@@ -584,7 +584,7 @@ users/{uid}                       (uid = Google 'sub')
                                    device field has this suffix, ADR-010.
                                    Written beside activeDeviceIdMaterialTesting,
                                    its name before ADR-030, which is the field
-                                   read until TD-330)
+                                   read until TD-56)
   driveFolderId                   (…/user/{uid} folder)
   maxSessions, maxFilesPerSession, maxFrames   (optional per-user quota overrides)
   # License terms, mirrored from licenses/{id} at activation so the read path
@@ -612,7 +612,7 @@ devices/{deviceId}                (deviceId = client UUID)
   uid, publicKeyPem
   app: "semper" | "materialtesting"   (the app that registered it, ADR-010;
                                   Semper Classroom under its old name until
-                                  TD-330, as on sessions below)
+                                  TD-56, as on sessions below)
   status: "ACTIVE" | "REVOKED" | "SUPERSEDED"
   revokedAt                       (set on REVOKED and SUPERSEDED)
   model, osVersion, appVersion
@@ -628,10 +628,10 @@ sessions/{sessionId}
                                   whatever its uid: `count_device_sessions`, §7)
   app: "semper" | "materialtesting"   (the app that created it, from X-App-Id,
                                   never the body — ADR-014. Semper Classroom
-                                  is stored under its old name until TD-330
+                                  is stored under its old name until TD-56
                                   (`apps.stored_name`, ADR-030), and read,
                                   compared and listed as "semperclassroom";
-                                  TD-330's `rename_classroom_app.py --retag`
+                                  TD-56's `rename_classroom_app.py --retag`
                                   rewrites it. Absent on sessions
                                   from before the tag, which read as "semper"
                                   (`repo/sessions.session_app`) until
@@ -646,7 +646,7 @@ sessions/{sessionId}
                                   "" or absent on a session from an app that
                                   sent none: GET /v1/sessions lists `name: ""`
                                   and the app names the backup from
-                                  `specimen` (TD-208))
+                                  `specimen` (TD-195))
   status: "PENDING" | "PROVISIONING" | "PROVISION_FAILED"
         | "UPLOADING" | "COMPLETED" | "FAILED"
         (PROVISIONING and UPLOADING are IN_FLIGHT_STATUSES — both still
@@ -767,7 +767,7 @@ audit_logs/{autoId}               (append-only)
   Operator setup can also enable it by hand — step A2a of
   [BACKEND_SETUP_GCP.md](BACKEND_SETUP_GCP.md). `consume_nonce` deletes a nonce on
   use; TTL reclaims the ones that are never consumed. `audit_logs.expireAt` is a
-  TTL field too (TD-237: rows kept 365 days, `AUDIT_RETENTION_DAYS`), declared
+  TTL field too (TD-199: rows kept 365 days, `AUDIT_RETENTION_DAYS`), declared
   there and enabled by hand after the audit-trail log bucket is locked
   ([FIRESTORE_DATA_PROTECTION.md](FIRESTORE_DATA_PROTECTION.md)).
 
@@ -814,8 +814,8 @@ the way it does.
 | Institution IT self-service routes | [`backend/app/routers/institutions.py`](../../backend/app/routers/institutions.py) | Token + adminEmails auth; the surface behind `/console/institution`, and equally usable from a script (§20.4). The `/v1/campus/*` aliases were retired (§20.5) |
 | Session provision / purge | [`backend/app/session_provision.py`](../../backend/app/session_provision.py) | `provision_session` / `purge_session` |
 | Auth + device dependencies | [`backend/app/deps.py`](../../backend/app/deps.py) | Bearer verify, device-signature check (§4) |
-| Step-up tiers | [`backend/app/step_up.py`](../../backend/app/step_up.py) | `attested_or_mfa_admin`, `attested_or_mfa_admin_fresh`, `attested_or_mfa_user`, `step_up_check`: an attested device or a second factor on a recent sign-in; built on `deps`, never imported by it (TD-293) |
-| Multi-step flows | [`backend/app/services/`](../../backend/app/services/__init__.py), one module per aggregate | Account erasure and export, recording an analysis and its bundle, licence mint: what a route does in several steps across Drive, Firestore, Auth and the audit log; the router checks and answers (TD-293, `tests/test_layering.py`) |
+| Step-up tiers | [`backend/app/step_up.py`](../../backend/app/step_up.py) | `attested_or_mfa_admin`, `attested_or_mfa_admin_fresh`, `attested_or_mfa_user`, `step_up_check`: an attested device or a second factor on a recent sign-in; built on `deps`, never imported by it (TD-230) |
+| Multi-step flows | [`backend/app/services/`](../../backend/app/services/__init__.py), one module per aggregate | Account erasure and export, recording an analysis and its bundle, licence mint: what a route does in several steps across Drive, Firestore, Auth and the audit log; the router checks and answers (TD-230, `tests/test_layering.py`) |
 | ID-token verify, keyless Drive token | [`backend/app/google_auth.py`](../../backend/app/google_auth.py) | Self-impersonation to add the Drive scope (§2) |
 | Drive folders, resumable init, blob probe | [`backend/app/drive.py`](../../backend/app/drive.py) | Returns the opaque upload URI, and `ALIVE`/`MISSING`/`UNKNOWN` (§4) |
 | Async provisioning | [`backend/app/tasks.py`](../../backend/app/tasks.py) | Cloud Tasks enqueue + OIDC callback auth (§4.1) |
@@ -848,19 +848,19 @@ rather than hardcoding its own.
 
 **The demo cap is counted per account and per device.** Both halves count
 analyses stored at once, less `PROVISION_FAILED`, so a delete frees a place
-(the product owner's choice, TD-275). The account half is `count_user_sessions`
+(the product owner's choice, TD-50). The account half is `count_user_sessions`
 (`backend/app/repo/sessions.py:445-463`); for a demo account `create_session`
 also refuses when the device's stored analyses, every account's, reach the cap
 (`count_device_sessions`, `:454-478`; `_device_cap_reached`,
 `backend/app/services/sessions.py:81-94`, applied at `:138-139`), with a
 `409 device_quota_exceeded` that names neither the count nor the owners (its
-own code since TD-279, so the app does not lift it on the account's count). A
+own code since TD-219, so the app does not lift it on the account's count). A
 session with no `deviceId` counts toward no device. `GET /v1/sessions`
 `quota.used` stays the account's count (`sessions.py:131`). A demo create costs
 11 reads, not 9 ([request-volume.md](../perf/request-volume.md) Pass 4). After
 a staff device release, or a staff or IT licence lock clear, the phone no longer
 counts its previous holder's analyses: `forget_device_sessions` drops their
-`deviceId` (`backend/app/repo/devices.py:82-107`; TD-276, closed). The holder's own
+`deviceId` (`backend/app/repo/devices.py:82-107`; TD-218, closed). The holder's own
 device change keeps them counted. Tests `backend/tests/test_demo_device_cap.py`.
 
 **`MAX_SESSIONS_PER_USER` is deleted, not merely unread.** It used to be the
@@ -974,7 +974,7 @@ gcloud artifacts repositories add-iam-policy-binding cloud-run-source-deploy \
 `storage.bucketViewer` holds only `storage.buckets.get` / `.list`. It is needed at
 project level because `gcloud run deploy --source` lists buckets to find the
 `run-sources-*` one; without it every deploy fails with `403 … storage.buckets.list`,
-as the staging runs of 2026-09-24 and 2026-09-25 did after the TD-71 clean-up. It
+as the staging runs of 2026-09-24 and 2026-09-25 did after the TD-97 clean-up. It
 grants no object access, so CI still cannot read or change the Firestore export bucket.
 
 **Drive membership (the only Workspace-side step, done by you, not the SA):**
@@ -1013,7 +1013,7 @@ The JSON routes' gateway deadline is 60 s
 ([`backend/gateway/openapi.yaml`](../../backend/gateway/openapi.yaml), top-level
 `deadline`). The Firestore client's own defaults are longer: 60 s for a get or
 a write and 300 s for a query or `get_all`, and its retry starts over on
-`DEADLINE_EXCEEDED`. So until TD-197 was closed, a hung call kept a threadpool
+`DEADLINE_EXCEEDED`. So until TD-185 was closed, a hung call kept a threadpool
 thread busy for minutes after the gateway had answered 504.
 
 Every Firestore call in `backend/app` now goes through a helper in
@@ -1034,7 +1034,7 @@ Every Firestore call in `backend/app` now goes through a helper in
   the value. That is still under 60 s.
 - **`DEADLINE_EXCEEDED` is not retried.** An attempt that used up its time
   ends the call.
-- **An outage answers 503, not 500 (TD-250, decided 2026-10-22).** When a
+- **An outage answers 503, not 500 (TD-38, decided 2026-10-22).** When a
   route's Firestore call ends in `DEADLINE_EXCEEDED` or `UNAVAILABLE`, raw or
   as the `RetryError` api-core raises once the retry window runs out on one,
   the edge middleware answers 503 `firestore_unreachable` with
@@ -1054,7 +1054,7 @@ Every Firestore call in `backend/app` now goes through a helper in
   `Transaction._begin` and `_commit` pass `metadata` only), so they keep the
   60 s default, and a contended transaction may begin and commit up to
   `_TX_ATTEMPTS` (10) times (`repo/_base.py:47`). The reads inside a
-  transaction are covered. Accepted on 2026-10-22 (product owner, TD-210): a
+  transaction are covered. Accepted on 2026-10-22 (product owner, TD-196): a
   deadline around the whole call can give up while its commit still lands,
   and a timeout through the client's private API breaks on a client bump.
   Revisit when the client exposes a timeout on begin and commit.
@@ -1297,7 +1297,7 @@ Signing.
   `tests/test_op_class.py` fails if a declared route lands in `other`.
   Client 500 bodies stay opaque (`internal_error`) on
   Cloud Run. A Firestore outage is 503 `firestore_unreachable` with
-  `Retry-After: 30` instead ([§10.1](#101-firestore-call-deadlines), TD-250).
+  `Retry-After: 30` instead ([§10.1](#101-firestore-call-deadlines), TD-38).
 - **Audit trail** in Firestore `audit_logs` — the compliance record (Cloud
   Logging is the operational one).
 - **Async Resend notify** — access-request mail is enqueued off the request
@@ -1313,7 +1313,7 @@ dedicated rotation exists.
 |---|---|---|---|
 | Unhandled / reported errors | Error Reporting ingests the `@type` ReportedErrorEvent lines (`jsonPayload`) and the `stack_trace` of a logged exception | New error group or >5 events / 5 min | Page on-call; check `/readyz` and recent deploys |
 | `outcome=server_error` access lines | Log-based metric on `jsonPayload.outcome="server_error"` | >10 / 5 min | Investigate revision; consider traffic rollback |
-| `errorCode=firestore_unreachable` or `drive_*` | Log-based metric on `jsonPayload.errorCode` (the `dependency_failure` line). Since TD-250 a Firestore outage on any route writes it, not only `/readyz`; before, a route's outage logged `unhandled_exception` with `internal_error` and only the 5xx signals saw it | Any sustained >2 min | Dependency outage — do not roll app code first |
+| `errorCode=firestore_unreachable` or `drive_*` | Log-based metric on `jsonPayload.errorCode` (the `dependency_failure` line). Since TD-38 a Firestore outage on any route writes it, not only `/readyz`; before, a route's outage logged `unhandled_exception` with `internal_error` and only the 5xx signals saw it | Any sustained >2 min | Dependency outage — do not roll app code first |
 | `AUTH_DENIED` audit / auth warnings | Metric on audit action or `invalid_token` spike | >50 / 5 min from many IPs | Possible attack; tighten gateway quota |
 | Drive `429` / `notify_rejected` | Metric on dependency=drive/resend warnings | Sustained | Quota / Resend misconfig |
 | Uptime | Cloud Monitoring uptime check on `/readyz` (not only `/healthz`) | 2 failed regions | Page; run staging rollback drill if deploy-correlated |
@@ -1471,7 +1471,7 @@ writes a `LICENSE_CLAIM_CODE` audit row with the code's prefix only. A browser
 names no device, so `activate_license` compares and binds no lock
 (`backend/app/repo/activation.py:62-68`); the phone's next request binds it.
 No app screen takes a code ([ADR-024](../adr/ADR-024-account-anchored-entitlements.md)). `POST /v1/licenses/activate` runs the same
-redemption and stays for installed builds only (TD-278).
+redemption and stays for installed builds only (TD-52).
 
 #### The device lock is bound, not declared
 
@@ -1695,7 +1695,7 @@ below. The table covers every direction a version skew can go:
 | Old ops tooling | Nothing any more. `AdminLicenseCreate` refuses `kind="campus"` with a 422 (shim 3); `PATCH /v1/admin/users/{uid}/config` refuses a `plan` key with a 422 — `UserConfigPatch` forbids unknown fields, so the old patch cannot return a 200 that changed nothing (shim 4). |
 | Unmigrated documents | `normalize_mode` / `normalize_kind` read either spelling, so a user or license document migration 002 has not reached still resolves and still activates. |
 
-**Retirement order.** There were nine compatibility shims (TD-45). Shims 1–5
+**Retirement order.** There were nine compatibility shims (TD-4). Shims 1–5
 were retired together on 2026-09-26, each on its own signal, checked live that
 day (below). Shims 6–9 are live and wait on the installed-app fleet, which
 cannot be measured yet; each still waits on the signal in its row, not on a
@@ -1976,7 +1976,7 @@ may be seated now, so a roster add and a staff mint cannot disagree.
 The seat keeps its own copy of the address for the roster and reconcile to
 show; when the holder signs in with a new verified address, the seat on their
 current institution licence takes it (`_refresh_seat_address`,
-`backend/app/repo/users.py`, TD-297). Nothing is decided on the copy.
+`backend/app/repo/users.py`, TD-234). Nothing is decided on the copy.
 
 The invite path exists because IT works from a list of addresses and cannot
 make people sign up on cue. Refusing with `user_not_found` until they had was
@@ -2318,7 +2318,7 @@ under `/auth/` on `app.sempermechanics.com` (`AUTH_HOST` in
 `data/account/AuthRepository.kt`). The `…-auth.firebaseapp.com` host stays accepted as
 `LEGACY_AUTH_HOST` for every installed build that declares only it, and is
 still the password-reset action URL, until Play vitals show no such build
-([TD-29](../ops/TECH_DEBT.md)). On the CORS side, `allowCors` in
+([TD-1](../ops/TECH_DEBT.md)). On the CORS side, `allowCors` in
 `gateway/openapi.yaml` sits under `x-google-endpoints` named by the
 `__MANAGED_SERVICE__` placeholder — the API's managed service name, not the
 gateway hostname, which ESPv2 ignores. `test_security_controls.py` pins the
@@ -2368,13 +2368,13 @@ re-activated, no key is re-issued, and nothing is typed on the new device.
 **One lock per app** ([ADR-010](../adr/ADR-010-device-binding-per-app.md)).
 A licence or seat holds `deviceIdLock` for Semper and
 `deviceIdLockSemperClassroom` for Semper Classroom (written beside
-`deviceIdLockMaterialTesting`, the field read until TD-330, ADR-030), and everything below is
+`deviceIdLockMaterialTesting`, the field read until TD-56, ADR-030), and everything below is
 per app: the registered phone, the release hold (`releasedDeviceId…`,
 `releasedAt…`) and the self-service cooldown (`deviceChangedAt…`). A staff or
 IT clear empties every app's lock and releases every app's phone, since the
 holder is changing phones. The holder's own clear moves only the app that
 asks (`X-App-Id`, or `?app=` from the account page, which sends the old
-`materialtesting` until TD-330 so that a backend from before the rename
+`materialtesting` until TD-56 so that a backend from before the rename
 understands it; `semperclassroom` is accepted too), against
 that app's cooldown. Responses and audit details carry each app's ids side by
 side: `previousDeviceId` / `previousDeviceIdSemperClassroom`,
@@ -2432,7 +2432,7 @@ phone may register again, so a mistaken clear strands nobody (decided
 
 **A Demo account changes phone through staff.** It has no licence lock to
 clear, so until 2026-09-26 its first phone was its only phone: only suspending
-the account emptied `activeDeviceId`. The decision (TD-126) is that it may
+the account emptied `activeDeviceId`. The decision (TD-131) is that it may
 change phone like any other account, on request to operators, never
 self-service. The app already tells a refused phone to ask an admin.
 `POST /v1/admin/device-releases` takes the account's email and makes the same
@@ -2553,7 +2553,7 @@ returned them — but `/v1/config` is the larger answer, and a browser asking
 holds a seat until 14:20. The prefix is the one field the two answer
 differently: `/v1/config` sends `licensePrefix` only while the mode is
 `licensed` (`backend/app/repo/user_config.py:252`), because builds before #405
-show "Licensed as …" whenever it is set (TD-145; the app now also checks
+show "Licensed as …" whenever it is set (TD-146; the app now also checks
 `LicenseEntitlements.isLicensed`); a held but inactive licence's prefix is on
 `/v1/me` alone.
 

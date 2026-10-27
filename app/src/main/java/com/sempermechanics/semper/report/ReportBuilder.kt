@@ -74,7 +74,7 @@ object ReportBuilder {
          * True when [defImgForCover] is this frame's own photo. The field images
          * are then drawn the way the viewer draws that frame: on that photo, the
          * map and its markers where the points moved to
-         * ([VisualizationEngine.generateFrameHeatmap], ADR-011, TD-139). False
+         * ([VisualizationEngine.generateFrameHeatmap], ADR-011, TD-141). False
          * (no photo on disk, or it did not decode) keeps the reference under
          * the reference-position map, as the viewer falls back.
          */

@@ -30,7 +30,7 @@ internal class LoadedRerun(
  * Reads a saved analysis's Re-run inputs and copies its photos for the
  * wizard. Copies, never moves or points at them: the new analysis is the
  * wizard's to sort, run and discard, and the saved one stays exactly as it
- * is (TD-211).
+ * is (TD-197).
  */
 internal object RerunLoader {
 

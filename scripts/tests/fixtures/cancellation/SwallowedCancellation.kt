@@ -4,7 +4,7 @@ package com.example.data
 class AccountLoader(private val api: CloudApi) {
     suspend fun fetchMe(): Me = api.me()
 
-    // 1. runCatching around a suspend call (TD-41's 21 sites).
+    // 1. runCatching around a suspend call (TD-77's 21 sites).
     suspend fun load(): Result<Me> = runCatching { fetchMe() }
 
     // 2. A broad catch with no rethrow, its parameter annotated.

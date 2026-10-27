@@ -5,7 +5,7 @@
 **Deciders:** app owner
 
 > **In this repo:** the app side for bending's deflection correction (#112,
-> TD-150) and the tensile curve correction (#113, TD-152). The backend route
+> TD-150) and the tensile curve correction (#113, TD-151). The backend route
 > deploys from semperdic-app (#288), which since 2026-10-01 also re-sends
 > metadata after a rename, and so does this app.
 
@@ -83,7 +83,7 @@ Two ways to reach the cloud copy were weighed:
   from semperdic-app only, so this change goes upstream first. Until then the
   app's send gets the gateway's 404 and leaves the row marked. Nothing is
   lost: the next reconcile after the deploy sends it.
-- The tensile curve correction (#111) takes the same path (TD-152, 2026-10-01):
+- The tensile curve correction (#111) takes the same path (TD-151, 2026-10-01):
   `setCurveCorrection` sets the mark, the viewer queues the send, and
   `clearMetadataStale` compares the curve correction as well as the geometry.
 - A rename reaches the cloud copy too (added 2026-10-01). It was first left

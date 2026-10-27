@@ -5,7 +5,7 @@ Gradle reports a test worker that exits on its own as only
 
     Process 'Gradle Test Executor 1' finished with non-zero exit value 1
 
-with no failing test (TD-199, TD-312). The worker leaves its evidence in
+with no failing test (TD-187, TD-54). The worker leaves its evidence in
 ``app/build/test-crash/`` (see ``app/build.gradle.kts``): the JVM's error file
 on a crash, a heap dump on an OutOfMemoryError, and a GC log. Tier 1 uploads
 that folder, but an artifact is not always reachable from where the failure is

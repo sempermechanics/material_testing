@@ -17,7 +17,7 @@ private const val NANOS_PER_MS = 1_000_000L
  * this phone that registers (a retired `com.indicvision.*` build, a debug build
  * of Semper Classroom) replaces our key. Every signed call then fails
  * `bad_signature`, and the `device_registered` flag kept sign-in from ever
- * registering again (TD-209).
+ * registering again (TD-7).
  *
  * Registering again is [reRegister], the sign-in's `POST /v1/devices/register`.
  * For the same device id on the same account the backend only rewrites the

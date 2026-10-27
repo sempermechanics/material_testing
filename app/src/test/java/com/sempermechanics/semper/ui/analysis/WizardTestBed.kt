@@ -27,7 +27,7 @@ import org.robolectric.android.controller.ActivityController
  *
  * [close] it after the test (`@After`, or `use`): an Activity left open keeps
  * its wizard's RecyclerView registered with the main thread's GapWorker, so it
- * and its themes outlive the test and pile up across the suite (TD-199).
+ * and its themes outlive the test and pile up across the suite (TD-187).
  *
  * @param resumed false leaves the Activity just created, where a part that
  *   registers a result launcher may still be built.

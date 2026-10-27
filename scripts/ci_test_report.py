@@ -17,7 +17,7 @@ a listed device (the JSON's ``context.build.device``) against that device's
 reference times (1 + margin), and exits 1 if any is over. Results from a device
 the file does not list, CI's emulator included, are reported and never gated.
 
-A startup time moves 30-40 % with heat and the charger (TD-135), so a result is
+A startup time moves 30-40 % with heat and the charger (TD-6), so a result is
 gated only in the state its reference was taken in. The benchmarks write that
 state (``*deviceState.json``, ``DeviceStateRule``) next to their results; a
 result whose test ran above the file's ``state.maxThermalStatus`` or off the

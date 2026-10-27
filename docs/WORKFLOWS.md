@@ -345,7 +345,7 @@ Storage section shows.
 sync state, re-enqueues B1 for local-only rows, refreshes the quota in
 `AccountCache` / `AppRemoteConfig`. A SYNCED row missing from this app's list
 is repaired only after one `?app=all` listing shows no other app's backup of
-it either (`CloudReconcile.list`, ADR-014, TD-153); if that listing fails, no
+it either (`CloudReconcile.list`, ADR-014, TD-152); if that listing fails, no
 row is repaired that pass.
 
 **A Drive outage must not look like deleted data**: local metadata is dropped
@@ -407,7 +407,7 @@ Tests: `diagnostics/SemperAnalyticsTest`, `diagnostics/AccountTypeTest`.
 | Key | `data/account/DeviceKeys` — EC P-256 in the AndroidKeyStore, private key never leaves it |
 | Register | `SemperApi.registerDevice` → C2 (409 = this account or device is bound elsewhere) |
 | Per call | `SemperApiSigning`: a client nonce (`ClientNonce`), or `fetchChallenge` → C3 once the server refused one; `signedHeaders` signs `(nonce ‖ METHOD ‖ path) ‖ SHA-256(body)` → verified by `C4` |
-| Recover | A `401 bad_signature` (another app with this signing key registered the same device id, TD-209) → `DeviceKeyRecovery` registers again (C2, same id, a key overwrite) and the call is sent once more: `SemperApiCalls.signed`, and `signedDownload` for restores. At most one registration per call and one a minute per process; the second refusal is the failure |
+| Recover | A `401 bad_signature` (another app with this signing key registered the same device id, TD-7) → `DeviceKeyRecovery` registers again (C2, same id, a key overwrite) and the call is sent once more: `SemperApiCalls.signed`, and `signedDownload` for restores. At most one registration per call and one a minute per process; the second refusal is the failure |
 | Tokens | `data/net/TokenProvider` / `AccountCache` — Firebase ID tokens are held in memory, never persisted |
 
 ### B12 Local session index
@@ -467,7 +467,7 @@ flows a route calls), `repo/` (all Firestore access, one module per aggregate),
 
 | Id | Concern | File | What it does |
 |---|---|---|---|
-| C17 | Access log | `main.py` `EdgeMiddleware` (one ASGI middleware) | One JSON line per request: `requestId`, `opClass`, `routeTemplate`, status, latency, outcome, uid/deviceId when known, `appId` (the `X-App-Id` when it is a listed id, else `none` / `unknown`; TD-176). Stamps **`X-Request-Id`** on the response — the app now echoes it into failure reasons (B1/B2), so a user's screenshot joins to this line |
+| C17 | Access log | `main.py` `EdgeMiddleware` (one ASGI middleware) | One JSON line per request: `requestId`, `opClass`, `routeTemplate`, status, latency, outcome, uid/deviceId when known, `appId` (the `X-App-Id` when it is a listed id, else `none` / `unknown`; TD-174). Stamps **`X-Request-Id`** on the response — the app now echoes it into failure reasons (B1/B2), so a user's screenshot joins to this line |
 | C17a | Route classes | `observability.classify_route` | `health` / `attest` / `login` / `config` / `account` / `backup` / `sync` / `restore` / `admin`; ids in paths collapse to `{id}` so nothing identifying lands in `routeTemplate` |
 | C18 | Audit trail 🔒 | `audit.record` | Append-only `audit_logs`: AUTH_DENIED, DEVICE_*, SESSION_CREATE/DELETE, UPLOAD_COMPLETE, FILE_DOWNLOAD, DATA_EXPORT, ACCOUNT_DELETE, ADMIN_*. Best-effort — an audit write never fails the request |
 | C19 | Access-request mail 🔒 | `notify.access_request` | On first PENDING user, mails support via Resend on a daemon worker with retry + per-uid idempotency. Off (silently) without `RESEND_API_KEY` |
@@ -481,7 +481,7 @@ flows a route calls), `repo/` (all Firestore access, one module per aggregate),
 | Id | Workflow | Entry | Chain |
 |---|---|---|---|
 | C1 | Identify the caller | `deps.current_user` | `google_auth.verify_id_token` → `repo.get_or_create_user` (auto-approve rules, device binding, `DeviceInUseError` → 409) → 403 unless APPROVED. First PENDING user triggers C19 |
-| C2 | Register a device | `POST /v1/devices/register` (`routers/devices.py`) | One account per device and one device per account: a different bound device is `device_conflict`, a device owned by another uid is `device_in_use` (audited), and a phone staff released from this test account is `device_released` (audited, TD-314); all checked inside the registration's transaction (`repo.register_device`). The device records `stepUpEligible`: whether the registering token completed a second factor, which staff and IT step-up require of a phone (ADR-010 amendment). Re-registering the same id heals the stored public key (`DEVICE_REBIND`; no device retired, no lock moved). A retired `com.indicvision.*` `X-App-Id` is `410 app_retired` (audited), since it shares the device id of its successor |
+| C2 | Register a device | `POST /v1/devices/register` (`routers/devices.py`) | One account per device and one device per account: a different bound device is `device_conflict`, a device owned by another uid is `device_in_use` (audited), and a phone staff released from this test account is `device_released` (audited, TD-249); all checked inside the registration's transaction (`repo.register_device`). The device records `stepUpEligible`: whether the registering token completed a second factor, which staff and IT step-up require of a phone (ADR-010 amendment). Re-registering the same id heals the stored public key (`DEVICE_REBIND`; no device retired, no lock moved). A retired `com.indicvision.*` `X-App-Id` is `410 app_retired` (audited), since it shares the device id of its successor |
 | C3 | Mint a nonce | `POST /v1/challenge` | `repo.issue_nonce(uid, deviceId)` — single-use, bound to the pair |
 | C1t | Token only | `deps.token_uid` | `google_auth.verify_id_token` (plus App Check when a device is named) and nothing else: no profile read or created. Only `GET /v1/me/erasure`, which must not bring back an erased account |
 | C4 | Verify a device-signed call | `deps.verified_device` | ACTIVE device → `consume_nonce` (replay = 401) → ECDSA P-256 over `(nonce ‖ METHOD ‖ path) ‖ SHA-256(body)` → `bad_signature` audited on failure |
@@ -501,7 +501,7 @@ flows a route calls), `repo/` (all Firestore access, one module per aggregate),
 
 | Id | Route | Auth | Notes |
 |---|---|---|---|
-| C5 | `POST /v1/sessions` | C4 | Idempotent on `localSessionId` while in flight. Quota + file-count check → **reserve the session doc before any Drive I/O** → batch-write file docs → enqueue provisioning (C15) or provision inline with rollback. The session is tagged with the asking app (`app`, ADR-014). An optional `name` (≤ 200 chars) is the analysis's name, which the list shows; an older app sends none (TD-208) |
+| C5 | `POST /v1/sessions` | C4 | Idempotent on `localSessionId` while in flight. Quota + file-count check → **reserve the session doc before any Drive I/O** → batch-write file docs → enqueue provisioning (C15) or provision inline with rollback. The session is tagged with the asking app (`app`, ADR-014). An optional `name` (≤ 200 chars) is the analysis's name, which the list shows; an older app sends none (TD-195) |
 | C15 | Provisioning | `session_provision.provision_session` | Opens one Drive resumable URI per unprovisioned file, bounded fan-out. Idempotent: only files with no `uploadUrl` are touched. Inline failure → `purge_session` (Drive **and** Firestore); queued failure → `PROVISION_FAILED` so a poller stops waiting |
 | C16 | `POST /v1/tasks/provision-session` | `tasks.tasks_caller` | Cloud Tasks callback, authenticated by the OIDC token's audience **and** invoker service-account email. Not reachable with a user token |
 | C6 | `GET /v1/sessions/{sid}/uploads` | C4 | The resume list. Carries Drive capability URIs, which is why it is attested (the ID-token-only migration window was retired 2026-09-26, FI-7). `status` PROVISIONING means "poll", not "nothing to do" |
@@ -509,8 +509,8 @@ flows a route calls), `repo/` (all Firestore access, one module per aggregate),
 | C8 | `GET /v1/sessions` | C1 | The asking app's sessions (`X-App-Id`; `?app=semper\|semperclassroom\|all` overrides, ADR-014; the old `materialtesting` is still accepted, ADR-030), each with its `app` and `name` (`""` when the backup was made without one: the app then names it from `specimen`, the reference's file name); `quota.used` is the whole account's. Cursor-paginated; `?verify=true` probes this page's folders in Drive. Purges metadata **only** on a confirmed `MISSING`; an `UNKNOWN` is counted and reported so the client knows the check was incomplete |
 | C9 | `GET /v1/sessions/{sid}/files` | C1 | The restore manifest, cursor-paginated (it used to truncate at 2000). Answers only the app that backed the session up; the other app gets `404 session_not_found` (ADR-014) |
 | C10 | `GET /v1/files/{id}/content` | C4 | The one route that streams file bytes out. Forwards `Range` to Drive and returns 206 so a restore resumes; audits only the window starting at byte 0; sanitises the client-supplied filename before it reaches `Content-Disposition` |
-| C11 | `DELETE /v1/sessions/{sid}` 🔒 | C4 | Drive folder then Firestore metadata; nothing soft-deleted. While the session is PROVISIONING (last written within 30 min, `session_provision.PROVISIONING_GRACE`; a provisioning attempt stamps `updatedAt` as it starts, `repo.start_provisioning`, TD-296) it is `409 session_provisioning` with `Retry-After`, so the folder the worker is creating is never orphaned |
-| C21 | `PUT /v1/sessions/{sid}/metadata` | C4 | Replaces a COMPLETED session's metadata.json in place, for a change made after the backup (a rename; in Semper Classroom also a deflection or tensile curve correction; ADR-013). Refuses an unfinished upload (409 `session_not_complete`), another session's metadata or an unknown schema (422), over 256 KB (413). The file doc's size and checksums follow the new bytes, and a non-blank `name` in the body becomes the session's listed `name` (TD-208). The only write to a completed file |
+| C11 | `DELETE /v1/sessions/{sid}` 🔒 | C4 | Drive folder then Firestore metadata; nothing soft-deleted. While the session is PROVISIONING (last written within 30 min, `session_provision.PROVISIONING_GRACE`; a provisioning attempt stamps `updatedAt` as it starts, `repo.start_provisioning`, TD-233) it is `409 session_provisioning` with `Retry-After`, so the folder the worker is creating is never orphaned |
+| C21 | `PUT /v1/sessions/{sid}/metadata` | C4 | Replaces a COMPLETED session's metadata.json in place, for a change made after the backup (a rename; in Semper Classroom also a deflection or tensile curve correction; ADR-013). Refuses an unfinished upload (409 `session_not_complete`), another session's metadata or an unknown schema (422), over 256 KB (413). The file doc's size and checksums follow the new bytes, and a non-blank `name` in the body becomes the session's listed `name` (TD-195). The only write to a completed file |
 | C-health | `GET /healthz`, `GET /readyz` | none | Liveness never probes dependencies; readiness pings Firestore + Drive and answers with stable `DependencyError` codes |
 
 Backend tests mirror these one-to-one — `backend/tests/test_route_authz_matrix.py`

@@ -24,7 +24,7 @@ class StartupBenchmark {
     @get:Rule
     val benchmarkRule = MacrobenchmarkRule()
 
-    /** The phone's thermal, charger and memory state around each test (TD-135). */
+    /** The phone's thermal, charger and memory state around each test (TD-6). */
     @get:Rule
     val deviceState = DeviceStateRule()
 
@@ -55,7 +55,7 @@ class StartupBenchmark {
 
         /**
          * 15, not 5: a Pixel 6's cold starts spread 404–478 ms within one run, so a
-         * 5-start median moved with one or two slow starts (TD-135).
+         * 5-start median moved with one or two slow starts (TD-6).
          */
         const val COLD_START_ITERATIONS = 15
     }

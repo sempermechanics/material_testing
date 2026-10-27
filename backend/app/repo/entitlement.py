@@ -188,7 +188,7 @@ def ensure_entitlement(user: dict, device_id: str | None) -> dict:
     strand the invite permanently.
 
     That includes a claim that lost every transaction attempt to contention
-    with nobody winning (TD-33): the invite is still pending, so this request
+    with nobody winning (TD-71): the invite is still pending, so this request
     is served without a licence — which resolves to Demo limits anyway — and
     the next request claims again. Any other failure (seats exhausted, already
     redeemed) is not transient, so Demo is minted as before — and the invite

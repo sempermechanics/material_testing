@@ -98,7 +98,7 @@ def forget_device_sessions(uid: str, device_ids) -> int:
     For a phone that staff or institution IT took off the account (a staff
     release, a staff or IT lock clear): the phone may go to someone else, and
     `count_device_sessions` would otherwise hold its next holder's demo to the
-    previous holder's analyses (TD-276). The analyses stay the account's and
+    previous holder's analyses (TD-218). The analyses stay the account's and
     still count toward its own cap. Never for a holder's own device change:
     that would let a second account on the same phone shed the first one's
     count. Two equality filters, served by the automatic indexes; chunked to
@@ -153,10 +153,10 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
     `activeDeviceId` names the latest. A full QC account is refused
     (`device_conflict`); a full CI account instead retires its oldest ACTIVE
     phones as superseded in the same transaction, since every CI run is a
-    fresh emulator with a new key (TD-313). The answer's `rotated` lists them.
+    fresh emulator with a new key (TD-248). The answer's `rotated` lists them.
     A phone staff released from the test account on its own
     (`staff_released_from`) is refused `device_released` for that account, so
-    it cannot take back the place it gave up (TD-314); another account may
+    it cannot take back the place it gave up (TD-249); another account may
     still register it. A real account is unchanged.
 
     `step_up_eligible` is whether the registering token proved a second factor
@@ -167,7 +167,7 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
     """
     dev = {
         "uid": uid,
-        # The stored name, which every backend reads (ADR-030, TD-330).
+        # The stored name, which every backend reads (ADR-030, TD-56).
         "app": apps.stored_name(app),
         "publicKeyPem": body.publicKeyPem,
         "status": statuses.DEVICE_ACTIVE,

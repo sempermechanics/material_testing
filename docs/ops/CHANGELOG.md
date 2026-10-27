@@ -18,7 +18,7 @@ The backend and Hosting from `main` at `46ac8b5e` went live, staging first. That
 carries #484 ([ADR-030](../adr/ADR-030-semper-classroom-app-identity.md)):
 - The backend knows `com.sempermechanics.semperclassroom` as the app `semperclassroom`. It
   still stores and reads the old `materialtesting` tag and `*MaterialTesting` fields, and
-  dual-writes the new ones, until TD-330.
+  dual-writes the new ones, until TD-56.
 - Each build gets the entitlement claim it pins.
 - `com.sempermechanics.materialtesting` is retired from device registration (410
   `app_retired`); its other calls are served as before.
@@ -30,13 +30,13 @@ No gateway change, no Firestore index, no app release. `rename_classroom_app.py`
 - **Staging.** Run 40299991596: `semper-api-staging-40299991596-1` at 100 % after `/readyz`
   passed on the candidate. The gateway dry run showed only the `?app=` description change in
   `openapi.yaml`.
-- **Production.** Run 40300681201, approved by the required reviewer (TD-228):
+- **Production.** Run 40300681201, approved by the required reviewer (TD-198):
   `semper-api-40300681201-1` at 100 % after `/readyz` passed on the candidate, with
   `semper-api-40063322039-1` pinned as `rollback-prev`. The gateway job's dry run showed the
   same description-only diff and left `v202610230501-112` serving.
 - **Hosting.**
   - The first deploy came from a plain `main` checkout. It therefore published #474's
-    Privacy and Terms text, which counsel has not cleared (TD-277).
+    Privacy and Terms text, which counsel has not cleared (TD-51).
   - It was redeployed the same day from a worktree of `46ac8b5e` with both legal
     `index.html` files taken from `b940cc29`, per [the checklist](DEPLOY_CHECKLIST_2026-10.md)
     §4. The live `/privacy` and `/terms` were then compared with `b940cc29` and match.
@@ -56,7 +56,7 @@ No gateway change, no Firestore index, no app release. `rename_classroom_app.py`
 ## 2026-10-24 — semperdic-app's backend: a staff-released phone is told so (#482)
 
 The backend from `main` at `187f4870` went live, staging first. It carries #482: a QC phone
-staff released from its test account (TD-314) is now refused registration with 409
+staff released from its test account (TD-249) is now refused registration with 409
 `device_released` instead of `device_conflict` (still audited `DEVICE_REGISTER` DENIED,
 `reason=staff_released`), and app builds from `187f4870` say "Staff released this phone from
 this account". Installed builds read any 409 there as a conflict, as before. The other PRs
@@ -66,14 +66,14 @@ index script (#476). No gateway change, no Hosting deploy, no app release.
 - **Staging.** Run 39948110403 (`semper-api-staging-39948110403-1`, 100 %), gateway dry run.
   On emulator-5586, the QC phone released on 2026-10-23 (`and-36439a0f18da2a33`), a debug
   build of `187f4870` signing in to the QC account was refused and showed the new message.
-- **Production.** Run 40063322039, approved by the required reviewer (TD-228):
+- **Production.** Run 40063322039, approved by the required reviewer (TD-198):
   `semper-api-40063322039-1` at 100 % after `/readyz` passed on the candidate; the gateway
   job found `v202610230501-112` already serving this spec and changed nothing.
 
 ## 2026-10-23 — semperdic-app's backend, gateways and console: #466–#468; its main green again
 
 The backend from `main` at `d79aa0c7` went live: staging first, then production with the
-required reviewer's approval (TD-228). That deploy carries #466, #467 and #468; the other
+required reviewer's approval (TD-198). That deploy carries #466, #467 and #468; the other
 PRs merged since `b940cc29` change no runtime backend code. Hosting followed with the
 console's per-phone **Release**. No Firestore index deploy, no app release.
 
@@ -86,20 +86,20 @@ console's per-phone **Release**. No Firestore index deploy, no app release.
   After the staging deploy, attempt 3 of run 39775004430 passed (register 201, round trip
   200s) and `CI OK` went green.
 - **Production.** Run 39900623312 (`semper-api-39900623312-1`, 100 %), with
-  `CHECK_REVOKED_ON_STEP_UP=true` live (TD-214; its acceptance check is still owed). The
+  `CHECK_REVOKED_ON_STEP_UP=true` live (TD-9; its acceptance check is still owed). The
   gateway diff against `v202610220502-104` added one path,
   `POST /v1/admin/test-accounts/{uid}/devices/{device_id}/release` (#468); config
   `v202610230501-112` now serves `semper-gw` and its outside check passed. An anonymous
   call to the new path answers 401 `Jwt is missing`; an undefined path answers 404. A
   second production dispatch of the same commit (run 39900805964) was cancelled.
 - **Live now:** a Firestore outage answers 503 `firestore_unreachable` with `Retry-After`
-  (#466, TD-250); new audit rows carry `expireAt` for one-year retention (#467, TD-237; the
-  TTL policy, the TD-246 backfill and the index deploy are still the operator's,
+  (#466, TD-38); new audit rows carry `expireAt` for one-year retention (#467, TD-199; the
+  TTL policy, the TD-34 backfill and the index deploy are still the operator's,
   [checklist](DEPLOY_CHECKLIST_2026-10.md) §6); staff can release one phone of a test
-  account (#468, TD-314).
+  account (#468, TD-249).
 - **Hosting.** `scripts/deploy-console.sh` from `main` at `d79aa0c7` put the operator desk's
   **Release** live (`console/operator/test-accounts.js`, 07:43 UTC). That deploy also
-  published #474's Privacy and Terms text, which waits on counsel (TD-277). At 07:51 UTC
+  published #474's Privacy and Terms text, which waits on counsel (TD-51). At 07:51 UTC
   the operator redeployed from a worktree at `d79aa0c7` with
   `firebase-hosting/public/{privacy,terms}/index.html` checked out from `b940cc29`; the live
   pages then matched `b940cc29` byte for byte, `test-accounts.js` still carried
@@ -107,7 +107,7 @@ console's per-phone **Release**. No Firestore index deploy, no app release.
   deployed the redesigned operator desk (#478) the same way, from `main` at `000575b0`
   with the two legal pages from `b940cc29`; the live console files and both legal pages
   matched that tree byte for byte, and `check_live_console.py` passed.
-- **TD-314 on staging** (QC test account, emulators): staff released
+- **TD-249 on staging** (QC test account, emulators): staff released
   `and-36439a0f18da2a33` in the console (audit `test_account_device_released`, 07:45:50 UTC);
   after **Refresh licence** that phone showed "Still on the demo" with backup and data
   management locked; its re-registration answered 409 `device_conflict`, audited
@@ -115,15 +115,15 @@ console's per-phone **Release**. No Firestore index deploy, no app release.
   (`and-100a171151b8fdb0`) registered once the CI rotation had freed its id. The app shows
   the generic "already linked to another account" message for a released phone.
 - **Audit retention in Firestore** ([checklist](DEPLOY_CHECKLIST_2026-10.md) §6). The
-  operator ran the TD-246 backfill (dry run, then `--apply`; it stamps `licenseId` and
+  operator ran the TD-34 backfill (dry run, then `--apply`; it stamps `licenseId` and
   `expireAt` on older rows, counts in `_migrations/td246_stamp_audit_licence_ids`; a dry-run
   rerun after it: 6145 rows, all with `expireAt`, 48 with `licenseId`, 6097 whose target
   names no licence, 0 without `ts`, 0 to stamp), then
   `scripts/deploy-firestore.sh indexes` with the pinned `firebase-tools@15.33.0` (#476): no
   "not present" line, and the only change was the `audit_logs.expireAt` TTL policy, then
-  `CREATING` (later `ACTIVE`). That closes TD-316. Then the `audit-trail` bucket (`asia-south1`, 365 days) and its sink on `jsonPayload.event="audit_row"` were created and the bucket locked on 2026-10-23: a staff licence
+  `CREATING` (later `ACTIVE`). That closes TD-250. Then the `audit-trail` bucket (`asia-south1`, 365 days) and its sink on `jsonPayload.event="audit_row"` were created and the bucket locked on 2026-10-23: a staff licence
   edit's row reached the bucket, and lowering its retention answered `FAILED_PRECONDITION`.
-  That closes TD-237. A new sink routes nothing for its first minutes: two rows from then
+  That closes TD-199. A new sink routes nothing for its first minutes: two rows from then
   (08:24:46 and 08:25:49 UTC) are only in `_Default` and Firestore.
 - **Merged the same days, nothing to deploy:** #472 (Current state condensed; the first
   `check_gcp_posture.sh` run, 18 FAIL, and the §5 monitoring dry run recorded) and #473 (the
@@ -131,10 +131,10 @@ console's per-phone **Release**. No Firestore index deploy, no app release.
 
 The Current state entry this deploy closes, as it stood:
 
-- **Backend on `main`, not deployed:** #466 (a Firestore outage answers 503, TD-250), #467
-  (one-year audit retention: `expireAt`, TTL, backfill; TD-237, TD-246) and #468 (staff
-  release one test-account phone, TD-314; a new gateway route). `CHECK_REVOKED_ON_STEP_UP`
-  is set and goes live with that deploy (TD-214).
+- **Backend on `main`, not deployed:** #466 (a Firestore outage answers 503, TD-38), #467
+  (one-year audit retention: `expireAt`, TTL, backfill; TD-199, TD-34) and #468 (staff
+  release one test-account phone, TD-249; a new gateway route). `CHECK_REVOKED_ON_STEP_UP`
+  is set and goes live with that deploy (TD-9).
 
 ## 2026-10-22 — semperdic-app's backend, gateways and Hosting: the readiness change, #457 and test accounts
 
@@ -145,10 +145,10 @@ and the after-deploy steps (§6) have not run yet.
 - **Before the backend.** The repo variable `TEST_ACCOUNT_DOMAINS` is
   `qa.sempermechanics.com`, so staff can make test accounts only on that subdomain
   ([ADR-027](../adr/ADR-027-test-accounts.md)). `indic-api@` holds
-  `roles/firebaseauth.admin` on `indicvision-dic-app-auth`, which is also the TD-214 grant.
+  `roles/firebaseauth.admin` on `indicvision-dic-app-auth`, which is also the TD-9 grant.
   The Cloud Scheduler API is on in `indicvision-dic-app`.
 - **Firestore indexes.** `scripts/deploy-firestore.sh indexes` failed before creating
-  anything (TD-316). The two missing composites, `audit_logs (licenseId ASC, ts DESC)`
+  anything (TD-250). The two missing composites, `audit_logs (licenseId ASC, ts DESC)`
   and `files (uid, sessionId)`, went in with `gcloud firestore indexes composite create`.
   The `seats.uid` and `deleted_seats.uid` collection-group overrides went in with a REST
   `PATCH …/collectionGroups/{seats,deleted_seats}/fields/uid?updateMask=indexConfig` that
@@ -174,17 +174,17 @@ The semperdic-app Current state entries this deploy closes, as they stood:
 
 - **Deployed.** Cloud Run `semper-api` behind API Gateway `semper-gw`, and staging
   `semper-api-staging` behind `semper-gw-staging`, from `c295639d` (2026-10-14; gateways
-  unchanged; Firestore deadlines #432, TD-210; backups by name #429).
+  unchanged; Firestore deadlines #432, TD-196; backups by name #429).
 - **Readiness change merged, not deployed** (#448, #449; `main` @ `763ed7a` with the
   docs-only #454–#456): the cross-check ([gate](PRODUCTION_READINESS_GATE.md#framework-cross-check-2026-10-18),
-  TD-214–TD-278, FI-17–FI-24), [ADR-023](../adr/ADR-023-signed-offline-entitlement.md),
+  TD-9–TD-52, TD-198–TD-218, FI-17–FI-24), [ADR-023](../adr/ADR-023-signed-offline-entitlement.md),
   **minSdk 30**, version gate, EMM config, IT roster tools, audit export, AAB, monitoring as
   code and account-anchored entitlements ([ADR-024](../adr/ADR-024-account-anchored-entitlements.md)).
   No release built from it. Owed at deploy, in [checklist](DEPLOY_CHECKLIST_2026-10.md)
-  order: indexes, backend, gateway, Hosting, monitoring; also TD-214, TD-215, TD-219, TD-226,
-  TD-229–TD-232, counsel on the Terms (TD-277).
+  order: indexes, backend, gateway, Hosting, monitoring; also TD-9, TD-10, TD-14, TD-21,
+  TD-23–TD-26, counsel on the Terms (TD-51).
 - **#457 merged, not deployed** (`main` @ `f5396c2`: the 2026-10-19 review and two tech-debt
-  rounds; closed TD-171, 198, 207, 281–293, 295–297, 306–308). Backend: device trust levels
+  rounds; closed TD-169, TD-186, TD-194, TD-221–TD-230, TD-232–TD-234, TD-242–TD-244). Backend: device trust levels
   (ADR-010 amendment), `step_up.py` and `services/`, a new-device mail, projected listings, a
   licence fan-out finished by a Cloud Task ([ADR-026](../adr/ADR-026-licence-fanout-marker.md)),
   `audit_logs` append-only in code and mirrored to Cloud Logging. App: uploads resume only on
@@ -192,8 +192,8 @@ The semperdic-app Current state entries this deploy closes, as they stood:
   work in ViewModels, retriever frames timed as decoded; CI checks file size, ADR-016 rule 1 and
   swallowed cancellation; [ADR-025](../adr/ADR-025-test-type-extension-points.md) proposed.
   At deploy ([checklist](DEPLOY_CHECKLIST_2026-10.md)): TOTP re-registration, C1/C2,
-  `NOTIFY_SECURITY_FROM` (TD-309), `TASKS_QUEUE` (TD-294), the audit bucket lock (TD-237).
-  Left: TD-237, TD-246, TD-294, TD-298, TD-299, TD-309.
+  `NOTIFY_SECURITY_FROM` (TD-245), `TASKS_QUEUE` (TD-231), the audit bucket lock (TD-199).
+  Left: TD-199, TD-34, TD-231, TD-235, TD-236, TD-245.
 - **Open: `ccr-603fe346-1bw2fa`**: staff test accounts for QC and CI
   ([ADR-027](../adr/ADR-027-test-accounts.md)); off until `TEST_ACCOUNT_DOMAINS` is set.
   [Note 2026-10-22: merged as #460 on 2026-10-20.]
@@ -235,7 +235,7 @@ closes, as it stood:
   [QUALITY_PROGRAM_RESULTS.md](QUALITY_PROGRAM_RESULTS.md)); security and data-loss
   fixes (#393–#400); the UI pass (#385–#396) and the minimal pass (#402–#419); tech-debt
   fixes (#404–#411, #425); unique analysis names (#426); device key recovery (#427; the
-  shared key slot stays open, TD-209); and the 2026-10-13/14 fixes #428, #429 (the app
+  shared key slot stays open, TD-7); and the 2026-10-13/14 fixes #428, #429 (the app
   sends the name), #430, #431, #433, #434 (backup schema `/4`) and #435 (exports drawn
   on the deformed frame), and #445 (engine `3e3a785`, 0.4.1: anchor-lattice seeding,
   incremental DIC, all 23 metrics slots through the JNI). Open: the pin to `23034fe` (0.4.2:
@@ -251,14 +251,14 @@ were not changed (no route or spec change since `v202610091239-93` /
 backend file.
 
 What changed for callers:
-- **Firestore call deadlines (#432, TD-197).** Every Firestore call in `backend/app`
+- **Firestore call deadlines (#432, TD-185).** Every Firestore call in `backend/app`
   goes through a helper in `repo/_base.py` with a timeout and a matching retry window:
   10 s for a get or a write, 20 s for a query, `.count()` or `get_all`, about twice
   that at worst, under the gateway's 60 s. Before, a hung call held a threadpool thread
   for minutes after the gateway had answered 504. A transaction's begin and commit take
-  no timeout in the client's public API and keep its 60 s default (TD-210);
+  no timeout in the client's public API and keep its 60 s default (TD-196);
   [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §10.1.
-- **Backup names (#429, TD-208).** `POST /v1/sessions` takes an optional `name`, the
+- **Backup names (#429, TD-195).** `POST /v1/sessions` takes an optional `name`, the
   listing returns it, and a metadata PUT with a non-blank `name` renames the session.
   The app lists `name` and falls back to `specimen` (the reference's file name) when it
   is empty. Backups made before this deploy, or by a build without #429 (every
@@ -269,24 +269,24 @@ What changed for callers:
 
 Merged 2026-10-13/14, not part of the backend image, for the next app release
 ([TECH_DEBT.md](TECH_DEBT.md) rows deleted in each):
-- #428 (TD-153): reconcile asks `?app=all` once when a SYNCED row is missing from its
+- #428 (TD-152): reconcile asks `?app=all` once when a SYNCED row is missing from its
   own list, so an analysis restored from the other app's backup stays SYNCED instead of
   uploading again ([ADR-014](../adr/ADR-014-session-app-tag.md)).
 - #429's app half: backups send the analysis's name; lists show it.
-- #430 (TD-173): a run's reference and frames are frozen at launch (`RunInputs`), so the
+- #430 (TD-171): a run's reference and frames are frozen at launch (`RunInputs`), so the
   batch loop and the sweep no longer read mutable view-model fields
   ([ADR-004](../adr/ADR-004-runspec.md)).
-- #431 (TD-154, TD-207 narrowed): video frames keep the decoded frame's own clip time on
+- #431 (TD-153, TD-194 narrowed): video frames keep the decoded frame's own clip time on
   the hardware and AVI rungs, and Key frames mode works on every rung. The retriever
-  rung still records the time asked for (TD-207).
-- #433 (TD-170): dispatchers are injected per instance; no mutable companion dispatcher
+  rung still records the time asked for (TD-194).
+- #433 (TD-168): dispatchers are injected per instance; no mutable companion dispatcher
   is left in main code.
-- #434 (TD-163, TD-164, TD-169): `Session.zip` stages the reference as
+- #434 (TD-161, TD-162, TD-167): `Session.zip` stages the reference as
   `ref/Reference.png` (upload schema `/3` → `/4`); unrecorded skip codes stay null;
   the 15 px strain window for records without one is kept on purpose. An app older than
   `/4` restores a `/4` backup without its reference, so material_testing must take the
   reader before the writer at its next sync.
-- #435 (TD-139): the PNG export, the PDF report and the summary GIF draw each frame on
+- #435 (TD-141): the PNG export, the PDF report and the summary GIF draw each frame on
   its own photo at the displaced positions, as the viewer does
   ([ADR-011](../adr/ADR-011-viewer-deformed-frame.md)). The GIF goldens were regenerated;
   `field_small.dat` is unchanged. Its Pixel 6 benchmarks are owed.
@@ -299,11 +299,11 @@ Staging run 38032218283 and production run 38032569176 from `a462755f` (`main` a
 since such a build reports the device id of the app that succeeded it on the same
 phone and would replace that app's key. The app half of #427 (a signed call refused
 `bad_signature` registers the key again and is re-sent once, `DeviceKeyRecovery`) waits
-for the next app release. Two apps signed with one key still share a key slot (TD-209).
+for the next app release. Two apps signed with one key still share a key slot (TD-7).
 
 ## 2026-10-10 — The first Firestore restore drill passed; backend redeploy from `bd1246c3`
 
-**Restore drill (TD-156, #404, #411, #422).** No export had ever been restored.
+**Restore drill (TD-155, #404, #411, #422).** No export had ever been restored.
 - The operator ran `scripts/setup-restore-drill.sh` on 2026-10-09. It created the
   drill project `indicvision-dic-restore-drill`, its asia-south1 database, the
   `restore-drill@` identity (Firestore owner on the drill project only, reached
@@ -334,16 +334,16 @@ operator, `gateway_mode: apply`. Both smokes passed (`/readyz`, `firestore: ok`)
 
 What changed for callers (#409):
 - **Access log:** every line names the app id the call sent (`appId`: a listed id,
-  `none` or `unknown`; TD-176 step 1).
+  `none` or `unknown`; TD-174 step 1).
 - **Log lines:** on Cloud Run each is one JSON object with a `severity`, so Cloud
   Logging stores `jsonPayload` and the documented `jsonPayload.*` filters and alerts
   can match. Lines from before this deploy stay `textPayload`.
 - **`/v1/config`:** sends `licensePrefix` only while the licence is the effective mode
-  (TD-145). `/v1/me` is unchanged.
+  (TD-146). `/v1/me` is unchanged.
 - **Gateway:** `page_size` and `page_token` are declared on `/uploads` and `/files`
-  (TD-159).
+  (TD-157).
 - **Refusals:** `license_revoked` is 403 and `license_seat_disabled` 409 on every route
-  (TD-185, [ADR-020](../adr/ADR-020-backend-refusal-model.md)).
+  (TD-179, [ADR-020](../adr/ADR-020-backend-refusal-model.md)).
 
 Checked on 2026-10-10: production access lines carry `appId`
 (`com.sempermechanics.semper` and `com.sempermechanics.materialtesting` seen; no
@@ -357,12 +357,12 @@ operator, `gateway_mode: apply`. Both smokes passed; `semper-api-37923748503-1` 
 (production).
 
 What changed for callers:
-- **`GET /v1/me/erasure`** (TD-206): whether this phone's device record is gone or
+- **`GET /v1/me/erasure`** (TD-193): whether this phone's device record is gone or
   someone else's, for the app's check after an account deletion that never answered.
   It reads the ID token alone (`deps.token_uid`), so asking does not re-create an
   erased account's profile. Answers 401 without a token through the gateway.
 - Also in this build, tests only: real Firebase ID tokens verified end to end
-  (TD-201), the ops scripts' tests (TD-202), the account-deletion probe pins (TD-165).
+  (TD-189), the ops scripts' tests (TD-190), the account-deletion probe pins (TD-163).
 
 ## 2026-10-08 — Backend deploys with `gateway_mode: apply`: both gateways' configs re-encoded
 
@@ -428,7 +428,7 @@ started by the operator:
 - The dry-run against `v202610070628-manual` showed the same 29 encoding-only lines,
   so `semper-gw` is unchanged.
 
-## 2026-10-08 — Hosting deploy: the default CSP runs no inline script (#377, TD-204)
+## 2026-10-08 — Hosting deploy: the default CSP runs no inline script (#377, TD-192)
 
 #377 (`05f71c58`) was deployed with `scripts/deploy-console.sh` and the live check
 passed. The default `**` policy is now `script-src 'self'` (it allowed
@@ -462,7 +462,7 @@ Five stacked PRs from the test review, merged in order once each `CI OK` was gre
 
 Floors after #371: app lines 72 / branches 54 (74.50 / 56.41 %, Activities now
 counted), backend 93 (95.47 %; 95.54 % with the emulator tier), console lines 53
-(55.32 %, counted per page load: TD-203). TD-199–TD-204 hold the gaps left open.
+(55.32 %, counted per page load: TD-191). TD-187–TD-192 hold the gaps left open.
 
 #371 (`f0a5e367`) was deployed with `scripts/deploy-console.sh` and the live check
 passed: the live `console/roster.js` takes the path before asking, and
@@ -654,16 +654,16 @@ recorded. What the hand deploy skipped:
 
 What changed for callers (#344):
 - **Errors:** every refusal comes from one table, with the same codes and statuses as
-  before ([ADR-020](../adr/ADR-020-backend-refusal-model.md); TD-185 keeps two
+  before ([ADR-020](../adr/ADR-020-backend-refusal-model.md); TD-179 keeps two
   route-specific statuses).
 - **Staff roster routes:** Semper staff have their own under
   `/v1/admin/licenses/{id}/seats` and `…/invites/{key}`. The seat listing on both
   tiers is paged with `page_size` and `page_token`.
 - **Request size:** a body over 4 MiB answers `413 request_too_large`.
 - **Account export:** `GET /v1/me/export` reads the account's files as one stream
-  (TD-195).
+  (TD-183).
 - **Consoles:** they read refusal codes rather than messages. The operator desk's
-  roster works for staff (TD-191), and the institution page offers its licences as a
+  roster works for staff (TD-182), and the institution page offers its licences as a
   picker.
 
 ## 2026-10-05 — Backend deploy: the new app ids (#333)
@@ -693,7 +693,7 @@ the same day.
 
 ## 2026-10-01 — material_testing: synced with semperdic-app `dc13351`
 
-A plain merge of the parent's #309, which records TD-65's arm64 check in its register
+A plain merge of the parent's #309, which records TD-93's arm64 check in its register
 (a Pixel 6 repeat solve, bit-identical on nine solves). This register already had it
 from #119, so ours was kept.
 
@@ -701,10 +701,10 @@ from #119, so ours was kept.
 
 A plain merge of the parent's #306–#308. Nothing changes here at run time:
 
-- **#307 and #308** took this repo's `RoiEditorGestureTest` (the TD-146 CI fixes) and
+- **#307 and #308** took this repo's `RoiEditorGestureTest` (the TD-147 CI fixes) and
   `SessionMetadataSync` KDoc, so both files merge as identical blobs.
 - **#306:** the restore drill fails early, naming missing variables, and
-  `FIRESTORE_DATA_PROTECTION.md` has the drill project's setup (its TD-156: no export has
+  `FIRESTORE_DATA_PROTECTION.md` has the drill project's setup (its TD-155: no export has
   been restored yet). The drill runs only in semperdic-app.
 
 ## 2026-10-01 — material_testing: synced with semperdic-app `5dc4522`
@@ -713,7 +713,7 @@ A plain merge of the parent's #297–#305. Most of it was ported from here, so i
 lands as this repo's own code; what changes here:
 
 - **CI and release (#297):** the CI APK is versionCode 1 and releases are 1000 +
-  run number (TD-148 fixed); `deploy-backend`, `firestore-backup` and
+  run number (TD-149 fixed); `deploy-backend`, `firestore-backup` and
   `firestore-restore-drill` run only in semperdic-app, so the daily backup no
   longer fails here; the parent's `docs/ops/FORK_SYNC.md` holds the sync rules.
 - **Metadata re-send (#300):** a rename marks a backed-up session stale too.
@@ -725,7 +725,7 @@ lands as this repo's own code; what changes here:
   references.
 - **Backups tagged by app (#303, ADR-014, deployed):** this app now lists only its
   own cloud backups; the 7 sessions it made were tagged `materialtesting`.
-- Kept this repo's side: the ROI e2e test (its TD-146 CI fixes are newer), the
+- Kept this repo's side: the ROI e2e test (its TD-147 CI fixes are newer), the
   wizard's step-1 IME pad and `BeamEdgeTapActivity`, the plot readout, the
   viewer's lab fields, CONTEXT, TECH_DEBT and the manual.
 
@@ -733,13 +733,13 @@ lands as this repo's own code; what changes here:
 
 A plain merge of the parent's #288–#296. Code that changes here: the engine
 moves to v0.2.3 (#296, [semper-dic-engine#4](https://github.com/sempermechanics/semper-dic-engine/pull/4)),
-whose Path B flood fill is deterministic (TD-65), with
+whose Path B flood fill is deterministic (TD-93), with
 `EnginePipelineSmokeTest.repeatSolve_bitIdentical`; the Dependabot bumps (#289
 Python base image, #290 backend deps and lock, #291 Gradle 9.8.0 and libraries,
 #292 `setup-gradle`); and `gradlew.bat`'s line endings renormalized (#295). #288's route
 and tests were already here byte for byte. ADR-013, its index row, C21 and the
 architecture paragraph keep this repo's text, which also covers the tensile
-curve correction (TD-152).
+curve correction (TD-151).
 
 ## 2026-10-01 — Backend and console deploy: cloud sessions tagged by app (#303)
 
@@ -823,7 +823,7 @@ A plain merge of the parent's #274, #276, #277 and #281–#287. The only code
 that changes here is the console's #276 (Edit on a Demo key opens Issue licence).
 #277's full-range video luma and #286's 500-frame ceiling were already here
 byte for byte (#81, #104); #286 is deployed, so `/config` now serves
-`maxFrames: 500` to both apps. TD-145 comes in as the parent's row. TD-134 keeps
+`maxFrames: 500` to both apps. TD-146 comes in as the parent's row. TD-137 keeps
 this repo's text, and the parent's note on which TD rows live here is left out.
 
 ## 2026-09-30 — Backend deploy: frame ceiling 500 (#286)
@@ -843,12 +843,12 @@ in its env, so the new default is what `/config` serves.
   per file (3F+4) and gets a 413 past ~198 frames. Same change as
   material_testing#104.
 
-## 2026-09-29 — material_testing: a pan pushed against an edge stays on it (TD-146)
+## 2026-09-29 — material_testing: a pan pushed against an edge stays on it (TD-147)
 
 `e2e/RoiEditorGestureTest`'s far pan failed about one CI run in seven with the
 photo 4.5–5 px off the canvas edge. A probe that ran the pan 25 times caught 12
 misses: a sweep put the photo on the edge, and the next sweep, pushing further,
-left it a few px off. TD-142's lift correction moved the photo back by however
+left it a few px off. TD-144's lift correction moved the photo back by however
 far the last MOVE had run past the fingers, but against an edge the clamp had
 already stopped that overshoot. `RoiViewport` now keeps the travel an edge
 stopped as slack and `settleBy` gives it back first. With the fix the probe
@@ -859,13 +859,13 @@ landed all 25 on the edge. `RoiViewportTest` and `StudioOverlayViewTest` cover i
 Built by `release.yml` from `main` at `528afdfc` (beta channel, versionCode 4,
 release key). It adds the 0.2% offset yield strength Rp0.2 to the tensile curve,
 the viewer and both PDFs (#100), and a peak stress taken over every frame with a
-load, named when it falls off the curve (#99, TD-147). The steel check under
-ΔL / L₀ is in #99 (TD-144). On the Pixel 6 it went on with `adb install -r` over
+load, named when it falls off the curve (#99, TD-148). The steel check under
+ΔL / L₀ is in #99 (TD-145). On the Pixel 6 it went on with `adb install -r` over
 v1.2-beta.2, same key: still signed in and licensed, local analyses kept.
 
 It was cut rather than installing `main`'s CI APK, which is signed with the same
 key but numbered by `ci.yml`'s run counter (257 here). That would have installed
-over beta.2 and then refused every later release until uninstalled (TD-148).
+over beta.2 and then refused every later release until uninstalled (TD-149).
 
 ## 2026-09-29 — material_testing: released as v1.2-beta.2
 
@@ -885,7 +885,7 @@ The release notes now tell testers to reset first; semperdic-app#285 records it
 in ADR-010. The release build's App Check attestation fails (403); production runs
 `APP_CHECK_MODE=off`, so nothing is refused.
 
-## 2026-09-29 — material_testing: a ROI-editor pan stops where the fingers lift (TD-142)
+## 2026-09-29 — material_testing: a ROI-editor pan stops where the fingers lift (TD-144)
 
 Tier 3 had been red on `main` since #86 added `e2e/RoiEditorGestureTest`: on the
 CI emulator a 200 px two-finger pan moved the photo 204 px. The overlay moved
@@ -896,7 +896,7 @@ follows the fingers to where the lift event says they are
 the pan fixed, the same e2e test reached its last swipe, which started 300 px
 left of the centre: off-screen on CI's 320 px emulator. It now sweeps inside
 the canvas. That last check still sometimes stops the photo 4.7 px short of
-the canvas edge on CI (TD-146).
+the canvas edge on CI (TD-147).
 
 ## 2026-09-28 — material_testing: synced with semperdic-app `ed0adbc`, one phone per app
 
@@ -904,19 +904,19 @@ A plain merge of the parent's #273, #278, #279 and #280. #280 adds
 `data/net/AppIdHeader.kt`: every API call sends `X-App-Id`, the build's
 `applicationId`, and the backend (deployed 2026-09-28, `semper-api-36419849032-1`)
 keeps one registered device, lock and cooldown per app
-([ADR-010](../adr/ADR-010-device-binding-per-app.md), TD-138). #279 serves a
-lock mismatch as Demo for that request only (TD-137). The next Material Testing
+([ADR-010](../adr/ADR-010-device-binding-per-app.md), TD-140). #279 serves a
+lock mismatch as Demo for that request only (TD-139). The next Material Testing
 build signs in on a phone that has Semper; `v1.2-beta.1` still reads as Semper.
 
-The parent's ADR-010 and TD-137 took numbers this repo had used, so the viewer's
-deformed-frame decision is now ADR-011 and its open row TD-139; #88's keyboard
-row, recorded as TD-138, is TD-140. The ADR index
+The parent's ADR-010 and TD-139 took numbers this repo had used, so the viewer's
+deformed-frame decision is now ADR-011 and its open row TD-141; #88's keyboard
+row, recorded as TD-140, is TD-142. The ADR index
 note that the parent wrote with a literal backslash-n is fixed here.
 
 ## 2026-09-28 — material_testing: its own app, released as v1.2-beta.1 (#82)
 
 Material Testing installs as `com.indicvision.semper.materialtesting` beside
-Semper instead of replacing it (TD-133,
+Semper instead of replacing it (TD-136,
 [ADR-009](../adr/ADR-009-material-testing-app-identity.md)). It has its own
 release key and Firebase Android app, and uses Semper's Firebase project,
 accounts and backend. `v1.2-beta.1` is a public pre-release from `2d28c3fc`.
@@ -940,7 +940,7 @@ inverse-bilinear interpolation, in the reference render's colour range. Probe
 taps find the moved point, and a frame with no photo on disk falls back to the
 reference. `generateHeatmapIndices` is unchanged, so the GIF bytes stay pinned.
 The summary GIF, the PNG export and the report still draw on the reference
-(TD-139; recorded as TD-137 until the parent's ADR-010 and TD-137/138 arrived in
+(TD-141; recorded as TD-139 until the parent's ADR-010 and TD-139/TD-140 arrived in
 the 2026-09-28 sync).
 
 Checked on an emulator with the PMMA bending set: frame 4 shows pmma_33 with
@@ -965,8 +965,8 @@ while the frame field has focus.
 
 Checked on API 34 and API 36 emulators, then on a Pixel 6 (Android 17) at
 `e90b23ba`. The ROI kept its image pixels through eight keyboard cycles, and a
-typed frame 20 opened 20/33 (TD-99). The same Pixel 6 session ran
-[WORKFLOWS.md](../app/WORKFLOWS.md) §5.1a with synthetic clips and found TD-134.
+typed frame 20 opened 20/33 (TD-117). The same Pixel 6 session ran
+[WORKFLOWS.md](../app/WORKFLOWS.md) §5.1a with synthetic clips and found TD-137.
 
 ## 2026-09-26 — material_testing: detail moved out of Current state
 
@@ -974,14 +974,14 @@ Current state was trimmed to its guideline length (#72). These lines had
 no other home, as they stood in CONTEXT.md:
 
 - Sync: the last parent merge is `cd7d5db` (parent #251–#258: no "upload
-  pending" with no upload coming, TD-127 fixed, licence-desk and console fixes,
-  the gateway job for staging; #248–#250 device change, TD-122–TD-132). General
-  fixes made here that went back: TD-76, TD-77, TD-79, TD-80, TD-82–TD-85, the
-  ranges write-back TD-88 as parent #217, and the four in semperdic-app#189.
+  pending" with no upload coming, TD-132 fixed, licence-desk and console fixes,
+  the gateway job for staging; #248–#250 device change, TD-129–TD-135). General
+  fixes made here that went back: TD-99, TD-100, TD-101, TD-102, TD-104–TD-105, the
+  ranges write-back TD-108 as parent #217, and the four in semperdic-app#189.
 - Phone checks: 2D DIC (#46) and the load card's ⓘ and **Beam height → Set**
   (#48), [WORKFLOWS.md](../app/WORKFLOWS.md) §3b.1–3b.3 and 3b.8–3b.9, pass on a
   Pixel 6 (Android 17, 2026-09-26); **Set** before a thickness now fits its
-  toast (TD-98).
+  toast (TD-116).
 - Lab end to end: on the Galaxy S21+ (Android 15) the Tier 3 lab tests pass 9/9
   at `db75267` (after #46–#50); `VideoFrameExtractionDeviceTest` passes 6/6
   there (2026-09-25, and 2026-09-26 on a build another session installed).
@@ -997,7 +997,7 @@ merges of #55, #58 and #60–#66. `cancel-in-progress` is now true only for
 of merges runs the one in flight and the newest. Checked on `main` the same
 day: #67's own merge left #68's run (`4633332a`) to finish, and it and the runs
 for #67, #69 and #70 all passed, Tier 3 and Tier 5 included. [CI.md](CI.md)
-describes it (TD-97).
+describes it (TD-115).
 
 ## 2026-09-26 — material_testing: CI path filters honour their excludes (#63)
 
@@ -1012,20 +1012,20 @@ pattern excludes it. The other six filters have no `!` pattern and match as
 before, and "CI OK" already takes a skipped Tier 1. On #63's own run the log
 read `Filter app = false` (Tier 1 still ran there, as any edit to `ci.yml`
 turns on the app and backend tiers). [CI.md](CI.md) describes the filters
-(TD-96).
+(TD-114).
 
 ## 2026-09-26 — material_testing: bending graph axes, full tick labels and the slope line over measured δ (#55)
 
 Merged as `9ea9a6f8`. On a Pixel 6 the Results graph for `concrete_00` read
 its load ticks as "1686 / 4771 / 7855 / 940 / 5975": the compact plots' left
 gutter was a fixed 34 dp, so any tick wider than about four characters lost
-its leading digits and sign off the view's edge (TD-93). `VsgPlotView.compactLeftPad`
+its leading digits and sign off the view's edge (TD-112). `VsgPlotView.compactLeftPad`
 now sizes it to the widest formatted tick, 34 dp at least; every compact plot
 (Results, the viewer settings sheet, the VSG lattice) gets it. The muted slope
 line was drawn from δ = 0, so its free intercept pulled the load axis down to
 about -3.7 kN. `BeamDeflection.Summary.slopeLine` now runs it from the first
 measured δ to the last over the load steps it was fitted to, in the viewer and
-the lab-report PDF alike (TD-94). The graph no longer shows where the fit meets
+the lab-report PDF alike (TD-113). The graph no longer shows where the fit meets
 δ = 0. Checked on the Pixel 6 with a debug build of `9b326883`: `concrete_00`
 reads 21360 / 15625 / 9889 / 4153 / -1582 N in full, the slope line spans
 0.951 → 1.631 mm (the two load steps), and E is unchanged at 2.48 / 1.90 GPa.
@@ -1046,7 +1046,7 @@ both curves are built (`StressStrain.build` and the CSV appender). Curves are
 rebuilt from `.dat` and the saved taps on every open, so saved sessions read
 right with no migration. The taps stay stored as tapped, so the CSV's
 `# load_point_top_px` can name the lower edge; nothing computes from it
-(TD-92). Checked on the Pixel 6 with the fixed debug build: `pmma_00`
+(TD-111). Checked on the Pixel 6 with the fixed debug build: `pmma_00`
 (reversed taps) now reads +2.02 / +2.12 GPa, graph 0 → +1.4 mm, and
 `concrete_00` (taps in order) is unchanged at 2.48 / 1.90 GPa. Ships with the
 next app release.
@@ -1072,9 +1072,9 @@ image `semper-api-36419849032-1`; the previous revision `semper-api-00029-z72`
 is pinned as `rollback-prev`). The gateway ran as dry-run: its spec did not
 change. `/readyz` passed on the candidate before the promote.
 
-- #279 (TD-137): a device-lock mismatch is Demo for that request only; it is
+- #279 (TD-139): a device-lock mismatch is Demo for that request only; it is
   no longer stored on the account.
-- #280 (TD-138, [ADR-010](../adr/ADR-010-device-binding-per-app.md)): each app
+- #280 (TD-140, [ADR-010](../adr/ADR-010-device-binding-per-app.md)): each app
   names itself with `X-App-Id` and has its own registered device, release hold,
   lock and cooldown. A request without the header is Semper, so builds in the
   field are unchanged.
@@ -1104,23 +1104,23 @@ Share, PDF, Delete everywhere, Restore and the backups card need a licensed acco
 and were not smoked. The Current state entries this release closes, as they stood:
 
 - **App release `v1.2-beta.2`** (beta, private GitHub Release, from `fab33cb`): the
-  burn-down's app half, #180's strain window in data points, engine `v0.2.2`, #182 (TD-66).
+  burn-down's app half, #180's strain window in data points, engine `v0.2.2`, #182 (TD-94).
 - **Merged, awaiting release:** #189, four fixes ported from material_testing
   (`SubsetRecommender` reads speckle inside the ROI from textured patches only,
   `VsgPlotView` y gutter, `TouchImageView` zoom across a resize, `AviReader` µs slack);
   #197, `settingsScroll` skips the licence-only settings headers and
   `scripts/ci_test_report.py` puts failing device tests and benchmark numbers in the CI log;
-  #203 (TD-81), Compute comes back after a single run fails outright, and a first frame
+  #203 (TD-103), Compute comes back after a single run fails outright, and a first frame
   that kept no points says why (the strain window with the run's VSG and step, nothing
   correlated, or an unreadable frame).
 - **Measured optimisation (2026-09-25, all six passes done).** Passes 1–2 (#191, #206) take
   an app open from 12 to 3 requests on the Pixel 6 and ship with the next app build; Pass 4
   (#202) is deployed; Passes 3, 5 and 6 measured nothing worth changing
   ([perf/request-volume.md](../perf/request-volume.md), [CHANGELOG](CHANGELOG.md)).
-- **Benchmarks in CI.** `HotPathMicroBenchmark` runs (#200, TD-86: debug-only permission,
-  `am instrument`); the scrub seeder writes the ranges sidecar (#208, TD-87: 150-frame heap
-  161 → 21 MB); #214 reuses one frame buffer, #217 (TD-88) saves the sidecar after a full
-  decode. #229/#230 (TD-90): no API URL now reads as offline instead of crashing on open.
+- **Benchmarks in CI.** `HotPathMicroBenchmark` runs (#200, TD-106: debug-only permission,
+  `am instrument`); the scrub seeder writes the ranges sidecar (#208, TD-107: 150-frame heap
+  161 → 21 MB); #214 reuses one frame buffer, #217 (TD-108) saves the sidecar after a full
+  decode. #229/#230 (TD-109): no API URL now reads as offline instead of crashing on open.
 - **Wrong-information audit, app half (merged, awaiting release):** #211 (enforce a known
   licensed ceiling), #212 (PDF page cover image and name, mixed bulk-delete prompt, sweep
   export header, per-node sweep reasons, restored skip count), #218 (licence countdown, backup
@@ -1139,7 +1139,7 @@ and were not smoked. The Current state entries this release closes, as they stoo
   Pixel 6, 2026-09-26: its 8 waiting analyses backed up on their own after sign-in.
 - **`v1.2-beta.2` shows "1 / 1 analyses used"** after a user's first analysis, whatever
   the cap: its plural's "one" form is a hard-coded "1 / 1", so a licensed account (cap 999)
-  looks capped at 1. TD-82's fix (`b9c218da`) is on `main`, so the next release carries it.
+  looks capped at 1. TD-104's fix (`b9c218da`) is on `main`, so the next release carries it.
   The backend floor for a licensed cap (#211) is deployed; the app half ships with that release.
 
 ## 2026-09-26 — Backend, gateway and console deploy: compat shims 1–5 retired (#267), account status line (#271)
@@ -1157,7 +1157,7 @@ on `/v1/campus/licenses/x/seats` and 401 on `/v1/institutions/licenses/x/seats`.
 and `semper-api-staging-00028-ndp`; the GitHub variable stays until no pre-#267
 commit can be redeployed. The console went out with `scripts/deploy-console.sh`.
 
-- #267 (TD-45, shims 1–5 of CLOUD_ARCHITECTURE_GCP §20.5): `PRO_MAX_SESSIONS_PER_USER`
+- #267 (TD-4, shims 1–5 of CLOUD_ARCHITECTURE_GCP §20.5): `PRO_MAX_SESSIONS_PER_USER`
   is no longer read; `GET /v1/sessions/{sid}/uploads` always requires an attested
   device; admin mint refuses `kind="campus"` and the user-config patch refuses
   `plan` (422); the `/v1/campus/*` seat aliases are gone from FastAPI and the
@@ -1165,10 +1165,10 @@ commit can be redeployed. The console went out with `scripts/deploy-console.sh`.
   old variable; 30 days of logs (back to 2026-09-07, old `indic-api` included)
   had no `legacy_unattested_uploads`, 73 `/uploads` reads with none refused, no
   `/v1/campus` request and no user-config PATCH. Shims 6–9 wait on the app fleet.
-- #268 and #270 (TD-22): 156 behavioural tests for `auth.js`, `router.js` and the
+- #268 and #270 (TD-63): 156 behavioural tests for `auth.js`, `router.js` and the
   operator, account and institution pages, run by `node --test` against a fake
   Firebase and a parsed DOM; no deploy needed.
-- #271 (TD-136 here; the parent recorded it as TD-134, which is a lab row in this repo; found by #270): the account page keeps "Could not read your
+- #271 (TD-138 here; the parent recorded it as TD-137, which is a lab row in this repo; found by #270): the account page keeps "Could not read your
   account" when the analyses answer second instead of clearing it.
 
 ## 2026-09-26 — Backend, gateway and console deploy: Demo phone change through staff (#266, with #264)
@@ -1181,7 +1181,7 @@ smoke passed on both. Each gateway diff added only `/v1/admin/device-releases`. 
 outside with no token, that route answers 401 on both gateways. The console went out
 afterwards with `scripts/deploy-console.sh` against `semper-gw`.
 
-- #266 closes TD-126, on the decision that a Demo account may change phone like any other
+- #266 closes TD-131, on the decision that a Demo account may change phone like any other
   account, on request to operators, never self-service. `POST /v1/admin/device-releases`
   `{"email": …}` (`ADMIN_STEPUP`) makes the release a lock clear makes: the old device
   `SUPERSEDED`, its id held off for `DEVICE_RELEASE_HOLD_HOURS`, audited as
@@ -1224,12 +1224,12 @@ dry-runs found the live config already serving the spec (`v202609260428` on stag
 `scripts/deploy-console.sh` against `semper-gw`; the live `operator.js` has the new
 device-history line.
 
-- #261 closes TD-128 to TD-132. A device-lock clear reads the holder once and writes the
+- #261 closes TD-133 to TD-135. A device-lock clear reads the holder once and writes the
   mode, the release and `updatedAt` in one batch (`_settle_holder`), and its audit detail
   names `releasedDeviceId` (the registered phone signed out) beside `previousDeviceId`
   (the lock's). The console's device history prints `signed out <id>` when they differ.
   One `_retire_device` helper replaces three copies.
-- #263 closes TD-122 to TD-125. After the promote, `deploy-backend.yml` tags `serving` on
+- #263 closes TD-129 to TD-130. After the promote, `deploy-backend.yml` tags `serving` on
   the promoted image and `rollback-prev` on the one it replaced, and `keep-serving` also
   keeps `serving`. The updated cleanup policy was applied by hand beforehand
   (`--no-dry-run`, still enforcing).
@@ -1249,7 +1249,7 @@ from `f04be71a` → `semper-api-staging-36226047617-1`; production run 362273581
 The candidate `/readyz` smoke passed on both, and the dry-run found that `v202609260522-60`
 already serves the spec, so the gateway was not touched.
 
-- Closes TD-127. `_release_holder_device` (#248) checked only that the holder was still on
+- Closes TD-132. `_release_holder_device` (#248) checked only that the holder was still on
   the licence, so **New device** on a held or revoked seat, or a revoked licence, freed the
   phone of a holder already on Demo, who could then register a different one. The release
   and `_restore_holder_mode` now share one guard, `_live_holder`: nothing is released or
@@ -1288,13 +1288,13 @@ is not set on the service, so the 24-hour default applies.
   old `devices/{id}` as `SUPERSEDED` (`_release_holder_device`). Before it, registration
   refused every new phone with `409 device_conflict`, so a cleared lock never reached the new
   phone (found 2026-09-26 on an emulator). A demo account has no licence to clear, so it still
-  cannot change phone (TD-126).
+  cannot change phone (TD-131).
 - #249: the released phone is held off for 24 hours. Every signed call from it reads
   `device_not_active`, and the app's upload worker answers that by re-registering, which took
   the account straight back. The clear stamps `releasedDeviceId` / `releasedAt`, and
   registration refuses that id with `409 device_conflict` until another device registers or
   the hold runs out. Installed builds read that 409 as "bound to a different device". Found
-  reviewing #248; its other findings are TD-127 to TD-132.
+  reviewing #248; its other findings are TD-132 to TD-135.
 
 ## 2026-09-26 — Firestore TTL policies declared as field overrides (#242)
 
@@ -1451,7 +1451,7 @@ serves it against the production gateway.
 The audit's app half (#211's ceiling, #212, #218, #219, #220, #223, #225) ships
 with the next app release.
 
-## 2026-09-25 — Backend deploy: inline create reads (#202), deployer IAM (TD-71)
+## 2026-09-25 — Backend deploy: inline create reads (#202), deployer IAM (TD-97)
 
 Production `semper-api-36096112375-1` from `300fb7f` (staging first, run
 36095277741 → `semper-api-staging-36095277741-1`; production run 36096112375).
@@ -1464,7 +1464,7 @@ Candidate smoke passed on both; the gateway dry-run found the live config
   cost ([perf/request-volume.md](../perf/request-volume.md) Pass 4). Production
   latency after the deploy: median 2487 ms over 10 uploads (was 3158 ms, n = 9), so
   no rise.
-- TD-71: every deploy failed after the clean-up with `403 … storage.buckets.list`,
+- TD-97: every deploy failed after the clean-up with `403 … storage.buckets.list`,
   because a source deploy lists the project's buckets to find `run-sources-*`.
   `indic-deployer` now also holds `roles/storage.bucketViewer` (buckets get/list,
   no object access); both deploys ran on the narrowed roles.
@@ -1781,7 +1781,7 @@ override on the card.
 
 ## 2026-09-24 — Deny-all Firestore rules deployed (#185)
 
-#185 (TD-70) replaced Hosting's undeployable `firestore` block with
+#185 (TD-96) replaced Hosting's undeployable `firestore` block with
 `scripts/deploy-firestore.sh`; the deny-all `firestore.rules` then went to
 `indicvision-dic-app`. Anonymous REST reads and a create answer
 `403 PERMISSION_DENIED`; the Auth project has no Firestore database.
@@ -1790,7 +1790,7 @@ override on the card.
 
 `v1.2-beta.2` (beta channel, private GitHub Release) from `fab33cb`, main CI
 green through Tier 3 and Tier 5: `v1.2-beta.1` plus #182, which keeps the
-upload CSV's `#` field-stats rows above the point section (TD-66).
+upload CSV's `#` field-stats rows above the point section (TD-94).
 
 ## 2026-09-24 — Backend deploy, first CI gateway apply (#173, #179, #182, #183)
 
@@ -1800,9 +1800,9 @@ google-cloud-firestore 2.31.0, uvicorn 0.53.0) and #179 (`python:3.12-slim`
 digest `2f17fc0`). After the owner's IAM grant, ADR-006's `gateway` job ran for
 the first time: a dry-run failed decoding the live document (`base64: invalid
 input`), fixed by #183; the next dry-run's diff was a comment and the removed
-`/v1/campus` invite-revoke alias (TD-45); `apply` (run 35992296245) switched
+`/v1/campus` invite-revoke alias (TD-4); `apply` (run 35992296245) switched
 `semper-gw` from `v202609230845` to `v202609241122-44` and passed its
-401/preflight checks. TD-27 closed. #182 (TD-66: the upload CSV's stats rows
+401/preflight checks. TD-68 closed. #182 (TD-94: the upload CSV's stats rows
 stay above the point section) merged as `5c4fe19`; app-only, so it ships with
 the release after `v1.2-beta.1`.
 
@@ -1833,7 +1833,7 @@ traffic. The app half (`RunSpec`, `ViewerArgs`, wizard draft, `CloudApi` seam,
 checked PDF write) waits for the next release. The same production run was
 ADR-006's first `gateway` run, `dry-run`: it stopped at the diff step with
 `apigateway.apis.get` denied, before the owner's IAM grant. The live gateway
-config therefore still routes the removed campus invite-revoke alias (TD-45),
+config therefore still routes the removed campus invite-revoke alias (TD-4),
 which the backend now 404s; nothing calls it.
 
 ## 2026-09-24 — Terms 16+ (#169), reverted to 18+ (#171)
@@ -1928,7 +1928,7 @@ waits for a Play developer account (AUTH_SETUP §3.2, gate). Harmless while
 ## 2026-09-23 — Deploys prune their tags (#151)
 
 **Deploys prune their tags (#151, deployed 2026-09-23).** The promote
-routes `--to-latest` and drops every `cand-*` tag in the same call (TD-32
+routes `--to-latest` and drops every `cand-*` tag in the same call (TD-70
 closed; #151, deployed to both environments with no tags left).
 
 ## 2026-09-23 — Backend names standardised (#146)
@@ -1944,7 +1944,7 @@ The legacy `indic-gw` gateway is deleted. Service-account emails and project IDs
 keep their `indic-*` names — see the names table in
 [docs/ops/ENVIRONMENTS.md](ENVIRONMENTS.md).
 
-[Note 2026-09-23: unverified from the repo — [TECH_DEBT.md](TECH_DEBT.md) TD-30
+[Note 2026-09-23: unverified from the repo — [TECH_DEBT.md](TECH_DEBT.md) TD-2
 still lists the legacy `indic-gw` / `indic-api` pair as provisioned. Check with
 `gcloud api-gateway gateways list` before relying on either statement.]
 
@@ -2282,7 +2282,7 @@ fixes a live 404 that `backend/app/legal.py` and the Terms clickwrap were
 already pointing at. The same host carries the app's auth continue links under
 `/auth/` (`AUTH_HOST`), with the `firebaseapp.com` host kept as
 `LEGACY_AUTH_HOST` for every installed build and for the password-reset action
-URL (TD-29). Found on the way: the API had **no CORS at all** — no middleware,
+URL (TD-1). Found on the way: the API had **no CORS at all** — no middleware,
 no `allowCors` on the gateway — so a console `fetch` carrying `Authorization`
 was preflighted and refused at the edge from any origin. `CONSOLE_ORIGINS`
 (Cloud Run, pinned by the workflow) plus `x-google-endpoints … allowCors` with
@@ -2351,7 +2351,7 @@ overwritten by a late PENDING. The viewer warms its `sessionRecord` lazy in
 `onCreate` instead of restructuring `ShareCenter` — `by lazy` is synchronized,
 so a tap arriving mid-read waits on the read it would have done itself and never
 on a second one. `SessionStore`'s blocking accessors carry `@WorkerThread` as
-documentation only; see TD-24 for why that is half a pair. And the parameter
+documentation only; see TD-65 for why that is half a pair. And the parameter
 sweep moved from the Activity's `lifecycleScope` onto `viewModelScope`, emitting
 progress and outcome as `SharedFlow`, so a rotation mid-sweep no longer throws
 the run away.
@@ -2361,12 +2361,12 @@ the run away.
 wizard; the remaining risk is process death —
 [ADR-005](../adr/ADR-005-wizard-process-death.md).]
 
-*The three deferrals each name their blocker.* TD-24: `@MainThread` on ~27
+*The three deferrals each name their blocker.* TD-65: `@MainThread` on ~27
 Activities is the other half of the thread contract, and needs a lint run to
-land against an empty baseline. TD-25: `AuthRepository` has no fake backend to
+land against an empty baseline. TD-66: `AuthRepository` has no fake backend to
 test against, because `IndicApi` is final with a private constructor — a seam
 there admits only the real client, so it wants the interface extraction that
-CONTRIBUTING defers to a DI PR of its own. TD-26: wizard and viewer UI state
+CONTRIBUTING defers to a DI PR of its own. TD-67: wizard and viewer UI state
 still lives on the Activity rather than hoisted as `StateFlow`, on a 1.8k-line
 native-solve screen with bit-exact `.dat` oracles; the part that was losing work
 was the run, and the run is now on `viewModelScope`.

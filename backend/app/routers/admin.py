@@ -30,7 +30,7 @@ def _audited_patch(patch: dict) -> dict:
     """A licence edit as ADMIN_LICENSE_EXTEND records it: each term as text,
     except `adminEmails`, which is hashed (`admin_email_detail`), and `note`,
     free text staff may type a name or an address into: only that it changed
-    and its length (TD-270). The row outlives erasure and reaches the
+    and its length (TD-216). The row outlives erasure and reaches the
     licence's audit export."""
     out = {k: str(v) for k, v in patch.items() if k not in ("adminEmails", "note")}
     if "adminEmails" in patch:
@@ -100,7 +100,7 @@ def admin_revoke_user(uid: Uid, ctx=Depends(attested_or_mfa_admin)):
 @router.post("/v1/admin/device-releases", dependencies=[rate_limited(rate_limit.admin_bucket)])
 def admin_release_account_device(body: AdminDeviceRelease,
                                  ctx=Depends(attested_or_mfa_admin)):
-    """Free an account's registered phone so a new one can register (TD-126).
+    """Free an account's registered phone so a new one can register (TD-131).
 
     For a Demo account, on request: it has no licence lock to clear, and the app
     tells a phone refused at registration to ask an admin. By email, since that
@@ -118,7 +118,7 @@ def admin_release_account_device(body: AdminDeviceRelease,
         raise HTTPException(404, errors.USER_NOT_FOUND)
     released = repo.release_account_device(user["uid"])
     # The phone may go to someone else: its demo count stops holding this
-    # account's analyses, which still count toward the account's (TD-276).
+    # account's analyses, which still count toward the account's (TD-218).
     forgotten = repo.forget_device_sessions(user["uid"], released.values())
     audit.record(
         admin["uid"], action="ADMIN_DEVICE_RELEASE",
@@ -163,7 +163,7 @@ def admin_list_licenses(
     false. `q` searches by exact address, domain or key prefix instead of
     paging (see `repo.list_licenses`).
 
-    `q` here is deprecated (TD-244): it puts an address in the URL, which
+    `q` here is deprecated (TD-203): it puts an address in the URL, which
     request logs keep. `POST /v1/admin/licenses/search` takes it in a body.
     It is still served for one release, with a warning that names the caller
     and never the value."""
@@ -178,7 +178,7 @@ def admin_list_licenses(
 @router.post("/v1/admin/licenses/search")
 def admin_search_licenses(body: AdminLicenseSearch, admin=Depends(admin_user)):
     """The licence search with its terms in the body, so an address never
-    reaches a URL (TD-244). A read: the ordinary admin token, the admin
+    reaches a URL (TD-203). A read: the ordinary admin token, the admin
     bucket and the answer of `GET /v1/admin/licenses`, whose query fields
     the body repeats."""
     return _licence_listing(admin, limit=body.limit, page_token=body.page_token,

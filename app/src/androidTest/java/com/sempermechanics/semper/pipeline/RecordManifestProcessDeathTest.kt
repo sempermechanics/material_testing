@@ -44,7 +44,7 @@ import kotlin.math.abs
 import kotlin.random.Random
 
 /**
- * Framework item 1.3's check (TD-247, ADR-028): kill a run partway, replay
+ * Framework item 1.3's check (TD-35, ADR-028): kill a run partway, replay
  * it, and compare what is stored with the source data.
  *
  * The run is killed from its own progress callback with an [Error] the run
@@ -56,7 +56,7 @@ import kotlin.random.Random
  * real engine loop: it must commit a signed manifest that verifies, whose
  * hashes are the stored `.dat` bytes, whose `.dat` hold the known
  * translation, and whose first frame is bit-identical to the one the killed
- * run had staged (TD-65).
+ * run had staged (TD-93).
  */
 @RunWith(AndroidJUnit4::class)
 class RecordManifestProcessDeathTest {

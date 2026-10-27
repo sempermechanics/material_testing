@@ -118,7 +118,7 @@ object VisualizationEngine {
      * A [HeatmapRequest.displaced] request draws each point where it moved to,
      * (x + u, y + v), so the map lies on that frame's own photo the way the
      * plain render lies on the reference; the colour range is taken over the
-     * same accepted values, so both share one scale (ADR-011, TD-139). See
+     * same accepted values, so both share one scale (ADR-011, TD-141). See
      * [HeatmapRenderer.generateHeatmapIndices] and
      * [DeformedHeatmap.generateDeformedHeatmapIndices].
      */

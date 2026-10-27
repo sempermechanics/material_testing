@@ -248,7 +248,7 @@ def token_uid(
     profile, mailing support). This reads the token alone: no profile is read
     or written, no access status is checked, no device lock is revalidated.
     App Check is still asked of a caller that names a device, as there. Only
-    `GET /v1/me/erasure` uses it (TD-206); a route that serves account data
+    `GET /v1/me/erasure` uses it (TD-193); a route that serves account data
     must not.
     """
     if settings.DEV_INSECURE_AUTH:
@@ -419,7 +419,7 @@ async def verified_device(
     target = request.url.path
     if request.url.query:
         target = target + "?" + request.url.query
-    # In the threadpool, as the Firestore lookups are (TD-198): the hash of a
+    # In the threadpool, as the Firestore lookups are (TD-186): the hash of a
     # 4 MiB body is a few ms, and the event loop serves every other request.
     signed = (x_nonce + request.method + target).encode()
     if not await run_in_threadpool(_signature_ok, dev["publicKeyPem"], x_signature, signed, body):

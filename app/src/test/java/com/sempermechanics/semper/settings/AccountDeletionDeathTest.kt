@@ -41,7 +41,7 @@ import org.robolectric.Shadows.shadowOf
 import java.io.IOException
 
 /**
- * TD-165: an account deletion the process did not live to finish. The run's
+ * TD-163: an account deletion the process did not live to finish. The run's
  * scope dies with the process, so the stage is kept on disk before the erase
  * is sent, and the next start finishes the wipe only when the account is
  * known gone.

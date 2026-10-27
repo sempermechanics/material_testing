@@ -3,7 +3,7 @@
 **Status:** Accepted (2026-10-18); merged in #448 and #449 (2026-10-19) and deployed 2026-10-22 from `b940cc29` ([CHANGELOG](../ops/CHANGELOG.md))
 **Date:** 2026-10-18
 **Deciders:** product owner
-**Supersedes in part:** [ADR-007](ADR-007-licence-lifecycle.md) (its grant point "a key typed in the app"), TD-259's in-app key screen
+**Supersedes in part:** [ADR-007](ADR-007-licence-lifecycle.md) (its grant point "a key typed in the app"), TD-206's in-app key screen
 **Framework items:** 4.1, 4.4, 5.6, 6.4; Part B "First activation", "Resilience controls"; Part C "Provisioning", "EMM" ([READINESS_FRAMEWORK_2026-10.md](../ops/READINESS_FRAMEWORK_2026-10.md))
 
 Paths are from `app/src/main/java/com/sempermechanics/semper/` unless they start
@@ -21,10 +21,10 @@ Three ways of reaching a paid entitlement had grown up side by side:
    `backend/app/repo/users.py:172-176`). Nothing is typed.
 2. **A typed key.** `POST /v1/licenses/activate` redeems a key for the calling
    account. The branch added an in-app screen for it (c748630, "Licence
-   activation screen (TD-259)"); no released build ever had one: v1.2-beta.4
+   activation screen (TD-206)"); no released build ever had one: v1.2-beta.4
    (`33dce87d`) carried `SemperApi.activateLicense` with no caller.
 3. **An EMM enrolment invite.** `enrollmentInvite` in the managed
-   configuration was parsed and never read (TD-259).
+   configuration was parsed and never read (TD-206).
 
 A key in the app is a second, weaker identity beside the account: it can be
 shared, typed on the wrong account, and it puts a purchase-shaped step inside an
@@ -55,11 +55,11 @@ reachable from the environment this record was written in).
 4. **Anything that touches the cloud is checked by the backend on every
    request** (below). The app's own gates are presentation.
 5. **Share runs only on the device**, so it relies on the signed token. A
-   modified APK can unlock it; that risk is accepted (TD-274).
+   modified APK can unlock it; that risk is accepted (TD-49).
 6. **The demo cap stays "stored at once"** (deleting an analysis frees its
    place), by the product owner's choice, and is now counted per device as well
-   as per account (TD-275). A phone staff or IT take off an account stops
-   counting that account's analyses (TD-276, closed 2026-10-19).
+   as per account (TD-50). A phone staff or IT take off an account stops
+   counting that account's analyses (TD-218, closed 2026-10-19).
 
 ### Entitlement sources
 
@@ -103,7 +103,7 @@ Tests `firebase-hosting/tests/account-claim.test.mjs`.
 **The legacy route.** `POST /v1/licenses/activate` stays, unchanged, for
 installed builds and support recovery (`licenses.py:49-81`). No current app
 build calls it. Retiring it retires `contracts/license_activate_request.json`
-with it (TD-278).
+with it (TD-52).
 
 ### How the app learns of a change
 
@@ -132,7 +132,7 @@ licence or seat device lock and drops to Demo on a mismatch or revocation
 
 | Route | Caller | Gates, in order |
 |---|---|---|
-| `POST /v1/sessions` (record an analysis) | signed device | rate limit; kill switch `upload` or `backup` → 503 `feature_paused`; files per session → 413; account cap: stored analyses (less `PROVISION_FAILED`) ≥ `maxSessions` → 409 `session_quota_exceeded`; **demo only**, device cap: every account's stored analyses from this device ≥ `maxSessions` → 409 `device_quota_exceeded` (TD-279; `backend/app/routers/sessions.py:335-366`, `backend/app/services/sessions.py:125-139`) |
+| `POST /v1/sessions` (record an analysis) | signed device | rate limit; kill switch `upload` or `backup` → 503 `feature_paused`; files per session → 413; account cap: stored analyses (less `PROVISION_FAILED`) ≥ `maxSessions` → 409 `session_quota_exceeded`; **demo only**, device cap: every account's stored analyses from this device ≥ `maxSessions` → 409 `device_quota_exceeded` (TD-219; `backend/app/routers/sessions.py:335-366`, `backend/app/services/sessions.py:125-139`) |
 | `POST /v1/files/{id}/complete` | signed device | rate limit; kill switch `upload` or `backup` → 503 (`backend/app/routers/files.py:139-143`) |
 | `GET /v1/files/{id}/content` (restore) | signed device | rate limit; kill switch `restore` → 503; demo → 403 `feature_not_licensed` (`files.py:38-58`) |
 | `GET /v1/sessions/{sid}/bundle` (download) | signed device, or browser with a second factor | rate limit; kill switch `restore` → 503; demo → 403 `feature_not_licensed` (`sessions.py:355-387`) |
@@ -173,7 +173,7 @@ cost 9 ([request-volume.md](../perf/request-volume.md) Pass 4).
 The product owner kept the demo cap as analyses **stored at once**, not ever
 created. A demo user can delete and continue, and an account erased and signed
 up again starts at zero on both counts, because erasure deletes its sessions
-(TD-275). The cap is a nudge toward a licence, not a meter; counting every
+(TD-50). The cap is a nudge toward a licence, not a meter; counting every
 analysis ever created would turn Delete into a dead end and would need a
 counter that survives erasure, which erasure is meant to remove. The per-device
 count closes the cheaper bypass, a fresh account on the same phone.
@@ -189,7 +189,7 @@ count closes the cheaper bypass, a fresh account on the same phone.
 - **Ever-created demo cap.** Rejected by the product owner (above).
 - **A server route for share** (render or sign exports server-side). Rejected
   for now: analysis and export are offline by design, and exports carry no
-  secret the server could withhold. Revisit if share gains a cloud step (TD-274).
+  secret the server could withhold. Revisit if share gains a cloud step (TD-49).
 
 ## Trade-offs
 
@@ -200,12 +200,12 @@ count closes the cheaper bypass, a fresh account on the same phone.
 - The device cap keys on the registered device id, an app-scoped `ANDROID_ID`
   (`data/account/DeviceKeys.kt:54-62`): a factory reset gives a new id. A phone
   released by staff or IT stops counting the previous holder's analyses
-  (`forget_device_sessions`, TD-276, closed 2026-10-19); one the holder moves
+  (`forget_device_sessions`, TD-218, closed 2026-10-19); one the holder moves
   off themselves keeps them counted.
 - The hosted Terms keep fees "as stated in your order" for access arranged
   outside the app (`docs/legal/TERMS_OF_SERVICE.md:149-180`). Their wording was
   aligned on 2026-10-19 (account-anchored sources in 6.2, "no purchases in the
-  App" in 6.6); counsel's review is owed (TD-277).
+  App" in 6.6); counsel's review is owed (TD-51).
 
 ## Consequences
 
@@ -231,11 +231,11 @@ count closes the cheaper bypass, a fresh account on the same phone.
 ## Action items
 
 - [x] App, backend and console changes on `claude/readiness-followups-jhfhj9`
-      (`6c6d059..2371bec`). Their tests first run in that branch's CI (TD-219).
+      (`6c6d059..2371bec`). Their tests first run in that branch's CI (TD-14).
 - [x] Deploy backend, gateway (the claim route is a new path) and Hosting, in
-      the order in TD-216 (2026-10-22; `/v1/me/claim` among the 14 new gateway paths).
+      the order in TD-11 (2026-10-22; `/v1/me/claim` among the 14 new gateway paths).
 - [x] Terms wording aligned with consumption-only (6.2, 6.6; 2026-10-19).
-- [ ] Counsel reviews the Terms' fees section against consumption-only (TD-277).
+- [ ] Counsel reviews the Terms' fees section against consumption-only (TD-51).
 - [ ] Retire `POST /v1/licenses/activate` and its contract fixture once no
-      installed build can call it (TD-278).
+      installed build can call it (TD-52).
 - [ ] Later: Google Play Billing as a fourth source (FI-24).

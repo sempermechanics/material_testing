@@ -72,7 +72,7 @@ def provision_session(sid: str, *, purge_on_failure: bool = False,
     whatever the auth layer handed the route.
     """
     # A retry (no `session` handed in) stamps `updatedAt` as it starts, so the
-    # delete guard sees it running however late it began (TD-296). The inline
+    # delete guard sees it running however late it began (TD-233). The inline
     # caller's session was written by this same request.
     session = session or repo.start_provisioning(sid)
     if not session:

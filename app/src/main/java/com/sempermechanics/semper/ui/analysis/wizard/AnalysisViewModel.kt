@@ -57,7 +57,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
     private val state = MutableStateFlow(WizardInputs())
 
     /**
-     * The wizard's inputs as one value (TD-286, TD-308). The screen and its
+     * The wizard's inputs as one value (TD-226, TD-244). The screen and its
      * parts read `inputs.value` and change it with one [edit] per change;
      * [WizardState] saves and restores it.
      */

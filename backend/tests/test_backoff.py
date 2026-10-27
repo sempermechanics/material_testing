@@ -1,4 +1,4 @@
-"""Outbound retry delays honour Retry-After but never park a thread (TD-52)."""
+"""Outbound retry delays honour Retry-After but never park a thread (TD-84)."""
 import requests
 
 from app import backoff, drive, notify

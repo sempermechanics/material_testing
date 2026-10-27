@@ -462,7 +462,7 @@ class StudioOverlayViewTest {
     @Test
     fun `outside the crop stays correlated so edge subsets keep their points`() {
         // The ROI rect bounds the grid; the engine drops any point whose subset
-        // touches a void pixel, so a void background would eat the crop's edge (TD-74).
+        // touches a void pixel, so a void background would eat the crop's edge (TD-98).
         val (mask, stride) = smallMask { applyImageRoi(20, 10, 100, 50) }
 
         assertEquals(255, mask.at(stride, 0, 0))

@@ -1,6 +1,6 @@
-"""TD-246: the one-off backfill that stamps `licenseId` on audit rows written
+"""TD-34: the one-off backfill that stamps `licenseId` on audit rows written
 before `audit.record` did (2026-10-18), so a licence's export reaches back
-past that date, and (TD-237) `expireAt` = `ts` + the retention on rows
+past that date, and (TD-199) `expireAt` = `ts` + the retention on rows
 written before `add_audit_row` did, so the TTL policy reaches them. Running
 it is the owner's decision; `--apply` refuses without one, and records it in
 the ledger."""

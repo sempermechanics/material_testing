@@ -254,7 +254,7 @@ class AuthRepository(
      * given the seat back (the backend's `_give_back_license`), and a release
      * sent with a token that still works would only re-create the erased
      * account's profile on the backend, mailing support when it is pending
-     * (TD-206).
+     * (TD-193).
      */
     suspend fun signOut(releaseSeat: Boolean = true) = withContext(Dispatchers.IO) {
         if (releaseSeat) SeatLease.releaseBestEffort(appContext, api, tokens)
@@ -329,7 +329,7 @@ class AuthRepository(
      * what the improvement pipeline reads, so this phone stores [granted] only
      * once the server took it: a refused change is reported, and the stored
      * answer (the one Settings shows) stays at the server's last accepted
-     * value (TD-306). With no token (signed out, or none to be had) the choice
+     * value (TD-242). With no token (signed out, or none to be had) the choice
      * is this phone's alone and is stored as is.
      */
     suspend fun setImprovementConsent(granted: Boolean): Result<Unit> = withContext(Dispatchers.IO) {

@@ -23,7 +23,7 @@ import java.nio.ByteOrder
 import kotlin.random.Random
 
 /**
- * Cancelling Settings → Your data → Export stops the export (TD-41).
+ * Cancelling Settings → Your data → Export stops the export (TD-77).
  *
  * The export copies files with blocking IO inside `withContext(IO)`, and used
  * to catch every `Exception` — cancellation included — so pressing Cancel on

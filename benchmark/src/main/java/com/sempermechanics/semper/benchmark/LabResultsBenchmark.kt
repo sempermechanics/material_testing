@@ -34,7 +34,7 @@ class LabResultsBenchmark {
     @get:Rule
     val benchmarkRule = MacrobenchmarkRule()
 
-    /** The phone's thermal, charger and memory state around each test (TD-135). */
+    /** The phone's thermal, charger and memory state around each test (TD-6). */
     @get:Rule
     val deviceState = DeviceStateRule()
 

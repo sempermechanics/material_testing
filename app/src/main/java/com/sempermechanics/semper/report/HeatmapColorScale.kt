@@ -161,7 +161,7 @@ internal object HeatmapColorScale {
      * [valueRanges] over the first [floatCount] floats of [data], filling [scratch]'s
      * columns when there is one per field and each holds `floatCount / STRIDE` values
      * (else new ones). The same values land in the same order, so the ranges are
-     * identical; a caller walking a batch reuses one set of columns (TD-87).
+     * identical; a caller walking a batch reuses one set of columns (TD-107).
      */
     internal fun valueRanges(
         data: FloatArray,

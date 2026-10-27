@@ -112,7 +112,7 @@ committed files in `app/src/test/resources/oracles/`, compared by
 | Golden | Test | Pins |
 |---|---|---|
 | `field_small.dat` | `results/DatFieldOracleTest` | A field written through `DicFieldIo` as the batch loop writes it: the 32-byte `x y u v exx eyy exy znssd` record, little-endian, valid points only — and that `decodeDatFile` reads it back |
-| `summary_u.gif`, `summary_exx.gif` | `results/SummaryGifOracleTest` | A whole `SummaryAnimation` build (decode, fit widened to the moved points, deformed heatmap render, jet palette, LZW): the bytes the viewer shows and Share sends. Regenerated 2026-10-13 when the GIF moved to the deformed configuration (TD-139, [ADR-011](../adr/ADR-011-viewer-deformed-frame.md#as-built-td-139-2026-10-13)) |
+| `summary_u.gif`, `summary_exx.gif` | `results/SummaryGifOracleTest` | A whole `SummaryAnimation` build (decode, fit widened to the moved points, deformed heatmap render, jet palette, LZW): the bytes the viewer shows and Share sends. Regenerated 2026-10-13 when the GIF moved to the deformed configuration (TD-141, [ADR-011](../adr/ADR-011-viewer-deformed-frame.md#as-built-td-141-2026-10-13)) |
 
 Parity tests (`VisualizationEngineTest`, `ReportBuilderTest`) compare the code
 against an older copy of itself, and the round trips (`DatCodecTest`,
@@ -173,7 +173,7 @@ Emulators on API 34 and 37 both raise `ACTIVITY-MISSING` and `NOT-AOT-COMPILED`
 besides `DEBUGGABLE`; leave one out and every case fails at once. Pass the list with
 `am instrument`, not `connectedDebugAndroidTest -P …suppressErrors=…`: through Gradle
 it arrives cut at its first comma, so only `EMULATOR` is suppressed (seen on Linux CI,
-TD-86). CI runs this command.
+TD-106). CI runs this command.
 
 Results land in logcat (`adb logcat -d -s Benchmark:I`).
 
@@ -182,7 +182,7 @@ Results land in logcat (`adb logcat -d -s Benchmark:I`).
 `BenchmarkSeedActivity` and scrubs frames, reporting frame timing, max heap and the
 `Semper.viewer.decodeDat` trace section. The seeder also writes the `field_ranges.bin`
 sidecar a real batch run leaves, so the viewer's colour-scale pass reads it as it does
-on a phone; without it the benchmark measured the no-sidecar fallback instead (TD-87).
+on a phone; without it the benchmark measured the no-sidecar fallback instead (TD-107).
 `scrub10Frames` and `scrub150Frames` open frames with no photo of their own, so each is
 drawn on the reference. `scrub150FramesWithPhotos` passes the seeder `--ez framePhotos true`:
 a separate session whose frames move moderately and each have a flat grey PNG in
@@ -235,7 +235,7 @@ Four things that will otherwise cost you an afternoon:
   `ViewerScrubBenchmark` deliberately avoids that API.
 - **A seeded session needs its `field_ranges.bin`.** The viewer fixes the summary colour
   scale on open; without the sidecar that pass decodes every frame, and at 150 frames its
-  garbage (~155 MB) is what `scrub150Frames` reported as max heap (TD-87).
+  garbage (~155 MB) is what `scrub150Frames` reported as max heap (TD-107).
   `BenchmarkSeedActivity` writes the sidecar, and reseeds a cached session that lacks one.
 
 - **The connected task installs over whatever is on the phone, then uninstalls it.**
@@ -243,7 +243,7 @@ Four things that will otherwise cost you an afternoon:
   existing `com.sempermechanics.semperclassroom` (same debug key), keeping its data, and uninstalls
   the app when it finishes, taking that data with it. Back up anything you need first.
   A signed-in session left over from a debug install also changes the launch route
-  (Splash → Home rather than sign-in); before TD-90 that crashed both `StartupBenchmark`
+  (Splash → Home rather than sign-in); before TD-109 that crashed both `StartupBenchmark`
   cases on a build with no `SEMPER_API_BASE_URL` (found on a Pixel 6 in material_testing).
 
 Results land as `*-benchmarkData.json` under the module's
@@ -258,7 +258,7 @@ so the same sources run in this fork under its own id. CI's micro step and
 ### Pixel 6 against the CI emulator (2026-09-25)
 
 Pixel 6 (`oriole`), Android 17 (API 37, `CP2A.260705.006`), battery 100 %, over
-wireless adb, at `main` @ `05aac72` plus the `resolveStatus` half of the TD-90
+wireless adb, at `main` @ `05aac72` plus the `resolveStatus` half of the TD-109
 fix (#38). Reference: CI run 36109382066, API 34 x86_64 emulator. Macro 12/12 passed (the three
 `StartupHeadroomBenchmark` cases skip unless `-e startupHeadroom true`, as in CI);
 micro `OK (10 tests)`. Medians unless marked; heap is `memoryHeapSizeMaxKb` / 1000.
@@ -284,7 +284,7 @@ What it says:
 - **Startup and the Results curve are 1.8–3× faster on the phone**; warm start is the
   same. The emulator's LabResults frame P90 of ~600 ms is its software renderer, not
   the app: the phone draws the same screens at 7–9 ms.
-- **Scrub heap agrees within 1 MB**, so the TD-87 sidecar fix holds on real hardware
+- **Scrub heap agrees within 1 MB**, so the TD-107 sidecar fix holds on real hardware
   (164 MB before). Both runs show one ~71 MB iteration out of five (phone 70.6,
   CI 71.8): the first one, in which the seeder fabricates the session in the app
   process. The median is the number to compare.
@@ -297,7 +297,7 @@ What it says:
   x86_64), not a regression. Compare allocations like for like: phone to phone,
   emulator image to the same image.
 
-### CI microbenchmark A/B (TD-199)
+### CI microbenchmark A/B (TD-187)
 
 An emulator's absolute times say nothing (its speed moves from runner to runner), so
 on a PR `tier-benchmark` judges the hot paths by their change against the PR's base.
@@ -337,7 +337,7 @@ a clean run of both suites. Microbenchmark times have no reference here: debugga
 not AOT-compiled, they are relative numbers, gated only against the PR's base in CI
 (below).
 
-**The phone's state (TD-135, [ADR-008](../adr/ADR-008-startup-gates-phone-state.md)).**
+**The phone's state (TD-6, [ADR-008](../adr/ADR-008-startup-gates-phone-state.md)).**
 A startup time moves 30–40 % with heat and the charger, so a result is gated only
 in the state the references assume. `DeviceStateRule` (in every gated benchmark
 class) writes `com.sempermechanics.semper.benchmark-deviceState.json` next to the
@@ -362,7 +362,7 @@ reference build's. It backs up the installed app first and reinstalls it at the
 end, uses `am instrument` (never the connected task), wakes the screen every 10 s,
 and stops without touching the phone if it is locked or another instrumentation
 is running. `--analyse ab-run` re-reads a finished run. On the 2026-09-26 wizard
-rounds (TD-135) it reads `1b4253db` at −6 % against `05aac72`. Checked end to end
+rounds (TD-6) it reads `1b4253db` at −6 % against `05aac72`. Checked end to end
 on the Pixel 6 the same day (warm start, one ABBA block): both snapshots
 recorded, the run reported `not gated` (thermal status 1, on battery), and the
 installed app came back byte-identical. That phone sat at thermal status 1 at
@@ -399,7 +399,7 @@ charge, and uses about 75 % of its gate's headroom: a further 6 % fails it. It
 is not the code: run back to back on the same phone the same day, the reference
 build (`05aac72`) was as slow, 439–623 ms, and failed its own gate in 2 of 4
 rounds as the phone warmed. The gate measures the phone's state (heat, charger,
-memory) as much as the app (TD-135); the state check and A/B run above are the
+memory) as much as the app (TD-6); the state check and A/B run above are the
 answer. The references themselves were taken in an unrecorded state and are owed a
 re-take under that protocol.
 
@@ -509,9 +509,9 @@ only, run in CI's `legal-pages` job on every event ([CI.md](../ops/CI.md)).
 Their tests are `unittest` modules in `scripts/tests`, run in the same job:
 
 ```bash
-python scripts/check_kotlin_file_size.py                   # ADR-015's 500-line file budget (TD-292)
-python scripts/check_activity_scope_work.py                # ADR-016 rule 1 on screens' lifecycleScope (TD-291)
-python scripts/check_swallowed_cancellation.py            # ADR-018: cancellation rethrown around suspend calls (TD-171)
+python scripts/check_kotlin_file_size.py                   # ADR-015's 500-line file budget (TD-229)
+python scripts/check_activity_scope_work.py                # ADR-016 rule 1 on screens' lifecycleScope (TD-228)
+python scripts/check_swallowed_cancellation.py            # ADR-018: cancellation rethrown around suspend calls (TD-169)
 python -m unittest discover -s scripts/tests -p "test_*.py"
 ```
 
@@ -530,7 +530,7 @@ temporary tree: Home's restore on `lifecycleScope` fails, the same restore on
 
 `check_swallowed_cancellation.py` stands in for detekt's
 `SuspendFunSwallowedCancellation`, which needs type resolution detekt 1.23.8
-cannot do here (TD-171). It reads every `app/src/main` file for a
+cannot do here (TD-169). It reads every `app/src/main` file for a
 `catch (e: Exception)` (or `Throwable`, `RuntimeException`,
 `IllegalStateException`) or a `runCatching { }` whose block calls a suspend
 function, known by name: one the main sources declare `suspend`, a
@@ -552,10 +552,10 @@ in `scripts/tests/fixtures/cancellation/`.
 - Real Firebase Auth → `auth/FirebaseAuthIntegrationTest`: email/password
   sign-in, an ID token and its refresh against the app's Firebase project, then
   sign-out. Tier 3 passes the CI test account from the repo secrets
-  `FIREBASE_TEST_EMAIL` / `FIREBASE_TEST_PASSWORD` (TD-200). Without them (a local
+  `FIREBASE_TEST_EMAIL` / `FIREBASE_TEST_PASSWORD` (TD-188). Without them (a local
   run, a fork's or Dependabot's PR) the cases skip (JUnit `assumeTrue`); locally,
   pass both with `-Pandroid.testInstrumentationRunnerArguments.FIREBASE_TEST_EMAIL=…`.
-  The password must have no comma: Gradle cuts an argument there (TD-86).
+  The password must have no comma: Gradle cuts an argument there (TD-106).
   The account and both secrets come from `scripts/create_ci_firebase_account.sh`
   (gcloud as an owner of `indicvision-dic-app-auth`, gh as a repo admin); `--rotate`
   gives the account a new password and updates the secret.

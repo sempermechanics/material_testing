@@ -95,7 +95,7 @@ test("accounts waiting for approval are listed with their phones, or 'Nobody wai
 });
 
 test("an account not yet migrated shows its Semper Classroom phone from the old field", async () => {
-  // ADR-030: until TD-330, an account may hold only activeDeviceIdMaterialTesting.
+  // ADR-030: until TD-56, an account may hold only activeDeviceIdMaterialTesting.
   await openDesk({ users: [{ uid: "u3", email: "c@lab.org", activeDeviceIdMaterialTesting: "mt-device-xyz-9" }] });
   assert.deepEqual(userRows(), [["c@lab.org", "—", "Semper Classroom mt-device-…", "Approve"]]);
 

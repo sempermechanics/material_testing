@@ -33,7 +33,7 @@ import java.nio.ByteOrder
  *
  * `framePhotos` (default false) seeds a separate session whose every frame has its own
  * photo in `raw_deformed/`, so the viewer draws each frame over it with
- * `VisualizationEngine.render` of a displaced request (ADR-011, TD-175). Its frames move by a
+ * `VisualizationEngine.render` of a displaced request (ADR-011, TD-173). Its frames move by a
  * moderate u = 0.02·x, v = 0.01·y px rather than the default frames' ~300 px drift, which
  * would warp most of the map off the canvas. The photos are one flat grey PNG, so their
  * decode is cheaper than a camera photo's. The default session, which the gated
@@ -90,7 +90,7 @@ class BenchmarkSeedActivity : Activity() {
      * real batch, so the viewer's colour-scale pass reads it instead of decoding every
      * frame. Without it the benchmark measured only the no-sidecar fallback (older or
      * restored sessions), whose ~1 MB per frame of garbage set the 150-frame heap
-     * (TD-87). The per-frame `valueRanges` columns are allocated here, in setup and on
+     * (TD-107). The per-frame `valueRanges` columns are allocated here, in setup and on
      * the first iteration only.
      *
      * With [photoNames] (the `framePhotos` extra) the session is its own dir, its frames

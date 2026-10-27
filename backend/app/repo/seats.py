@@ -51,7 +51,7 @@ def _live_holder(license_id: str, lic: dict, ref, scope: str, uid: str):
     account that has since moved to a different licence. The release once
     checked only the last condition: **New device** on a held seat let its
     member, by then on Demo, register a different phone, a change Demo accounts
-    do not otherwise get (TD-127).
+    do not otherwise get (TD-132).
     """
     if _is_revoked(lic):
         return None
@@ -166,7 +166,7 @@ def clear_device_lock(license_id: str, uid: str = "", *,
     Semper Classroom wait a month to follow.
 
     A staff or IT clear also stops the released phone's demo count holding
-    the holder's analyses (`forget_device_sessions`, TD-276); the holder's
+    the holder's analyses (`forget_device_sessions`, TD-218); the holder's
     own clear does not, or a second account on the same phone could shed
     the first one's count.
 
@@ -224,7 +224,7 @@ def clear_device_lock(license_id: str, uid: str = "", *,
         })
         released = _settle_holder(license_id, lic, ref, scope, uid, previous)
         # The phone may go to someone else: its demo count stops holding the
-        # holder's analyses (TD-276). Staff and IT only; see the docstring.
+        # holder's analyses (TD-218). Staff and IT only; see the docstring.
         holder = uid if scope == "seat" else lic.get("redeemedByUid") or ""
         forgotten = forget_device_sessions(holder, released.values()) if holder else 0
         return {**detail, **apps.spread("previousDeviceId", previous),
@@ -289,7 +289,7 @@ def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> None:
     made a freed slot look occupied.
 
     The holder, while still pointed at this licence, moves in the same commit
-    as the seat (TD-294). It was a separate write after it, so a call that
+    as the seat (TD-231). It was a separate write after it, so a call that
     died in between left a held seat's holder licensed until IT pressed the
     button again.
     """

@@ -367,7 +367,7 @@ internal object TypedLoadsSheet {
     /**
      * Opens the keyboard on [box], now or once its window has focus again. Right
      * after the entry dropdown closes, its popup still holds window focus, and the
-     * keyboard ignores a request from a window without it (TD-141).
+     * keyboard ignores a request from a window without it (TD-143).
      */
     private fun showKeyboard(box: EditText) {
         val keyboard = box.context.getSystemService(InputMethodManager::class.java) ?: return

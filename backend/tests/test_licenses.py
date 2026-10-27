@@ -206,7 +206,7 @@ async def test_activate_endpoint_happy_path(client, monkeypatch, audited):
     assert resp.status_code == 200
     assert resp.json()["config"]["plan"] == "professional"
     # The audit trail records the current vocabulary only; `plan` stays a
-    # response mirror for old app builds, not something new rows carry (TD-45).
+    # response mirror for old app builds, not something new rows carry (TD-4).
     (row,) = [r for r in audited if r["action"] == "LICENSE_ACTIVATE"]
     assert row["detail"] == {"mode": "licensed"}
 

@@ -190,7 +190,7 @@ internal class HardwareVideoDecoder private constructor(
         val image = codec.getOutputImage(outIndex) ?: return null
         return try {
             // The codec's output format carries the stream's colour range when it
-            // has one; the container's track format is the fallback (TD-134).
+            // has one; the container's track format is the fallback (TD-137).
             val output = runCatching { codec.getOutputFormat(outIndex) }.getOrNull()
             ImageLuma.of(image, rotationDegrees, limitedRange = ImageLuma.isLimitedRange(output, format))
         } finally {

@@ -41,7 +41,7 @@ Check the R8 mapping reached Crashlytics (the release build uploads it); the wor
 - `versionCode` increases for every release (the run number is monotonic).
 - `main`'s CI also builds a `release-apk` signed with the release key, at
   **versionCode 1**, so it can never install over a release. Until 2026-10-01 it
-  used CI's run number (671 by then in semperdic-app, against its release workflow's 35; here in the 250s against 4 for `v1.2-beta.3`, TD-148), so a
+  used CI's run number (671 by then in semperdic-app, against its release workflow's 35; here in the 250s against 4 for `v1.2-beta.3`, TD-149), so a
   tester who installed it was refused every later release until they
   uninstalled, which deletes analyses that are not in the cloud. The 1000 base
   puts releases above every number CI ever used, so those phones update again.
@@ -106,7 +106,7 @@ which the backend may later gate (for this app, `MIN_SUPPORTED_VERSION_CODE_SEMP
 
 Readiness items 1.1, 6.3 and Part D5
 ([READINESS_FRAMEWORK_2026-10.md](READINESS_FRAMEWORK_2026-10.md)). Nothing here
-has been rehearsed: there is no Play listing or closed track yet (TD-229, TD-231).
+has been rehearsed: there is no Play listing or closed track yet (TD-23, TD-25).
 Play does not allow a staged rollout for an app's first production release, and a
 staged percentage never rises by itself. Start on the internal testing track: it
 has no review delay, and the pre-launch report needs a track. What the first
@@ -161,7 +161,7 @@ the repository, so a drill on staging never reaches the next production deploy:
 `deploy-backend.yml` runs under `environment:`, whose variables win over the
 repository's.
 
-**Drill on staging, 2026-10-22** (TD-220), with a debug build at versionCode 100
+**Drill on staging, 2026-10-22** (TD-15), with a debug build at versionCode 100
 pointed at `semper-api-staging`, signed in as a QC test account on an Android 14
 and an Android 12 emulator; each step is a `deploy-backend.yml` run from `main`
 with `gateway_mode=dry-run`:
@@ -192,7 +192,7 @@ minutes of the last reconcile reuse the cached `/v1/config`
 (`data/cloud/CloudSync.kt:412`, `RECONCILE_MIN_INTERVAL_MS`), and **Refresh
 licence** fetches it at once. Lifting a lever reaches phones the same way, so
 allow that long before calling a rollback done. The Semper Classroom pair and
-`ENTITLEMENT_OFFLINE_GRACE_DAYS` were not moved (TD-220).
+`ENTITLEMENT_OFFLINE_GRACE_DAYS` were not moved (TD-15).
 
 ## CI-based release (workflow_dispatch)
 
@@ -279,7 +279,7 @@ deobfuscation key — publishing it would undo the obfuscation for everyone — 
 without it a field stack trace from that build is unreadable, and it cannot be
 regenerated afterwards. The build passes `-PuploadCrashlyticsMapping=true`, so
 the Crashlytics Gradle plugin uploads the mapping to Firebase and field crashes
-stay readable there for the life of the project (TD-40). The 90-day workflow
+stay readable there for the life of the project (TD-76). The 90-day workflow
 artifact is only the fallback for a manual `retrace`. Local builds never upload.
 
 ### `publish`

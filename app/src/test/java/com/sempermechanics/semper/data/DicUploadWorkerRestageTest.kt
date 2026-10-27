@@ -96,7 +96,7 @@ class DicUploadWorkerRestageTest : UploadWorkerHarness() {
         assertEquals(SessionRecord.SyncState.SYNCED, row().syncState)
     }
 
-    // ── the staging's binding to its session (TD-282) ──────────────────────
+    // ── the staging's binding to its session (TD-222) ──────────────────────
 
     @Test
     fun `a whole staging bound to another session releases this one and is declared afresh`() {

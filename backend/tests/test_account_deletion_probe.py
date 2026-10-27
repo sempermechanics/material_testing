@@ -5,7 +5,7 @@ start asks here whether the account went (`CloudErase.probeErasedAccount`)
 before it wipes the phone. Erased means this phone's device record is gone or
 belongs to someone else. The route reads the ID token alone: the earlier probe
 went through `current_user`, which re-created a profile for the erased uid and
-mailed support when it was pending (TD-206).
+mailed support when it was pending (TD-193).
 """
 from pathlib import Path
 
@@ -65,7 +65,7 @@ async def test_a_device_now_someone_elses_means_erased(client, store):
 
 
 async def test_asking_creates_no_profile(client, store, monkeypatch):
-    # The whole point (TD-206): an erased account must stay erased.
+    # The whole point (TD-193): an erased account must stay erased.
     store._data["users"] = {}
     store._data["devices"] = {}
 

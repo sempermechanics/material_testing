@@ -175,7 +175,7 @@ test("each member row offers only what applies to that seat", async () => {
 });
 
 test("a seat bound only on Semper Classroom offers New device, read from the old field", async () => {
-  // Every backend writes the old field (ADR-030, TD-330): a seat this one
+  // Every backend writes the old field (ADR-030, TD-56): a seat this one
   // bound holds both, one not yet migrated only the old. A new field alone was
   // left behind by a backend from before the rename that cleared the old: stale.
   await open({ roster: { ...assigned, invites: [], seats: [

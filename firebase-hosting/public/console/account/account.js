@@ -229,7 +229,7 @@ function releaseError(e) {
 
 $("unbind").addEventListener("click", () => unbind("", "Semper"));
 // Semper Classroom's old short name: a backend from before ADR-030 knows only
-// it, and every backend since reads it as Semper Classroom (TD-330).
+// it, and every backend since reads it as Semper Classroom (TD-56).
 $("unbindMt").addEventListener("click", () => unbind("materialtesting", "Semper Classroom"));
 
 /**

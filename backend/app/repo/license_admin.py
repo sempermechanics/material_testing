@@ -106,7 +106,7 @@ def _search_licenses(col, q: str, include_demo: bool, include_revoked: bool) -> 
 
     Single-field equality queries, so no composite index; the filters and the
     order are applied here, over at most `3 * SEARCH_LIMIT` rows. The lookups
-    run at once, each on its own thread (TD-198): the search costs the
+    run at once, each on its own thread (TD-186): the search costs the
     slowest one's round trip, not the sum. A failed lookup fails the search.
     """
     text = q.strip()
@@ -203,7 +203,7 @@ def _revoke_fanout(ref, license_id: str, lic: dict) -> None:
         _delete_license_invites(license_id, lic.get("emailLock") or "")
 
 
-# ---------------- pending fan-outs (ADR-026, TD-294) ----------------
+# ---------------- pending fan-outs (ADR-026, TD-231) ----------------
 
 #: The licence fields that record a fan-out still to run: an id per action,
 #: what is left to do, and when it was recorded.

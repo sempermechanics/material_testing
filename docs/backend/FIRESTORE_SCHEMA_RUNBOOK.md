@@ -19,7 +19,7 @@ records are returned by `GET /v1/me/export` and deleted with the user document.
 
 ### `sessions/{sid}.app`, and its backfill
 
-`app` (`semper`, or `materialtesting` for Semper Classroom until TD-330:
+`app` (`semper`, or `materialtesting` for Semper Classroom until TD-56:
 `apps.stored_name`, below) is written by `POST /v1/sessions` from
 `X-App-Id` ([ADR-014](../adr/ADR-014-session-app-tag.md)). Absent means
 `semper` (`repo/sessions.session_app`), so it needs no version bump either, but
@@ -49,7 +49,7 @@ Staging and production share one database, so there is one run.
 [ADR-030](../adr/ADR-030-semper-classroom-app-identity.md) renamed the app's
 short name `materialtesting` → `semperclassroom` and its field suffix
 `MaterialTesting` → `SemperClassroom`. A backend from before the rename knows
-only the old names, so until TD-330 they stay the stored truth: tags are
+only the old names, so until TD-56 they stay the stored truth: tags are
 stored as `materialtesting` (`apps.stored_name`) and read as `semperclassroom`
 (`apps.canonical`); per-app fields are read from the old field only
 (`apps.read_field`) and written to both (`apps.written_fields`). So no
@@ -61,7 +61,7 @@ absent or differs, and deletes a `<name>SemperClassroom` whose old twin is
 absent (a previous backend deleted the old field and left the new one stale).
 It never modifies or deletes an old field and never touches audit or event
 rows. `--retag` also rewrites the `app` tag on `devices/` and `sessions/` to
-`semperclassroom`; that is TD-330's first step, not part of the rollout.
+`semperclassroom`; that is TD-56's first step, not part of the rollout.
 
 Every run is the owner's: staging and production share one database.
 
@@ -73,7 +73,7 @@ Every run is the owner's: staging and production share one database.
 2. Apply, once the new backend serves all traffic and rolling back past it is
    ruled out: the same command with `--apply`. A dry-run must then report
    nothing to change.
-3. TD-330 only, once no backend from before the rename can serve and no build
+3. TD-56 only, once no backend from before the rename can serve and no build
    sends the old id: `--apply` again, then `--apply --retag`, before reads and
    tags move to the new names.
 

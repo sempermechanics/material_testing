@@ -45,7 +45,7 @@ class HomeFirstRunPromptsTest {
     @After
     fun stopWorkManager() {
         // Home's session list registers with the main thread's GapWorker until
-        // the Activity is destroyed; left open, it outlives the test (TD-199).
+        // the Activity is destroyed; left open, it outlives the test (TD-187).
         screens.forEach { it.close() }
         WorkManagerTestInitHelper.closeWorkDatabase()
         WorkManagerImpl.setDelegate(null)

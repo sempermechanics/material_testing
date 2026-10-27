@@ -20,7 +20,7 @@ import org.robolectric.RobolectricTestRunner
 
 /**
  * The floating-seat release on sign-out, and why an account deletion skips it
- * (TD-206): the backend's erase gives the seat back itself, and a release sent
+ * (TD-193): the backend's erase gives the seat back itself, and a release sent
  * after it, with a token that still works, re-created the erased account's
  * profile and mailed support when it was pending.
  */

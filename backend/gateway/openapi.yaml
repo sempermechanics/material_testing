@@ -693,7 +693,7 @@ paths:
       operationId: adminReleaseTestAccountDevice
       description: >
         Semper staff, fresh step-up. Release one ACTIVE phone of the test
-        account so another can take its place (TD-314); the released phone
+        account so another can take its place (TD-249); the released phone
         may not register for this account again.
       parameters:
         - name: uid

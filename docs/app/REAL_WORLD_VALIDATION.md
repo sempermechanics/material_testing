@@ -149,7 +149,7 @@ because the neck sits inside the region while the gauge points span 60 mm.
 - In this run (`2b94d644`) peak stress read **404.07 MPa at frame 35**, the
   last frame on the curve. The dataset's peak, 435.5 MPa at frame 38, is off
   the curve, and the app then took the peak over the curve's points only.
-  Since TD-147 the peak counts every frame with a load, so this session now
+  Since TD-148 the peak counts every frame with a load, so this session now
   reports 435.50 MPa at frame 38 and says it is off the curve. The viewer on
   the Pixel_8 AVD shows exactly that for this session (2026-09-29), and
   `StressStrainTest` and `LabReportTest` cover it. With the region mean it
@@ -327,7 +327,7 @@ Over all 33 frames: **RMSE 0.0074 mm**, 0.5% of the 1.396 mm peak; bias
 Both E values are within 1%. The app's Results showed "E from the graph ≈
 2.0 GPa (slope 6777.73 N/mm, R² 0.9993)" and "Average E ≈ 2.1 GPa (31 load
 steps)". One decimal hid the 5% gap between the two, so a modulus under
-10 GPa now shows two ("2.00" and "2.10"; `LabReportFormat.gpa`, TD-81).
+10 GPa now shows two ("2.00" and "2.10"; `LabReportFormat.gpa`, TD-103).
 `RealPmmaBendingTest` pins the slope, now from the engine v0.2.3 run at these
 taps: 6769.6 N/mm, 1.997 and 2.104 GPa ([below](#engine-v023-2026-10-01)).
 
@@ -345,7 +345,7 @@ about 100 / N %, where N is the thickness in pixels.
 read "E from the graph ≈ -2.02 GPa (slope -6835.96 N/mm, R² 0.9993)" and
 "Average E ≈ -2.12 GPa", with the graph running to −1.4 mm: the right
 magnitudes for its 579 px taps, the wrong sign. The probe read δ from the
-first tap towards the second. δ is now signed by the load (TD-92), and
+first tap towards the second. δ is now signed by the load (TD-111), and
 `RealPmmaBendingTest` builds the curve with the taps in both orders.
 
 ### Displacement and strain, point by point
@@ -474,7 +474,7 @@ displacement and strain RMSEs. `--windows` adds the plane-fit recompute.
 
 On 2026-09-26, cases 1 and 2 were run again on a phone, plus a third set that the app cannot
 analyse. Pixel 6 (`oriole`), Android 17, debug build (arm64) of `3f50d0e7`,
-the TD-92 fix merged in #51. Cases 1 and 2 use the `prep` output above. Each
+the TD-111 fix merged in #51. Cases 1 and 2 use the `prep` output above. Each
 set has a README that gives its settings, and each run used them; the sets and
 their READMEs now ship in the app (`app/src/main/assets/examples/`, ADR-031),
 where Try it sets those settings itself, all but the bending taps.
@@ -507,7 +507,7 @@ emulator re-run in [case 1](#what-was-run) (a Pixel_8 AVD, API 37, x86_64).
 | E, frames 1–26 | **148.9 GPa**, R² 0.9952 | **148.9 GPa**, R² 0.9952 |
 | ΔL / L₀ ÷ gauge points, frames 13–28 | 1.0796 | 1.0796 |
 | RMSE / bias, frames 1–28 | 73 / +58 µε | 73 / +58 µε |
-| Peak on the curve (before TD-147) | 404.07 MPa, frame 35 | 404.07 MPa, frame 35 |
+| Peak on the curve (before TD-148) | 404.07 MPa, frame 35 | 404.07 MPa, frame 35 |
 
 The two agree. `compare` prints the same numbers except at frame 33, where
 ΔL / L₀ reads 20.826 mε on the phone and 20.827 on the emulator; the phone kept
@@ -516,7 +516,7 @@ differs by more than 0.001, which is arm64 against x86_64 floating point.
 
 ## Engine v0.2.3 (2026-10-01)
 
-Engine v0.2.3 makes Path B deterministic (TD-65), so numbers can move within the
+Engine v0.2.3 makes Path B deterministic (TD-93), so numbers can move within the
 old run-to-run spread. Cases 1 and 2 were run again on a Pixel_8 AVD (API 37,
 x86_64), debug build of `main` at `bd1e6f9a`, with the settings of the runs above.
 Steel used `steel_loads.csv` (one row per frame), not the timed log; the loads per
@@ -557,7 +557,7 @@ Not repeated on the Pixel 6: it carries a release build of this app, which the
 `.dat` pull (`run-as`) cannot read. The engine's arm64 determinism was checked
 there instead: `EnginePipelineSmokeTest.repeatSolve_bitIdentical`, through
 semperdic-app's debug build of the same engine, gave the same bytes on nine
-solves (TD-65).
+solves (TD-93).
 
 ## Case 3 — reinforced concrete beam in 3-point bending: expected to fail
 

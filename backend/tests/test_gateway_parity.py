@@ -105,7 +105,7 @@ def test_every_gateway_path_has_a_handler():
 
 
 def test_the_retired_campus_aliases_are_gone_from_both_halves():
-    """The pre-rename `/v1/campus/*` seat aliases were retired (TD-45) after
+    """The pre-rename `/v1/campus/*` seat aliases were retired (TD-4) after
     30 days with no request. They have to leave the app and the gateway
     together: left in the spec alone, ESPv2 forwards a call to a 404; left in
     the app alone, the parity tests above fail."""
@@ -160,7 +160,7 @@ def test_gateway_responses_carry_only_swagger_keys():
 def test_the_licence_search_is_its_own_literal_path_ahead_of_the_template():
     """`/v1/admin/licenses/search` also matches `/v1/admin/licenses/{licenseId}`,
     which has no POST, so the console check's pattern match cannot tell it is
-    missing. The literal path carries the POST and comes first (TD-244)."""
+    missing. The literal path carries the POST and comes first (TD-203)."""
     spec = yaml.safe_load(_spec_text())["paths"]
     order = list(spec)
     literal, template = "/v1/admin/licenses/search", "/v1/admin/licenses/{licenseId}"

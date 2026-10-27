@@ -486,7 +486,7 @@ def test_monitoring_refuses_bad_input(tmp_path):
     assert proc.returncode == 2
 
 
-# ---------------------------------------------- secret access pre-check (TD-269)
+# ---------------------------------------------- secret access pre-check (TD-215)
 
 _SECRET_CHECK = _REPO / "scripts" / "check_secret_access.sh"
 _RUNTIME_SA = "api@demo-app-prod.iam.gserviceaccount.com"

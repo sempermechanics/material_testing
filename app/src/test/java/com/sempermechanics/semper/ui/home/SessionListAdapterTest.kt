@@ -80,7 +80,7 @@ class SessionListAdapterTest {
         )
     }
 
-    /** A bound row's bar springs to its percent, and no frame ends it here (TD-200). */
+    /** A bound row's bar springs to its percent, and no frame ends it here (TD-188). */
     @After
     fun tearDown() {
         SpringFrames.endAll()

@@ -90,7 +90,7 @@ def verify_id_token(token: str, *, check_revoked: bool = False) -> dict:
 # fail the request it rides on: the state change in Firestore is the control,
 # and these only shorten how long an already-minted token keeps working. Each
 # logs and answers False, and the caller records that answer in its audit row.
-# Both spend `rate_limit.auth_admin_bucket` first (TD-239): over it, the call
+# Both spend `rate_limit.auth_admin_bucket` first (TD-200): over it, the call
 # is not made, `auth_admin_rate_limited` is logged, and the answer is False.
 
 

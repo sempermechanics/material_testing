@@ -154,7 +154,7 @@ def test_holding_a_seat_releases_its_lease(store):
 
 @pytest.mark.parametrize("enabled", [False, True])
 def test_a_hold_or_resume_writes_the_holder_in_the_seats_commit(store, monkeypatch, enabled):
-    """TD-294: the holder's mode moves in the same transaction as the seat.
+    """TD-231: the holder's mode moves in the same transaction as the seat.
     It used to be a separate write after it, and a crash in between left a
     held seat's holder licensed (or a resumed one's in Demo) until IT
     pressed the button again. Any write outside the transaction now fails

@@ -1,4 +1,4 @@
-"""TD-237 (framework 5.3): `audit_logs` is append-only in code, not by
+"""TD-199 (framework 5.3): `audit_logs` is append-only in code, not by
 convention alone.
 
 * Only `repo/audit_log.add_audit_row` writes the collection, and it only adds.
@@ -74,7 +74,7 @@ def test_a_migration_may_not_rewrite_the_audit_log_unless_it_says_so():
     with pytest.raises(ValueError, match="append-only"):
         migrations._load(_module(collections=("users", "audit_logs")), "009_x")
     allowed = migrations._load(_module(collections=("audit_logs",),
-                                       rewrites_append_only="owner decision TD-246"), "009_x")
+                                       rewrites_append_only="owner decision TD-34"), "009_x")
     assert allowed.collections == ("audit_logs",)
     with pytest.raises(ValueError, match="append-only"):
         migrations._load(_module(collections=("audit_logs",), rewrites_append_only=" "), "009_x")
@@ -130,7 +130,7 @@ def test_a_value_json_cannot_hold_is_written_as_text(store, caplog):
     assert _lines(caplog)[0]["auditRow"]["detail"] == {"expiresAt": str(when)}
 
 
-# ---------------- retention (TD-237) ----------------
+# ---------------- retention (TD-199) ----------------
 
 
 def _added_rows(monkeypatch):
@@ -155,7 +155,7 @@ def _added_rows(monkeypatch):
 
 @pytest.mark.parametrize("days", [365, 30])
 def test_a_new_row_carries_its_expiry(monkeypatch, days):
-    """TD-237: each row is added with `expireAt` = now + AUDIT_RETENTION_DAYS,
+    """TD-199: each row is added with `expireAt` = now + AUDIT_RETENTION_DAYS,
     which the TTL policy on `audit_logs.expireAt` deletes; it is never
     rewritten to carry one."""
     from datetime import datetime, timedelta, timezone

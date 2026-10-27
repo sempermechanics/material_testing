@@ -10,7 +10,7 @@
 # not touched (that is scripts/create_ci_firebase_account.sh).
 #
 # The password is generated here (32 letters and digits: no comma, which Gradle
-# would cut an instrumentation argument at, TD-86), sent to Firebase over stdin and
+# would cut an instrumentation argument at, TD-106), sent to Firebase over stdin and
 # written to the properties file, and never printed. Run it again for a new
 # password: an existing account is updated, not duplicated.
 #

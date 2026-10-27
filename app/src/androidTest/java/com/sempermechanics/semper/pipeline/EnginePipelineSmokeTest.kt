@@ -278,7 +278,7 @@ class EnginePipelineSmokeTest {
 
     @Test
     fun repeatSolveIsBitIdentical() {
-        // TD-65: the same inputs solved again on the same device must give the
+        // TD-93: the same inputs solved again on the same device must give the
         // same bytes. A rotation leaves the border cells outside the seed
         // mesh to the threaded Path B flood fill, which used to pick each
         // cell's initial guess by thread timing.
@@ -397,7 +397,7 @@ class EnginePipelineSmokeTest {
             // Cleared as launchBatchAnalysis clears it; the loop no longer does.
             vm.cancelRequested = false
             val run = BatchRun(spec, ctx.cacheDir, System.currentTimeMillis(), Job(), vm.snapshotRunInputs())
-            // TD-173: what the wizard does once the run has its inputs never reaches it.
+            // TD-171: what the wizard does once the run has its inputs never reaches it.
             vm.edit { it.copy(refBytes = null, refName = "other.png", deformedFrames = emptyList()) }
             val outcome = vm.runBatchAnalysisBody(ctx, run) { ticks += it }
             val sessionId = checkNotNull(outcome.sessionId)

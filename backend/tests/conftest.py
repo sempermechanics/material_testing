@@ -51,7 +51,7 @@ def firestore_calls_carry_a_deadline():
     """Fails a test whose app code reached the store double without a timeout.
 
     Every Firestore round trip goes through a `repo/_base.py` helper that sets
-    `timeout` and `retry` (TD-197); a raw `.get()` / `.stream()` / write would
+    `timeout` and `retry` (TD-185); a raw `.get()` / `.stream()` / write would
     run on the client's 60 to 300 s defaults, past the gateway's 60 s.
     """
     fake_firestore.CALLS.clear()

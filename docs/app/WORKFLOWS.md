@@ -184,7 +184,7 @@ The session list and the only entry point to a new analysis.
 | [ ] 3.8 | Tap an "Upload pending" cloud icon | Upload is retried / queued |
 | [ ] 3.8a | Tap a red crossed-out cloud (a failed backup) | A dialog names *why* the last backup failed (device conflict, too large, render ran out of memory, result files no longer on the device) with a **Try again** action — not a silent re-queue |
 | [ ] 3.8b | Let a background backup fail terminally while on Home | A message pill surfaces the reason once (quota-full is excluded — it has its own screen) |
-| [ ] 3.8c | Testers only: sign in to a debug Semper Classroom on the same phone (same debug key, so the same device id, TD-209), then back up or restore in Semper | It works first time. The first signed call is refused `bad_signature`; Semper registers its key again and sends it once more (logcat: "registered it again"). No prompt, and the licence stays as it was |
+| [ ] 3.8c | Testers only: sign in to a debug Semper Classroom on the same phone (same debug key, so the same device id, TD-7), then back up or restore in Semper | It works first time. The first signed call is refused `bad_signature`; Semper registers its key again and sends it once more (logcat: "registered it again"). No prompt, and the licence stays as it was |
 | [ ] 3.9 | Tap a "Not backed up" cloud icon with cloud backup switched off | Settings opens |
 | [ ] 3.10 | Long-press a row | Selection bar with count, select-all, rename, re-run (circular arrow), delete, close |
 | [ ] 3.10a | Select several **Only in cloud** rows | A **Restore** (cloud-download) button joins the bar; tapping it queues one restore per row, shows "Restoring 3 analyses…" once, and each row shows its own progress. Add a row that is on the phone and the button goes away. Demo accounts never see it |
@@ -192,7 +192,7 @@ The session list and the only entry point to a new analysis.
 | [ ] 3.11a | Select one row whose frames are on the phone, saved by this version, and tap **Re-run** (TalkBack: "Re-run as a new analysis"; long-press shows "Re-run") | The selection ends and the wizard opens on **Parameters** after a short "Copying the analysis's photos…": the same reference, the same frames in the same order with their names, the same ROI and mask, and every setting as run (subset, step, strain window, overlap, interpolation). **Compute** saves a **new** row ("steel_00 (2)"), counted towards the quota; the first row, its frames, thumbnail and backup are unchanged (owner decision, 2026-10-15) |
 | [ ] 3.11b | Re-run a parameter sweep | The wizard opens on the sweep's settings page in **Parameter sweep** mode: the same subset and window ranges, sample counts, step depth, line-cut axis and planned lattice, with the one frame the sweep solved against |
 | [ ] 3.11c | Re-run an analysis made from a video | Its frames keep their times and the clip's name: the new row reads "Video · 40 frames, 0:00–0:12" |
-| [ ] 3.11d | Re-run, then sort the frames by name or date on step 1 | Only the wizard's copies are renamed; the first analysis still opens, exports and backs up with all its images (TD-211) |
+| [ ] 3.11d | Re-run, then sort the frames by name or date on step 1 | Only the wizard's copies are renamed; the first analysis still opens, exports and backs up with all its images (TD-197) |
 | [ ] 3.11e | Re-run an **Only in cloud** row | "Can't re-run this analysis" / "Its photos aren't on this phone. Restore it first."; nothing opens and the selection stays |
 | [ ] 3.11f | Re-run a row freed up in Storage | Backed up, with restore available: as 3.11e ("Restore it first"). Otherwise (not backed up, or restore not available to this account or paused): "Can't re-run this analysis" / "This phone doesn't have its original photos." (`SessionSelectionController.kt:181-185`); nothing opens either way |
 | [ ] 3.11h | Re-run a row restored from the cloud, or saved before Re-run kept its reference | "Pick its reference photo" / "This analysis was saved before Re-run kept its reference. Choose the same reference photo; its frames and settings come from the analysis." with **Choose photo** / **Cancel**. Cancel: nothing opens. Choose photo: the reference picker (Photos, with Files for DNG) |
@@ -200,7 +200,7 @@ The session list and the only entry point to a new analysis.
 | [ ] 3.11j | In 3.11h, pick the same reference | "Checking the photo…" (Cancel stops it), then the wizard opens on **Parameters** (or the sweep page) with that reference, copies of the saved frames in run order with their names (and a video's times, on a row saved on this phone), the region and every setting. A row whose region was drawn shows once "The mask wasn't saved; the region is a rectangle." and the ROI is that rectangle; a whole-image row shows nothing. **Compute** saves a new row; the first is unchanged |
 | [ ] 3.11k | Rotate the phone while the picker of 3.11h is up, then pick | The check still runs for the same analysis |
 | [ ] 3.11g | Re-run at the quota cap, or on an institution licence with no free seat | The session limit (or seat) screen, as for **+**; the wizard does not open |
-| [ ] 3.11m | Re-run a **Tensile** or **Bending** analysis | The wizard opens as the same test with the same photos and settings and its load card filled: cross-section or beam dimensions, strain axis, beam-edge taps, and bending's typed masses. Typed bending lands on Parameters, ready to Compute; one that read a load log lands on step 1 with the log to import again. Its run has Results and a lab report (TD-280) |
+| [ ] 3.11m | Re-run a **Tensile** or **Bending** analysis | The wizard opens as the same test with the same photos and settings and its load card filled: cross-section or beam dimensions, strain axis, beam-edge taps, and bending's typed masses. Typed bending lands on Parameters, ready to Compute; one that read a load log lands on step 1 with the log to import again. Its run has Results and a lab report (TD-220) |
 | [ ] 3.12 | Rename a single selection | Text dialog; the new name persists after leaving and returning |
 | [ ] 3.12b | Rename a row to another row's name | It is saved with the next free "(2)", "(3)", and a toast reads "Saved as steel_00 (2)" |
 | [ ] 3.12a | Rename a backed-up analysis, then restore it on another phone (or after a reinstall) | It restores under the new name: the rename re-sends the backup's metadata.json (ADR-013) |
@@ -351,7 +351,7 @@ data**.
 | [ ] 4.14f | Download a row whose cloud zip is unavailable | It falls back to packing the local session into the same destination |
 | [ ] 4.14g | Cause a Download to fail | The empty destination file is removed rather than left as a 0-byte zip, and the failure is named |
 | [ ] 4.14h | Look at cloud-only rows of backups made from one image, beside a phone row of that name | Named without the extension and never alike: "steel_00 (2)", "pmma_00", "pmma_00 (2)"; restored, each keeps the name it was backed up with, numbered on a clash |
-| [ ] 4.14i | Back up a sweep and a renamed analysis, then look at their cloud-only rows here and on Home's restore list (another phone, or after deleting the phone copies) | Listed by the analysis's name ("steel_24 sweep", the new name), the name the restore gives the row, not the reference's file name. Rename one after its backup: after the metadata re-send the list shows the new name. A backup from an older build, or on a backend from before TD-208, is still listed by its reference's name |
+| [ ] 4.14i | Back up a sweep and a renamed analysis, then look at their cloud-only rows here and on Home's restore list (another phone, or after deleting the phone copies) | Listed by the analysis's name ("steel_24 sweep", the new name), the name the restore gives the row, not the reference's file name. Rename one after its backup: after the metadata re-send the list shows the new name. A backup from an older build, or on a backend from before TD-195, is still listed by its reference's name |
 | [ ] 4.15 | Tap the bin on a row with a local copy | The same three choices as Home §3.13: phone / cloud backup / everywhere, plus Cancel |
 | [ ] 4.16 | Tap the bin on a cloud-only row | "Delete steel_00 from the cloud?" naming the analysis, "Raw images, results and report. This can't be undone.", and **Delete** |
 | [ ] 4.17 | Confirm any backup delete, then tap **Undo** within 5 s | The row returns; nothing is deleted server-side |
@@ -529,7 +529,7 @@ edge taps at 39 and 612 px (573 px, 0.0541 mm/px) and ROI 2180 × 520 at
 stores 4.903, 9.807, 14.710 and 0 N (`loadsN`, read with `run-as`, since the
 scrub label reads the line under the finger, not the dot). One gap: after a
 switch the cursor goes to the first box, but the keyboard stays down until a
-box is tapped (TD-141).
+box is tapped (TD-143).
 
 **5.1b.40–43 on the Pixel 6 (2026-09-30, the tree merged as #108 and #107)**, with
 `semper_test_data/2_bending_pmma_real` and its CSV loads (taps 573 px,
@@ -581,7 +581,7 @@ rotation, and that every PNG came from the lossless Y-plane path rather than the
 retriever fallback. Keyframes mode is checked on every rung: the hardware decoder,
 the AVI demuxer (an indexed H.264 AVI gives its I-frames; an all-intra or
 index-less AVI falls back to the interval), and the retriever, forced; every
-rung's frames carry their own clip times (the retriever's from a sample walk, TD-207,
+rung's frames carry their own clip times (the retriever's from a sample walk, TD-194,
 also checked at a fixed 7 fps). Rows 5.1a.1–11 remain for the
 sheet itself and for real vendor decoders and camera AVIs.
 | [ ] 5.1a.14 | Semper Classroom: extract with **Keyframes** for a tensile or bending run, then add its timed load log | Each frame's load is matched by its own clip time less the reference's; a frame inside the log's start lag gets none |
@@ -1089,7 +1089,7 @@ row (`SessionStore.save`). In order:
    stop instead (`AccountCache.setDeviceLimitReached`, read by
    `SessionQuota.deviceStop` while the server counts the account as demo). Fresh
    account numbers do not lift it, so the limit screen's Re-check keeps it; a
-   delete on the phone, sign-out or a licence does (TD-279).
+   delete on the phone, sign-out or a licence does (TD-219).
 4. Otherwise blocked when the larger of the server's last count and the phone's
    rows reaches `LicenseEntitlements.analysisCap()`. The phone's rows are the
    session index's: a check off the main thread counts them, and a tap on the main
@@ -1292,7 +1292,7 @@ verified, both are live; §1.13a covers the in-app reset form it opens.
 - **The licences screen covers the example data and the engine only.**
   Credits & licences (§4.26d) shows the example sets' credits and the DICe,
   OpenCV and Eigen licences; the AndroidX, Firebase and OkHttp notices are not
-  listed yet (TD-331). Privacy Policy and Terms of Service are linked from the
+  listed yet (TD-57). Privacy Policy and Terms of Service are linked from the
   About dialog and open the hosted pages in a browser.
 - **Crash reporting is opt-in and off until accepted.** Crashlytics collection
   is disabled in the manifest and enabled only after the first-run prompt or the

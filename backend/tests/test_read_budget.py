@@ -172,7 +172,7 @@ async def _measure(client, priv, meter):
 
 #: (reads, writes) per request, measured 2026-09-25. POST /v1/sessions was
 #: (14, 11) before the inline path stopped reading back what it had just written.
-#: GET and POST /v1/sessions each gained one read the same day (TD-121): the
+#: GET and POST /v1/sessions each gained one read the same day (TD-128): the
 #: quota count subtracts a second count of PROVISION_FAILED sessions, which
 #: store nothing and were being charged as stored analyses. POST /v1/sessions
 #: lost one again on 2026-10-05: the retry lookup is one query, not two.
@@ -204,7 +204,7 @@ async def test_firestore_cost_per_request_stays_in_budget(world, client, capsys)
 
 #: Reads for one POST /v1/sessions by manifest size, up to the largest manifest
 #: provisioned inline (INLINE_PROVISION_MAX_FILES). Before: 8 + 2N, then 6 + N,
-#: then 7 + N with the failed-session count in the quota check (TD-121), then
+#: then 7 + N with the failed-session count in the quota check (TD-128), then
 #: 6 + N once the retry lookup became one `status in` query (2026-10-05),
 #: then 8 + N for a demo account with the per-device count (2026-10-18).
 CREATE_READS = {1: 9, 3: 11, 8: 16}

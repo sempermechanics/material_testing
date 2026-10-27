@@ -58,7 +58,7 @@ Typed loads and a CSV are never combined; ✕ on one brings back the choice. Ten
   - MPa ÷ mε = GPa.
 - **The reference is not forced onto the line.** Labs zero the gauge under a preload. Through the origin, Exp. 2 would read 218 GPa, not 194.
 - **Yield strength Rp0.2** (0.2 % offset): where the curve meets the E line moved 0.2 % (2 mε) along the strain axis, read between the two photos either side (`YieldStrength`). It is marked with a diamond, with its value in the legend, on the viewer's curve and the report's full curve graph. Without E, or when the curve peaks before it reaches the offset line, there is none, and the viewer and the report say so. Photos far apart around yield make it coarse.
-- **Peak stress,** the highest over every photo with a load. A photo with a load but no strain still counts; the viewer and the report then say it is off the curve (TD-147).
+- **Peak stress,** the highest over every photo with a load. A photo with a load but no strain still counts; the viewer and the report then say it is off the curve (TD-148).
 - **The virtual extensometer** (`Extensometer`) gives both ε and the report table's **Extension (px)**:
   - Two end bands, each a tenth of the region, are fixed on the first solved photo.
   - ΔL is the mean displacement of the far band minus that of the near band.

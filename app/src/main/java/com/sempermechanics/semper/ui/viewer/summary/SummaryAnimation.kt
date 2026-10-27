@@ -43,7 +43,7 @@ import java.util.concurrent.ConcurrentHashMap
  *   handed to [GifEncoder] with that palette, so nothing is quantised.
  *
  * Each frame is drawn in the deformed configuration, its points where they
- * moved to, as the viewer draws a frame on its own photo (ADR-011, TD-139), in
+ * moved to, as the viewer draws a frame on its own photo (ADR-011, TD-141), in
  * one box that covers the whole sequence's movement.
  *
  * Frames are encoded one at a time and never accumulated, so a 150-frame
@@ -255,7 +255,7 @@ class SummaryAnimation(private val spec: Spec) {
     }
 
     /**
-     * One frame as the viewer draws a frame on its own photo (ADR-011, TD-139):
+     * One frame as the viewer draws a frame on its own photo (ADR-011, TD-141):
      * each point where it moved to, [VisualizationEngine.indices].
      * The GIF carries no photo (its palette is the jet ramp and the canvas
      * colour), so every frame is drawn displaced, photo on disk or not.
@@ -375,7 +375,7 @@ class SummaryAnimation(private val spec: Spec) {
             // The frame buffer and the per-field columns are reused across frames,
             // growing only for a larger frame: allocating both per frame cost ~1 MB at
             // 19 200 points (~50 MB at 1 M) on the one pass a session without a
-            // sidecar makes before saving one (TD-87).
+            // sidecar makes before saving one (TD-107).
             var frameBuffer: FloatArray? = null
             var columns: Array<FloatArray>? = null
             batchFiles.forEachIndexed { index, file ->

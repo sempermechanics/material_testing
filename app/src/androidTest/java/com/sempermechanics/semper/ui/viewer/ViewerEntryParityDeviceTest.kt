@@ -26,7 +26,7 @@ import java.nio.ByteOrder
 /**
  * The lattice → viewer hop must carry the sweep's arguments to the node
  * picked. A session opened straight from the run that made it and later from
- * Home used to be two builders kept equal only here (TD-61, ADR-003/004);
+ * Home used to be two builders kept equal only here (TD-90, ADR-003/004);
  * both now open its saved row through [ViewerArgs.of], which the JVM
  * `ViewerArgsTest` pins.
  */

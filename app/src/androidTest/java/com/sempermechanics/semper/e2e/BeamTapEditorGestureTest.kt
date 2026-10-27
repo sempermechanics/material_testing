@@ -32,7 +32,7 @@ import kotlin.random.Random
  * The bending tap editor under real touches: a tap on the top edge and one on
  * the bottom edge give the taps it saves, the bottom mark snaps to the top
  * mark's x when the finger slips a little sideways and keeps its own on a
- * tilted beam (`BeamTapPlacement`, TD-310), and a pinch-zoom survives the next
+ * tilted beam (`BeamTapPlacement`, TD-246), and a pinch-zoom survives the next
  * tap (the photo stays still between taps).
  */
 @RunWith(AndroidJUnit4::class)

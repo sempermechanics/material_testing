@@ -265,7 +265,7 @@ destination (§4 of [WORKFLOWS.md](WORKFLOWS.md)), and the lattice's **Save grap
 goes to the system chooser directly.
 
 Every export of a frame draws what the viewer draws for it
-([ADR-011](../adr/ADR-011-viewer-deformed-frame.md), TD-139). The field PNGs
+([ADR-011](../adr/ADR-011-viewer-deformed-frame.md), TD-141). The field PNGs
 (`FieldImageExport.renderAnnotated`) and the report's field images
 (`ReportBuilder.buildReport`, from `ViewerReportFactory` and the cloud bundle)
 look up the frame's own photo as the viewer does (`deformedImagePath`), decode it

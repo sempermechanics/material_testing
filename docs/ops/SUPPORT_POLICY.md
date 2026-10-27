@@ -3,7 +3,7 @@
 Readiness Part D6 and item 6.6 ([READINESS_FRAMEWORK_2026-10.md](READINESS_FRAMEWORK_2026-10.md)).
 **Draft.** Every value marked **TBD** is a business commitment the operator sets;
 nothing here is an offer to a customer until it is in a signed contract or the
-Terms. Owned by TD-258.
+Terms. Owned by TD-45.
 
 Support contact: the support address configured for the deployment
 (`SUPPORT_EMAIL`, default `support@sempermechanics.com`, `backend/app/config.py`),
@@ -49,12 +49,12 @@ days (`ops/monitoring/slo/availability.json`); an internal objective, not an SLA
   Phones on Android 7–10 can no longer install or update the app.
 - Backend changes keep the supported versions working (expand / contract,
   [FIRESTORE_SCHEMA_RUNBOOK.md](../backend/FIRESTORE_SCHEMA_RUNBOOK.md)); a CI job
-  that proves it for N-2 is owed (TD-251).
+  that proves it for N-2 is owed (TD-39).
 
 ## Deprecation notice
 
 Notice before raising the minimum version or removing a customer-visible backend
-behaviour: **TBD** (period, channel). The Terms state none today (TD-258). The
+behaviour: **TBD** (period, channel). The Terms state none today (TD-45). The
 in-app nudge (`RECOMMENDED_VERSION_CODE_MATERIAL_TESTING` for this app,
 `RECOMMENDED_VERSION_CODE` for Semper) is the earliest technical notice; raise it
 one release before the minimum.
@@ -73,5 +73,5 @@ is for Firestore restores and schema migrations that stop writers.
 
 ## Status page
 
-None yet (TD-258). Until one exists, incidents are communicated by email to
+None yet (TD-45). Until one exists, incidents are communicated by email to
 affected institution contacts.

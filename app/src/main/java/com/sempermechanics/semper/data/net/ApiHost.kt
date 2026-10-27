@@ -13,7 +13,7 @@ import okhttp3.Response
  *
  * The backend is a host *and* a port, written `host:port` with the port always
  * explicit, so `https://api.x` and `https://api.x:443` are the same backend and
- * `https://api.x:8443` is another one (TD-160).
+ * `https://api.x:8443` is another one (TD-158).
  */
 internal object ApiHost {
 

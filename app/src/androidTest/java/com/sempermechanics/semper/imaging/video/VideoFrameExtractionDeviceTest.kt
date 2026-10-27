@@ -43,7 +43,7 @@ import kotlin.math.abs
  * Keyframe mode is checked on each rung: the hardware decoder, the AVI
  * demuxer (indexed, all-intra and index-less files), and the retriever,
  * forced; frames from each carry their own clip times (the retriever's from
- * a sample walk, TD-207).
+ * a sample walk, TD-194).
  */
 @RunWith(AndroidJUnit4::class)
 class VideoFrameExtractionDeviceTest {
@@ -92,12 +92,12 @@ class VideoFrameExtractionDeviceTest {
         val frames = extract(clip, preferKeyframes = false, fps = 10.0, endMs = CLIP_MS)
         assertEquals((0..87 step 3).toList() + 89, frames.map { it.code(rotation = 0) })
         frames.forEach { it.assertGrayOfSize(W, H) }
-        // TD-207: each frame is timed by its own presentation time, so the last
+        // TD-194: each frame is timed by its own presentation time, so the last
         // sample (asked for at 3000 ms) reads frame 89's 2966 ms.
         frames.drop(1).forEach { it.assertTimedAsFrame(it.code(rotation = 0)) }
     }
 
-    // ---- Key frames mode on the retriever rung, forced (TD-154) ----------------
+    // ---- Key frames mode on the retriever rung, forced (TD-153) ----------------
 
     @Test
     fun keyframeModeOnTheRetrieverRungExtractsEachIFrame() {
@@ -105,7 +105,7 @@ class VideoFrameExtractionDeviceTest {
         val frames = extractWithRetriever(clip, preferKeyframes = true, fps = 5.0, endMs = CLIP_MS)
         // At 5 fps a uniform plan would hold 15 frames; the I-frames are three.
         assertEquals(listOf(0, 30, 60), frames.map { it.code(rotation = 0) })
-        // TD-207: each I-frame is timed by its own presentation time.
+        // TD-194: each I-frame is timed by its own presentation time.
         frames.drop(1).forEach { it.assertTimedAsFrame(it.code(rotation = 0)) }
     }
 
@@ -113,7 +113,7 @@ class VideoFrameExtractionDeviceTest {
     fun fixedIntervalOnTheRetrieverRungTimesEachFrameByItsOwnTime() {
         val clip = encodeMp4("retriever-uniform.mp4", rotation = 0)
         // 7 fps asks for t = 0, 142, 285, … ms, none of them a 30 fps frame's start:
-        // each frame reads the time of the frame the retriever returned (TD-207).
+        // each frame reads the time of the frame the retriever returned (TD-194).
         val frames = extractWithRetriever(clip, preferKeyframes = false, fps = 7.0, endMs = 2_000)
         assertTrue("too few frames: ${frames.size}", frames.size > 2)
         frames.drop(1).forEach { it.assertTimedAsFrame(it.code(rotation = 0)) }
@@ -182,7 +182,7 @@ class VideoFrameExtractionDeviceTest {
 
     @Test
     fun keyframeModeOnAnIndexedH264AviExtractsEachIFrame() {
-        // TD-154: the AVI rung reads the idx1 keyframe flags, one I-frame a second.
+        // TD-153: the AVI rung reads the idx1 keyframe flags, one I-frame a second.
         val frames = extract(h264Avi("h264-keyframes.avi"), preferKeyframes = true, fps = 5.0, endMs = CLIP_MS)
         assertEquals(listOf(0, 30, 60), frames.map { it.code(rotation = 0) })
         frames.forEach { it.assertGrayOfSize(W, H) }

@@ -69,7 +69,7 @@ internal class HomeQuotaCard(
 
     private fun updateQuotaIndicator(localSessionCount: Int) {
         // The cap the gate enforces, not the server's maxSessions: with the
-        // entitlement token lapsed that is demo's (TD-263).
+        // entitlement token lapsed that is demo's (TD-209).
         val max = LicenseEntitlements.shownAnalysisCap(activity)
         val used = AccountCache.quotaUsed(activity).coerceAtLeast(localSessionCount)
         if (max <= 0) {

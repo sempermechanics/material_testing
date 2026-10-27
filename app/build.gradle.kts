@@ -141,7 +141,7 @@ android {
     namespace = "com.sempermechanics.semper"
     // core-ktx 1.19+ (gradle-deps) requires compileSdk 37+ (AAR metadata).
     compileSdk = 37
-    // Pinned (TD-37): the engine builds with -ffast-math and the .dat oracles
+    // Pinned (TD-73): the engine builds with -ffast-math and the .dat oracles
     // are bit-exact, so a compiler change must be a deliberate edit, not a side
     // effect of an AGP bump. This is AGP 9.3.2's default NDK as of 2026-09-23.
     ndkVersion = "28.2.13676358"
@@ -271,7 +271,7 @@ android {
             // Local builds stay offline: the plugin still injects the build-ID
             // resource the SDK needs and skips the mapping upload. The release
             // workflow passes -PuploadCrashlyticsMapping=true so Crashlytics keeps
-            // the R8 mapping privately for the project's life (TD-40); the
+            // the R8 mapping privately for the project's life (TD-76); the
             // workflow artifact alone expires after 90 days, and attaching it to
             // the public GitHub Release would undo the obfuscation.
             configure<CrashlyticsExtension> {
@@ -340,7 +340,7 @@ android {
             isIncludeAndroidResources = true
             all { test ->
                 // Gradle gives a test worker 512 MB unless told otherwise. The
-                // suite's live heap reached 430-460 MB of that (TD-199, local
+                // suite's live heap reached 430-460 MB of that (TD-187, local
                 // and CI GC logs), so an OutOfMemoryError could land in the
                 // worker's own thread and end it with "Gradle Test Executor 1
                 // finished with non-zero exit value 1" and no failing test.
@@ -354,7 +354,7 @@ android {
                 // rest. 2 GB is headroom for the suite to grow, not a need.
                 test.maxHeapSize = "2g"
                 // The exit still recurs now and then with the same message and
-                // no failing test (TD-312: firebase-bom 35 on #453, and the
+                // no failing test (TD-54: firebase-bom 35 on #453, and the
                 // Semper Classroom fork). So the worker leaves what ended it:
                 // a heap dump on an OutOfMemoryError, the JVM's error file on
                 // a crash, and a GC log of how full the heap ran. Tier 1 prints
@@ -369,8 +369,8 @@ android {
                 // (CI run 40312454011), but with two, one worker ended with
                 // "finished with non-zero exit value 1" after its last class in
                 // 3 of 3 local runs (Windows, 2026-10-26; one with JaCoCo off),
-                // the TD-312 exit made certain; one worker passed. Try
-                // -PunitTestForks=2 when working on TD-312. The GC log is per
+                // the TD-54 exit made certain; one worker passed. Try
+                // -PunitTestForks=2 when working on TD-54. The GC log is per
                 // worker (%p), so two do not write one file.
                 test.maxParallelForks =
                     (project.findProperty("unitTestForks") as String?)?.toIntOrNull() ?: 1

@@ -86,7 +86,7 @@ class DicUploadWorkerTest : UploadWorkerHarness() {
         seed(cloudSessionId = "cs1")
         // cs1 declared other Session.zip bytes of the same size: a zip packed
         // again has new entry timestamps. Resumed, :complete's md5 would pass on
-        // the new bytes and every restore fail the declared sha256 (TD-281).
+        // the new bytes and every restore fail the declared sha256 (TD-221).
         val declared = hashed(pendingAll()).map { if (it.role == "bundle") it.copy(sha256 = "0".repeat(64)) else it }
         api.onSessionUploads = { uploading(it, declared) }
 
@@ -236,7 +236,7 @@ class DicUploadWorkerTest : UploadWorkerHarness() {
     }
 
     @Test
-    fun `the device's cap holds its own stop, not the account's (TD-279)`() {
+    fun `the device's cap holds its own stop, not the account's (TD-219)`() {
         seed()
         api.onCreateSession = { throw apiError(409, "device_quota_exceeded: the demo allows 25 analyses.") }
         DicUploadSeams.inForeground = { false }
@@ -418,7 +418,7 @@ class DicUploadWorkerTest : UploadWorkerHarness() {
         val declared = api.created!!.files.associateBy { it.name }
         assertEquals(setOf("metadata.json", "Session.zip", "Extras.zip"), declared.keys)
         assertEquals(ID, api.created!!.localSessionId)
-        // The backup list shows the analysis's name, not the reference's file name (TD-208).
+        // The backup list shows the analysis's name, not the reference's file name (TD-195).
         assertEquals("n", api.created!!.name)
         assertEquals("ref.png", api.created!!.specimen)
         assertEquals(listOf("metadata", "bundle", "extras"), api.created!!.files.map { it.role })

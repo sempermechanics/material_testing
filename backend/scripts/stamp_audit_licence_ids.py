@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stamp `licenseId` and `expireAt` on audit rows written before the backend did (TD-246, TD-237).
+"""Stamp `licenseId` and `expireAt` on audit rows written before the backend did (TD-34, TD-199).
 
 Since 2026-10-18 every row whose target is a licence, a seat, an invite or a
 lease carries `licenseId` (`audit.licence_of`), and a licence's audit export
@@ -7,7 +7,7 @@ reads only those (`repo/audit_log.page_license_audit`). Rows from before then
 are absent from every export. This adds the field to them, derived from the
 row's own `target` exactly as `record` derives it.
 
-Since TD-237 (retention one year, the owner's decision of 2026-10-22) every
+Since TD-199 (retention one year, the owner's decision of 2026-10-22) every
 new row also carries `expireAt` = its time + `AUDIT_RETENTION_DAYS`
 (`repo/audit_log.add_audit_row`), which the Firestore TTL policy on
 `audit_logs.expireAt` deletes. Rows from before then carry none and would be
@@ -19,7 +19,7 @@ gets an `expireAt` in the past, and TTL deletes it once the policy is on.
 Nothing else changes: not `ts`, not `schemaVersion`, not the action or its
 detail, and a field a row already has is never overwritten.
 
-`audit_logs` is append-only (TD-237): this is the one rewrite of it after
+`audit_logs` is append-only (TD-199): this is the one rewrite of it after
 migration 001, so `--apply` refuses to run without `--decision`, the owner's
 decision that allows it, which goes in the ledger (`_migrations/{LEDGER_ID}`)
 with the counts. The alternative the owner may choose instead is to state the
@@ -30,7 +30,7 @@ skipped, so an interrupted run is resumed by running it again.
 
     python scripts/stamp_audit_licence_ids.py --project indicvision-dic-app
     python scripts/stamp_audit_licence_ids.py --project indicvision-dic-app \\
-        --apply --decision "TD-246: backfill approved by <owner>, <date>"
+        --apply --decision "TD-34: backfill approved by <owner>, <date>"
 
 Run it after the backend that stamps new rows is deployed, or rows written
 in between are missed (a rerun picks them up).
@@ -85,7 +85,7 @@ def stamp(client, *, apply: bool, decision: str, page: int = PAGE,
     decision = (decision or "").strip()
     if apply and not decision:
         raise SystemExit("--apply rewrites the append-only audit log: pass --decision "
-                         "with the owner decision that allows it (TD-246).")
+                         "with the owner decision that allows it (TD-34).")
     days = settings.AUDIT_RETENTION_DAYS if retention_days is None else retention_days
     retention = timedelta(days=days)
     ledger = client.collection(LEDGER).document(LEDGER_ID)

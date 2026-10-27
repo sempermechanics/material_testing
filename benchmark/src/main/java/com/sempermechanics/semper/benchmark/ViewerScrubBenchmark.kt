@@ -35,7 +35,7 @@ import org.junit.runner.RunWith
  * UI is awaited instead.
  *
  * [scrub150FramesWithPhotos] opens a separate session whose frames each have their own
- * photo, so every frame is drawn with the deformed-frame heatmap over it (TD-175). It is
+ * photo, so every frame is drawn with the deformed-frame heatmap over it (TD-173). It is
  * report-only: `benchmark/gates.json` lists no reference for it.
  *
  * Run: `./gradlew :benchmark:connectedBenchmarkAndroidTest`
@@ -48,7 +48,7 @@ class ViewerScrubBenchmark {
     @get:Rule
     val benchmarkRule = MacrobenchmarkRule()
 
-    /** The phone's thermal, charger and memory state around each test (TD-135). */
+    /** The phone's thermal, charger and memory state around each test (TD-6). */
     @get:Rule
     val deviceState = DeviceStateRule()
 

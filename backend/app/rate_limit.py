@@ -131,7 +131,7 @@ institution_bucket = TokenBucket(rate_per_sec=1.0, burst=10.0)
 # bucket. A burst of 3 covers a re-import to finish rows an import ran out of
 # time for; after that, one a minute.
 roster_import_bucket = TokenBucket(rate_per_sec=1 / 60, burst=3.0)
-# Firebase Auth Admin calls (TD-239): the step-up revocation check,
+# Firebase Auth Admin calls (TD-200): the step-up revocation check,
 # `google_auth.revoke_sessions` and `google_auth.delete_auth_user`. One shared
 # key, because what it protects is the Auth project's quota, not a caller's
 # fair share; see `settings.AUTH_ADMIN_CALLS_PER_SECOND`.

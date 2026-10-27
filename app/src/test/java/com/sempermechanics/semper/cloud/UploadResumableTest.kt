@@ -35,7 +35,7 @@ import java.io.File
  * resuming re-sent bytes Drive already had (size-mismatch 400s), an upload
  * that was already complete "finished without a final Drive response", and
  * the server-supplied chunk size being trusted blindly. And one it would have:
- * moving past a chunk Drive only partly kept (TD-158).
+ * moving past a chunk Drive only partly kept (TD-156).
  */
 @RunWith(RobolectricTestRunner::class)
 class UploadResumableTest {

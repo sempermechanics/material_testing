@@ -50,7 +50,7 @@ def app_for_device(device: dict | None) -> str:
     device document says so (by either name, `apps.same_app`), Semper
     otherwise. Tagged with the stored name (`apps.stored_name`)."""
     if apps.same_app((device or {}).get("app"), apps.SEMPER_CLASSROOM):
-        return apps.stored_name(apps.SEMPER_CLASSROOM)  # TD-330
+        return apps.stored_name(apps.SEMPER_CLASSROOM)  # TD-56
     return apps.SEMPER
 
 

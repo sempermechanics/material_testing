@@ -42,7 +42,7 @@ import java.io.File
  * of them ([RerunLoader], [applyRerun]): the same reference, frames in the
  * same order with their names and clip times, ROI, mask and settings, and for
  * a sweep its plan, in sweep mode. The copy lives in the wizard's own import
- * cache, so nothing the new analysis does (sorting included, TD-211) reaches
+ * cache, so nothing the new analysis does (sorting included, TD-197) reaches
  * the saved one.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -186,7 +186,7 @@ class RerunInputsTest {
     }
 
     @Test
-    fun `sorting frames that sit in a saved analysis leaves them as they are (TD-211)`() {
+    fun `sorting frames that sit in a saved analysis leaves them as they are (TD-197)`() {
         val raw = SessionLayout(SessionStore.dirFor(ctx, "saved")).rawDeformedDir.apply { mkdirs() }
         val frames = listOf("b.png", "a.png").map { name ->
             DeformedFrame(File(raw, name).apply { writeText(name) }.absolutePath, name)

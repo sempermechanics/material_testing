@@ -2,12 +2,12 @@
 
 Each test pins one fix, named by its TECH_DEBT id:
 
-- TD-116  a device-change refusal says when the holder may change again
-- TD-117  `maxSeats` cannot be set below an assigned roster ("12 of 10 seats")
-- TD-118  a whole-licence revoke answers with the counts it just wrote
-- TD-119  an invite is not claimed onto a licence past its grace
-- TD-120  a provisioning retry never moves a COMPLETED session back
-- TD-121  a PROVISION_FAILED session is not charged to the quota
+- TD-123  a device-change refusal says when the holder may change again
+- TD-124  `maxSeats` cannot be set below an assigned roster ("12 of 10 seats")
+- TD-125  a whole-licence revoke answers with the counts it just wrote
+- TD-126  an invite is not claimed onto a licence past its grace
+- TD-127  a provisioning retry never moves a COMPLETED session back
+- TD-128  a PROVISION_FAILED session is not charged to the quota
 """
 from datetime import datetime, timedelta, timezone
 
@@ -35,7 +35,7 @@ def _seat(store, license_id, key, uid):
     assert err == ""
 
 
-# ============================================================ TD-116 cooldown
+# ============================================================ TD-123 cooldown
 
 
 @pytest.mark.asyncio
@@ -59,7 +59,7 @@ async def test_a_refused_device_change_says_when_over_http(store, client, monkey
     assert abs(retry_after - remaining) < 60
 
 
-# ======================================================== TD-117 seat cap
+# ======================================================== TD-124 seat cap
 
 
 @pytest.mark.asyncio
@@ -99,7 +99,7 @@ async def test_a_floating_pool_may_be_smaller_than_its_roster(store, client):
     assert resp.status_code == 200, resp.text
 
 
-# ===================================================== TD-118 revoke counts
+# ===================================================== TD-125 revoke counts
 
 
 def test_revoking_an_institution_licence_answers_with_zero_seats(store):
@@ -118,7 +118,7 @@ def test_revoking_an_institution_licence_answers_with_zero_seats(store):
     assert out["seatsUsed"] == store._data["licenses"][license_id]["seatsUsed"]
 
 
-# ==================================================== TD-119 lapsed invite
+# ==================================================== TD-126 lapsed invite
 
 
 def _lapse(store, license_id):
@@ -177,7 +177,7 @@ def test_the_invite_is_claimed_once_the_licence_is_extended(store):
     assert out["mode"] == "licensed"
 
 
-# ================================================ TD-120 / TD-121 sessions
+# ================================================ TD-127 / TD-128 sessions
 
 
 def _file(name: str) -> dict:

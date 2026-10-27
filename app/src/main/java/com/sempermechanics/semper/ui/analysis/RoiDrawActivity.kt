@@ -241,7 +241,7 @@ class RoiDrawActivity : AppCompatActivity() {
      * The whole pixels the HUD and typed fields show for [rect] (image px), or
      * null when it is empty. A [crop] is rounded as Save rounds it
      * ([Roi.fromImageRect]: each edge, then clamped to the image), so the two
-     * never read a pixel apart (TD-162). A hole shows its size and corner each
+     * never read a pixel apart (TD-160). A hole shows its size and corner each
      * rounded; the mask encoder takes it from the floats.
      */
     private fun shownRoi(rect: RectF, crop: Boolean = !erasing): Roi? = when {

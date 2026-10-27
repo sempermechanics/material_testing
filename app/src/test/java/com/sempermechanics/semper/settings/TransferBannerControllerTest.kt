@@ -36,7 +36,7 @@ class TransferBannerControllerTest {
     /**
      * The banner here is never in a window, so nothing ends its bar's spring,
      * and one still moving would hold its Settings for the rest of the run
-     * (TD-200).
+     * (TD-188).
      */
     @After
     fun destroySettings() {

@@ -20,7 +20,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 /**
- * Home's Re-run of a lab test (TD-280): the record's test, dimensions, taps
+ * Home's Re-run of a lab test (TD-220): the record's test, dimensions, taps
  * and typed masses reach the wizard, and a test that read a load log lands on
  * step 1 to import it again.
  */

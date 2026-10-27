@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Create the CI Firebase test account and store it as the two repo secrets
-# FirebaseAuthIntegrationTest reads on Tier 3 (TD-200).
+# FirebaseAuthIntegrationTest reads on Tier 3 (TD-188).
 #
 # The password is generated here (32 letters and digits: no comma, which Gradle
-# would cut an instrumentation argument at, TD-86), sent to Firebase and to
+# would cut an instrumentation argument at, TD-106), sent to Firebase and to
 # GitHub over stdin, and never printed. Run it again with --rotate to give the
 # existing account a new password and update the secret.
 #

@@ -27,7 +27,7 @@ from types import ModuleType
 _NAME_RE = re.compile(r"^(\d{3})_[a-z0-9_]+$")
 
 #: Collections no migration rewrites unless it says why, in a module-level
-#: `rewrites_append_only = "<the decision>"` (TD-237). `audit_logs` is the
+#: `rewrites_append_only = "<the decision>"` (TD-199). `audit_logs` is the
 #: audit trail: the backend only ever adds to it (`repo/audit_log.py`).
 APPEND_ONLY = frozenset({"audit_logs"})
 

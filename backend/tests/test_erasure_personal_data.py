@@ -1,11 +1,11 @@
-"""Account erasure leaves no address and no sign-in link behind (TD-243).
+"""Account erasure leaves no address and no sign-in link behind (TD-202).
 
 `delete_all_user_data` deletes `auth_links/{firebaseSub}` for every sub that
 resolves to the account, and blanks the address on every seat the account
 held, on any licence, live or in a deleted licence's hold. The seats stay, so
 `seatsUsed`, reconciliation and the licence's audit export still count them;
 a live one is revoked first so the counts read as after any other revoke.
-Only `audit_logs` keeps anything, and it holds no address (TD-242).
+Only `audit_logs` keeps anything, and it holds no address (TD-201).
 """
 import json
 import logging

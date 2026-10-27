@@ -167,7 +167,7 @@ class TransferReactionsTest {
         run(setOf("upload", "upload-c"), workDataOf(IntentKeys.UPLOAD_FAIL_REASON to reason), fail = true)
         idleUntil("the backup failure pill") { pills.isNotEmpty() }
 
-        // A new Home is handed the same retained job: the ledger keeps it quiet (TD-166).
+        // A new Home is handed the same retained job: the ledger keeps it quiet (TD-164).
         close(home)
         launch(HomeActivity::class.java)
         val later = "Device conflict (ref r5)"

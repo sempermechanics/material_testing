@@ -6,7 +6,7 @@
 
 ## Context
 
-TD-26 said the wizard loses state on rotation. It does not:
+TD-67 said the wizard loses state on rotation. It does not:
 `StaticAnalysisActivity` declares the full `configChanges` set
 (`AndroidManifest.xml:207-209`), so rotation, dark mode and font scale never
 recreate it. **Process death** does, and nothing survives it:
@@ -93,7 +93,7 @@ the import, which on a 150-frame batch is minutes.
 4. [x] Restore path + "draft lost" snackbar; guard `applyRoiResult`.
 5. [x] Tests: JVM restore from a `SavedStateHandle`; emulator
        `WizardDraftRestoreTest`; scripted `adb shell am kill` pass.
-6. [x] Close TD-26.
+6. [x] Close TD-67.
 
 ## As built (2026-09-24)
 

@@ -54,7 +54,7 @@ class SessionLimitActivity : AppCompatActivity() {
 
     /**
      * The body and the counter, by which half of the cap holds the stop. The
-     * account's counter is beside the point when the device is full (TD-279):
+     * account's counter is beside the point when the device is full (TD-219):
      * "3 / 25" under "limit reached" reads as a fault, so it is hidden.
      */
     private fun renderQuota() {
@@ -62,7 +62,7 @@ class SessionLimitActivity : AppCompatActivity() {
         binding.tvLimitBody.setText(if (deviceStop) R.string.limit_body_device else R.string.limit_body)
         val used = AccountCache.quotaUsed(this)
         // The cap the gate enforces, not the server's maxSessions: with the
-        // entitlement token lapsed that is demo's (TD-263).
+        // entitlement token lapsed that is demo's (TD-209).
         val max = LicenseEntitlements.shownAnalysisCap(this)
         // Only show the counter when the backend actually reported numbers.
         binding.tvLimitQuota.isVisible = max > 0 && !deviceStop

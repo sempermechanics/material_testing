@@ -15,7 +15,7 @@ through that alias; tests do the same and patch 16 distinct names on it.
 The same file repeats one transaction shape ten times — build a transaction,
 run a `@firestore.transactional` body, `except Exception: if not
 _lost_to_contention(exc): raise`, then a per-site contention answer — which is
-where most of its 29 broad `except` suppressions come from (TD-53).
+where most of its 29 broad `except` suppressions come from (TD-85).
 
 Forces:
 
@@ -52,7 +52,7 @@ Forces:
    repo/users.py      get_or_create_user, list_users, set_user_status, …
    repo/config.py     resolve_user_config, effective_mode, set_user_config, …
    repo/licensing.py  mint, claims, invites, licence admin, institution queries
-                      (split again under TD-64; see "Licensing split")
+                      (split again under TD-92; see "Licensing split")
    repo/devlock.py    bind/check/revalidate_device_lock
    repo/leases.py     checkout/release_lease, sweep
    repo/seats.py      clear_device_lock, set_seat_enabled, revoke seat
@@ -121,7 +121,7 @@ function body before and after must match, with only its module changing.
   the facade hides from tests; see "As built".
 - Revisit: if `licensing.py` itself passes ~1,000 lines, split mint / claims /
   invites along the same acyclic edges. It was about 1,300 as built, and was
-  split under TD-64 (see "Licensing split"); the largest licensing module is
+  split under TD-92 (see "Licensing split"); the largest licensing module is
   now `mint.py`, under 400 lines.
 - A licensing change now lands in the module for its concern. A new repo
   module has to join `PACKAGE` in import order or the facade tests fail; a
@@ -156,14 +156,14 @@ function-local `from . import audit` → `from .. import audit`.
 `tests/test_repo_facade.py` pins the propagation, the one-way imports, the
 facade's public names, and that only `_base` binds `firestore`.
 
-## Licensing split (TD-64, 2026-09-24)
+## Licensing split (TD-92, 2026-09-24)
 
 `repo/licensing.py` (1,298 lines) is cut along its call graph into seven
 modules. Code moved unchanged; `licensing.py` now only re-exports the 44 names
 it used to define, so `from app.repo.licensing import …` still works.
 
 *2026-10-05:* nothing imported `app.repo.licensing` any more, so the
-re-export module is deleted (TD-184).
+re-export module is deleted (TD-178).
 
 ```
 repo/claims.py             claim_seat, claim_individual_license,
@@ -206,11 +206,11 @@ nothing.
 
 ## Action items
 
-1. [x] `_run_tx` at the ten sites; the ten `noqa: BLE001` go with it (TD-53).
+1. [x] `_run_tx` at the ten sites; the ten `noqa: BLE001` go with it (TD-85).
 2. [x] Move into `repo/` with the facade; AST-equality check (see As built).
 3. [x] ~~Update `fake_firestore.install`, the emulator fixture, and the tests
        patching `_now`, `_BIND_BACKOFF_S`, `_drop_user_to_demo_if_licensed`.~~
        Not needed: the facade propagates patches (As built).
 4. [x] Full pytest (532 with the facade tests), emulator tier (23),
        `test_gateway_parity`, `test_route_authz_matrix`.
-5. [x] Split `licensing.py` (TD-64); see "Licensing split".
+5. [x] Split `licensing.py` (TD-92); see "Licensing split".

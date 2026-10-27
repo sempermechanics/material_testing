@@ -39,7 +39,7 @@ on:
       release_train:
         description: >
           App release train this backend ships with, set as the Cloud Run
-          label release-train on the service and the new revision (TD-262).
+          label release-train on the service and the new revision (TD-208).
           Empty = the newest v* tag reachable from the deployed commit, or
           "untagged". Lowercased; dots and other characters become dashes;
           cut to 63 characters.
@@ -127,7 +127,7 @@ jobs:
           # never promoted.
           echo "ingress=--no-allow-unauthenticated" >> "$GITHUB_OUTPUT"
 
-      # TD-262: the app release train this revision ships with, as the Cloud
+      # TD-208: the app release train this revision ships with, as the Cloud
       # Run label release-train, so a release can name the backend revision it
       # was tested against (`gcloud run revisions list
       # --filter=metadata.labels.release-train=v1-2-0`). The operator may name
@@ -223,7 +223,7 @@ jobs:
       # variable this workflow stopped setting stays on the service forever.
       # MAX_SESSIONS_PER_USER was retired by the licensing rollout
       # (DEMO_MAX_ANALYSES / LICENSED_MAX_SESSIONS_PER_USER replace it), and
-      # REQUIRE_ATTESTED_UPLOADS by TD-45 (/uploads is always device-attested
+      # REQUIRE_ATTESTED_UPLOADS by TD-4 (/uploads is always device-attested
       # now). The code ignores both, but a stale value misleads anyone reading
       # the console. Print the live env and warn — removal is a manual
       # `gcloud run services update --remove-env-vars` after promote, so the
@@ -268,7 +268,7 @@ jobs:
             echo "::notice::ENTITLEMENT_SIGNING_SECRET is not set: deploying without ENTITLEMENT_SIGNING_KEY."
           elif gcloud secrets describe "$ENTITLEMENT_SECRET" --project "$PROJECT" --format='value(name)' >/dev/null 2>/tmp/secret-err; then
             # The runtime SA must be able to read it, or the candidate never
-            # starts and every deploy stops there (TD-269). Read-only; an
+            # starts and every deploy stops there (TD-215). Read-only; an
             # unreadable policy is a warning, a missing grant fails here.
             if [ -z "$RUNTIME_SA" ]; then
               echo "::warning::SERVICE_ACCOUNT_EMAIL is not set: not checked whether the runtime SA can read ${ENTITLEMENT_SECRET}."
@@ -319,7 +319,7 @@ jobs:
           # CONSOLE_ORIGINS and KILL_SWITCHES are space-separated: this block
           # splits pairs on commas, so a comma inside a value truncates it.
           # NOTIFY_SECURITY_FROM unset (empty) keeps the holder's new-device
-          # mail off (TD-295, TD-309); set it to a verified Resend sender.
+          # mail off (TD-232, TD-245); set it to a verified Resend sender.
           env_vars: |-
             GOOGLE_CLOUD_PROJECT=${{ github.event.inputs.project }}
             FIREBASE_PROJECT_ID=${{ vars.FIREBASE_PROJECT_ID }}

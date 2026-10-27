@@ -248,7 +248,7 @@ internal class UploadSessionPlanner(
                 specs,
                 metrics,
                 localSessionId = localId,
-                // Listed by the backup list in place of the reference's file name (TD-208).
+                // Listed by the backup list in place of the reference's file name (TD-195).
                 name = record.name.trim().take(SessionCreateRequest.NAME_MAX_CHARS),
             ),
         )
@@ -379,7 +379,7 @@ internal class UploadSessionPlanner(
      * Each pending upload paired with the artifact of the same role, name,
      * size and, when the backend sends it, declared sha256; null at the first
      * one that has none. The hash is what tells a rebuilt zip (same size, new
-     * entry timestamps) from the bytes the session declared (TD-281); an older
+     * entry timestamps) from the bytes the session declared (TD-221); an older
      * backend sends none, and the size match stands.
      */
     private fun matchPending(uploads: List<PendingUploadDto>, artifacts: List<UploadArtifact>): List<UploadJob>? {

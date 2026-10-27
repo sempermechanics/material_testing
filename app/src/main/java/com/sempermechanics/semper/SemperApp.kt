@@ -43,7 +43,7 @@ class SemperApp : Application() {
         // One count of started screens: an upload may open the limit screen
         // only while one is up; the managed configuration is re-read whenever
         // the app comes to the front, and an entitlement token past its
-        // refreshAfter asks /v1/config for a fresh one then (TD-264).
+        // refreshAfter asks /v1/config for a fresh one then (TD-210).
         AppForeground.install(
             this,
             ManagedConfigReader.foregroundListener(this),
@@ -65,7 +65,7 @@ class SemperApp : Application() {
         // config refresh is scheduled after a successful sign-in — WorkManager
         // is not always ready during Application.onCreate in unit tests.
         SeatHeartbeat.start(appScope, this)
-        // An account deletion the last process did not live to finish (TD-165).
+        // An account deletion the last process did not live to finish (TD-163).
         AccountDeletionRun.resumeInterrupted(this)
         LauncherIcon.sync(this)
     }

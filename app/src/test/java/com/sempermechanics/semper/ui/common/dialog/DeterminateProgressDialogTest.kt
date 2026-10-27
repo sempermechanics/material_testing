@@ -24,7 +24,7 @@ import org.robolectric.shadows.ShadowDialog
 /**
  * The bar springs to each value while the dialog shows, and a dismissed
  * dialog's spring ends on the next frames instead of running on through its
- * settle, holding the Activity (TD-200). Nothing in the dialog does that:
+ * settle, holding the Activity (TD-188). Nothing in the dialog does that:
  * dismissing detaches the bar, and a detached view jumps its drawables to
  * their current state, which asks Material's spring to end on its next frame.
  */

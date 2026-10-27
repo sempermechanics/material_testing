@@ -44,7 +44,7 @@ test("a lease is held only until it ends", () => {
   assert.equal(leaseHeld("", NOW), false);
 });
 
-test("an expired lease is not shown as held (TD-50)", () => {
+test("an expired lease is not shown as held (TD-82)", () => {
   const html = seatCells(
     { uid: "u1", email: "a@uni.edu", status: "active", leaseExpiresAt: "2026-09-23T11:00:00Z" },
     NOW,
@@ -75,7 +75,7 @@ test("a seat shows each app's device, escaped (ADR-010)", () => {
   assert.equal(seatDevices({}), "");
   assert.equal(seatDevices({ deviceIdLock: "abcdefghijklmnop" }), "abcdefghij…");
   // Semper Classroom's lock is read from the old field, which every backend
-  // writes beside the new one (ADR-030, TD-330).
+  // writes beside the new one (ADR-030, TD-56).
   const bound = (id) => ({ deviceIdLockMaterialTesting: id, deviceIdLockSemperClassroom: id });
   assert.equal(
     seatDevices({ deviceIdLock: "abcdefghijklmnop", ...bound("<sc>defghijklmn") }),
@@ -89,7 +89,7 @@ test("a seat shows each app's device, escaped (ADR-010)", () => {
   assert.equal(
     seatDevices({ deviceIdLockSemperClassroom: "newnewnewnew", deviceIdLockMaterialTesting: "oldoldoldold" }),
     "Semper Classroom oldoldoldo…",
-    "the old field, the one every backend writes, wins until TD-330",
+    "the old field, the one every backend writes, wins until TD-56",
   );
   // The new field alone is one a backend from before the rename left
   // behind when it cleared the old one: stale, so not shown (H1).
@@ -151,7 +151,7 @@ test("a licence's state follows its end and grace, not only its status", () => {
   assert.match(licenceStatePill(lic({ expiresAt: "2026-09-22T23:59:59Z" }), NOW), /pill off/);
 });
 
-test("an error detail splits at its first colon only (TD-116)", () => {
+test("an error detail splits at its first colon only (TD-123)", () => {
   assert.deepEqual(errorDetail("no_license"), { code: "no_license", rest: "" });
   // An ISO instant carries colons of its own.
   assert.deepEqual(
@@ -167,7 +167,7 @@ test("the licence list asks the backend to leave Demo and revoked rows out", () 
     licenceListPath({ limit: 50, showDemo: true, showRevoked: true, pageToken: "abc" }),
     "/v1/admin/licenses?limit=50&include_demo=true&page_token=abc",
   );
-  // A search is never a query parameter (TD-244): it is licenceSearchBody.
+  // A search is never a query parameter (TD-203): it is licenceSearchBody.
   assert.equal(
     licenceListPath({ limit: 50, showRevoked: true, q: "a@b.com" }),
     "/v1/admin/licenses?limit=50",

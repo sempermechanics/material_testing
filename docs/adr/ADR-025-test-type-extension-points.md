@@ -1,6 +1,6 @@
 # ADR-025: Test types plug into Semper through extension points, and Material Testing becomes a product flavour
 
-**Status:** Accepted (product owner, 2026-10-22); phases 1–5 under TD-298, smallest first
+**Status:** Accepted (product owner, 2026-10-22); phases 1–5 under TD-235, smallest first
 **Date:** 2026-10-19
 **Deciders:** app owner
 **Relates to:** material_testing's ADR-009 (its own app on this backend), ADR-012
@@ -19,7 +19,7 @@ un-prefixed path is in its tree at `763ed7a`, and an `mt:` path is in this repo 
 ([ADR-022-rerun-as-copy](ADR-022-rerun-as-copy.md), here too since the 2026-10-19 sync);
 this repo's own ADR-022 is [ADR-022-semper-ui-plus-lab-tests](ADR-022-semper-ui-plus-lab-tests.md).
 The two numbers collided before this record; it names the fork's by file name. TD
-numbers are shared ([../ops/TECH_DEBT.md](../ops/TECH_DEBT.md)). Edit semperdic-app's
+numbers here are this repo's own since 2026-10-27 ([ADR-032](ADR-032-own-td-numbers.md)). Edit semperdic-app's
 copy first and mirror the change.
 Since the sync of semperdic-app `14b279d6` (2026-10-21) the fork's lab wizard state is
 one field of the wizard's inputs (`WizardInputs.lab`, a `LabWizardState`), changed through
@@ -100,7 +100,7 @@ ways, out of the count.
    `if: github.repository == 'sempermechanics/semperdic-app'`; `mt:CONTEXT.md:289`).
    Twelve backend files already differ (205 lines of fixes missing), along with
    `scripts/check_secret_access.sh`. Three rows closed here on 2026-10-19 are still
-   open there: TD-269, TD-270 and TD-276 (`mt:docs/ops/TECH_DEBT.md:257`, `:258`,
+   open there: TD-215, TD-216 and TD-218 (`mt:docs/ops/TECH_DEBT.md:257`, `:258`,
    `:263`). Nothing reads those copies except the fork's own CI. (Later the same day
    material_testing#139 synced `17d7bc8`, with #454, and closed those three there too;
    the copies still drift with every backend change here until they are deleted.)
@@ -295,7 +295,7 @@ product arrives or the core is reused outside an app.
 - **The copies go last.** While the fork still merges, a directory it deleted but
   this repo still modifies gives a modify/delete conflict at every sync, settled by
   deleting it again. So phase 5 comes after the flavour, once merges stop. The rows
-  still open only in the fork (TD-269, TD-270, TD-276) close with the deletion,
+  still open only in the fork (TD-215, TD-216, TD-218) close with the deletion,
   since they are fixed here.
 - **Superseded in part once phase 4 lands:** material_testing's ADR-009 ("own repo"
   becomes "own flavour") and its ADR-022 ("Semper's UI plus two test choices" is
@@ -331,5 +331,5 @@ Phased, smallest first. Every phase can ship on its own and leaves both apps wor
 5. [ ] **Delete the fork's copies** (`backend/`, `firebase-hosting/`,
    `firestore.rules`, `contracts/`, `ops/`), retire the fork's sync docs, and mark
    material_testing's ADR-009 and ADR-022 superseded in part.
-6. [x] Open a TECH_DEBT row to track carrying out this record: TD-298 (2026-10-19), in
+6. [x] Open a TECH_DEBT row to track carrying out this record: TD-235 (2026-10-19), in
    semperdic-app's register.

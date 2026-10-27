@@ -205,7 +205,7 @@ class StudioOverlayView @JvmOverloads constructor(
         onRoiChangedListener?.invoke(RectF())
     }
 
-    /** Crop and erase are rectangles; the mask encoder relies on that (TD-74). */
+    /** Crop and erase are rectangles; the mask encoder relies on that (TD-98). */
     enum class RoiMode { RECTANGLE, SQUARE }
     var currentMode = RoiMode.RECTANGLE
 

@@ -185,7 +185,7 @@ for (const spec of COLLECTIONS) {
   });
 }
 
-// TD-237 (framework 5.3 Verify: "Attempt to edit or delete audit entries as
+// TD-199 (framework 5.3 Verify: "Attempt to edit or delete audit entries as
 // Org Owner and expect failure"). The deny-all above already covers it; this
 // names the acceptance, with an institution owner's claims and a merge write.
 describe('audit_logs is append-only for every client', () => {

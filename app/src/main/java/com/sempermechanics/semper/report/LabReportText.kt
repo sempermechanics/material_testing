@@ -99,7 +99,7 @@ object LabReportText {
         /** The yield point's legend on the full curve graph. */
         fun yieldMark(stressMPa: String) = "Yield (0.2% offset) $stressMPa MPa"
 
-        /** The peak's value; one off the curve (TD-147) names its frame, which is not a table row. */
+        /** The peak's value; one off the curve (TD-148) names its frame, which is not a table row. */
         fun peakValue(stressMPa: String, peak: StressStrain.Peak) = if (peak.onCurve) {
             "$stressMPa MPa"
         } else {

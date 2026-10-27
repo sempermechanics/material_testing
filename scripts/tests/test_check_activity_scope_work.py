@@ -1,8 +1,8 @@
-"""`scripts/check_activity_scope_work.py`: ADR-016 rule 1 as a CI check (TD-291).
+"""`scripts/check_activity_scope_work.py`: ADR-016 rule 1 as a CI check (TD-228).
 
 Each test copies Kotlin fixtures (`fixtures/activity_scope/`) into a small
 repository under a temporary directory and runs the check against it. The
-acceptance TD-291 set: a restore enqueued from an Activity's `lifecycleScope`
+acceptance TD-228 set: a restore enqueued from an Activity's `lifecycleScope`
 fails, and the same restore from `viewModelScope` passes. Stdlib only:
 `python -m unittest discover -s scripts/tests`.
 """
@@ -131,7 +131,7 @@ class AllowlistTest(_Repo):
 
     def test_listed_findings_pass(self) -> None:
         self.allow(
-            "ui/home/HomeActivity.kt | queueRestores | RestoreStart.startAll | test, TD-291\n"
+            "ui/home/HomeActivity.kt | queueRestores | RestoreStart.startAll | test, TD-228\n"
             "ui/home/HomeActivity.kt | queueRestores | CloudSync.resolveCloudIdFor | test, ADR-016\n"
         )
         self.assertEqual(self.failures(), [])
@@ -139,9 +139,9 @@ class AllowlistTest(_Repo):
 
     def test_an_entry_that_matches_nothing_must_go(self) -> None:
         self.allow(
-            "ui/home/HomeActivity.kt | queueRestores | RestoreStart.startAll | test, TD-291\n"
+            "ui/home/HomeActivity.kt | queueRestores | RestoreStart.startAll | test, TD-228\n"
             "ui/home/HomeActivity.kt | queueRestores | CloudSync.resolveCloudIdFor | test, ADR-016\n"
-            "ui/home/HomeActivity.kt | elsewhere | CloudSync.reconcile | test, TD-291\n"
+            "ui/home/HomeActivity.kt | elsewhere | CloudSync.reconcile | test, TD-228\n"
         )
         [failure] = self.failures()
         self.assertIn("elsewhere | CloudSync.reconcile matches nothing", failure)

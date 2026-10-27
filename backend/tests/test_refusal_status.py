@@ -3,7 +3,7 @@
 Each case stubs the repo call behind a route so that it refuses with one code,
 and records the status and detail the client receives. The table is what the
 routes answered before refusals had one status table (`errors.STATUS`), less
-the two overrides TD-185 dropped: `license_revoked` is 403 and
+the two overrides TD-179 dropped: `license_revoked` is 403 and
 `license_seat_disabled` 409 on every route, since no client read those
 statuses. A change that moves any of these is a wire change.
 """

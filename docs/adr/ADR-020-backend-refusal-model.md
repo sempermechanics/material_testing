@@ -37,7 +37,7 @@ adding the member, 403 to a typed key). Nothing said whether that was intended.
 - Routes do not map codes. The two existing deviations were kept at first,
   named where they happened with `errors.restatus({code: status})`: activation
   (`license_seat_disabled` → 403), conversion and seat holds (`license_revoked`
-  → 409). They are gone (TD-185): no client read those statuses. The app
+  → 409). They are gone (TD-179): no client read those statuses. The app
   matches the `detail` code, and its activation call is gone (removed
   2026-10-18, [ADR-024](ADR-024-account-anchored-entitlements.md)); the consoles match the code through
   `explain` (`firebase-hosting/public/console/messages.js:28`) and compare no
@@ -75,4 +75,4 @@ adding the member, 403 to a typed key). Nothing said whether that was intended.
 
 1. [x] `STATUS`, `Refusal`, `restatus` (removed with item 3), the handler.
 2. [x] The repo raises; the nine route maps are gone; literals become `errors.*`.
-3. [x] Decide the two deviations: dropped, as no client reads them (TD-185).
+3. [x] Decide the two deviations: dropped, as no client reads them (TD-179).

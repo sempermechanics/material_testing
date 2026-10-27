@@ -89,7 +89,7 @@ class FrameSinkTest {
     @Test
     fun `a decoded frame is timed by its own presentation time, its pixels unchanged`() {
         // A decoder that lands one frame (33 ms at 30 fps) after each time asked for,
-        // as the hardware decoder does when a sample falls between two frames (TD-207).
+        // as the hardware decoder does when a sample falls between two frames (TD-194).
         val asked = listOf(0L, 100L, 200L)
         val pts = listOf(0L, 133_333L, 233_333L)
         val luma = luma(6, 4)

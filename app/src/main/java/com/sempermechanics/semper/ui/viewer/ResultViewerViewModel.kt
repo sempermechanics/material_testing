@@ -114,7 +114,7 @@ class ResultViewerViewModel(
 
     /**
      * Runs [write] on session [id] off the main thread, then queues the new
-     * metadata for a backed-up session's cloud copy (ADR-013, TD-152). Results'
+     * metadata for a backed-up session's cloud copy (ADR-013, TD-151). Results'
      * Adjust curve and Adjust deflection save through here: on this scope a
      * rotation does not drop the write (ADR-016), and the write and its queue
      * are one short step that finishes even if the screen closes meanwhile.

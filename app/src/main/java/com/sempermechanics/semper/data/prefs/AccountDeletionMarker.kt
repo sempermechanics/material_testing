@@ -6,7 +6,7 @@ import com.sempermechanics.semper.data.prefs.PrefFiles.AccountDeletion
 
 /**
  * What an account deletion still owes this phone, kept on disk so it survives
- * process death (TD-165).
+ * process death (TD-163).
  *
  * The deletion runs on an application-lifetime scope, which ends with the
  * process. Killed between the cloud erase and the local wipe, the phone kept

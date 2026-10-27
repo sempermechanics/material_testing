@@ -274,7 +274,7 @@ class Settings:
         "CHECK_REVOKED_ON_STEP_UP", "false",
     ).strip().lower() in ("1", "true", "yes")
 
-    # --- Firebase Auth Admin budget (TD-239) ---------------------------------
+    # --- Firebase Auth Admin budget (TD-200) ---------------------------------
     # The Admin-SDK calls that read or change a Firebase Auth user — the
     # step-up revocation check, `revoke_sessions`, `delete_auth_user` — share
     # the Auth project's Identity Toolkit quota, which no route bucket stands
@@ -359,7 +359,7 @@ class Settings:
     NOTIFY_FROM = os.environ.get("NOTIFY_FROM", "")
     RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
     # Verified sender for the mail an account's holder gets when a new device
-    # registers to it (`notify.device_registered`, TD-295), e.g.
+    # registers to it (`notify.device_registered`, TD-232), e.g.
     # "Semper security <security@sempermechanics.com>". Its own sender, so
     # the holder's mail does not come from the support inbox's address.
     # Empty (the default) leaves that mail off; it also needs RESEND_API_KEY.
@@ -413,7 +413,7 @@ class Settings:
     # it the client falls back to a challenge. 0 disables client nonces.
     CLIENT_NONCE_WINDOW_SECONDS = _env_int("CLIENT_NONCE_WINDOW_SECONDS", "120")
 
-    # How long an `audit_logs` row is kept (TD-237; one year, the owner's
+    # How long an `audit_logs` row is kept (TD-199; one year, the owner's
     # decision of 2026-10-22). Each new row carries `expireAt` = now + this,
     # which the Firestore TTL policy on `audit_logs.expireAt` deletes; the
     # locked `audit-trail` log bucket keeps its copy for the same period

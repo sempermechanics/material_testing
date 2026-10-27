@@ -1,4 +1,4 @@
-"""Audit rows hold no email address (TD-242).
+"""Audit rows hold no email address (TD-201).
 
 `audit_logs` survives account erasure by design, and FIRESTORE_DATA_PROTECTION.md
 ("Account-erasure audit policy") says its rows must not hold addresses. The
@@ -93,7 +93,7 @@ async def test_a_conversion_records_hashes(store, audited, client):
 
 @pytest.mark.asyncio
 async def test_a_note_edit_records_its_length_not_its_text(store, audited, client):
-    """TD-270: staff may type a name or an address into the note, and the row
+    """TD-216: staff may type a name or an address into the note, and the row
     outlives erasure and reaches the licence's audit export."""
     minted = await client.post("/v1/admin/licenses", json={
         "kind": "institution", "domainLock": "uni.edu", "adminEmails": ["it@uni.edu"]})

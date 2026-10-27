@@ -13,9 +13,9 @@ import java.util.zip.ZipException
  * with `Range` from the bytes already on disk — same as a mid-stream
  * `IOException`. After an attempt that succeeded or gave up, the next one
  * starts the file over: CloudRestore deletes its temps and their `.part`
- * sidecars on the way out. After a failure the worker retries (TD-307) or a stop
+ * sidecars on the way out. After a failure the worker retries (TD-243) or a stop
  * WorkManager runs again (connectivity, quota, the system: `DicRestoreWorker`,
- * TD-283) the bundle's `.part` is kept, and after process death that cleanup
+ * TD-223) the bundle's `.part` is kept, and after process death that cleanup
  * never ran, so the next attempt's download resumes from it; the bundle's sha256
  * (and a legacy prefix's per-entry CRCs) catch a bad resume, and `metadata.json`
  * is always fetched fresh.
