@@ -1172,11 +1172,9 @@ jobs:
           # The action's default options plus -no-metrics (see tier 3).
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
           script: |
-            echo "DIAG apk $(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1 | xargs -I{} {}/apksigner verify --print-certs app/build/outputs/apk/benchmark/app-benchmark.apk | grep SHA-256)"; echo "DIAG keystore $(keytool -list -v -keystore "$HOME/.android/debug.keystore" -storepass android 2>&1 | grep SHA256)"; ls -la --time-style=full-iso "$HOME/.android"; env | grep -i android || true
             python3 scripts/launch_smoke.py app/build/outputs/apk/benchmark/app-benchmark.apk --package "$APP_ID" --out launch-smoke
             "$ANDROID_HOME/platform-tools/adb" uninstall "$APP_ID" || true
             ./gradlew :benchmark:connectedBenchmarkAndroidTest -PabiFilters=x86_64 -PnativeCompilerLauncher=ccache --console=plain -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED $MACRO_DRY_RUN
-            echo "DIAG apk $(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1 | xargs -I{} {}/apksigner verify --print-certs app/build/outputs/apk/benchmark/app-benchmark.apk | grep SHA-256)"; echo "DIAG keystore $(keytool -list -v -keystore "$HOME/.android/debug.keystore" -storepass android 2>&1 | grep SHA256)"; ls -la --time-style=full-iso "$HOME/.android"; env | grep -i android || true
             python3 scripts/ci_test_report.py --require-tests benchmark/build/outputs/androidTest-results
             [ -d "$RUNNER_TEMP/micro-ab/A" ] || ./gradlew :app:installDebug :app:installDebugAndroidTest -PabiFilters=x86_64 -PnativeCompilerLauncher=ccache --console=plain
             [ -d "$RUNNER_TEMP/micro-ab/A" ] || "$ANDROID_HOME/platform-tools/adb" shell am instrument -w -e class com.sempermechanics.semper.benchmark.HotPathMicroBenchmark -e androidx.benchmark.suppressErrors EMULATOR,DEBUGGABLE,LOW-BATTERY,UNLOCKED,ACTIVITY-MISSING,NOT-AOT-COMPILED "$APP_ID.test/androidx.test.runner.AndroidJUnitRunner" | tee micro-instrument.txt
