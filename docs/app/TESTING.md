@@ -195,18 +195,31 @@ test / Elastic region, reporting frame timing and the `Semper.viewer.stressStrai
 section (the curve build over every frame's `.dat`).
 
 ```bash
-./gradlew :benchmark:connectedBenchmarkAndroidTest \
+./gradlew :benchmark:connectedBenchmarkAndroidTest -PabiFilters=x86_64 \
   -P android.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED
 ```
+
+The `benchmark` build type is **R8-minified with release's rules** (resources are
+not shrunk: the benchmarks find views by resource name), so its numbers are a
+release build's. Add `-PabiFilters=x86_64` on an emulator: without it the build
+compiles arm64-v8a too.
 
 CI's `tier-benchmark` job passes the same `suppressErrors` (plus
 `enabledRules=Macrobenchmark`) on an **API 34** emulator;
 `benchmark/build.gradle.kts` sets the same suppress list so a local emulator run
-matches CI. On the same emulator the job then runs the micro suite with the
-`am instrument` command above. Those numbers are not gated; both suites'
-`*-benchmarkData.json` are uploaded, as `macrobenchmark-results` and
-`microbenchmark-results`. On a PR the micro suite then runs again, A/B against the
-PR's base, and that is a gate (below).
+matches CI. First it runs `scripts/launch_smoke.py` on the minified APK: a cold
+start that fails on a crash, a process gone within 15 s, or an R8 symptom
+(`ClassNotFoundException`, `NoSuchMethodError`, `SerializationException`, …) in an
+error line of the app's logcat. It is the only place CI runs an R8 build, so a PR
+that touches the keep rules or the build script (the `packaging` filter) runs the
+job too. On a PR the Macrobenchmarks run as a dry run (one pass each,
+`androidx.benchmark.dryRunMode.enable=true`), since their emulator numbers are not
+gated; the `benchmark` label or a `run_benchmark` dispatch runs the full
+iterations. Without a PR (a dispatch) the job then runs the micro suite with the
+`am instrument` command above; on a PR the A/B's rounds run that suite instead,
+and that is a gate (below). The numbers outside the A/B are not gated; the
+`*-benchmarkData.json` upload as `macrobenchmark-results` and
+`microbenchmark-results`.
 
 Four things that will otherwise cost you an afternoon:
 
