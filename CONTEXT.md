@@ -131,7 +131,7 @@ no thresholds ([TESTING.md](docs/app/TESTING.md)); the phone-run gates (`benchma
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-26)
+## Current state (2026-10-27)
 
 - **Semper's UI plus two test choices ([ADR-022](docs/adr/ADR-022-semper-ui-plus-lab-tests.md)).**
   **Which test?** offers 2D DIC (Semper's analysis: no load card, no test type recorded),
@@ -195,10 +195,11 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   Try it / Save to phone / Credits & licences. Terms §4.6 merged upstream (semperdic-app #487)
   and synced here (#153); its Hosting deploy is owed, from semperdic-app. The website's Examples
   page merged (semper-website #13). The §3c device pass ran on a Galaxy S22 on 2026-10-27; its
-  fixes and TD-275's new numbers merged (#154, `e0e697b2`). Open on `claude/example-followups`:
-  the DICe files named for their set (Try it's analysis was "ref"), and TD-57 closed (Credits &
-  licences lists every part with its licence; the full texts move to sempermechanics.com/licences/);
-  the website zips to match (semper-website #14). Owed: TD-58 (semper-dic-engine#26, then a pin bump).
+  fixes and TD-275's new numbers merged (#154, `e0e697b2`). The follow-ups merged 2026-10-27
+  (#156, `9c9fc2a7`): the DICe files named for their set (Try it's analysis was "ref"), and TD-57
+  closed (Credits & licences lists every part with its licence; the full texts are on
+  sempermechanics.com/licences/, semper-website #15, live). The website's zips match (semper-website
+  #14, live). Owed: TD-58 (fixed in semper-dic-engine `0c65d8f`, #26; closes with the pin bump).
 - **Rename to Semper Classroom ([ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md)):** merged
   2026-10-26 (#147, `f25ebd01`), not released; still owed: the upstream deploy and the owner's Firebase app registration.
 - **Play submission ([gate](docs/ops/PRODUCTION_READINESS_GATE.md#google-play-submission-semper-classroom)):**
