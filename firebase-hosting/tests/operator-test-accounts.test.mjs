@@ -83,7 +83,7 @@ async function showList(accounts = [QC, CI], routes = {}) {
 test("a QC account is created with the form's values and its password is shown once", async () => {
   const answer = deferred();
   await openDesk({ routes: { [CREATE]: () => answer.promise, [LIST]: listed([QC]) } });
-  assert.equal($("testAccountsWrap").hidden, true, "the list is read on demand");
+  assert.equal($("testAccountsBox").open, false, "the list is read on demand");
   fill({ email: " new@test.example ", note: " Pixel 6 " });
   $("taCreate").click();
   await settle();
@@ -104,7 +104,7 @@ test("a QC account is created with the form's values and its password is shown o
   assert.ok(!$("status").textContent.includes(ISSUED));
   assert.deepEqual([$("taEmail").value, $("taNote").value], ["", ""], "ready for the next one");
   assert.deepEqual(sent(/test-accounts/), [CREATE, LIST], "the list is read again");
-  assert.equal($("testAccountsWrap").hidden, false);
+  assert.equal($("testAccountsBox").open, true);
 
   $("taPasswordClose").click();
   assert.equal(dialog().open, false);
@@ -251,7 +251,7 @@ test("a return leg declined, malformed, or without a fresh sign-in sends nothing
 
 test("the list shows purpose, end, phones, status and note, and a row per account", async () => {
   await showList([QC, CI, { ...QC, uid: "uid-old", email: "old@test.example", status: "ended", note: "<b>x</b>" }]);
-  assert.equal($("loadTestAccounts").textContent, "Refresh");
+  assert.equal($("testAccountsBox").open, true, "the fold opens with the list");
   assert.deepEqual(accountRows(), [
     ["qc-1@test.example", "QC", day(ENDS), "1 of 3", "active", "QC rack", "Extend New password End now"],
     ["ci@test.example", "CI", "Never", "0 of 10", "active", "—", "Extend New password End now"],
@@ -288,12 +288,25 @@ test("a late list answer is not drawn over a newer one", async () => {
   } });
   $("loadTestAccounts").click();
   await settle();
-  $("loadTestAccounts").disabled = false;
+  // Fold it while the first read is out, then open it again: a second read.
+  $("loadTestAccounts").click();
   $("loadTestAccounts").click();
   await settle();
   first.resolve(json(200, { accounts: [QC] }));
   await settle();
   assert.deepEqual(accountRows().map((r) => r[0]), ["ci@test.example"]);
+});
+
+test("the list folds open and shut, and every opening reads it afresh", async () => {
+  await showList([QC]);
+  $("loadTestAccounts").click();
+  assert.equal($("testAccountsBox").open, false, "a second click folds it away");
+  assert.equal(sent(/test-accounts/).length, 1, "and reads nothing");
+  $("loadTestAccounts").click();
+  await settle();
+  assert.equal($("testAccountsBox").open, true);
+  assert.equal(sent(/test-accounts/).length, 2, "opening reads it again");
+  assert.equal($("loadTestAccounts").tagName, "SUMMARY", "the fold's own label, as Create a test account");
 });
 
 /* ------------------------------------------------------------- actions */

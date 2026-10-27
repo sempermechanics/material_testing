@@ -146,7 +146,7 @@ async function sendDelete(id, label) {
     renderLicences();
     closeRosterOf(id);
     setStatus(`${label} deleted — restorable under Recently deleted until ${day(out.purgeAt)}.`);
-    if (!$("deletedWrap").hidden) loadDeleted();
+    if ($("deletedBox").open) loadDeleted();
   } catch (e) {
     if (e.message === ERR_CANCELLED) {
       setStatus("Delete cancelled.");
@@ -159,23 +159,31 @@ async function sendDelete(id, label) {
   }
 }
 
-$("loadDeleted").addEventListener("click", loadDeleted);
+// A fold, read afresh each time it opens. The page opens and closes it
+// itself (not the browser) so an open is always a read; the button that
+// stood here became Refresh after one click, with no way to put the list away.
+$("loadDeleted").addEventListener("click", (ev) => {
+  ev.preventDefault();
+  if ($("deletedBox").open) $("deletedBox").open = false;
+  else loadDeleted();
+});
+
+let deletedLoad = 0; // the latest read; an older answer is not drawn over it
 
 async function loadDeleted() {
-  $("loadDeleted").textContent = "Refresh";
-  $("deletedWrap").hidden = false;
+  const ticket = ++deletedLoad;
+  $("deletedBox").open = true;
   $("deletedRows").innerHTML = placeholderRows(7, 2);
-  $("loadDeleted").disabled = true;
   try {
     const data = await api("/v1/admin/deleted-licenses?limit=50");
+    if (ticket !== deletedLoad) return;
     const rows = data.licenses || [];
     $("deletedRows").innerHTML = rows.length
       ? rows.map(deletedRow).join("")
       : '<tr><td colspan="7" class="muted">Nothing deleted in the last 30 days.</td></tr>';
   } catch (e) {
+    if (ticket !== deletedLoad) return;
     $("deletedRows").innerHTML = retryRow(7, `Could not load: ${explain(e)}`);
-  } finally {
-    $("loadDeleted").disabled = false;
   }
 }
 

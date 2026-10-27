@@ -129,15 +129,21 @@ $("taCopyPassword").addEventListener("click", () => {
 
 /* ---------------------------------------------------------------- list */
 
-$("loadTestAccounts").addEventListener("click", () => loadTestAccounts());
+// A fold like Create a test account above it, read afresh each time it
+// opens. The page opens and closes it itself (not the browser) so an open is
+// always a read; the button that stood here became Refresh after one click,
+// with no way to put the list away.
+$("loadTestAccounts").addEventListener("click", (ev) => {
+  ev.preventDefault();
+  if ($("testAccountsBox").open) $("testAccountsBox").open = false;
+  else loadTestAccounts();
+});
 
-/** Read and draw the test accounts (on demand: most visits never look). */
+/** Open the list and read the test accounts (on demand: most visits never look). */
 export async function loadTestAccounts() {
   const ticket = ++loads;
-  $("loadTestAccounts").textContent = "Refresh";
-  $("testAccountsWrap").hidden = false;
+  $("testAccountsBox").open = true;
   $("testAccountRows").innerHTML = placeholderRows(7, 2);
-  $("loadTestAccounts").disabled = true;
   try {
     const data = await api("/v1/admin/test-accounts");
     if (ticket !== loads) return;
@@ -149,8 +155,6 @@ export async function loadTestAccounts() {
     if (ticket !== loads) return;
     $("testAccountRows").innerHTML = retryRow(7,
       explain(e, SENTENCES, (text) => `Could not load: ${text}`));
-  } finally {
-    if (ticket === loads) $("loadTestAccounts").disabled = false;
   }
 }
 
