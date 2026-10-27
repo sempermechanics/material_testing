@@ -191,7 +191,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   pairs (BSD-3) in `app/src/main/assets/examples/` (~80 MB), with ground truth and credits;
   Try it / Save to phone / Credits & licences. Terms §4.6 merged upstream (semperdic-app #487),
   not yet synced here or deployed to Hosting; the website's Examples page merged (semper-website
-  #13). Owed: that sync and deploy, the device pass §3c, TD-331–TD-333.
+  #13). The §3c device pass ran on a Galaxy S22 on 2026-10-27; its fixes and TD-333's
+  new numbers are on `claude/example-s22-fixes`. Owed: that sync and deploy, TD-331, TD-332.
 - **Rename to Semper Classroom ([ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md)):** merged
   2026-10-26 (#147, `f25ebd01`), not released; still owed: the upstream deploy and the owner's Firebase app registration.
 - **Play submission ([gate](docs/ops/PRODUCTION_READINESS_GATE.md#google-play-submission-semper-classroom)):**

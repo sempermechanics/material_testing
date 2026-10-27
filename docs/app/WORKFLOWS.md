@@ -294,6 +294,18 @@ data**, **Licence**, **Try it** and **Save to phone**.
 | [ ] 3c.12 | Cancel a save part-way | The dialog closes; no half-written file is left in the folder |
 | [ ] 3c.13 | Tap **Credits & licences** at the top | §4.26d |
 
+**3c.1–3c.13 on a Galaxy S22+ (Android 16, `5b3b3948` + `claude/example-s22-fixes`,
+2026-10-27)** pass, signed in to a QC test account. On `5b3b3948` alone 3c.11
+failed: `LICENSE.DICe` was saved as `LICENSE.DICe.txt` (MediaStore names a
+`text/plain` download `.txt`), so the second save wrote `LICENSE.DICe (1).txt`
+beside it; it is now saved as a generic binary under its own name. The same pass
+fixed "1 deformed frames", the saved message's load log on a set without one, and
+the sheet opening half-way with Try it under the navigation bar. 3c.3 stopped at
+Chrome's first-run screen, which is the phone owner's to accept; the links sent
+`https://doi.org/…` and `https://creativecommons.org/…`. 3c.12's cancel left the
+files already written, each complete, and no pending row. The numbers are in
+[REAL_WORLD_VALIDATION.md](REAL_WORLD_VALIDATION.md#try-it-on-a-galaxy-s22-2026-10-27).
+
 ## 4. Settings
 
 One scrolling screen of seven collapsible sections, all collapsed on open, plus a

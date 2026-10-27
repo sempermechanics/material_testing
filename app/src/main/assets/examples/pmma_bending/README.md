@@ -59,10 +59,10 @@ point, mid-depth, radius t/2).
 | **E from the graph** | **≈ 1.98 GPa** (2.06 GPa using loads below 4.7 kN only) |
 | Average E over the steps | ≈ 2.09 GPa |
 
-Run through the app (subset 27, step 5, strain window 15, taps at 39 and
-611 px), the app gave δ 1.38 mm at the peak, E from the graph 2.00 GPa and an
-average of 2.11 GPa. Its deflection was within 0.008 mm RMS of the authors'
-over all 33 frames.
+Run through Try it on engine 0.6.1 (subset 27, step 5, strain window 9
+points, taps at 39 and 611 px), the app gave E from the graph 2.00 GPa and an
+average of 2.10 GPa (2026-10-27). An earlier run on engine 0.2.x gave δ 1.38 mm
+at the peak, within 0.008 mm RMS of the authors' deflection over all 33 frames.
 
 For comparison, from the same data:
 - the authors' bottom point P1 gives 2.04 GPa, and their top point P0 (under
