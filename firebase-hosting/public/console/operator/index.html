@@ -472,11 +472,15 @@
            address on a test domain, a generated password shown once,
            pre-approved and licensed, on up to N phones, and an end date.
            Every change is held to the revoke window's fresh sign-in.
-           The create form is folded away: the list is what most visits want,
-           and five open fields stood between the heading and it. -->
+           Show list sits at the right of the heading, where every card on the
+           desk keeps what it does to its whole list, and the list opens right
+           under it (test-accounts.js reads it afresh on each Show). The create
+           form is a fold below: a form opened in place, not the card's list. -->
       <section class="card" id="testAccountsCard">
         <div class="card-head">
           <h2>Test accounts</h2>
+          <span class="spacer"></span>
+          <button id="loadTestAccounts" class="secondary disclose" aria-controls="testAccountsWrap" aria-expanded="false">Show list</button>
         </div>
         <p class="muted">
           For QC staff and CI only, never a customer. The address must be on one
@@ -484,6 +488,15 @@
           once, may be signed in on several phones, and is ended — suspended and
           its data erased — when its days run out. Its audit rows are kept.
         </p>
+        <div class="wrap" id="testAccountsWrap" hidden>
+          <table class="test-accounts">
+            <thead>
+              <tr><th>Account</th><th>Purpose</th><th>Ends</th><th>Phones</th>
+                <th>Status</th><th>Note</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr>
+            </thead>
+            <tbody id="testAccountRows"></tbody>
+          </table>
+        </div>
         <details class="fold" id="taCreateBox">
           <summary>Create a test account</summary>
           <div class="grid">
@@ -508,20 +521,6 @@
           </div>
           <div class="row form-actions">
             <button id="taCreate">Create test account</button>
-          </div>
-        </details>
-        <!-- The list folds like the form above it, and is read afresh each
-             time it opens (test-accounts.js). -->
-        <details class="fold" id="testAccountsBox">
-          <summary id="loadTestAccounts">All test accounts</summary>
-          <div class="wrap" id="testAccountsWrap">
-            <table class="test-accounts">
-              <thead>
-                <tr><th>Account</th><th>Purpose</th><th>Ends</th><th>Phones</th>
-                  <th>Status</th><th>Note</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr>
-              </thead>
-              <tbody id="testAccountRows"></tbody>
-            </table>
           </div>
         </details>
       </section>
@@ -549,25 +548,24 @@
       <section class="card" id="deletedCard">
         <div class="card-head">
           <h2>Recently deleted</h2>
+          <span class="spacer"></span>
+          <button id="loadDeleted" class="secondary disclose" aria-controls="deletedWrap" aria-expanded="false">Show list</button>
         </div>
         <p class="muted">
           A deleted licence is held for 30 days, then purged for good. Restore
           puts it and its holders back — except anyone who has taken another
           licence since.
         </p>
-        <!-- Read afresh each time it opens (lifecycle.js). -->
-        <details class="fold" id="deletedBox">
-          <summary id="loadDeleted">Deleted licences</summary>
-          <div class="wrap" id="deletedWrap">
-            <table>
-              <thead>
-                <tr><th>Key</th><th>Kind</th><th>Locked to</th><th>Was</th>
-                  <th>Deleted</th><th>Purged in</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr>
-              </thead>
-              <tbody id="deletedRows"></tbody>
-            </table>
-          </div>
-        </details>
+        <!-- Read afresh on each Show (lifecycle.js). -->
+        <div class="wrap" id="deletedWrap" hidden>
+          <table>
+            <thead>
+              <tr><th>Key</th><th>Kind</th><th>Locked to</th><th>Was</th>
+                <th>Deleted</th><th>Purged in</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr>
+            </thead>
+            <tbody id="deletedRows"></tbody>
+          </table>
+        </div>
       </section>
     </div>
 

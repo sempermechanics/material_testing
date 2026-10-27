@@ -175,24 +175,29 @@ const deletedRows = () => tableRows("deletedRows");
 
 test("Recently deleted is read only when asked, and says what each licence was and how long is left", async () => {
   await openDesk({ routes: { [DELETED]: deletedPages(GONE) } });
-  assert.equal($("deletedBox").open, false);
+  assert.equal($("deletedWrap").hidden, true);
   assert.deepEqual(sent(/deleted/), [], "nothing read on load");
+  assert.ok($("loadDeleted").closest(".card-head"), "Show list sits in the card's heading row");
   await click($("loadDeleted"));
-  assert.equal($("deletedBox").open, true);
+  assert.equal($("deletedWrap").hidden, false);
+  assert.equal($("loadDeleted").textContent, "Hide list");
+  assert.equal($("loadDeleted").getAttribute("aria-expanded"), "true");
   assert.deepEqual(deletedRows(), [
     ["SEMP-DEL1", "individual", "a@b.org", "redeemed", day(DELETED_AT), "12 days", "Restore"],
     ["lic-delete", "institution", "uni.edu", "revoked", day(DELETED_AT), "1 day", "Restore"],
     ["SEMP-DEL3", "individual", "—", "—", day(DELETED_AT), "due", ""],
   ]);
   await click($("loadDeleted"));
-  assert.equal($("deletedBox").open, false, "a second click folds it away");
+  assert.equal($("deletedWrap").hidden, true, "Hide list puts it away");
+  assert.equal($("loadDeleted").textContent, "Show list");
+  assert.equal($("loadDeleted").getAttribute("aria-expanded"), "false");
   assert.deepEqual(sent(/deleted/), [DELETED], "and reads nothing");
   await click($("loadDeleted"));
-  assert.equal($("deletedBox").open, true);
-  assert.deepEqual(sent(/deleted/), [DELETED, DELETED], "every opening reads it afresh");
+  assert.equal($("deletedWrap").hidden, false);
+  assert.deepEqual(sent(/deleted/), [DELETED, DELETED], "every Show reads it afresh");
 });
 
-test("a delete with Recently deleted folded does not open or read it", async () => {
+test("a delete with Recently deleted hidden does not show or read it", async () => {
   await openDesk({ routes: {
     [DELETED]: deletedPages([]),
     [DELETE(IND)]: () => json(200, { purgeAt: at(30) }),
@@ -203,7 +208,7 @@ test("a delete with Recently deleted folded does not open or read it", async () 
   prompts.answer("SEMP-IND1");
   await click(rowButton("delete", IND.id));
   assert.deepEqual(sent(/deleted|DELETE/), [DELETED, DELETE(IND)]);
-  assert.equal($("deletedBox").open, false);
+  assert.equal($("deletedWrap").hidden, true);
 });
 
 test("an empty or unreadable deleted list says so", async () => {
