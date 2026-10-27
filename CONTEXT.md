@@ -198,6 +198,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   branch `claude/play-readiness-checks`. The release check now fails
   a targetSdk below 36 or a native library off 16 KB pages; the rest is the operator's
   (signing key TD-318, reviewer access TD-334, TD-36, TD-229–TD-232).
+- **CI fixes after main's failures on 2026-10-26:** merged as #152 (2026-10-27). Submodule
+  checkout no longer needs GitLab when Eigen's pin is cached (`checkout-submodules`), and
+  `PdfReportGeneratorTest` reads its statuses without a race.
 - **Look it up; this list rots.** `gh pr list --state open`; history in
   [CHANGELOG.md](docs/ops/CHANGELOG.md); proposals in [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 

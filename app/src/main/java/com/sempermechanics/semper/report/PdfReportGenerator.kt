@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import java.io.IOException
 import java.io.OutputStream
+import kotlin.coroutines.CoroutineContext
 
 /**
  * Renders a [ReportData] into the multi-page PDF report (cover, field
@@ -87,6 +88,11 @@ object PdfReportGenerator {
      * recycled before the next is built, so a 50-frame report never holds more
      * than one frame's images in memory. It returns null for a frame that
      * cannot be read, which is skipped.
+     *
+     * The pages render on [renderContext]. A failure there cancels the
+     * collector, which drops the statuses still buffered between the two
+     * contexts, so a test that reads the statuses of a failing render passes
+     * [kotlin.coroutines.EmptyCoroutineContext] and renders on its own thread.
      */
     @Suppress("LongParameterList") // one call site; the report's full config, all named and defaulted
     fun generateBatch(
@@ -96,6 +102,7 @@ object PdfReportGenerator {
         frameTitle: (Int) -> String = { "DIC Analysis Report — Frame ${it + 1}" },
         resources: Resources? = null,
         stressStrain: StressStrainPage? = null,
+        renderContext: CoroutineContext = Dispatchers.Default,
     ): Flow<Progress> = renderPdf(outputStream, resources) { layout ->
         // The session's engine stats are its first frame's, so one page
         // closes the document; its ZNSSD is pooled over every frame drawn.
@@ -128,7 +135,7 @@ object PdfReportGenerator {
             emit(Progress.Status(Stage.TELEMETRY, TELEMETRY_PROGRESS))
             drawTelemetryPage(layout, it, TelemetrySummary.batch(znssdFrames))
         }
-    }.flowOn(Dispatchers.Default)
+    }.flowOn(renderContext)
 
     fun generate(
         data: ReportData,

@@ -444,7 +444,11 @@ Worth knowing before you assume something is protected:
 - Robolectric's `PdfDocument` has no native document: `startPage` throws
   "document is closed". Anything that draws a PDF page (`PdfReportGenerator`,
   the bundler's reports, the viewer's PDF and ZIP exports) is checked only by
-  the device tests above. JVM tests stop at the progress and error contract.
+  the device tests above. JVM tests stop at the progress and error contract,
+  and those that read a batch's statuses render with
+  `renderContext = EmptyCoroutineContext`: on `Dispatchers.Default` the final
+  write's failure cancelled the collector before it read the buffered statuses
+  (7 of 300 runs locally; main's Tier 1 at `035f5095`).
 
 - The strain plot's own gestures — scrub, pinch, pan, double-tap, and the
   fraction it reports to the scrub slider (NaN once the scrub clears) — are
