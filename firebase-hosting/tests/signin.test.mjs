@@ -304,3 +304,28 @@ test("a redirect that keeps failing stops with a message instead of looping", as
     "Re-authentication with Google did not complete. Sign out, then sign in again.");
   assert.equal($("status").className, "muted err");
 });
+
+/* ---------------------------------------------------------- status close */
+
+test("the × beside a message clears it, and the bar with it", async () => {
+  await start(readyUser());
+  auth.setStatus("Licence issued.");
+  assert.equal($("statusClose").getAttribute("aria-label"), "Dismiss this message");
+  $("statusClose").click();
+  assert.equal($("status").textContent, "");
+
+  auth.setStatus("Could not issue: the server did not answer.", true);
+  $("statusClose").click();
+  assert.equal($("status").textContent, "");
+  assert.equal($("status").className, "muted", "no error styling left on an empty line");
+});
+
+test("every console page has the status bar with its ×, right after the line", async () => {
+  const { readFileSync } = await import("node:fs");
+  for (const file of ["index.html", "account/index.html", "institution/index.html", "operator/index.html"]) {
+    const html = readFileSync(new URL(`../public/console/${file}`, import.meta.url), "utf8");
+    assert.match(html,
+      /<div class="status-bar">\s*<p id="status"[^>]*>[^<]*<\/p>\s*<button id="statusClose" type="button" class="status-close" aria-label="Dismiss this message"/,
+      file);
+  }
+});
