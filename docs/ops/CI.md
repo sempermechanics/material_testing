@@ -100,7 +100,7 @@ gitleaks detect --config .gitleaks.toml --log-opts="<base-sha>..HEAD"
 | `android_test` | `app/src/androidTest/**` | `app` (tier 1 compiles it) |
 | `packaging` | `app/build.gradle.kts`, `app/proguard-rules.pro`, `gradle/libs.versions.toml` | `app` + `release_build` (tier 5 runs R8) |
 | `native_jni` | `engine`, `.gitmodules`, `SemperNativeLib.kt` | `emulator` + `release_build` (tiers 3 + 5) |
-| `native_ci` | `.github/actions/{setup-native-ci,enable-kvm,check-arm64-so}/**` | `emulator` + `release_build` |
+| `native_ci` | `.github/actions/{setup-native-ci,enable-kvm,check-arm64-so,checkout-submodules}/**` | `emulator` + `release_build` |
 | `backend` | `backend/**`, `firestore.rules`, `firebase-hosting/firebase.json`, `scripts/deploy-firestore.sh`, `.github/workflows/deploy-backend.yml`, `docs/legal/**`, `scripts/*.py`, `scripts/tests/**` (the scripts' test fixtures), `scripts/check_gcp_posture.sh`, `scripts/apply-monitoring.sh`, `ops/monitoring/**`, `contracts/**`, and the client's three wire-contract files | `backend` (tier 4) |
 | `rules` | `firestore.rules`, `firestore-rules-tests/**`, `backend/app/**` | `rules` (Firestore rules tests) |
 | `ci_workflow` | `.github/workflows/ci.yml`, `.github/actions/**`, `scripts/ci_test_report.py` | `app` + `backend` + `rules`, so a workflow-only PR is not gates-only |
@@ -370,6 +370,7 @@ one job runs:
 | Action | Used by | What |
 |--------|---------|------|
 | `setup-android-build` | every app job | JDK 17 + Gradle; cache written from `main` only |
+| `checkout-submodules` | tier 3, tier 5, Release, benchmark, `engine-host-sanitized` | `engine`, Eigen and OpenCV one commit deep after a plain `actions/checkout`; Eigen's git directory restored from the `submodule-eigen-<pin>` cache; each fetch retried with backoff (`retry.sh`) |
 | `setup-native-ci` | tier 3, tier 5, Release, benchmark | `.cxx` / ccache restore, OpenCV sparse checkout, the `CCACHE_*` env |
 | `enable-kvm` | tier 3, benchmark | Emulator acceleration |
 | `check-arm64-so` | tier 5, Release | The release APK carries `libsemper_core.so` |
@@ -407,6 +408,16 @@ on 2026-10-26 and failed `engine-host-sanitized` at checkout. `ci.yml` and
 `github.com/eigen-mirror/eigen`. The engine's gitlink still pins the commit (Eigen
 5.0.1, `bc3b3987`), so the source is identical; a mirror without it fails the
 checkout. Local clones still use gitlab.com. The engine-side fix is TD-348.
+
+**A cached Eigen needs neither host.** The jobs that check out submodules use
+[`checkout-submodules`](../../.github/actions/checkout-submodules/action.yml) after a plain
+`actions/checkout` (ported from material_testing#152): Eigen's git directory (~10 MB) is
+cached by its pinned commit (`submodule-eigen-<pin>`), so a run that restores it fetches
+Eigen from neither gitlab.com nor the mirror, and every fetch still needed (`engine`,
+OpenCV, an uncached Eigen) is retried for about four minutes. The cache comes from a run
+that fetched Eigen: a PR's own earlier run, or `main`'s for every PR. The first run on a
+new Eigen pin, before either, still needs the mirror. The micro A/B's base and head
+checkouts retry their submodule updates with a copy of the same `retry.sh`.
 
 **A new push cancels a PR's older run, never `main`'s.** CI's concurrency
 group is per branch, and `cancel-in-progress` is true only for `pull_request`
