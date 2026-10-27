@@ -318,7 +318,11 @@ fails.
    of R8's mapping), contains `DebugAppCheckProviderFactory` (dex or mapping) or a
    firebase-appcheck-debug version file, allows cleartext (manifest or network
    security config), has a `minSdkVersion` other than `minSdk` in
-   `app/build.gradle.kts`, loses a consent default (`<application>` meta-data
+   `app/build.gradle.kts`, has a `targetSdkVersion` other than `targetSdk` there
+   or below Play's floor of 36 (`target-sdk`), ships a `lib/<abi>/*.so` with a
+   LOAD segment aligned below 16 KB or stored uncompressed off a 16 KB zip
+   offset, or ships no `.so` at all (`native-16kb`, Play's 16 KB page-size
+   rule), loses a consent default (`<application>` meta-data
    `firebase_crashlytics_collection_enabled`, `firebase_analytics_collection_enabled`
    and `google_analytics_adid_collection_enabled` must be present and `false`;
    no `AD_ID` or `ACCESS_ADSERVICES_*` permission, TD-232), or R8's

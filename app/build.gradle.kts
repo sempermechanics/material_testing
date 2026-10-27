@@ -282,13 +282,22 @@ android {
         }
         // Non-debuggable, debug-signed release-like variant for Macrobenchmark.
         // CI runs on an x86_64 AVD, so carry that ABI the same way debug does.
+        // R8-minified with release's rules (initWith), so the startup numbers
+        // are a release build's and CI's launch smoke (scripts/launch_smoke.py)
+        // starts an R8 build before a user does: a missing keep rule fails only
+        // at run time. Resources are not shrunk: the benchmarks find views by
+        // resource name (By.res).
         create("benchmark") {
             initWith(getByName("release"))
             matchingFallbacks += listOf("release")
             isDebuggable = false
-            isMinifyEnabled = false
+            isMinifyEnabled = true
             isShrinkResources = false
             signingConfig = signingConfigs.getByName("debug")
+            // Never upload a benchmark build's mapping to Crashlytics.
+            configure<CrashlyticsExtension> {
+                mappingFileUploadEnabled = false
+            }
             if (project.findProperty("abiFilters") == null) {
                 ndk { abiFilters.add("x86_64") }
             }
@@ -349,11 +358,20 @@ android {
                         .dir("test-crash")
                         .get()
                         .asFile
+                // One worker. Two would halve the ~4 min the suite takes, but
+                // with two, one worker ended with "finished with non-zero exit
+                // value 1" after its last class in 3 of 3 local runs of the
+                // material_testing fork's suite (Windows, 2026-10-26; one with
+                // JaCoCo off), the TD-312 exit made certain; one worker passed. Try
+                // -PunitTestForks=2 when working on TD-312. The GC log is per
+                // worker (%p), so two do not write one file.
+                test.maxParallelForks =
+                    (project.findProperty("unitTestForks") as String?)?.toIntOrNull() ?: 1
                 test.jvmArgs(
                     "-XX:+HeapDumpOnOutOfMemoryError",
                     "-XX:HeapDumpPath=$crashDir",
                     "-XX:ErrorFile=$crashDir/hs_err_pid%p.log",
-                    "-Xlog:gc:file=$crashDir/gc.log:uptime:filecount=2,filesize=10m",
+                    "-Xlog:gc:file=$crashDir/gc-%p.log:uptime:filecount=2,filesize=10m",
                 )
                 test.doFirst {
                     // A local rerun must not report the last run's crash.

@@ -30,6 +30,7 @@ REQUIRED = (
     "Console accessibility",
     "Engine pin is a tagged release",
     "Engine host tests (ASan+UBSan)",
+    "Tier 1 — Static checks",
     "Tier 1 — App fast",
     "Tier 3 — Emulator E2E",
     "Tier 4 — Backend",
