@@ -65,7 +65,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
 import { ERR_CANCELLED, askInPage, codeCard, enrolInPage } from "./dialogs.js";
 import { clearPendingStatus, mark, setStatus } from "./status.js";
-import { authErrorText, reauthMethods, sessionEnded } from "./util.js";
+import { authErrorText, challengeExpired, reauthMethods, sessionEnded } from "./util.js";
 
 // Hosting's /__/firebase/init.js is the classic-SDK script
 // (`firebase.initializeApp({...})`), not a module — there is nothing to
@@ -98,17 +98,6 @@ const REAUTH_STARTED = "semper.reauthStarted";
 const AFTER_REAUTH = "semper.afterReauth";
 const RESUME = "semper.resume";
 const REAUTH_RETRY_SECONDS = 120;
-
-/* The challenge an authenticator code answers lives a few minutes after the
-   first factor. SDK 12.4.0 reports a lapsed one with the session codes, not
-   the `totp-challenge-timeout` this page was written against. */
-const CHALLENGE_EXPIRED = new Set([
-  "auth/totp-challenge-timeout",
-  "auth/invalid-multi-factor-session",
-  "auth/missing-multi-factor-session",
-  "auth/code-expired",
-]);
-
 const SESSION_ENDED_TEXT = "Your sign-in has expired. Sign in again.";
 
 function stash(key, value) {
@@ -131,11 +120,10 @@ function unstash(key) {
 /**
  * Seconds since this session's sign-in (the token's auth_time), or Infinity.
  *
- * On Google's clock: a freshly minted token's issued-at is Google's "now".
- * `Date.now()` put the console's windows and the backend's apart by however
- * far this computer's clock is off — a minute slow, and a step-up was skipped
- * as fresh and refused by the backend as stale, after a code was accepted.
- * The refresh also finds a remembered session Firebase can no longer renew.
+ * On Google's clock (a fresh token's issued-at): `Date.now()` put the console's
+ * windows and the backend's apart by however far this computer's clock was
+ * off, so a step-up was skipped as fresh and then refused as stale. The
+ * refresh also finds a remembered session Firebase can no longer renew.
  */
 async function authAge(user = auth.currentUser) {
   if (!user) return Infinity;
@@ -206,10 +194,10 @@ export function signedInUser() {
  */
 async function resolveChallenge(error) {
   const resolver = getMultiFactorResolver(auth, error);
-  const hint = resolver.hints.find(
+  const hints = resolver.hints.filter(
     (h) => h.factorId === TotpMultiFactorGenerator.FACTOR_ID,
   );
-  if (!hint) throw new Error(ERR_NO_SECOND_FACTOR);
+  if (!hints.length) throw new Error(ERR_NO_SECOND_FACTOR);
 
   // A wrong code keeps the challenge: Try again asks for the next code
   // against the same resolver, with no second trip to Google. Anything else
@@ -221,9 +209,7 @@ async function resolveChallenge(error) {
       const code = await card.next();
       if (!code) throw new Error(ERR_CANCELLED);
       try {
-        result = await resolver.resolveSignIn(
-          TotpMultiFactorGenerator.assertionForSignIn(hint.uid, code),
-        );
+        result = await resolveWithAny(resolver, hints, code);
         break;
       } catch (e) {
         if (e.code !== "auth/invalid-verification-code") throw e;
@@ -244,6 +230,20 @@ async function resolveChallenge(error) {
     await updateCurrentUser(auth, result.user);
   }
   return result;
+}
+
+/* `code` against each enrolled authenticator in turn: only the first was
+   asked, so a valid code from another one read as "not accepted". */
+async function resolveWithAny(resolver, hints, code) {
+  for (const [i, hint] of hints.entries()) {
+    try {
+      return await resolver.resolveSignIn(
+        TotpMultiFactorGenerator.assertionForSignIn(hint.uid, code),
+      );
+    } catch (e) {
+      if (e.code !== "auth/invalid-verification-code" || i === hints.length - 1) throw e;
+    }
+  }
 }
 
 /** Sign in. The result — and any second-factor challenge — arrives in
@@ -348,6 +348,11 @@ export async function sessionHasSecondFactor(user = auth.currentUser) {
 export async function ensureDashboardMfa() {
   const user = auth.currentUser;
   if (!user) throw new Error("not_signed_in");
+  // A session that proved a factor has one; else ask the server. The SDK
+  // fills `enrolledFactors` only from a reload, which a step-up redirect's
+  // return leg never had: every step-up enrolled another authenticator.
+  if (await sessionHasSecondFactor(user)) return;
+  await user.reload();
   if (!hasSecondFactor(user)) {
     setStatus("Enrol an authenticator app to open any Semper dashboard.");
     // The QR library is needed once per account, here, so it is fetched
@@ -460,7 +465,7 @@ export function requireSignIn(onReady, { showApp = true } = {}) {
         await endSession();
         setStatus(SESSION_ENDED_TEXT, true);
       } else {
-        setStatus(CHALLENGE_EXPIRED.has(e.code)
+        setStatus(challengeExpired(e)
           ? "That sign-in timed out before a code was accepted. Sign in again."
           : `Sign-in failed: ${authErrorText(e)}.`, true);
       }
@@ -561,12 +566,9 @@ export async function stepUpForRevoke(resume) {
  * return leg of a Google re-authentication, as for a revoke.
  */
 export async function stepUpFresh(resume, what) {
-  let age;
-  try {
-    age = await authAge();
-  } catch (e) {
+  const age = await authAge().catch(async (e) => {
     throw sessionEnded(e) ? await endSession() : e;
-  }
+  });
   if (age < REVOKE_FRESH_SECONDS) return;
   const can = reauthMethods(auth.currentUser && auth.currentUser.providerData);
   let password;

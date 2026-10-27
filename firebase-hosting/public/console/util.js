@@ -309,6 +309,8 @@ const FIREBASE_ERRORS = {
   "auth/requires-recent-login": "your sign-in is too old for that — sign in again",
   "auth/user-token-expired": "your sign-in has expired — sign in again",
   "auth/invalid-user-token": "your sign-in has expired — sign in again",
+  "auth/maximum-second-factor-count-exceeded":
+    "this account already holds as many authenticators as it can — ask Semper support to remove the unused ones",
   "auth/unauthorized-domain": "this address is not set up for sign-in",
   "auth/web-storage-unsupported": "this browser blocks the storage sign-in needs",
   "auth/internal-error": "the sign-in service had a problem — try again",
@@ -334,6 +336,21 @@ const SESSION_ENDED = new Set([
   "auth/user-not-found",
   "invalid_token",
 ]);
+
+// A lapsed second-factor challenge: it lives a few minutes after the first
+// factor. SDK 12.4.0 says so with the session codes, not the
+// `totp-challenge-timeout` the console was written against.
+const CHALLENGE_EXPIRED = new Set([
+  "auth/totp-challenge-timeout",
+  "auth/invalid-multi-factor-session",
+  "auth/missing-multi-factor-session",
+  "auth/code-expired",
+]);
+
+/** Whether `e` is a second-factor challenge that lapsed before a code was accepted. */
+export function challengeExpired(e) {
+  return CHALLENGE_EXPIRED.has(e && e.code);
+}
 
 /** Whether `e` means the remembered sign-in is over and only a new one helps. */
 export function sessionEnded(e) {

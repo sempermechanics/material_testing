@@ -27,6 +27,10 @@ export class FakeUser {
     // The cached ID token is past its hour, so every read refreshes it, as
     // the first one does in a browser that remembered yesterday's sign-in.
     tokenStale = false,
+    // Whether this page load has the factor list. The SDK fills it only from
+    // a reload; the return leg of a step-up redirect restores the user
+    // without one, so `multiFactor(user).enrolledFactors` reads [] until then.
+    factorsLoaded = true,
   } = {}) {
     this.uid = uid;
     this.email = email;
@@ -37,6 +41,7 @@ export class FakeUser {
     this.clockSkewSeconds = clockSkewSeconds;
     this.refreshError = refreshError;
     this.tokenStale = tokenStale;
+    this.factorsLoaded = factorsLoaded;
     this.authTime = this.googleNow() - authAgeSeconds * 1000;
     this.issuedAt = this.googleNow();
     // Firebase serves a cached ID token until asked to refresh: only
@@ -74,6 +79,14 @@ export class FakeUser {
     return this.token;
   }
 
+  async reload() {
+    fake.calls.push(["reload", this.uid]);
+    if (this.refreshError) {
+      throw Object.assign(new Error(this.refreshError), { code: this.refreshError });
+    }
+    this.factorsLoaded = true;
+  }
+
   async getIdTokenResult(forceRefresh = false) {
     fake.calls.push(["getIdTokenResult", this.uid, Boolean(forceRefresh)]);
     this.refresh(forceRefresh);
@@ -92,7 +105,7 @@ export class FakeUser {
  * `reject` is a code every attempt fails with, or a list taken one per
  * attempt (null in it accepts that attempt).
  */
-function mfaError({ user, hints = [{ uid: "totp-1", factorId: "totp" }], reject = null } = {}) {
+function mfaError({ user, hints = [{ uid: "totp-1", factorId: "totp" }], reject = null, accept = null } = {}) {
   const error = new Error("Multi-factor authentication required");
   error.code = MFA_REQUIRED;
   const rejects = Array.isArray(reject) ? [...reject] : null;
@@ -100,6 +113,11 @@ function mfaError({ user, hints = [{ uid: "totp-1", factorId: "totp" }], reject 
     hints,
     async resolveSignIn(assertion) {
       fake.calls.push(["resolveSignIn", assertion]);
+      // `accept`: the one enrolment the code came from; checked against any
+      // other factor, the code is wrong.
+      if (accept && assertion.enrollmentId !== accept) {
+        throw Object.assign(new Error("wrong factor"), { code: "auth/invalid-verification-code" });
+      }
       const code = rejects ? rejects.shift() : reject;
       if (code) throw Object.assign(new Error(code), { code });
       const who = user || fake.auth.currentUser;
@@ -221,7 +239,7 @@ export function onAuthStateChanged(auth, listener) {
 
 export function multiFactor(user) {
   return {
-    enrolledFactors: user.factors,
+    enrolledFactors: user.factorsLoaded ? user.factors : [],
     async getSession() {
       fake.calls.push(["getSession", user.uid]);
       return { uid: user.uid };
