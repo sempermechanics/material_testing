@@ -194,6 +194,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   #13). Owed: that sync and deploy, the device pass §3c, TD-331–TD-333.
 - **Rename to Semper Classroom ([ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md)):** merged
   2026-10-26 (#147, `f25ebd01`), not released; still owed: the upstream deploy and the owner's Firebase app registration.
+- **CI fixes after main's failures on 2026-10-26:** branch `claude/ci-main-fixes`. Submodule
+  checkout no longer needs GitLab when Eigen's pin is cached (`checkout-submodules`), and
+  `PdfReportGeneratorTest` reads its statuses without a race.
 - **Look it up; this list rots.** `gh pr list --state open`; history in
   [CHANGELOG.md](docs/ops/CHANGELOG.md); proposals in [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
