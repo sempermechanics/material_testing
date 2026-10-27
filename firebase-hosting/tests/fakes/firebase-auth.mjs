@@ -18,6 +18,19 @@ export class FakeUser {
     factors = [],
     secondFactor = false,
     authAgeSeconds = 10,
+    // How far Google's clock is ahead of this computer's (negative: behind).
+    // auth_time and a token's issued-at are on Google's clock.
+    clockSkewSeconds = 0,
+    // What a refresh throws once the remembered session is over, e.g.
+    // "auth/user-token-expired"; null while it can still be renewed.
+    refreshError = null,
+    // The cached ID token is past its hour, so every read refreshes it, as
+    // the first one does in a browser that remembered yesterday's sign-in.
+    tokenStale = false,
+    // Whether this page load has the factor list. The SDK fills it only from
+    // a reload; the return leg of a step-up redirect restores the user
+    // without one, so `multiFactor(user).enrolledFactors` reads [] until then.
+    factorsLoaded = true,
   } = {}) {
     this.uid = uid;
     this.email = email;
@@ -25,16 +38,35 @@ export class FakeUser {
     this.password = password;
     this.factors = factors.map((f) => ({ uid: "totp-1", factorId: "totp", ...f }));
     this.secondFactor = secondFactor;
-    this.authTime = Date.now() - authAgeSeconds * 1000;
+    this.clockSkewSeconds = clockSkewSeconds;
+    this.refreshError = refreshError;
+    this.tokenStale = tokenStale;
+    this.factorsLoaded = factorsLoaded;
+    this.authTime = this.googleNow() - authAgeSeconds * 1000;
+    this.issuedAt = this.googleNow();
     // Firebase serves a cached ID token until asked to refresh: only
-    // getIdToken(true) moves to the next version.
+    // getIdToken(true) / getIdTokenResult(true) move to the next version.
     this.tokenVersion = 1;
+  }
+
+  googleNow() {
+    return Date.now() + this.clockSkewSeconds * 1000;
   }
 
   /** A completed re-authentication: new auth_time, and a second factor if one was proved. */
   freshen({ secondFactor = this.secondFactor } = {}) {
-    this.authTime = Date.now();
+    this.authTime = this.googleNow();
+    this.issuedAt = this.authTime;
     this.secondFactor = secondFactor;
+  }
+
+  refresh(forceRefresh) {
+    if (!forceRefresh && !this.tokenStale) return;
+    if (this.refreshError) {
+      throw Object.assign(new Error(this.refreshError), { code: this.refreshError });
+    }
+    this.tokenVersion += 1;
+    this.issuedAt = this.googleNow();
   }
 
   get token() {
@@ -43,14 +75,28 @@ export class FakeUser {
 
   async getIdToken(forceRefresh = false) {
     fake.calls.push(["getIdToken", this.uid, Boolean(forceRefresh)]);
-    if (forceRefresh) this.tokenVersion += 1;
+    this.refresh(forceRefresh);
     return this.token;
   }
 
-  async getIdTokenResult() {
+  async reload() {
+    fake.calls.push(["reload", this.uid]);
+    if (this.refreshError) {
+      throw Object.assign(new Error(this.refreshError), { code: this.refreshError });
+    }
+    this.factorsLoaded = true;
+  }
+
+  async getIdTokenResult(forceRefresh = false) {
+    fake.calls.push(["getIdTokenResult", this.uid, Boolean(forceRefresh)]);
+    this.refresh(forceRefresh);
     const firebase = { sign_in_provider: this.providerData[0]?.providerId };
     if (this.secondFactor) firebase.sign_in_second_factor = "totp";
-    return { authTime: new Date(this.authTime).toUTCString(), claims: { firebase } };
+    return {
+      authTime: new Date(this.authTime).toUTCString(),
+      issuedAtTime: new Date(this.issuedAt).toUTCString(),
+      claims: { firebase },
+    };
   }
 }
 
@@ -59,7 +105,7 @@ export class FakeUser {
  * `reject` is a code every attempt fails with, or a list taken one per
  * attempt (null in it accepts that attempt).
  */
-function mfaError({ user, hints = [{ uid: "totp-1", factorId: "totp" }], reject = null } = {}) {
+function mfaError({ user, hints = [{ uid: "totp-1", factorId: "totp" }], reject = null, accept = null } = {}) {
   const error = new Error("Multi-factor authentication required");
   error.code = MFA_REQUIRED;
   const rejects = Array.isArray(reject) ? [...reject] : null;
@@ -67,6 +113,11 @@ function mfaError({ user, hints = [{ uid: "totp-1", factorId: "totp" }], reject 
     hints,
     async resolveSignIn(assertion) {
       fake.calls.push(["resolveSignIn", assertion]);
+      // `accept`: the one enrolment the code came from; checked against any
+      // other factor, the code is wrong.
+      if (accept && assertion.enrollmentId !== accept) {
+        throw Object.assign(new Error("wrong factor"), { code: "auth/invalid-verification-code" });
+      }
       const code = rejects ? rejects.shift() : reject;
       if (code) throw Object.assign(new Error(code), { code });
       const who = user || fake.auth.currentUser;
@@ -188,7 +239,7 @@ export function onAuthStateChanged(auth, listener) {
 
 export function multiFactor(user) {
   return {
-    enrolledFactors: user.factors,
+    enrolledFactors: user.factorsLoaded ? user.factors : [],
     async getSession() {
       fake.calls.push(["getSession", user.uid]);
       return { uid: user.uid };

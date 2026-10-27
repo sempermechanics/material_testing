@@ -24,9 +24,14 @@ result whose test ran above the file's ``state.maxThermalStatus`` or off the
 charger (``state.requirePlugged``), at its start or end, is reported as not
 gated. A result with no recorded state is gated as before, with a note.
 
-Usage: python scripts/ci_test_report.py [--gates FILE] DIR [DIR ...]
-Without ``--gates`` the exit status is always 0: the Gradle step already
-failed or passed the job.
+With ``--require-tests`` it exits 1 when the directories hold no test case or a
+failing one. A connected task can log an APK that failed to install and still
+end in BUILD SUCCESSFUL with no test run (TD-349), so CI checks the Macrobenchmark
+run this way right after Gradle.
+
+Usage: python scripts/ci_test_report.py [--gates FILE] [--require-tests] DIR [DIR ...]
+Without ``--gates`` or ``--require-tests`` the exit status is always 0: the
+Gradle step already failed or passed the job.
 """
 
 from __future__ import annotations
@@ -67,6 +72,17 @@ def report_failures(root: Path) -> int:
                 print("\n".join(text[:MESSAGE_LINES]))
                 print("::endgroup::")
     return failures
+
+
+def count_test_cases(root: Path) -> int:
+    """How many test cases the ``TEST-*.xml`` files under ``root`` hold."""
+    count = 0
+    for xml_file in sorted(root.rglob("TEST-*.xml")):
+        try:
+            count += sum(1 for _ in ET.parse(xml_file).getroot().iter("testcase"))
+        except ET.ParseError:
+            continue
+    return count
 
 
 def _fmt(value: object) -> str:
@@ -183,9 +199,12 @@ def check_gates(
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--gates", type=Path, help="benchmark gates JSON (benchmark/gates.json)")
+    parser.add_argument("--require-tests", action="store_true",
+                        help="exit 1 if the directories hold no test case, or a failing one")
     parser.add_argument("dirs", nargs="*", type=Path)
     args = parser.parse_args(argv[1:])
     failures = 0
+    cases = 0
     benchmarks = 0
     measured: dict[str, dict[str, float]] = {}
     states: dict[str, dict[str, dict]] = {}
@@ -194,9 +213,16 @@ def main(argv: list[str]) -> int:
             print(f"{root}: not found")
             continue
         failures += report_failures(root)
+        cases += count_test_cases(root)
         benchmarks += report_benchmarks(root, measured)
         read_device_states(root, states)
     print(f"{failures} failing test case(s), {benchmarks} benchmark result(s)")
+    if args.require_tests:
+        if cases == 0:
+            print("::error title=No tests ran::no test case under " + ", ".join(map(str, args.dirs)))
+            return 1
+        if failures:
+            return 1
     if args.gates is None:
         return 0
     breaches, skipped = check_gates(json.loads(args.gates.read_text(encoding="utf-8")), measured, states)

@@ -218,3 +218,24 @@ def test_main_with_gates_exits_1_on_a_breach_and_0_otherwise(report, tmp_path, c
     _write(results / "x-benchmarkData.json", json.dumps(_bench(device="generic_x86_64")))
     assert report.main(["ci_test_report.py", "--gates", str(gates), str(results)]) == 0
     assert "0 benchmark gate(s) exceeded" in capsys.readouterr().out
+
+
+def test_require_tests_fails_with_no_test_case_or_a_failing_one(report, tmp_path, capsys):
+    # A connected task that logged an install failure still ended in BUILD
+    # SUCCESSFUL with no TEST-*.xml (TD-349): no test case is a failure here.
+    results = tmp_path / "results"
+    results.mkdir()
+    assert report.main(["ci_test_report.py", str(results)]) == 0
+    assert report.main(["ci_test_report.py", "--require-tests", str(results)]) == 1
+    assert "::error title=No tests ran::no test case under" in capsys.readouterr().out
+
+    _write(results / "TEST-x.xml", _JUNIT)
+    assert report.count_test_cases(results) == 6
+    assert report.main(["ci_test_report.py", "--require-tests", str(results)]) == 1
+
+    _write(
+        results / "TEST-x.xml",
+        '<testsuite name="S" tests="1"><testcase classname="S" name="passes" time="0.1"/></testsuite>',
+    )
+    assert report.count_test_cases(results) == 1
+    assert report.main(["ci_test_report.py", "--require-tests", str(results)]) == 0

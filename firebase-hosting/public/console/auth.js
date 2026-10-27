@@ -65,7 +65,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
 import { ERR_CANCELLED, askInPage, codeCard, enrolInPage } from "./dialogs.js";
 import { clearPendingStatus, mark, setStatus } from "./status.js";
-import { authErrorText, reauthMethods } from "./util.js";
+import { authErrorText, challengeExpired, reauthMethods, sessionEnded } from "./util.js";
 
 // Hosting's /__/firebase/init.js is the classic-SDK script
 // (`firebase.initializeApp({...})`), not a module — there is nothing to
@@ -98,6 +98,7 @@ const REAUTH_STARTED = "semper.reauthStarted";
 const AFTER_REAUTH = "semper.afterReauth";
 const RESUME = "semper.resume";
 const REAUTH_RETRY_SECONDS = 120;
+const SESSION_ENDED_TEXT = "Your sign-in has expired. Sign in again.";
 
 function stash(key, value) {
   try {
@@ -116,12 +117,37 @@ function unstash(key) {
   }
 }
 
-/** Seconds since this session's sign-in (the token's auth_time), or Infinity. */
+/**
+ * Seconds since this session's sign-in (the token's auth_time), or Infinity.
+ *
+ * On Google's clock (a fresh token's issued-at): `Date.now()` put the console's
+ * windows and the backend's apart by however far this computer's clock was
+ * off, so a step-up was skipped as fresh and then refused as stale. The
+ * refresh also finds a remembered session Firebase can no longer renew.
+ */
 async function authAge(user = auth.currentUser) {
   if (!user) return Infinity;
-  const result = await user.getIdTokenResult();
+  const result = await user.getIdTokenResult(true);
   const at = Date.parse(result.authTime);
-  return Number.isFinite(at) ? (Date.now() - at) / 1000 : Infinity;
+  const now = Date.parse(result.issuedAtTime);
+  return Number.isFinite(at) && Number.isFinite(now) ? Math.max(0, now - at) / 1000 : Infinity;
+}
+
+/** The error a page shows once the remembered sign-in is over: COMMON's `invalid_token`. */
+function sessionEndedError() {
+  return Object.assign(new Error("invalid_token"), { code: "invalid_token", status: 401 });
+}
+
+/**
+ * Sign the page out because the remembered sign-in is over, and return the
+ * error to throw: the page's status line then says to sign in again, with
+ * Sign in on screen instead of a Sign out that hides a dead session.
+ */
+export async function endSession() {
+  try {
+    await signOut(auth);
+  } catch (_) { /* already out: Firebase drops a session it cannot refresh */ }
+  return sessionEndedError();
 }
 
 /**
@@ -168,10 +194,10 @@ export function signedInUser() {
  */
 async function resolveChallenge(error) {
   const resolver = getMultiFactorResolver(auth, error);
-  const hint = resolver.hints.find(
+  const hints = resolver.hints.filter(
     (h) => h.factorId === TotpMultiFactorGenerator.FACTOR_ID,
   );
-  if (!hint) throw new Error(ERR_NO_SECOND_FACTOR);
+  if (!hints.length) throw new Error(ERR_NO_SECOND_FACTOR);
 
   // A wrong code keeps the challenge: Try again asks for the next code
   // against the same resolver, with no second trip to Google. Anything else
@@ -183,9 +209,7 @@ async function resolveChallenge(error) {
       const code = await card.next();
       if (!code) throw new Error(ERR_CANCELLED);
       try {
-        result = await resolver.resolveSignIn(
-          TotpMultiFactorGenerator.assertionForSignIn(hint.uid, code),
-        );
+        result = await resolveWithAny(resolver, hints, code);
         break;
       } catch (e) {
         if (e.code !== "auth/invalid-verification-code") throw e;
@@ -206,6 +230,20 @@ async function resolveChallenge(error) {
     await updateCurrentUser(auth, result.user);
   }
   return result;
+}
+
+/* `code` against each enrolled authenticator in turn: only the first was
+   asked, so a valid code from another one read as "not accepted". */
+async function resolveWithAny(resolver, hints, code) {
+  for (const [i, hint] of hints.entries()) {
+    try {
+      return await resolver.resolveSignIn(
+        TotpMultiFactorGenerator.assertionForSignIn(hint.uid, code),
+      );
+    } catch (e) {
+      if (e.code !== "auth/invalid-verification-code" || i === hints.length - 1) throw e;
+    }
+  }
 }
 
 /** Sign in. The result — and any second-factor challenge — arrives in
@@ -277,8 +315,10 @@ export async function stepUp({ password, note, resume, operatorAsked = false } =
       );
     }
   } catch (e) {
-    if (e.code === "auth/multi-factor-auth-required") await resolveChallenge(e);
-    else throw e;
+    if (e.code !== "auth/multi-factor-auth-required") {
+      throw sessionEnded(e) ? await endSession() : e;
+    }
+    await resolveChallenge(e);
   }
   return auth.currentUser.getIdToken(true);
 }
@@ -308,6 +348,11 @@ export async function sessionHasSecondFactor(user = auth.currentUser) {
 export async function ensureDashboardMfa() {
   const user = auth.currentUser;
   if (!user) throw new Error("not_signed_in");
+  // A session that proved a factor has one; else ask the server. The SDK
+  // fills `enrolledFactors` only from a reload, which a step-up redirect's
+  // return leg never had: every step-up enrolled another authenticator.
+  if (await sessionHasSecondFactor(user)) return;
+  await user.reload();
   if (!hasSecondFactor(user)) {
     setStatus("Enrol an authenticator app to open any Semper dashboard.");
     // The QR library is needed once per account, here, so it is fetched
@@ -411,14 +456,19 @@ export function requireSignIn(onReady, { showApp = true } = {}) {
       if (result && afterReauth) setStatus(afterReauth);
       return result ? stashedResume : unfinished("incomplete");
     })
-    .catch((e) => {
+    .catch(async (e) => {
       if (e.message === ERR_CANCELLED) {
         setStatus("Sign-in cancelled — the authenticator code was not entered.");
         return unfinished("cancelled");
       }
-      setStatus(e.code === "auth/totp-challenge-timeout"
-        ? "That sign-in timed out before a code was accepted. Sign in again."
-        : `Sign-in failed: ${authErrorText(e)}.`, true);
+      if (sessionEnded(e)) {
+        await endSession();
+        setStatus(SESSION_ENDED_TEXT, true);
+      } else {
+        setStatus(challengeExpired(e)
+          ? "That sign-in timed out before a code was accepted. Sign in again."
+          : `Sign-in failed: ${authErrorText(e)}.`, true);
+      }
       return unfinished(e.code || e.message);
     });
 
@@ -475,6 +525,12 @@ export function requireSignIn(onReady, { showApp = true } = {}) {
           "then sign in again.", true);
         return;
       }
+      // A remembered sign-in Firebase can no longer renew: Sign in, not Sign out.
+      if (sessionEnded(e)) {
+        await endSession();
+        setStatus(SESSION_ENDED_TEXT, true);
+        return;
+      }
       setStatus(`Could not open the dashboard: ${authErrorText(e)}.`, true);
     }
   });
@@ -510,7 +566,10 @@ export async function stepUpForRevoke(resume) {
  * return leg of a Google re-authentication, as for a revoke.
  */
 export async function stepUpFresh(resume, what) {
-  if ((await authAge()) < REVOKE_FRESH_SECONDS) return;
+  const age = await authAge().catch(async (e) => {
+    throw sessionEnded(e) ? await endSession() : e;
+  });
+  if (age < REVOKE_FRESH_SECONDS) return;
   const can = reauthMethods(auth.currentUser && auth.currentUser.providerData);
   let password;
   if (can.password) {

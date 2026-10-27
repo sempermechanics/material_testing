@@ -38,6 +38,8 @@ permissions:
 # actions/checkout's submodule clones, fetches it from the GitHub mirror instead.
 # The gitlink pins the commit (Eigen 5.0.1, bc3b3987 at engine f072da0), so
 # the source is identical; a mirror without that commit fails the checkout.
+# checkout-submodules caches Eigen's git directory by that pin, so a run that
+# restores it fetches Eigen from neither.
 env:
   GIT_CONFIG_COUNT: "1"
   GIT_CONFIG_KEY_0: url.https://github.com/eigen-mirror/eigen.git.insteadOf
@@ -325,6 +327,7 @@ jobs:
               - '.github/actions/setup-native-ci/**'
               - '.github/actions/enable-kvm/**'
               - '.github/actions/check-arm64-so/**'
+              - '.github/actions/checkout-submodules/**'
             backend:
               - 'backend/**'
               - 'firestore.rules'
@@ -543,8 +546,10 @@ jobs:
       CCACHE_COMPILERCHECK: content
     steps:
       - uses: actions/checkout@v7
-        with:
-          submodules: recursive
+
+      # Submodules after checkout: Eigen from cache, every fetch retried.
+      - uses: ./.github/actions/checkout-submodules
+
       # libopencv-dev or the full-field pipeline is silently left out of the
       # build (the engine CI's note); DIC_REQUIRE_OPENCV makes that a failure.
       - name: Install OpenCV + ccache
@@ -680,8 +685,9 @@ jobs:
       && needs.changes.outputs.emulator == 'true'
     steps:
       - uses: actions/checkout@v7
-        with:
-          submodules: recursive
+
+      # Submodules after checkout: Eigen from cache, every fetch retried.
+      - uses: ./.github/actions/checkout-submodules
 
       - uses: ./.github/actions/setup-android-build
         with:
@@ -929,8 +935,9 @@ jobs:
       && needs.changes.outputs.release_build == 'true'
     steps:
       - uses: actions/checkout@v7
-        with:
-          submodules: recursive
+
+      # Submodules after checkout: Eigen from cache, every fetch retried.
+      - uses: ./.github/actions/checkout-submodules
 
       - uses: ./.github/actions/setup-android-build
         with:
@@ -1045,8 +1052,9 @@ jobs:
       && (needs.tier1-static.result == 'success' || needs.tier1-static.result == 'skipped')
     steps:
       - uses: actions/checkout@v7
-        with:
-          submodules: recursive
+
+      # Submodules after checkout: Eigen from cache, every fetch retried.
+      - uses: ./.github/actions/checkout-submodules
 
       - uses: ./.github/actions/setup-android-build
         with:
@@ -1091,6 +1099,9 @@ jobs:
           set -euo pipefail
           ab="$RUNNER_TEMP/micro-ab"
           head=$(git rev-parse HEAD)
+          # A copy: the base checked out below may predate the script.
+          retry="$RUNNER_TEMP/retry.sh"
+          cp .github/actions/checkout-submodules/retry.sh "$retry"
           build() {
             ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest -PabiFilters=x86_64 -PnativeCompilerLauncher=ccache --console=plain
             mkdir -p "$ab/$1"
@@ -1099,10 +1110,10 @@ jobs:
           }
           git fetch --no-tags --depth=1 origin "$BASE_SHA"
           git -c advice.detachedHead=false checkout "$BASE_SHA"
-          git submodule update --init --recursive
+          bash "$retry" git submodule update --init --recursive
           build A
           git -c advice.detachedHead=false checkout "$head"
-          git submodule update --init --recursive
+          bash "$retry" git submodule update --init --recursive
           build B
           ls -l "$ab"/*
           cat "$ab"/*/app-id.txt
@@ -1126,7 +1137,12 @@ jobs:
       #   an R8 build before a user does.
       # - Macrobenchmarks: on a PR a dry run (one pass each, androidx.benchmark
       #   dryRunMode), since their emulator numbers are not gated; the full
-      #   iterations run on dispatch and with the `benchmark` label.
+      #   iterations run on dispatch and with the `benchmark` label. The smoke's
+      #   install is removed first: this Gradle run packages the app again, and
+      #   its install over the smoke's failed on the signature, which the
+      #   connected task logged and still called BUILD SUCCESSFUL with no test
+      #   run (TD-349). So ci_test_report.py --require-tests fails the step
+      #   unless the run left a test case and no failing one.
       # - The micro smoke run only when there is no A/B (dispatch): on a PR the
       #   A/B's rounds run the same class twice from this build. It is a debug
       #   build on an emulator, hence DEBUGGABLE in its suppress list: its
@@ -1157,7 +1173,9 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
           script: |
             python3 scripts/launch_smoke.py app/build/outputs/apk/benchmark/app-benchmark.apk --package "$APP_ID" --out launch-smoke
+            "$ANDROID_HOME/platform-tools/adb" uninstall "$APP_ID" || true
             ./gradlew :benchmark:connectedBenchmarkAndroidTest -PabiFilters=x86_64 -PnativeCompilerLauncher=ccache --console=plain -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED $MACRO_DRY_RUN
+            python3 scripts/ci_test_report.py --require-tests benchmark/build/outputs/androidTest-results
             [ -d "$RUNNER_TEMP/micro-ab/A" ] || ./gradlew :app:installDebug :app:installDebugAndroidTest -PabiFilters=x86_64 -PnativeCompilerLauncher=ccache --console=plain
             [ -d "$RUNNER_TEMP/micro-ab/A" ] || "$ANDROID_HOME/platform-tools/adb" shell am instrument -w -e class com.sempermechanics.semper.benchmark.HotPathMicroBenchmark -e androidx.benchmark.suppressErrors EMULATOR,DEBUGGABLE,LOW-BATTERY,UNLOCKED,ACTIVITY-MISSING,NOT-AOT-COMPILED "$APP_ID.test/androidx.test.runner.AndroidJUnitRunner" | tee micro-instrument.txt
             mkdir -p app/build/outputs/connected_android_test_additional_output

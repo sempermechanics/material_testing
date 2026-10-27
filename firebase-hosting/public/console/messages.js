@@ -8,7 +8,7 @@
  * the message: it follows a sentence as "(ref: <code>)", for support, so
  * nothing is ever silently swallowed and nobody is shown only a code.
  */
-import { errorDetail } from "./util.js";
+import { authErrorText, errorDetail } from "./util.js";
 
 /** Sentences any page may show for a code it has none of its own for. */
 export const COMMON = {
@@ -20,6 +20,10 @@ export const COMMON = {
   claim_contended: "Busy just now — try again.",
   mfa_required: "Set up two-factor authentication first.",
   reauth_required: "Sign in again, then repeat that.",
+  // 401: the ID token itself was refused, or the remembered sign-in can no
+  // longer be refreshed. api.js signs the page out for either, so Sign in is
+  // on screen beside this.
+  invalid_token: "Your sign-in has expired. Sign in again, then repeat that.",
   not_admin: "That account is not a Semper operator.",
   email_not_verified: "Verify your email address first.",
 };
@@ -63,6 +67,9 @@ const BARE_CODE = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/;
 function reason(error, code, text) {
   if (REASONS[code]) return REASONS[code];
   if (error instanceof TypeError) return REASONS.network;
+  // A step-up's own failure (a code that came too late, a refused password).
+  // Its message is Firebase's "Firebase: Error (auth/…)." and no sentence.
+  if (/^auth\//.test(code)) return authErrorText(error);
   const gateway = /^http_(\d{3})$/.exec(code);
   if (gateway && GATEWAY[gateway[1]]) return GATEWAY[gateway[1]];
   // A code nobody wrote a sentence for: words, with the code kept for support.

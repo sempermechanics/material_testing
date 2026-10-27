@@ -127,6 +127,29 @@ test("an enrolled session that proved its factor opens the dashboard once", asyn
   assert.equal(ready[1].resume, null);
 });
 
+test("a remembered sign-in Firebase can no longer renew says to sign in again, with Sign in shown", async () => {
+  // The browser kept yesterday's sign-in; its refresh token was revoked since.
+  const ready = await start(readyUser({ tokenStale: true, refreshError: "auth/user-token-expired" }));
+  assert.equal(ready.length, 0);
+  assert.equal($("status").textContent, "Your sign-in has expired. Sign in again.");
+  assert.equal($("status").className, "muted err");
+  assert.equal(fake.callsTo("signOut").length, 1);
+  assert.equal($("app").hidden, true);
+  assert.equal($("signIn").hidden, false);
+  assert.equal($("signOut").hidden, true);
+});
+
+test("a code entered after the challenge lapsed says the sign-in timed out, not 'unexpected'", async () => {
+  returningFromRevokeStepUp();
+  const user = readyUser();
+  fake.redirectResult = fake.mfaError({ user, reject: "auth/invalid-multi-factor-session" });
+  codes.answer("123456");
+  const ready = await start(user);
+  assert.equal($("status").textContent,
+    "That sign-in timed out before a code was accepted. Sign in again.");
+  assert.equal(ready[0].resume.reauthFailed, "auth/invalid-multi-factor-session");
+});
+
 test("a session without its second factor never reaches onReady", async () => {
   const ready = await start(new FakeUser({ factors: [{}], secondFactor: false }));
   assert.equal(ready.length, 0);
@@ -170,6 +193,47 @@ test("a TOTP challenge on the return leg adopts the re-authenticated user, with 
   assert.deepEqual(ready[0].resume, resume);
   assert.equal(fake.callsTo("reauthenticateWithRedirect").length, 0, "no bounce back to Google");
   assert.equal($("app").hidden, false);
+});
+
+test("the return leg of a step-up never enrols another authenticator", async () => {
+  // The SDK restores the user without reloading it and the adopted copy has
+  // no reload either, so `enrolledFactors` reads [] on an enrolled account.
+  // The console took that for "no authenticator" and enrolled one more on
+  // every step-up, until Firebase refused: maximum-second-factor-count-exceeded.
+  returningFromRevokeStepUp();
+  const stale = new FakeUser({ factors: [{}], factorsLoaded: false, authAgeSeconds: 3600 });
+  const fresh = new FakeUser({ factors: [{}], factorsLoaded: false, authAgeSeconds: 3600 });
+  fake.redirectResult = fake.mfaError({ user: fresh });
+  codes.answer("123456");
+  const ready = await start(stale);
+  assert.equal(fake.callsTo("generateSecret").length, 0, "no enrolment card");
+  assert.equal(ready.length, 1);
+  assert.equal($("app").hidden, false);
+});
+
+test("a session whose factor list was never loaded asks the server before enrolling", async () => {
+  // Enrolled, but this session has not proved the factor: a step-up, not a QR code.
+  const ready = await start(new FakeUser({ factors: [{}], factorsLoaded: false }));
+  assert.deepEqual(fake.callsTo("reload"), [["uid-1"]]);
+  assert.equal(fake.callsTo("generateSecret").length, 0);
+  assert.equal(fake.callsTo("reauthenticateWithRedirect").length, 1);
+  assert.equal(ready.length, 0);
+});
+
+test("a code from any of several enrolled authenticators is accepted", async () => {
+  // An account the old console enrolled five times: the code in the app is
+  // for whichever entry the operator opens, not necessarily the first.
+  returningFromRevokeStepUp();
+  const user = new FakeUser({ factors: [{}], secondFactor: false, authAgeSeconds: 3600 });
+  const hints = ["totp-1", "totp-2", "totp-3"].map((uid) => ({ uid, factorId: "totp" }));
+  fake.redirectResult = fake.mfaError({ user, hints, accept: "totp-3" });
+  codes.answer("123456");
+  const ready = await start(user);
+  assert.deepEqual(fake.callsTo("resolveSignIn").map(([a]) => a.enrollmentId),
+    ["totp-1", "totp-2", "totp-3"]);
+  assert.equal(codes.asked, 1, "one code, no 'not accepted'");
+  assert.equal(ready.length, 1);
+  assert.equal($("status").textContent, "Re-authenticated.");
 });
 
 test("a return leg that came back without a sign-in marks the resume incomplete", async () => {
