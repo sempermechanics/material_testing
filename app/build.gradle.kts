@@ -1,6 +1,8 @@
 import com.android.build.api.artifact.SingleArtifact
 import com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension
+import groovy.json.JsonSlurper
 import org.w3c.dom.Element
+import java.util.zip.ZipFile
 import javax.xml.parsers.DocumentBuilderFactory
 
 plugins {
@@ -9,6 +11,8 @@ plugins {
     alias(libs.plugins.detekt)
     alias(libs.plugins.google.services)
     alias(libs.plugins.firebase.crashlytics)
+    // Credits & licences lists every library the APK carries (TD-57): res/raw/aboutlibraries.json.
+    alias(libs.plugins.aboutlibraries)
     // Coverage: `koverVerify` enforces the floor below (CI tier 1 and
     // ciReleaseGate); `./gradlew :app:koverHtmlReport` → app/build/reports/kover/.
     alias(libs.plugins.kover)
@@ -421,6 +425,12 @@ android {
     }
 }
 
+// The licences come from the dependencies' own POMs: no network at build time,
+// so a release builds the same offline and in CI.
+aboutLibraries {
+    offlineMode = true
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
@@ -607,6 +617,59 @@ abstract class VerifyForegroundServiceTypes : DefaultTask() {
     }
 }
 
+/**
+ * The notices Google ships inside its Play services and Firebase AARs
+ * (`third_party_licenses.json` indexes `third_party_licenses.txt` by byte
+ * range), gathered into one file the way Google's oss-licenses plugin does
+ * (TD-57). AboutLibraries lists those AARs by name only; the code they bundle
+ * (Guava, Kotlin, Error Prone, …) has its notices here. The file is not in the
+ * APK: semper-website's `tools/build-licences.py` publishes it, with the
+ * library list, at sempermechanics.com/licences/, where Credits & licences links.
+ * `./gradlew :app:collectReleasePlayServicesNotices :app:prepareLibraryDefinitionsRelease`
+ * writes both.
+ */
+abstract class CollectPlayServicesNotices : DefaultTask() {
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val aars: ConfigurableFileCollection
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun collect() {
+        // A text shared by several components (most are Apache-2.0) is written once, under all their names.
+        val notices = linkedMapOf<String, Pair<String, MutableSet<String>>>()
+        aars.files.sortedBy { it.name }.forEach { aar ->
+            ZipFile(aar).use { zip ->
+                val index = zip.getEntry("third_party_licenses.json") ?: return@use
+                val text = zip.getInputStream(zip.getEntry("third_party_licenses.txt")).use { it.readBytes() }
+
+                @Suppress("UNCHECKED_CAST")
+                val ranges = zip.getInputStream(index).use { JsonSlurper().parse(it) } as Map<String, Map<String, Int>>
+                ranges.forEach { (name, range) ->
+                    val start = range.getValue("start")
+                    val notice = String(text, start, range.getValue("length"), Charsets.UTF_8).trim()
+                    val key = notice.replace(Regex("""\s+"""), " ")
+                    notices.getOrPut(key) { notice to sortedSetOf(String.CASE_INSENSITIVE_ORDER) }.second += name
+                }
+            }
+        }
+        val out = outputDir.get().file("play-services-notices.txt").asFile
+        out.parentFile.mkdirs()
+        out.writeText(
+            notices.values
+                .sortedBy { (_, names) -> names.first().lowercase() }
+                .joinToString("\n\n") { (text, names) -> "$NOTICE_HEADING${names.joinToString(", ")}\n\n$text" } + "\n",
+        )
+    }
+
+    companion object {
+        /** The line that opens each notice in the file, so the website's generator can split it again. */
+        const val NOTICE_HEADING = "### "
+    }
+}
+
 androidComponents {
     onVariants { variant ->
         val suffix = variant.name.replaceFirstChar { it.uppercase() }
@@ -625,6 +688,16 @@ androidComponents {
                     ),
                 )
             }
+        tasks.register<CollectPlayServicesNotices>("collect${suffix}PlayServicesNotices") {
+            aars.from(
+                variant.runtimeConfiguration.incoming
+                    .artifactView {
+                        lenient(true)
+                        attributes { attribute(Attribute.of("artifactType", String::class.java), "aar") }
+                    }.files,
+            )
+            outputDir.set(layout.buildDirectory.dir("licences/${variant.name}"))
+        }
         // Runs inside CI Tier 1, which is the only tier that always executes.
         tasks.matching { it.name == "test${suffix}UnitTest" }.configureEach {
             dependsOn(verifyTask)

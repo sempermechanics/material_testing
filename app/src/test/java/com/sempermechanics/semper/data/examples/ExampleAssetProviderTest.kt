@@ -35,13 +35,14 @@ class ExampleAssetProviderTest {
 
     @Test
     fun `a listed file opens with its bytes, name and size`() {
-        val uri = uri("dice_translation", "ref.tif")
-        val expected = app.assets.open("examples/dice_translation/ref.tif").use { it.readBytes() }
+        val uri = uri("dice_translation", "translation_ref.tif")
+        val expected = app.assets.open("examples/dice_translation/translation_ref.tif").use { it.readBytes() }
         val read = provider.openAssetFile(uri, "r").createInputStream().use { it.readBytes() }
         assertEquals(expected.toList(), read.toList())
         provider.query(uri, null, null, null, null)!!.use { cursor ->
             cursor.moveToFirst()
-            assertEquals("ref.tif", cursor.getString(cursor.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME)))
+            val name = cursor.getString(cursor.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME))
+            assertEquals("translation_ref.tif", name)
             assertEquals(expected.size.toLong(), cursor.getLong(cursor.getColumnIndexOrThrow(OpenableColumns.SIZE)))
         }
         assertEquals("image/tiff", provider.getType(uri))
@@ -57,7 +58,7 @@ class ExampleAssetProviderTest {
 
     @Test
     fun `nothing is writable`() {
-        val ref = uri("dice_translation", "ref.tif")
+        val ref = uri("dice_translation", "translation_ref.tif")
         assertThrows(FileNotFoundException::class.java) { provider.openAssetFile(ref, "w") }
         assertThrows(UnsupportedOperationException::class.java) { provider.delete(ref, null, null) }
         assertThrows(UnsupportedOperationException::class.java) { provider.insert(ref, null) }

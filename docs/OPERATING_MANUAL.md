@@ -915,7 +915,7 @@ Write above that block; leave it in place.
 - No spatial calibration — pixels only.
 - Coach marks show once and cannot be replayed.
 - Approval never polls.
-- Credits & licences (Settings → Help) covers the example data and the engine's DICe, OpenCV and Eigen licences only; the AndroidX and Firebase notices are not listed yet (TD-57).
+- Credits & licences (Settings → Help) lists the example data, the engine and every library in the app, each with its licence; the full texts and the Play services notices are at sempermechanics.com/licences/. When dependencies change, regenerate that page with semper-website's `tools/build-licences.py`.
 - ROI shapes are rectangle and square only. -->
 
 ---

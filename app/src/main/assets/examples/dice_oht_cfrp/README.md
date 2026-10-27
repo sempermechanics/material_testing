@@ -2,7 +2,7 @@
 
 Two images of an open-hole tension specimen of carbon-fibre composite, from the
 test data of the Digital Image Correlation Engine (DICe), Sandia National
-Laboratories. `ref.tiff` is the first load step and `def.tiff` the next one.
+Laboratories. `oht_cfrp_ref.tiff` is the first load step and `oht_cfrp_def.tiff` the next one.
 The images are 400 × 1040 px, 8-bit.
 
 **In Semper Classroom:** + → *Try an example* (or Settings → Help → Example data) → this set. **Try it** opens a new 2D DIC analysis with both images in; **Save to phone** copies this folder to `Download/Semper examples/`.
@@ -12,7 +12,7 @@ Credit: [CREDIT.txt](CREDIT.txt). Licence: BSD-3-Clause, full text in [LICENSE.D
 ## Steps
 
 1. New analysis → 2D DIC.
-2. Reference: `ref.tiff`. Deformed frame: `def.tiff`.
+2. Reference: `oht_cfrp_ref.tiff`. Deformed frame: `oht_cfrp_def.tiff`.
 3. ROI: the plate, about x 40–360, y 40–990 px. Subset 27 px, step 35 px
    matches DICe's own run.
 4. Compute, then look at V and Eyy.

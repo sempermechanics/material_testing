@@ -192,10 +192,13 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Example data in the app ([ADR-031](docs/adr/ADR-031-bundled-example-data.md)), merged
   2026-10-26 (#149, `8b11ed8f`), not released:** steel, PMMA, concrete (CC BY 4.0) and two DICe
   pairs (BSD-3) in `app/src/main/assets/examples/` (~80 MB), with ground truth and credits;
-  Try it / Save to phone / Credits & licences. Terms §4.6 merged upstream (semperdic-app #487),
-  not yet synced here or deployed to Hosting; the website's Examples page merged (semper-website
-  #13). The §3c device pass ran on a Galaxy S22 on 2026-10-27; its fixes and TD-275's
-  new numbers merged (#154, `e0e697b2`). Owed: that sync and deploy, TD-57, TD-58.
+  Try it / Save to phone / Credits & licences. Terms §4.6 merged upstream (semperdic-app #487)
+  and synced here (#153); its Hosting deploy is owed, from semperdic-app. The website's Examples
+  page merged (semper-website #13). The §3c device pass ran on a Galaxy S22 on 2026-10-27; its
+  fixes and TD-275's new numbers merged (#154, `e0e697b2`). Open on `claude/example-followups`:
+  the DICe files named for their set (Try it's analysis was "ref"), and TD-57 closed (Credits &
+  licences lists every part with its licence; the full texts move to sempermechanics.com/licences/);
+  the website zips to match (semper-website #14). Owed: TD-58 (semper-dic-engine#26, then a pin bump).
 - **Rename to Semper Classroom ([ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md)):** merged
   2026-10-26 (#147, `f25ebd01`), not released; still owed: the upstream deploy and the owner's Firebase app registration.
 - **Play submission ([gate](docs/ops/PRODUCTION_READINESS_GATE.md#google-play-submission-semper-classroom)):**

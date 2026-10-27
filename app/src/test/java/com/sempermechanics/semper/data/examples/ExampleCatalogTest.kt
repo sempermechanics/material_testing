@@ -7,6 +7,7 @@ import com.sempermechanics.semper.data.mechanical.LoadCsvParse
 import com.sempermechanics.semper.data.mechanical.LoadUnit
 import com.sempermechanics.semper.data.mechanical.MachineLoadCsv
 import com.sempermechanics.semper.data.mechanical.TestType
+import com.sempermechanics.semper.data.session.SessionNaming
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -47,6 +48,16 @@ class ExampleCatalogTest {
             set.files.forEach { file ->
                 assets.open(ExampleCatalog.path(set.id, file)).use { assertTrue("${set.id}/$file", it.read() >= 0) }
             }
+        }
+    }
+
+    @Test
+    fun `each set's analysis is named for the set, not for a bare ref`() {
+        // Try it names the analysis after the reference: DICe's own ref.tiff made a Home row "ref" (Galaxy S22).
+        val names = sets.map { SessionNaming.defaultSessionName(it.reference, emptyList()) }
+        assertEquals(names.toString(), names.size, names.toSet().size)
+        names.zip(sets).forEach { (name, set) ->
+            assertTrue("${set.id}: $name", name.startsWith(set.id.removePrefix("dice_").substringBefore('_')))
         }
     }
 
@@ -118,12 +129,12 @@ class ExampleCatalogTest {
         val samples = File("../engine/examples/samples")
         assumeTrue("engine submodule not checked out", samples.isDirectory)
         val copies = mapOf(
-            "dice_oht_cfrp/ref.tiff" to "oht_cfrp/ref.tiff",
-            "dice_oht_cfrp/def.tiff" to "oht_cfrp/def.tiff",
+            "dice_oht_cfrp/oht_cfrp_ref.tiff" to "oht_cfrp/ref.tiff",
+            "dice_oht_cfrp/oht_cfrp_def.tiff" to "oht_cfrp/def.tiff",
             "dice_oht_cfrp/DICe_solution_01.txt" to "oht_cfrp/DICe_solution_01.txt",
             "dice_oht_cfrp/LICENSE.DICe" to "LICENSE.DICe",
-            "dice_translation/ref.tif" to "translation/ref.tif",
-            "dice_translation/def.tif" to "translation/def.tif",
+            "dice_translation/translation_ref.tif" to "translation/ref.tif",
+            "dice_translation/translation_def.tif" to "translation/def.tif",
             "dice_translation/LICENSE.DICe" to "LICENSE.DICe",
         )
         copies.forEach { (asset, engine) ->
@@ -139,7 +150,19 @@ class ExampleCatalogTest {
     @Test
     fun `the licence texts the app shows are bundled`() {
         assertEquals(
-            listOf("DICe-BSD-3-Clause.txt", "Eigen-MPL-2.0.txt", "OpenCV-Apache-2.0.txt"),
+            listOf(
+                // The short notices that travel with the app: the codecs OpenCV links into
+                // libsemper, and the MIT / BSD libraries (TD-57). The long texts are on the website.
+                "carotene-BSD-3-Clause.txt",
+                "checker-qual-MIT.txt",
+                "cpufeatures-Apache-2.0.txt",
+                "libjpeg-turbo-IJG-BSD-3-Clause-Zlib.txt",
+                "libpng-PNG-2.txt",
+                "libtiff-libtiff.txt",
+                "libwebp-BSD-3-Clause.txt",
+                "protobuf-BSD-3-Clause.txt",
+                "zlib-Zlib.txt",
+            ),
             assets.list("licences").orEmpty().sorted(),
         )
     }

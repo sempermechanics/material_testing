@@ -11,9 +11,9 @@
     512,
     512
   ],
-  "reference": "ref.tif",
+  "reference": "translation_ref.tif",
   "deformed": [
-    "def.tif"
+    "translation_def.tif"
   ],
   "roi": [
     64,
@@ -38,6 +38,6 @@
     "licence": "BSD-3-Clause",
     "licence_url": "https://opensource.org/license/bsd-3-clause",
     "licence_file": "LICENSE.DICe",
-    "changes": "None. Copyright 2015 National Technology & Engineering Solutions of Sandia, LLC (NTESS)."
+    "changes": "None to the images; ref.tif and def.tif renamed translation_ref.tif and translation_def.tif. Copyright 2015 National Technology & Engineering Solutions of Sandia, LLC (NTESS)."
   }
 }
