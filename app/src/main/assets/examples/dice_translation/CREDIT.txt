@@ -6,7 +6,7 @@ Licence:   BSD-3-Clause (https://opensource.org/license/bsd-3-clause)
            The full licence text is in LICENSE.DICe, beside this file.
 
 Changes made by Semper Mechanics:
-  None. Copyright 2015 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+  None to the images; ref.tif and def.tif renamed translation_ref.tif and translation_def.tif. Copyright 2015 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 
 These files keep their own licence. You may copy, share and adapt them under
 BSD-3-Clause; the Semper Classroom terms place no further limit on them.

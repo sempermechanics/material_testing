@@ -77,8 +77,8 @@ class ExampleDownloadsTest {
         assertEquals(listOf("README.md", "CREDIT.txt", "LICENSE.DICe"), set.files.take(3))
         assertEquals((1..set.files.size).toList(), done)
         assertTrue(sink.pending.isEmpty())
-        val ref = app.assets.open("examples/dice_translation/ref.tif").use { it.readBytes() }
-        assertEquals(ref.toList(), sink.files.getValue(folder + "ref.tif").toList())
+        val ref = app.assets.open("examples/dice_translation/translation_ref.tif").use { it.readBytes() }
+        assertEquals(ref.toList(), sink.files.getValue(folder + "translation_ref.tif").toList())
     }
 
     @Test
@@ -91,20 +91,20 @@ class ExampleDownloadsTest {
 
     @Test
     fun `a failed write is reported and its pending file removed`() = runTest {
-        val sink = FakeSink(failOn = "def.tif")
+        val sink = FakeSink(failOn = "translation_def.tif")
         val outcome = ExampleDownloads(app.assets, sink).save(set)
         assertEquals(ExampleDownloads.Outcome.Failed("disk full"), outcome)
-        assertEquals(listOf(folder + "def.tif"), sink.discarded)
+        assertEquals(listOf(folder + "translation_def.tif"), sink.discarded)
         assertTrue(sink.pending.isEmpty())
     }
 
     @Test
     fun `a cancel removes the pending file and goes on`() {
-        val sink = FakeSink(cancelOn = "def.tif")
+        val sink = FakeSink(cancelOn = "translation_def.tif")
         assertThrows(CancellationException::class.java) {
             runBlocking { ExampleDownloads(app.assets, sink).save(set) }
         }
-        assertEquals(listOf(folder + "def.tif"), sink.discarded)
+        assertEquals(listOf(folder + "translation_def.tif"), sink.discarded)
     }
 
     @Test

@@ -2,7 +2,7 @@
 
 A speckle image and a copy of it shifted by 0.4 px, from the test data of the
 Digital Image Correlation Engine (DICe), Sandia National Laboratories. The
-images are 512 × 512 px, 8-bit. `def.tif` holds a second page; the app reads
+images are 512 × 512 px, 8-bit. `translation_def.tif` holds a second page; the app reads
 the first, which is the shifted one.
 
 **In Semper Classroom:** + → *Try an example* (or Settings → Help → Example data) → this set. **Try it** opens a new 2D DIC analysis with both images in; **Save to phone** copies this folder to `Download/Semper examples/`.
@@ -12,7 +12,7 @@ Credit: [CREDIT.txt](CREDIT.txt). Licence: BSD-3-Clause, full text in [LICENSE.D
 ## Steps
 
 1. New analysis → 2D DIC.
-2. Reference: `ref.tif`. Deformed frame: `def.tif`.
+2. Reference: `translation_ref.tif`. Deformed frame: `translation_def.tif`.
 3. ROI: x 64–448, y 64–448 px. Subset 27 px.
 4. Compute, then look at U and V.
 

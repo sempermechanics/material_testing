@@ -35,13 +35,13 @@ class ExampleAssetProviderTest {
 
     @Test
     fun `a listed file opens with its bytes, name and size`() {
-        val uri = uri("dice_translation", "ref.tif")
-        val expected = app.assets.open("examples/dice_translation/ref.tif").use { it.readBytes() }
+        val uri = uri("dice_translation", "translation_ref.tif")
+        val expected = app.assets.open("examples/dice_translation/translation_ref.tif").use { it.readBytes() }
         val read = provider.openAssetFile(uri, "r").createInputStream().use { it.readBytes() }
         assertEquals(expected.toList(), read.toList())
         provider.query(uri, null, null, null, null)!!.use { cursor ->
             cursor.moveToFirst()
-            assertEquals("ref.tif", cursor.getString(cursor.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME)))
+            assertEquals("translation_ref.tif", cursor.getString(cursor.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME)))
             assertEquals(expected.size.toLong(), cursor.getLong(cursor.getColumnIndexOrThrow(OpenableColumns.SIZE)))
         }
         assertEquals("image/tiff", provider.getType(uri))
@@ -57,7 +57,7 @@ class ExampleAssetProviderTest {
 
     @Test
     fun `nothing is writable`() {
-        val ref = uri("dice_translation", "ref.tif")
+        val ref = uri("dice_translation", "translation_ref.tif")
         assertThrows(FileNotFoundException::class.java) { provider.openAssetFile(ref, "w") }
         assertThrows(UnsupportedOperationException::class.java) { provider.delete(ref, null, null) }
         assertThrows(UnsupportedOperationException::class.java) { provider.insert(ref, null) }
@@ -68,13 +68,13 @@ class ExampleAssetProviderTest {
     fun `files a set does not list, other sets and paths out of the folder are refused`() {
         val unlisted = uri("dice_translation", "secret.txt")
         assertThrows(FileNotFoundException::class.java) { provider.openAssetFile(unlisted, "r") }
-        assertThrows(FileNotFoundException::class.java) { provider.openAssetFile(uri("no_such_set", "ref.tif"), "r") }
+        assertThrows(FileNotFoundException::class.java) { provider.openAssetFile(uri("no_such_set", "translation_ref.tif"), "r") }
         val root = "content://${ExampleAssetProvider.authority(app)}"
         val escape = Uri.parse("$root/dice_translation/..%2F..%2Flicences%2FEigen-MPL-2.0.txt")
         assertThrows(FileNotFoundException::class.java) { provider.openAssetFile(escape, "r") }
         val deep = Uri.parse("content://${ExampleAssetProvider.authority(app)}/licences/a/b")
         assertThrows(FileNotFoundException::class.java) { provider.openAssetFile(deep, "r") }
-        assertNull(provider.query(uri("no_such_set", "ref.tif"), null, null, null, null))
+        assertNull(provider.query(uri("no_such_set", "translation_ref.tif"), null, null, null, null))
     }
 
     @Test
