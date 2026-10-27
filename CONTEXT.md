@@ -112,7 +112,7 @@ disabled until the `targetSdk` bump. Settings / wizard XML stay under `TooManyVi
 `SettingsScrollContentView` / `WizardStepSettingsContentView`. Macrobenchmark CI is smoke,
 no thresholds; the hot-path microbenchmarks gate a PR A/B against its base on the CI
 emulator (`scripts/micro_ab.py`, [TESTING.md](docs/app/TESTING.md)); the phone-run gates (`benchmark/gates.json`,
-[ADR-008](docs/adr/ADR-008-startup-gates-phone-state.md)) list the Pixel 6 for five metrics; its startup cold and warm start and wizard cold start are owed (TD-155); the engine floor (≥ 4557 solves/s,
+[ADR-008](docs/adr/ADR-008-startup-gates-phone-state.md)) gate the benchmark phone, a Galaxy S22+ (`g0q`), on eight metrics from 2026-10-27 (the Pixel 6 keeps five); the engine floor (≥ 4557 solves/s,
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
@@ -154,7 +154,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   fails a targetSdk below 36 or a `.so` off 16 KB pages; the `benchmark` build is R8-minified
   and launch-smoked; Macrobenchmarks dry-run on PRs; heavy tiers wait for `tier1-static` only.
 - **Owed.** A device smoke of the next release ([RELEASING.md](docs/ops/RELEASING.md) step 5);
-  TD-212 at the 0.6.1 pin; Pixel 6 benchmarks for #435; ADR-015's queued-work upgrade check;
+  TD-212 at the 0.6.1 pin (on the Galaxy S22+); ADR-015's queued-work upgrade check;
   [WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a on a device; both apps on one phone; TD-36.
 - **Look it up; this list rots.** `gh pr list --state open`, [CHANGELOG.md](docs/ops/CHANGELOG.md), [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 

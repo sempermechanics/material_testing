@@ -1,7 +1,8 @@
 # ADR-008: Real-device startup gates check the phone's state, and a trip is settled A/B
 
 **Status:** Accepted, built (in material_testing 2026-09-26; ported here 2026-10-01).
-Semper's Pixel 6 references taken 2026-10-05 for the tests that stayed at status 0; the rest are owed (TD-155).
+Semper's Pixel 6 references taken 2026-10-05 for the tests that stayed at status 0. The
+benchmark phone became a Galaxy S22+ (`g0q`) on 2026-10-27, with references for every gated test.
 **Date:** 2026-09-26
 **Deciders:** app owner
 
@@ -88,8 +89,9 @@ projects.
   limit. Check it with `startup_ab.py` before a code search.
 - `gates.json` carries `state` and `abMargin`. Adding a phone means taking its
   references under the same state rules.
-- A test with no reference in `gates.json` is not gated. On Semper's Pixel 6 that is
-  the startup cold and warm start and the wizard cold start (TD-155).
+- A test with no reference in `gates.json` is not gated. On the Galaxy S22+ that is
+  only `scrub150FramesWithPhotos` (report-only by choice); on the Pixel 6 it is also the
+  startup cold and warm start and the wizard cold start, which never stayed at status 0.
 - Lowering `COLD_START_ITERATIONS` back to 5 reopens TD-135.
 
 ## Action items
@@ -98,5 +100,5 @@ projects.
       15 cold-start iterations (material_testing, then here).
 - [x] The harness reads the app id from `:app`'s build, so both repos carry the
       same files.
-- [ ] Take Semper's Pixel 6 references under the protocol and label their state
-      (TD-155).
+- [x] Take Semper's references under the protocol and label their state: the Pixel 6
+      in part (2026-10-05), the Galaxy S22+ in full (2026-10-27, TD-155 closed).
