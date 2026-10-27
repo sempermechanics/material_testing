@@ -245,6 +245,7 @@ jobs:
               - '.github/actions/setup-native-ci/**'
               - '.github/actions/enable-kvm/**'
               - '.github/actions/check-arm64-so/**'
+              - '.github/actions/checkout-submodules/**'
             backend:
               - 'backend/**'
               - 'firestore.rules'
@@ -537,8 +538,9 @@ jobs:
       && needs.changes.outputs.emulator == 'true'
     steps:
       - uses: actions/checkout@v7
-        with:
-          submodules: recursive
+
+      # Submodules after checkout: Eigen from cache, fetches retried (GitLab outages).
+      - uses: ./.github/actions/checkout-submodules
 
       - uses: ./.github/actions/setup-android-build
         with:
@@ -786,8 +788,9 @@ jobs:
       && needs.changes.outputs.release_build == 'true'
     steps:
       - uses: actions/checkout@v7
-        with:
-          submodules: recursive
+
+      # Submodules after checkout: Eigen from cache, fetches retried (GitLab outages).
+      - uses: ./.github/actions/checkout-submodules
 
       - uses: ./.github/actions/setup-android-build
         with:
@@ -909,8 +912,9 @@ jobs:
       && (needs.tier1-static.result == 'success' || needs.tier1-static.result == 'skipped')
     steps:
       - uses: actions/checkout@v7
-        with:
-          submodules: recursive
+
+      # Submodules after checkout: Eigen from cache, fetches retried (GitLab outages).
+      - uses: ./.github/actions/checkout-submodules
 
       - uses: ./.github/actions/setup-android-build
         with:
@@ -955,6 +959,9 @@ jobs:
           set -euo pipefail
           ab="$RUNNER_TEMP/micro-ab"
           head=$(git rev-parse HEAD)
+          # A copy: the base checked out below may predate the script.
+          retry="$RUNNER_TEMP/retry.sh"
+          cp .github/actions/checkout-submodules/retry.sh "$retry"
           build() {
             ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest -PabiFilters=x86_64 -PnativeCompilerLauncher=ccache --console=plain
             mkdir -p "$ab/$1"
@@ -963,10 +970,10 @@ jobs:
           }
           git fetch --no-tags --depth=1 origin "$BASE_SHA"
           git -c advice.detachedHead=false checkout "$BASE_SHA"
-          git submodule update --init --recursive
+          bash "$retry" git submodule update --init --recursive
           build A
           git -c advice.detachedHead=false checkout "$head"
-          git submodule update --init --recursive
+          bash "$retry" git submodule update --init --recursive
           build B
           ls -l "$ab"/*
           cat "$ab"/*/app-id.txt
