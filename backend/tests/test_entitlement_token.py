@@ -4,7 +4,8 @@ the Android verifier implements, and when the route issues one.
 `fixtures/entitlement_vector.json` is the shared test vector: the app's unit
 tests verify the same token with the same public key. Regenerate it only with
 the contract, `UPDATE_ENTITLEMENT_VECTOR=1 pytest tests/test_entitlement_token.py`,
-and copy it to the app in the same change.
+and copy it to the app in the same change (`test_the_app_copy_is_this_vector`
+fails until the copy matches).
 """
 from __future__ import annotations
 
@@ -27,6 +28,8 @@ from app.config import settings
 from key_helpers import public_pem, seeded_p256_key
 
 VECTOR_PATH = Path(__file__).parent / "fixtures" / "entitlement_vector.json"
+_APP_TREE = Path(__file__).resolve().parents[2] / "app"
+APP_VECTOR_PATH = _APP_TREE / "src" / "test" / "resources" / "entitlement_vector_backend.json"
 SIGNER_SEED = "semper-entitlement-vector-v1/signer TEST ONLY"
 DEVICE_SEED = "semper-entitlement-vector-v1/device TEST ONLY"
 KID = "test-ent-1"
@@ -373,6 +376,17 @@ def test_the_vector_is_what_this_code_would_build():
     for key in ("kid", "publicKeyPem", "devicePublicKeyPem", "header", "payload", "verifyAt"):
         assert vector[key] == built[key], key
     assert _parts(vector["token"])[:2] == _parts(built["token"])[:2]
+
+
+@pytest.mark.skipif(not _APP_TREE.is_dir(), reason="app/ not present (backend-only checkout)")
+def test_the_app_copy_is_this_vector():
+    """The app's EntitlementVectorTest reads its own copy of the vector, so a
+    vector regenerated here and left uncopied would keep both suites green."""
+    assert APP_VECTOR_PATH.is_file(), f"{APP_VECTOR_PATH} is missing"
+    assert APP_VECTOR_PATH.read_bytes() == VECTOR_PATH.read_bytes(), (
+        "app/src/test/resources/entitlement_vector_backend.json differs from "
+        "backend/tests/fixtures/entitlement_vector.json: copy the backend file over it"
+    )
 
 
 # ---------------- over HTTP ----------------

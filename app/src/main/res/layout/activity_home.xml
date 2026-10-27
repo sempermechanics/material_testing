@@ -58,7 +58,7 @@
                 android:paddingHorizontal="8dp"
                 android:paddingVertical="3dp"
                 android:textColor="@color/text_secondary"
-                android:textSize="11sp"
+                android:textSize="@dimen/text_caption"
                 android:visibility="gone"
                 tools:text="820 / 999 analyses used" />
 
@@ -74,7 +74,7 @@
                 android:paddingHorizontal="8dp"
                 android:paddingVertical="3dp"
                 android:textColor="@color/text_secondary"
-                android:textSize="11sp"
+                android:textSize="@dimen/text_caption"
                 android:visibility="gone"
                 tools:text="License expires in 9 days" />
         </LinearLayout>
@@ -252,7 +252,8 @@
         <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
             android:id="@+id/swipeRefresh"
             android:layout_width="match_parent"
-            android:layout_height="match_parent">
+            android:layout_height="match_parent"
+            android:layout_marginHorizontal="@dimen/content_side_inset">
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/sessionList"

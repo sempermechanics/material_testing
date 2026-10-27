@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="oval">
+    android:shape="rectangle">
+    <!-- A circle at 22dp; a pill when the font scale widens the number. -->
+    <corners android:radius="999dp" />
     <solid android:color="@color/sky_primary" />
 </shape>

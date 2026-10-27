@@ -9,7 +9,7 @@ import {
   errorDetail, licenceListPath, licenceSearchBody, searchableLicenceText, upsertLicence, alreadyLicensedId,
   isoDay, emailList, licenceEditPatch, daysLeft, reauthMethods, unfinishedStepUpText,
   normaliseClaimCode, claimCodeShaped, MAX_CLAIM_CODE,
-  reauthFailureText, testAccountBody, testAccountEnds, extendDays, TEST_ACCOUNT,
+  reauthFailureText, testAccountBody, testAccountEnds, extendDays, TEST_ACCOUNT, localDayRange,
 } from "../public/console/util.js";
 
 const NOW = Date.parse("2026-09-23T12:00:00Z");
@@ -25,6 +25,26 @@ test("when renders an em dash for nothing or garbage", () => {
   assert.equal(when(null), "—");
   assert.equal(when("not a date"), "—");
   assert.notEqual(when("2026-09-23T12:00:00Z"), "—");
+});
+
+test("when names the time zone it is shown in", () => {
+  const at = new Date("2026-09-23T12:00:00Z");
+  const zone = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" })
+    .formatToParts(at).find((p) => p.type === "timeZoneName").value;
+  assert.ok(when(at.toISOString()).endsWith(zone), `${when(at.toISOString())} ends with ${zone}`);
+});
+
+test("an audit date range is the local days chosen, as instants", () => {
+  // The rows are shown in local time (when), so the filter is local days too:
+  // until includes its day, up to the next local midnight.
+  assert.deepEqual(localDayRange({ since: "2026-10-18", until: "2026-10-18" }), {
+    since: new Date(2026, 9, 18).toISOString(),
+    until: new Date(2026, 9, 19).toISOString(),
+  });
+  assert.deepEqual(localDayRange({ since: "", until: "" }), { since: "", until: "" });
+  assert.deepEqual(localDayRange({ since: "garbage", until: "2026-12-31" }), {
+    since: "garbage", until: new Date(2027, 0, 1).toISOString(),
+  });
 });
 
 test("only a real licence counts as held, and a backend without held is read from mode", () => {
@@ -64,7 +84,7 @@ test("a live lease shows its end", () => {
 test("seat cells: four columns, status labels, escaped member", () => {
   const html = seatCells({ uid: "u<2>", status: "disabled", deviceIdLock: "abcdefghijklmnop" }, NOW);
   assert.equal(html.match(/<td/g).length, 4);
-  assert.match(html, /on hold/);
+  assert.match(html, /paused/);
   assert.match(html, /u&lt;2&gt;/);
   assert.match(html, /abcdefghij…/);
   assert.match(seatCells({ uid: "u", status: "revoked" }, NOW), /removed/);
@@ -128,6 +148,7 @@ test("a licence end shows the day it was set to, in any time zone", () => {
   // read as the next day anywhere east of UTC.
   const shown = day("2026-06-30T23:59:59Z");
   assert.match(shown, /30/);
+  assert.ok(shown.endsWith(" (UTC)"), `${shown} says it is a UTC day`);
   assert.doesNotMatch(shown, /1|Jul/);
   assert.equal(day(null), "—");
   assert.equal(day("garbage"), "—");
@@ -298,12 +319,12 @@ test("a failed re-authentication says the action was not sent", () => {
     "SEMP-2YCY was not revoked: the authenticator code was not entered. Revoke it again to retry.");
   assert.match(
     unfinishedStepUpText({ action: "delete", id: "x", reauthFailed: "auth/network-request-failed" }, "K"),
-    /re-authentication failed \(auth\/network-request-failed\)/);
+    /was not deleted: the sign-in service did not answer — check your connection\. /);
 });
 
-test("a failed re-authentication is said in words, an unknown reason as it came", () => {
+test("a failed re-authentication is said in words, an unknown reason as a reference", () => {
   assert.equal(reauthFailureText("cancelled"), "the authenticator code was not entered");
-  assert.equal(reauthFailureText("auth/x"), "re-authentication failed (auth/x)");
+  assert.equal(reauthFailureText("auth/x"), "re-authentication did not finish (ref: auth/x)");
 });
 
 /* ------------------------------------------------------- test accounts */

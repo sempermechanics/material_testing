@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <int name="schema" value="1" />
+    <boolean name="save_to_cloud" value="true" />
+    <boolean name="upload_wifi_only" value="true" />
+    <int name="max_frames" value="150" />
+    <boolean name="diagnostics_asked" value="true" />
+    <boolean name="diagnostics_enabled" value="false" />
+</map>

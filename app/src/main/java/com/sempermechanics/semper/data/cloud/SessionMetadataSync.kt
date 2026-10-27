@@ -47,6 +47,12 @@ object SessionMetadataSync {
         /** Offline, rate-limited, or the backend failed; try again soon. */
         RETRY,
 
+        /**
+         * The upload or backup kill switch is on (503 `feature_paused`, TE4-004):
+         * a pause, not a failure. The row stays marked; send again once it lifts.
+         */
+        PAUSED,
+
         /** Leave it marked for the next reconcile: no cloud copy, or the backend refused. */
         LATER,
     }
@@ -91,7 +97,15 @@ object SessionMetadataSync {
      * statused answer goes by [refused]. A failure that is not I/O at all is
      * logged as an error and left for the next reconcile, not retried.
      */
-    private fun afterFailure(id: String, failure: HttpFailure): Outcome = when (failure.kind) {
+    private fun afterFailure(id: String, failure: HttpFailure): Outcome = when {
+        ApiErrors.hasCode(failure.body, ApiErrors.FEATURE_PAUSED) -> {
+            Timber.i("Metadata for %s not sent: backup is paused by the backend; waiting", id)
+            Outcome.PAUSED
+        }
+        else -> afterKind(id, failure)
+    }
+
+    private fun afterKind(id: String, failure: HttpFailure): Outcome = when (failure.kind) {
         Kind.UNAUTHORIZED, Kind.FORBIDDEN, Kind.NOT_FOUND, Kind.CONFLICT,
         Kind.RATE_LIMITED, Kind.SERVER, Kind.REJECTED,
         -> refused(id, failure)

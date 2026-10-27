@@ -35,6 +35,7 @@
                 android:id="@+id/sessionThumb"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
+                android:forceDarkAllowed="false"
                 android:background="@color/viewer_chip_off"
                 android:contentDescription="@string/home_thumb_desc"
                 android:scaleType="centerCrop" />
@@ -43,6 +44,7 @@
                 android:id="@+id/sessionResultThumb"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
+                android:forceDarkAllowed="false"
                 android:importantForAccessibility="no"
                 android:scaleType="centerCrop" />
 

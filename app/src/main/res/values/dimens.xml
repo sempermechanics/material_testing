@@ -11,6 +11,20 @@
     <dimen name="space_16">16dp</dimen>
     <dimen name="space_24">24dp</dimen>
 
+    <!-- Type scale (TextAppearance.Semper.*). New and reworked text takes its size
+         from here; no layout text goes below the caption (readiness AE1-011). -->
+    <dimen name="text_title">20sp</dimen>
+    <dimen name="text_subtitle">16sp</dimen>
+    <dimen name="text_body">14sp</dimen>
+    <dimen name="text_label">13sp</dimen>
+    <dimen name="text_caption">12sp</dimen>
+
+    <!-- Side inset of the main screens' content column (Home's list, Settings,
+         sign-in, the wizard pages): 0 on a phone; values-w600dp / w840dp / w1240dp
+         raise it so a tablet shows a column near 600 dp instead of a stretched
+         phone layout (readiness AE1-019). The viewer stays full-bleed. -->
+    <dimen name="content_side_inset">0dp</dimen>
+
     <!-- Home row thumbnail edge; its result render is cached at twice this in px (SessionThumbs). -->
     <dimen name="session_thumb_size">44dp</dimen>
     <!-- Sweep page: the line-cut preview as a strip, and opened. -->

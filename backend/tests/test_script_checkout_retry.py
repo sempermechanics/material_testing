@@ -26,8 +26,8 @@ _FLAKY = 'n=$(( $(cat calls 2>/dev/null || echo 0) + 1 )); echo "$n" > calls; [ 
 
 def _run(tmp_path: Path, succeed_on: int) -> subprocess.CompletedProcess[str]:
     env = {**os.environ, "RETRY_DELAYS": "0 0 0 0"}
-    return subprocess.run(
-        ["bash", _RETRY.as_posix(), "bash", "-c", _FLAKY, "flaky", str(succeed_on)],
+    return subprocess.run(  # noqa: S603 - this repo's own script and a fixed command, no shell
+        ["bash", _RETRY.as_posix(), "bash", "-c", _FLAKY, "flaky", str(succeed_on)],  # noqa: S607 - fixed bash on PATH
         capture_output=True, text=True, env=env, cwd=tmp_path, timeout=60,
     )
 

@@ -5,6 +5,7 @@ import androidx.core.content.edit
 import com.google.firebase.auth.ActionCodeSettings
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.prefs.PrefFiles.EmailLink
 import com.sempermechanics.semper.data.prefs.get
 import com.sempermechanics.semper.data.prefs.privatePrefs
@@ -66,7 +67,7 @@ internal class AuthLinks(context: Context) {
     /** Email a sign-in link to [email], remembering the address so the tapped link can finish. */
     suspend fun sendSignInLink(email: String): Result<Unit> {
         val clean = email.trim()
-        return firebaseOp("Could not send sign-in link", "Could not send the sign-in link.") {
+        return firebaseOp(appContext, "Could not send sign-in link", R.string.auth_link_send_failed) {
             auth.sendSignInLinkToEmail(clean, continueTo(EMAIL_LINK_CONTINUE_URL)).await()
             prefs().edit { put(EmailLink.PENDING_EMAIL, clean) }
         }
@@ -86,8 +87,9 @@ internal class AuthLinks(context: Context) {
      */
     suspend fun sendPasswordReset(email: String): Result<Unit> =
         firebaseOp(
+            appContext,
             "Could not send password reset",
-            "Could not send the reset email.",
+            R.string.auth_reset_failed,
             known = { e ->
                 (e as? FirebaseAuthInvalidUserException)?.let {
                     Timber.d(it, "Password reset for an unregistered email (existence not revealed)")
@@ -99,12 +101,12 @@ internal class AuthLinks(context: Context) {
         }
 
     suspend fun verifyPasswordResetCode(oobCode: String): Result<String> =
-        firebaseOp("Password-reset code invalid or expired", "This reset link is invalid or has expired.") {
+        firebaseOp(appContext, "Password-reset code invalid or expired", R.string.auth_reset_link_invalid) {
             auth.verifyPasswordResetCode(oobCode).await()
         }
 
     suspend fun confirmPasswordReset(oobCode: String, newPassword: String): Result<Unit> =
-        firebaseOp("Could not confirm password reset", "Could not reset the password.") {
+        firebaseOp(appContext, "Could not confirm password reset", R.string.auth_reset_confirm_failed) {
             auth.confirmPasswordReset(oobCode, newPassword).await()
         }
 

@@ -27,14 +27,21 @@ _COMPLETE = ("POST", "/v1/files/f-1/complete", "/v1/files/{file_id}/complete",
              {"sessionId": "s-1", "driveFileId": "d-1", "bytes": 10, "md5": _MD5})
 _CONTENT = ("GET", "/v1/files/f-1/content", "/v1/files/{file_id}/content", None)
 _BUNDLE = ("GET", "/v1/sessions/s-1/bundle", "/v1/sessions/{sid}/bundle", None)
+# The resume path hands out Drive resumable URIs; the metadata replace writes
+# into Drive. Both are upload work (readiness TE4-004).
+_UPLOADS = ("GET", "/v1/sessions/s-1/uploads", "/v1/sessions/{sid}/uploads", None)
+_METADATA = ("PUT", "/v1/sessions/s-1/metadata", "/v1/sessions/{sid}/metadata",
+             {"specimen": "s"})
 
 #: Every switch the backend enforces, by the routes it refuses.
 PAUSED = [
     ("upload", _CREATE), ("upload", _COMPLETE),
+    ("upload", _UPLOADS), ("upload", _METADATA),
     ("backup", _CREATE), ("backup", _COMPLETE),
+    ("backup", _UPLOADS), ("backup", _METADATA),
     ("restore", _CONTENT), ("restore", _BUNDLE),
 ]
-ROUTES = [_CREATE, _COMPLETE, _CONTENT, _BUNDLE]
+ROUTES = [_CREATE, _COMPLETE, _UPLOADS, _METADATA, _CONTENT, _BUNDLE]
 
 
 def _events(caplog, event: str) -> list[dict]:
@@ -102,6 +109,7 @@ async def test_upload_and_backup_together_are_named_together(untouched, client, 
 @pytest.mark.parametrize("switch,route", [
     ("restore", _CREATE), ("restore", _COMPLETE), ("share", _CREATE), ("share", _COMPLETE),
     ("upload", _CONTENT), ("backup", _CONTENT), ("upload", _BUNDLE), ("share", _BUNDLE),
+    ("restore", _UPLOADS), ("share", _UPLOADS), ("restore", _METADATA), ("share", _METADATA),
 ], ids=lambda v: v if isinstance(v, str) else v[1])
 async def test_another_switch_leaves_the_route_alone(recording, client, monkeypatch, switch,
                                                      route):
@@ -129,6 +137,8 @@ def _drive_stubs(monkeypatch):
     (_COMPLETE, 404, "file_not_found"),
     (_CONTENT, 404, "file_not_found"),
     (_BUNDLE, 404, "session_not_found"),
+    (_UPLOADS, 404, "session_not_found"),
+    (_METADATA, 404, "session_not_found"),
 ], ids=lambda v: v[1] if isinstance(v, tuple) else str(v))
 async def test_no_switch_answers_as_before(recording, client, monkeypatch, route, status,
                                            detail):

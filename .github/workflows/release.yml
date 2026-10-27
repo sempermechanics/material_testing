@@ -22,10 +22,21 @@ concurrency:
   group: release
   cancel-in-progress: false
 
+# The engine's Eigen submodule points at gitlab.com, which has refused clones
+# under load (2026-10-26). Every git command in every job, including
+# actions/checkout's submodule clones, fetches it from the GitHub mirror instead.
+# The gitlink pins the commit (Eigen 5.0.1, bc3b3987 at engine f072da0), so
+# the source is identical; a mirror without that commit fails the checkout.
+env:
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: url.https://github.com/eigen-mirror/eigen.git.insteadOf
+  GIT_CONFIG_VALUE_0: https://gitlab.com/libeigen/eigen.git
+
 jobs:
   # Green CI was previously only a manual checklist item in RELEASING.md, so a
-  # red suite could still be signed and published. These three jobs are the
-  # gate and run in parallel — same checks as the old sequential `verify` job.
+  # red suite could still be signed and published. These three jobs and
+  # verify-ci below are the gate and run in parallel; the three are the same
+  # checks as the old sequential `verify` job.
   # Releases only ship from main — refuse other refs.
   verify-legal:
     name: Verify legal pages
@@ -85,10 +96,58 @@ jobs:
 
       - uses: ./.github/actions/backend-gate
 
+  # The version input names the tag the release is published under, and the
+  # build is github.sha (main's head at dispatch). Refuse a malformed version,
+  # and a tag that already exists on another commit; a new tag is created at
+  # github.sha by publish (target_commitish) (TE6-008).
+  verify-tag:
+    name: Verify the version tag names this commit
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # the tags
+
+      - name: Version format and tag commit
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: python3 scripts/check_release_tag.py --version "$VERSION" --sha "$GITHUB_SHA"
+
+  # The three jobs above re-run part of CI; the rest of it (secret scan,
+  # console pages, the emulator tier, the Firestore rules, the signed-release
+  # tier) was a checklist line in RELEASING.md. This requires every CI job's
+  # latest check run on this commit to have passed, not been skipped, so the
+  # commit needs a full-matrix CI run first (dispatch CI with full_ci, or its
+  # weekly run) (TE6-009).
+  verify-ci:
+    name: Verify full-matrix CI passed on this commit
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Full-matrix CI OK on the commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs?per_page=100" \
+            > "$RUNNER_TEMP/check-runs.json"
+          python3 scripts/check_release_ci.py --runs "$RUNNER_TEMP/check-runs.json" --sha "$GITHUB_SHA"
+
   build-release:
     name: Build signed release
     if: github.ref == 'refs/heads/main'
-    needs: [verify-legal, verify-android, verify-backend]
+    needs: [verify-legal, verify-android, verify-backend, verify-tag, verify-ci]
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     environment: release
@@ -141,6 +200,11 @@ jobs:
           # Releases sit above every CI run number ever used as a versionCode
           # (main's CI reached 671 before it switched to a fixed 1), so a phone
           # holding an old CI APK takes the next release as an update.
+          # run_number counts this workflow's runs and is monotonic only while
+          # the workflow keeps its identity: renaming or re-creating release.yml
+          # restarts it at 1, and the next versionCode would then be lower than
+          # an installed one. Raise RELEASE_CODE_BASE past the last release's
+          # versionCode in the same change (TE6-008).
           RELEASE_CODE_BASE: 1000
         run: |
           if [ -z "${SEMPER_API_BASE_URL}" ]; then
@@ -176,17 +240,38 @@ jobs:
 
       # What the release build type promises, read back from the APK itself:
       # not debuggable or testOnly, no debug source-set component, no App Check
-      # debug provider, no cleartext, minSdk as app/build.gradle.kts says, a
-      # non-empty R8 mapping (readiness A1.5; MASWE-0067 / MASWE-0089). Warns,
-      # without failing, when no certificate pin was compiled in.
+      # debug provider, no cleartext, minSdk as app/build.gradle.kts says, the
+      # consent defaults (collection off, no AD_ID permission), an R8 mapping
+      # that renames app classes (readiness A1.5; MASWE-0067 / MASWE-0089).
+      # Warns, without failing, when no certificate pin was compiled in.
+      # Entitlement keys (TE4-001): a warning while TD-215 is open. Once the
+      # signing key is live SEMPER_ENTITLEMENT_PUBKEYS is set, and from then a
+      # release that compiled none fails here; SEMPER_REQUIRE_ENTITLEMENT_PINS
+      # =true keeps that on should the pubkeys variable be cleared by mistake
+      # (RELEASING.md, step 5). Both are unset today: no release fails on it.
+      # Signing key (TE1-007): the signer must be the release certificate every
+      # Semper release so far carries (runs 31565590316 to 39064532280, last
+      # v1.2-beta.4 = versionCode 1036), or the APK would not install over
+      # theirs. SEMPER_RELEASE_CERT_SHA256 overrides it (a deliberate rotation,
+      # with a v3 lineage); a fork, which signs with its own key, has no
+      # default and gets a warning until it sets the variable.
       - name: Inspect release APK hardening
+        env:
+          REQUIRE_ENTITLEMENT_PINS: ${{ (vars.SEMPER_ENTITLEMENT_PUBKEYS != '' || vars.SEMPER_REQUIRE_ENTITLEMENT_PINS == 'true') && 'true' || '' }}
+          EXPECTED_SIGNER: ${{ vars.SEMPER_RELEASE_CERT_SHA256 || (github.repository == 'sempermechanics/semperdic-app' && 'ff72a8b08f02a05d65b53d91250bef7e3b0ff7538af2b0168ee52d5f36b15c9a' || '') }}
         run: |
           set -euo pipefail
           APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
           BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          SIGNER=$("$BUILD_TOOLS/apksigner" verify --print-certs "$APK" \
+            | grep -iE "(Signer #1|V[0-9]+ Signer):? ?certificate SHA-256 digest:" \
+            | head -1 | awk '{print $NF}')
           python3 scripts/check_release_apk.py "$APK" \
             --aapt2 "$BUILD_TOOLS/aapt2" \
-            --mapping app/build/outputs/mapping/release/mapping.txt
+            --mapping app/build/outputs/mapping/release/mapping.txt \
+            --signer-sha256 "$SIGNER" \
+            ${EXPECTED_SIGNER:+--expected-signer-sha256 "$EXPECTED_SIGNER"} \
+            ${REQUIRE_ENTITLEMENT_PINS:+--require-entitlement-pins}
 
       # An AAB is a signed JAR, not an APK: apksigner does not read it.
       - name: Verify release bundle signature
@@ -315,6 +400,10 @@ jobs:
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ github.event.inputs.version }}
+          # A tag that does not exist yet is created at the built commit, not
+          # at the default branch's tip when this step runs (verify-tag
+          # refused one already on another commit).
+          target_commitish: ${{ github.sha }}
           name: ${{ github.event.inputs.version }}
           body: ${{ github.event.inputs.changelog }}
           prerelease: ${{ github.event.inputs.channel == 'beta' }}

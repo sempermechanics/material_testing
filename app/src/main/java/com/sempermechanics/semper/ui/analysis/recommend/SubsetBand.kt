@@ -106,7 +106,7 @@ class SubsetBand private constructor(private val slider: Slider) : Drawable() {
                 DicGoodPractice.MAX_SPECKLE_PX.toInt(),
             )
             val usable = DicGoodPractice.verdictFor(diameterPx) == DicGoodPractice.Verdict.USABLE
-            val color = if (usable) R.color.viewer_chrome_text else R.color.semantic_warning
+            val color = if (usable) R.color.viewer_chrome_text else R.color.semantic_warning_ink
             chip.setTextColor(chip.context.getColor(color))
         }
 

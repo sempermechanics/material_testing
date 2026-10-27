@@ -1,0 +1,401 @@
+package com.sempermechanics.semper.ui.common
+
+import android.app.Application
+import android.content.Context
+import android.content.res.Configuration
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
+import androidx.annotation.LayoutRes
+import androidx.appcompat.view.ContextThemeWrapper
+import androidx.core.widget.NestedScrollView
+import androidx.test.core.app.ApplicationProvider
+import com.sempermechanics.semper.R
+import com.sempermechanics.semper.ui.analysis.roi.RoiHud
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+
+/**
+ * Core-flow layouts at font scale 2.0 on a 360 dp phone (readiness AE1V-001,
+ * AE1V-002, AE1V-003, AE1V-008, AE1V-014): text is measured with real fonts
+ * (native graphics), so a value field or toggle squeezed below its text fails.
+ */
+@RunWith(RobolectricTestRunner::class)
+@Config(application = Application::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class FontScaleLayoutTest {
+
+    private fun context(fontScale: Float): Context {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val config = Configuration(app.resources.configuration).apply {
+            this.fontScale = fontScale
+            screenWidthDp = PHONE_DP
+        }
+        return ContextThemeWrapper(app.createConfigurationContext(config), R.style.Theme_Semper)
+    }
+
+    private fun Context.px(dp: Int) = (dp * resources.displayMetrics.density).toInt()
+
+    /** Inflates [layout] into a phone-wide column and lays it out. */
+    private fun laidOut(context: Context, @LayoutRes layout: Int, merge: Boolean, widthDp: Int): View {
+        val parent = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        val root = if (merge) {
+            LayoutInflater.from(context).inflate(layout, parent, true)
+            parent
+        } else {
+            LayoutInflater.from(context).inflate(layout, parent, false)
+        }
+        return root
+            .also { prepare(it) }
+            .apply {
+                measure(
+                    View.MeasureSpec.makeMeasureSpec(context.px(widthDp), View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                )
+                layout(0, 0, measuredWidth, measuredHeight)
+            }
+    }
+
+    private var prepare: (View) -> Unit = {}
+
+    /** The text's own width (one line), the least a label needs to show in full. */
+    private fun TextView.textWidth(): Int =
+        (paint.measureText(text.toString()) + totalPaddingLeft + totalPaddingRight).toInt()
+
+    private fun View.rightIn(ancestor: View): Int {
+        var x = right
+        var p = parent as? View
+        while (p != null && p !== ancestor) {
+            x += p.left
+            p = p.parent as? View
+        }
+        return x
+    }
+
+    @Test
+    fun `wizard parameter values keep their width at font scale 2`() {
+        val ctx = context(2f)
+        prepare = { root ->
+            root.findViewById<EditText>(R.id.etSubsetValue).setText("121")
+            root.findViewById<EditText>(R.id.etStepValue).setText("30")
+            root.findViewById<EditText>(R.id.etStrainValue).setText("31")
+            root.findViewById<TextView>(R.id.tvStrainVsg).text = "301 px VSG"
+            root.findViewById<View>(R.id.chipSpeckle).visibility = View.VISIBLE
+            root.findViewById<TextView>(R.id.chipSpeckle).text = "Speckle 6.8 px"
+        }
+        // The page's 16dp side margins leave 328dp of a 360dp phone.
+        val root = laidOut(ctx, R.layout.wizard_step_settings_content, merge = true, widthDp = PHONE_DP - 32)
+        for (id in intArrayOf(R.id.etSubsetValue, R.id.etStepValue, R.id.etStrainValue)) {
+            val field = root.findViewById<EditText>(id)
+            val name = ctx.resources.getResourceEntryName(id)
+            assertTrue("$name is ${field.width}px, needs ${field.textWidth()}px", field.width >= field.textWidth())
+            assertTrue("$name ends at ${field.rightIn(root)} past ${root.width}", field.rightIn(root) <= root.width)
+        }
+        for (id in intArrayOf(R.id.tvSubsetLabel, R.id.tvStrainLabel)) {
+            val label = root.findViewById<TextView>(id)
+            val name = ctx.resources.getResourceEntryName(id)
+            assertTrue("$name starts ${label.top}px above its row", label.top >= 0)
+            val text = label.text
+            val midWord = (0 until label.layout.lineCount - 1).map { label.layout.getLineEnd(it) }
+                .filter { end -> !text[end - 1].isWhitespace() }
+            assertEquals("$name breaks mid-word at $midWord", emptyList<Int>(), midWord)
+        }
+        // A value keeps a gap before its unit ("31 px", not "31px").
+        val units = listOf(R.id.etSubsetValue to R.id.tvSubsetUnit, R.id.etStrainValue to R.id.tvStrainUnit)
+        for ((value, unit) in units) {
+            val gap = root.findViewById<View>(unit).left - root.findViewById<View>(value).right
+            val name = ctx.resources.getResourceEntryName(unit)
+            assertTrue("$name is ${gap}px from its value", gap >= ctx.px(UNIT_GAP_DP))
+        }
+    }
+
+    @Test
+    fun `the wizard's Compute button shows its whole label at font scale 2`() {
+        val ctx = context(2f)
+        prepare = { root ->
+            // The parameters page's bar: Back and Compute.
+            root.findViewById<View>(R.id.btnBack).visibility = View.VISIBLE
+            root.findViewById<View>(R.id.btnNext).visibility = View.GONE
+            root.findViewById<TextView>(R.id.btnCalculateFullField).apply {
+                visibility = View.VISIBLE
+                text = ctx.getString(R.string.run_compute_eta_fmt, ctx.getString(R.string.run_estimate_minutes_fmt, 12))
+            }
+        }
+        val root = laidOut(ctx, R.layout.activity_static_analysis, merge = false, widthDp = PHONE_DP)
+        val compute = root.findViewById<TextView>(R.id.btnCalculateFullField)
+        val room = compute.width - compute.totalPaddingLeft - compute.totalPaddingRight
+        val lines = compute.layout.lineCount
+        assertTrue(
+            "Compute label '${compute.text}' needs $lines lines of ${compute.maxLines}",
+            lines <= compute.maxLines,
+        )
+        val midWord = (0 until lines - 1).map { compute.layout.getLineEnd(it) }
+            .filter { end -> !compute.text[end - 1].isWhitespace() }
+        assertEquals("Compute label breaks mid-word at $midWord", emptyList<Int>(), midWord)
+        val widest = (0 until lines).maxOf { compute.layout.getLineWidth(it) }
+        assertTrue("Compute label line is ${widest}px in ${room}px", widest <= room)
+        val textHeight = compute.layout.height + compute.totalPaddingTop + compute.totalPaddingBottom
+        assertTrue("Compute is ${compute.height}px high, its text ${textHeight}px", compute.height >= textHeight)
+        val back = root.findViewById<View>(R.id.btnBack)
+        assertEquals("Back and Compute heights", compute.height, back.height)
+    }
+
+    @Test
+    fun `the sweep lattice's plot title and buttons show in full at font scale 2`() {
+        val ctx = context(2f)
+        prepare = { root ->
+            root.findViewById<View>(R.id.strainPlotSection).visibility = View.VISIBLE
+            root.findViewById<TextView>(R.id.tvStrainPlotTitle).text =
+                ctx.getString(R.string.line_cut_title_axis_fmt, "X")
+        }
+        val root = laidOut(ctx, R.layout.activity_vsg_lattice, merge = false, widthDp = PHONE_DP)
+        for (id in intArrayOf(R.id.tvStrainPlotTitle, R.id.btnSaveGraph, R.id.btnView)) {
+            val view = root.findViewById<TextView>(id)
+            val name = ctx.resources.getResourceEntryName(id)
+            val lines = view.layout.lineCount
+            assertTrue("$name '${view.text}' needs $lines lines of ${view.maxLines}", lines <= view.maxLines)
+            assertEquals("$name ellipsized", 0, view.layout.getEllipsisCount(lines - 1))
+            val textHeight = view.layout.height + view.totalPaddingTop + view.totalPaddingBottom
+            assertTrue("$name is ${view.height}px high, its text ${textHeight}px", view.height >= textHeight)
+        }
+    }
+
+    @Test
+    fun `the ROI studio's toggles show their whole labels at font scale 2`() {
+        val ctx = context(2f)
+        prepare = {}
+        val root = laidOut(ctx, R.layout.activity_roi_draw, merge = false, widthDp = PHONE_DP)
+        val toggles = intArrayOf(
+            R.id.rbModeDraw,
+            R.id.rbModeManual,
+            R.id.rbCrop,
+            R.id.rbErase,
+            R.id.rbRect,
+            R.id.rbSquare,
+        )
+        for (id in toggles) {
+            val toggle = root.findViewById<TextView>(id)
+            val name = ctx.resources.getResourceEntryName(id)
+            assertTrue("$name is ${toggle.width}px, needs ${toggle.textWidth()}px", toggle.width >= toggle.textWidth())
+            // On screen, not scrolled off the edge (the after-screenshot read "Eras").
+            assertTrue("$name ends at ${toggle.rightIn(root)} past ${root.width}", toggle.rightIn(root) <= root.width)
+        }
+    }
+
+    @Test
+    fun `the ROI studio's Draw-Manual toggle reads in full at font scale 1`() {
+        val ctx = context(1f)
+        prepare = {}
+        val root = laidOut(ctx, R.layout.activity_roi_draw, merge = false, widthDp = PHONE_DP)
+        val manual = root.findViewById<TextView>(R.id.rbModeManual)
+        assertTrue("rbModeManual is ${manual.width}px of ${manual.textWidth()}px", manual.width >= manual.textWidth())
+    }
+
+    @Test
+    fun `the ROI studio keeps Use full image left and Crop-Erase right when they share a row`() {
+        val ctx = context(1f)
+        prepare = {}
+        val root = laidOut(ctx, R.layout.activity_roi_draw, merge = false, widthDp = PHONE_DP)
+        val chip = root.findViewById<View>(R.id.btnFullImageRoi)
+        val group = root.findViewById<View>(R.id.rgCropErase)
+        val chipLeft = chip.rightIn(root) - chip.width
+        val chipMid = (chip.top + chip.bottom) / 2
+        assertTrue("one row at font scale 1", chipMid in group.top..group.bottom)
+        assertTrue("Use full image starts at ${chipLeft}px", chipLeft <= ctx.px(EDGE_DP))
+        val groupRight = group.rightIn(root)
+        assertTrue("Crop/Erase ends at ${groupRight}px of ${root.width}", groupRight >= root.width - ctx.px(EDGE_DP))
+    }
+
+    @Test
+    fun `the ROI studio keeps Use full image left and Crop-Erase right when they wrap`() {
+        val ctx = context(2f)
+        prepare = {}
+        val root = laidOut(ctx, R.layout.activity_roi_draw, merge = false, widthDp = PHONE_DP)
+        val chip = root.findViewById<View>(R.id.btnFullImageRoi)
+        val group = root.findViewById<View>(R.id.rgCropErase)
+        assertTrue("two rows at font scale 2", group.top >= chip.bottom)
+        val chipLeft = chip.rightIn(root) - chip.width
+        assertTrue("Use full image starts at ${chipLeft}px", chipLeft <= ctx.px(EDGE_DP))
+        val groupRight = group.rightIn(root)
+        assertTrue("Crop/Erase ends at ${groupRight}px of ${root.width}", groupRight >= root.width - ctx.px(EDGE_DP))
+    }
+
+    @Test
+    fun `the deformed frames' range names both files in full at font scale 1`() = assertRangeInFull(1f)
+
+    @Test
+    fun `the deformed frames' range names both files in full at font scale 2`() = assertRangeInFull(2f)
+
+    private fun assertRangeInFull(fontScale: Float) {
+        val ctx = context(fontScale)
+        prepare = { root ->
+            root.findViewById<View>(R.id.defCard).visibility = View.VISIBLE
+            root.findViewById<TextView>(R.id.tvDefName).text = "4 deformed frames"
+            // A phone camera's names: on the 360 dp emulator even "specimen_01.png …
+            // specimen_04.png" lost a letter on one line.
+            root.findViewById<TextView>(R.id.tvDefMeta).text = "IMG_20261024_101530.png … IMG_20261024_101934.png"
+        }
+        val root = laidOut(ctx, R.layout.activity_static_analysis, merge = false, widthDp = PHONE_DP)
+        val meta = root.findViewById<TextView>(R.id.tvDefMeta)
+        val lines = meta.layout.lineCount
+        val cut = (0 until lines).sumOf { meta.layout.getEllipsisCount(it) }
+        assertEquals("tvDefMeta '${meta.text}' ellipsizes $cut chars", 0, cut)
+    }
+
+    @Test
+    fun `a frame's order badge holds its number at font scale 2`() {
+        val ctx = context(2f)
+        prepare = { it.findViewById<TextView>(R.id.tvFrameBadge).text = "50" }
+        val root = laidOut(ctx, R.layout.item_frame_order, merge = true, widthDp = TILE_DP)
+        val badge = root.findViewById<TextView>(R.id.tvFrameBadge)
+        val line = badge.paint.fontMetricsInt.let { it.descent - it.ascent }
+        assertTrue("tvFrameBadge is ${badge.width}px, needs ${badge.textWidth()}px", badge.width >= badge.textWidth())
+        assertTrue("tvFrameBadge is ${badge.height}px high, its line ${line}px", badge.height >= line)
+    }
+
+    @Test
+    fun `the Google sign-in button grows with its label`() {
+        val ctx = context(2f)
+        val root = LayoutInflater.from(ctx).inflate(R.layout.activity_auth, null)
+        val google = root.findViewById<View>(R.id.btnGoogleSignIn)
+        assertEquals(ViewGroup.LayoutParams.WRAP_CONTENT, google.layoutParams.height)
+        assertTrue(google.minimumHeight >= ctx.px(GOOGLE_MIN_DP))
+    }
+
+    @Test
+    fun `licensing gates scroll`() {
+        val ctx = context(2f)
+        for (layout in intArrayOf(
+            R.layout.activity_session_limit,
+            R.layout.activity_seat_required,
+            R.layout.activity_update_required,
+            R.layout.activity_pending_approval,
+        )) {
+            val root = LayoutInflater.from(ctx).inflate(layout, null)
+            assertTrue(
+                "${ctx.resources.getResourceEntryName(layout)} root is ${root.javaClass.simpleName}",
+                root is NestedScrollView || root is ScrollView,
+            )
+        }
+    }
+
+    /** The ROI studio at font scale 2 in a 360 × 800 dp phone's window, laid out as RoiDrawActivity lays it out. */
+    private inner class RoiStudio {
+        val ctx = context(2f)
+        val root: View = LayoutInflater.from(ctx).inflate(R.layout.activity_roi_draw, LinearLayout(ctx), false)
+        val hud: TextView = root.findViewById(R.id.tvHud)
+        val canvas: View = root.findViewById(R.id.canvasFrame)
+
+        fun layOut() = root.apply {
+            measure(
+                View.MeasureSpec.makeMeasureSpec(ctx.px(PHONE_DP), View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(ctx.px(ROI_PHONE_HEIGHT_DP), View.MeasureSpec.EXACTLY),
+            )
+            layout(0, 0, measuredWidth, measuredHeight)
+        }
+
+        /** What RoiDrawActivity does on a change of mode (and once the screen is laid out). */
+        fun show(mode: RoiHud.Mode) {
+            layOut()
+            RoiHud.show(mode, root.findViewById(R.id.drawTools), root.findViewById(R.id.manualTools), hud)
+            layOut()
+        }
+
+        fun dp(px: Int) = px / ctx.resources.displayMetrics.density
+
+        /** Shows [text] in the pill and checks it is whole, uncut, and above the canvas. */
+        fun say(text: String, mode: RoiHud.Mode) {
+            hud.text = text
+            layOut()
+            val layout = requireNotNull(hud.layout)
+            val cut = (0 until layout.lineCount).sumOf { layout.getEllipsisCount(it) }
+            assertEquals("$mode: '$text' is cut", 0, cut)
+            assertEquals("$mode: '$text' shows in full", text, layout.text.toString())
+            assertTrue("$mode: '$text' needs more lines than the pill has", hud.height >= layout.height)
+            val overlap = "$mode: the pill ends at ${hud.bottom}px, the canvas starts at ${canvas.top}px"
+            assertTrue(overlap, hud.bottom <= canvas.top)
+        }
+    }
+
+    /**
+     * The ROI studio's info pill (tvHud) sits above the canvas, never on it: at font
+     * scale 2 its two lines covered the crop's top edge and corner handles (readiness
+     * AE1V-023), and cut to one line it hid the position ("Pos…"). It wraps, so every
+     * text it shows in a mode is visible in full and ends above the canvas.
+     */
+    @Test
+    fun `the ROI studio's info pill shows its whole text and never covers the canvas at font scale 2`() {
+        val studio = RoiStudio()
+        for (mode in RoiHud.Mode.entries) {
+            studio.show(mode)
+            val typical = studio.ctx.getString(R.string.roi_hud_dimensions_fmt, 6000, 4000, 1234, 5678)
+            for (text in RoiHud.texts(studio.ctx, mode) + typical) studio.say(text, mode)
+        }
+    }
+
+    /**
+     * In Draw mode the canvas keeps room to draw at font scale 2 (readiness AE1V-023,
+     * the Admin's "one more small fix"): round 2 left it about 82 dp on a 360 × 800 dp
+     * phone, under a pill sized for every mode's longest text and a dock that kept the
+     * hidden Manual fields' height. [DRAW_CANVAS_FLOOR_DP] is about three times that: a
+     * 4:3 photo then shows 320 dp wide, nearly the full width.
+     */
+    @Test
+    fun `the ROI canvas keeps room to draw in Draw mode at font scale 2`() {
+        val studio = RoiStudio()
+        studio.show(RoiHud.Mode.DRAW_CROP)
+        val dp = studio.dp(studio.canvas.height)
+        assertTrue("the Draw-mode canvas is $dp dp, needs $DRAW_CANVAS_FLOOR_DP", dp >= DRAW_CANVAS_FLOOR_DP)
+    }
+
+    /**
+     * A drag (or a pinch) changes the pill's numbers within one mode; the canvas
+     * under the finger keeps its place and size the whole time. It may resize only
+     * on a change of mode.
+     */
+    @Test
+    fun `a drag within one mode never moves or resizes the ROI canvas at font scale 2`() {
+        val studio = RoiStudio()
+        val ctx = studio.ctx
+        val dragged = listOf(1, 12, 123, 1234, 12345, 88888).map { n ->
+            ctx.getString(R.string.roi_hud_dimensions_fmt, n, n, n / 2, n / 3)
+        }
+        val pinched = listOf(1.5f, 3.25f, 10f).map { ctx.getString(R.string.roi_hud_zoom_fmt, it) } +
+            ctx.getString(R.string.roi_hud_zoom_fit)
+        for (mode in RoiHud.Mode.entries) {
+            studio.show(mode)
+            val top = studio.canvas.top
+            val height = studio.canvas.height
+            for (text in dragged + pinched) {
+                studio.say(text, mode)
+                assertEquals("$mode: the canvas moved at '$text'", top, studio.canvas.top)
+                assertEquals("$mode: the canvas resized at '$text'", height, studio.canvas.height)
+            }
+        }
+    }
+
+    private companion object {
+        const val PHONE_DP = 360
+
+        /** The window of a 360 × 800 dp phone between its 24 dp status bar and 48 dp navigation bar. */
+        const val ROI_PHONE_HEIGHT_DP = 800 - 24 - 48
+
+        /** About three times round 2's 82 dp: a 4:3 photo shows at 320 dp, nearly the full 360 dp width. */
+        const val DRAW_CANVAS_FLOOR_DP = 240f
+        const val GOOGLE_MIN_DP = 52
+        const val TILE_DP = 72
+        const val UNIT_GAP_DP = 4
+
+        /** The ROI tool row's side padding (12dp) plus a little slack. */
+        const val EDGE_DP = 16
+    }
+}

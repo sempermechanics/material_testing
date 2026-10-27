@@ -10,6 +10,7 @@ Modules import only modules listed before them in `PACKAGE`
 module, so a test double patches one place (`tests/fake_firestore.install`).
 """
 from ._base import (  # noqa: F401
+    PING_TIMEOUT_S,
     SCHEMA_VERSION,
     TEST_ACCOUNT_DEFAULT_DEVICES,
     TEST_ACCOUNT_MAX_DEVICES,

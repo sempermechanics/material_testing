@@ -9,7 +9,7 @@
 // simple selectors (`tag`, `.class`, `#id`, `[attr]`, `[attr="v"]`,
 // `:checked`, compounded, no combinators); listeners with click bubbling;
 // insertAdjacentElement, appendChild, remove; <dialog> showModal / close;
-// `cells` on a row. An unmodelled selector throws rather than matching
+// `cells` on a row; focus, `document.activeElement` and `isConnected`. An unmodelled selector throws rather than matching
 // nothing, so a test cannot pass on a query the fake did not understand.
 import { readFileSync } from "node:fs";
 
@@ -69,6 +69,16 @@ export class FakeElement {
     return name in this.attributes ? this.attributes[name] : null;
   }
 
+  setAttribute(name, value) {
+    this.attributes[name] = String(value);
+    if (name === "id") this.id = String(value);
+    if (name.startsWith("data-")) this.dataset[camel(name.slice(5))] = String(value);
+  }
+
+  removeAttribute(name) {
+    delete this.attributes[name];
+  }
+
   get textContent() {
     return this.childNodes.map((n) => (typeof n === "string" ? n : n.textContent)).join("");
   }
@@ -83,6 +93,8 @@ export class FakeElement {
 
   set innerHTML(html) {
     this.html = String(html);
+    // What was here leaves the page, as in a browser.
+    for (const child of this.children) child.parentNode = null;
     this.childNodes = [];
     parseInto(this, this.html);
   }
@@ -145,8 +157,19 @@ export class FakeElement {
     for (let e = this; e instanceof FakeElement; e = e.parentNode) e.dispatch("click", ev);
   }
 
+  /** Focus moves here; `document.activeElement` is the last element focused. */
   focus() {
     this.focused = true;
+    page.active = this;
+  }
+
+  /** Whether this element is still in the mounted page. */
+  get isConnected() {
+    for (let e = this; e instanceof FakeElement; e = e.parentNode) {
+      if (e.removed) return false;
+      if (e === page.root) return true;
+    }
+    return false;
   }
 
   appendChild(element) {
@@ -253,5 +276,9 @@ export const document = {
   createElement: (tag) => new FakeElement(tag),
   get body() {
     return page.body;
+  },
+  /** The last element focused while still in the page, else <body>. */
+  get activeElement() {
+    return page.active && page.active.isConnected ? page.active : page.body;
   },
 };

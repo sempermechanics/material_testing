@@ -16,11 +16,9 @@ import androidx.annotation.VisibleForTesting
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.integrity.RecordIntegrity
 import com.sempermechanics.semper.data.integrity.RecordVerifier
 import com.sempermechanics.semper.data.mechanical.LabSession
-import com.sempermechanics.semper.data.policy.FeatureAccess
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.databinding.ActivityResultViewerBinding
@@ -34,6 +32,7 @@ import com.sempermechanics.semper.report.StressStrain
 import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.dialog.CrispToast
 import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
+import com.sempermechanics.semper.ui.common.dialog.LicenseLock
 import com.sempermechanics.semper.ui.common.transfer.TransferBannerController
 import com.sempermechanics.semper.ui.home.HomeActivity
 import com.sempermechanics.semper.ui.viewer.inspect.InspectHost
@@ -112,6 +111,9 @@ class ResultViewerActivity :
      * model's, listed once and kept across a rotation. Null until then.
      */
     private var opened: ViewerFrameLoader.FrameSet? = null
+
+    /** The frame whose data is on screen; -1 until one is drawn. */
+    private var shownFrameIndex = -1
 
     /** True once [onFrameSetRead] has run: [batchFiles] and the rest are final. */
     override val frameSetLoaded: Boolean get() = opened != null
@@ -290,8 +292,7 @@ class ResultViewerActivity :
 
         binding.btnViewerBack.setOnClickListener { finish() }
         // Greyed, never hidden: locked without the licence, paused by the kill switch.
-        val canShare = ShareCenter.access(this) == FeatureAccess.OPEN
-        binding.btnViewerShare.alpha = if (canShare) 1f else LicenseEntitlements.BLOCKED_ALPHA
+        LicenseLock.mark(binding.btnViewerShare, ShareCenter.access(this))
         binding.btnViewerShare.setOnClickListener {
             val blocked = ShareCenter.blockedMessage(ShareCenter.access(this))
             if (blocked != null) {
@@ -388,6 +389,7 @@ class ResultViewerActivity :
 
     override fun applyLoadedFrame(index: Int, data: FloatArray) {
         rawData = data
+        shownFrameIndex = index
         // A sweep's frames each have their own grid pitch.
         step = frameParams.at(index).step
         // Invalidate rather than rebuild: the O(n) bucket map is only needed for
@@ -404,6 +406,24 @@ class ResultViewerActivity :
         if (inspect.lastClosestIdx != -1) {
             inspect.refreshCrosshairs()
         }
+    }
+
+    /**
+     * Names the frame that could not be read and puts the frame field back on
+     * the frame still on screen, so the number never claims a picture that is
+     * not there (readiness AE1-013).
+     */
+    override fun onFrameUnreadable(index: Int) {
+        val shown = shownFrameIndex
+        val message = if (shown in batchFiles.indices && shown != index) {
+            viewModel.currentFrameIndex = shown
+            frameJump.updateNavButtons()
+            frameJump.syncFrameNumber()
+            getString(R.string.viewer_frame_unreadable_fmt, index + 1, shown + 1)
+        } else {
+            getString(R.string.viewer_frame_unreadable_none_fmt, index + 1)
+        }
+        CrispToast.show(this, message, long = true)
     }
 
     /**

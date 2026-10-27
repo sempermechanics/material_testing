@@ -1,11 +1,16 @@
 package com.sempermechanics.semper.ui.analysis.sweep
 
 import androidx.annotation.WorkerThread
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.data.session.SkippedNode
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.ui.viewer.ViewerArgs
 import com.sempermechanics.semper.ui.viewer.ViewerSweepArgs
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import timber.log.Timber
 import java.io.File
 
@@ -106,4 +111,28 @@ internal fun sweepFrameProfiles(
         }
     }
     return out
+}
+
+/**
+ * A sweep lattice's line-cut profiles, held across a rotation so the rebuilt
+ * screen does not decode every `.dat` again (readiness TE1-005).
+ */
+internal class SweepProfilesModel : ViewModel() {
+
+    private var loading: Deferred<Map<Int, StrainProfiles>>? = null
+
+    /**
+     * [readSweepFrameProfiles] on IO, once: a later call, from the screen
+     * rebuilt after a rotation, gets the same read, finished or not.
+     */
+    fun load(
+        batchDir: File,
+        steps: List<Int>,
+        baseStep: Int,
+        components: IntArray,
+        line: SweepStudy.StudyLine,
+    ): Deferred<Map<Int, StrainProfiles>> = loading
+        ?: viewModelScope.async(Dispatchers.IO) {
+            readSweepFrameProfiles(batchDir, steps, baseStep, components, line)
+        }.also { loading = it }
 }

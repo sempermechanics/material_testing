@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.AccessStatus
 import com.sempermechanics.semper.data.net.AdminUserDto
+import com.sempermechanics.semper.data.net.HttpFailure
 import com.sempermechanics.semper.data.net.SemperApi
 import com.sempermechanics.semper.data.net.TokenProvider
 import com.sempermechanics.semper.util.suspendRunCatching
@@ -127,9 +128,11 @@ class AdminViewModel(app: Application) : AndroidViewModel(app) {
         _busy.value = callsOut > 0
     }
 
-    /** An error for the admin: [res] formatted with [error]'s message. */
+    /** An error for the admin: [res] formatted with what [error] means, never its own text (AE1-009). */
     private suspend fun say(@StringRes res: Int, error: Throwable) {
-        outcomeChannel.send(Outcome.Say(text(res, error.message.orEmpty()), long = true))
+        val app = getApplication<Application>()
+        val meaning = app.getString(HttpFailure.classify(error).userMessage(R.string.error_generic))
+        outcomeChannel.send(Outcome.Say(text(res, meaning), long = true))
     }
 
     private fun text(@StringRes res: Int, arg: String): String = getApplication<Application>().getString(res, arg)

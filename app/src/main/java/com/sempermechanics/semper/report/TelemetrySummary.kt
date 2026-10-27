@@ -45,25 +45,50 @@ internal data class TelemetrySummary(
     fun qualityRows(stats: EngineStats): List<List<String>> = listOf(
         listOf(avgZnssdLabel, "%.5f".format(Locale.US, avgZnssd)),
         listOf(convergenceLabel, "%.2f %%".format(Locale.US, stats.convergencePercent)),
-        listOf("Average ICGN Iterations", "%.2f".format(Locale.US, stats.avgIcgnIterations)),
+        listOf("Solver iterations per point (avg)", "%.2f".format(Locale.US, stats.avgIcgnIterations)),
     )
 
     companion object {
+        /**
+         * The last page's title and what it is for. Its rows are named in the
+         * user's terms (readiness AE1-010); the engine's names for the same
+         * steps are in docs/engine.
+         */
+        const val TITLE = "Engine details"
+        const val INTRO = "How the solver reached these results, for support and method checks."
+
+        /** The page's four section headings, in order. */
+        val SECTIONS = listOf("1. Points solved", "2. Match quality", "3. Recovery attempts", "4. Time taken")
+
+        /** How many grid points were tried, and how each was solved or not. */
+        fun pipelineRows(stats: EngineStats): List<List<String>> = listOf(
+            listOf("Starting points", stats.meshSeedingLabel()),
+            listOf("Grid points tried", "${stats.totalPointsAttempted}"),
+            listOf("Solved from the starting mesh", "${stats.pathAPoints}"),
+            listOf("Solved by growing from neighbours", "${stats.pathBPoints}"),
+            listOf("Not solved", "${stats.totalPointsRejected}"),
+        )
+
+        /** Points the main solve missed that a second, slower method was tried on. */
+        fun rescueRows(stats: EngineStats): List<List<String>> = listOf(
+            listOf("Second-method solves (Simplex)", "${stats.simplexCalls}", "${stats.simplexSaved}"),
+        )
+
         /** The telemetry page's wall-time table, in [Locale.US] (see [qualityRows]). */
         fun timingRows(stats: EngineStats): List<List<String>> = listOf(
-            listOf("Seeding Phase", "%.1f ms".format(Locale.US, stats.seedingMs)),
-            listOf("Hessian Pre-Pass", "%.1f ms".format(Locale.US, stats.hessianPrepassMs)),
-            listOf("Delaunay Mesh Phase", "%.1f ms".format(Locale.US, stats.delaunayMs)),
-            listOf("Strain Calculation Phase", "%.1f ms".format(Locale.US, stats.strainMs)),
-            listOf("TOTAL WALL TIME", "%.1f ms".format(Locale.US, stats.wallTimeMs)),
-            listOf("Average Throughput", "%.2f pts/ms".format(Locale.US, stats.avgThroughputPtsPerMs)),
+            listOf("Finding starting points", "%.1f ms".format(Locale.US, stats.seedingMs)),
+            listOf("Preparing image gradients", "%.1f ms".format(Locale.US, stats.hessianPrepassMs)),
+            listOf("Building the starting mesh", "%.1f ms".format(Locale.US, stats.delaunayMs)),
+            listOf("Computing strain", "%.1f ms".format(Locale.US, stats.strainMs)),
+            listOf("Total time", "%.1f ms".format(Locale.US, stats.wallTimeMs)),
+            listOf("Solving speed (points per ms)", "%.2f pts/ms".format(Locale.US, stats.avgThroughputPtsPerMs)),
         )
 
         /** A single-frame report: every number is that frame's analysis. */
         fun single(data: ReportData) = TelemetrySummary(
-            avgZnssdLabel = "Global Average ZNSSD (Correlation)",
+            avgZnssdLabel = "Average match error (ZNSSD, lower is better)",
             avgZnssd = data.globalAvgZnssd,
-            convergenceLabel = "Overall Convergence Rate",
+            convergenceLabel = "Points that converged",
             scopeNote = null,
         )
 
@@ -82,16 +107,16 @@ internal data class TelemetrySummary(
             val n = frames.size
             return TelemetrySummary(
                 avgZnssdLabel = if (n == 1) {
-                    "Average ZNSSD (Correlation), 1 frame"
+                    "Average match error (ZNSSD), 1 frame"
                 } else {
-                    "Average ZNSSD (Correlation), all $n frames"
+                    "Average match error (ZNSSD), all $n frames"
                 },
                 avgZnssd = pooled,
-                convergenceLabel = "Convergence Rate (first frame)",
-                scopeNote = "Average ZNSSD pools every accepted point of the $n " +
+                convergenceLabel = "Points that converged (first frame)",
+                scopeNote = "The average match error pools every accepted point of the $n " +
                     (if (n == 1) "frame" else "frames") +
-                    " in this report. The solver counts, convergence, ICGN iterations, " +
-                    "Simplex rescues and timings below were recorded on the run's first frame.",
+                    " in this report. The point counts, convergence, solver iterations, " +
+                    "recovery attempts and times below were recorded on the run's first frame.",
             )
         }
     }

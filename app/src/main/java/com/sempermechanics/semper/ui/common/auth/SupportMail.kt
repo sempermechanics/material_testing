@@ -17,10 +17,10 @@ import timber.log.Timber
  * the same diagnostics lines at the end of three bodies (FI-14).
  */
 object SupportMail {
-    /** The app version and device, as the last two lines of a support body. */
+    /** The app version and phone, as the last two lines of a support body. */
     fun deviceLines(): String =
         "App: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})\n" +
-            "Device: ${Build.MANUFACTURER} ${Build.MODEL} — Android ${Build.VERSION.RELEASE}"
+            "Phone: ${Build.MANUFACTURER} ${Build.MODEL} — Android ${Build.VERSION.RELEASE}"
 
     /**
      * Opens the user's mail app on a message to support. With no mail app, says

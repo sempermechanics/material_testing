@@ -24,7 +24,7 @@
             android:text="@string/results_title"
             android:textAllCaps="true"
             android:textColor="@color/viewer_chrome_muted"
-            android:textSize="11sp"
+            android:textSize="@dimen/text_caption"
             android:textStyle="bold" />
 
         <!-- The session's correction (ViewerStressStrainHelper.draw): bending's

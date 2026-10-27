@@ -11,20 +11,25 @@
         android:id="@+id/imgFrameThumb"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:forceDarkAllowed="false"
         android:background="@color/surface_muted"
         android:contentDescription="@string/deformed_frames"
         android:scaleType="centerCrop" />
 
     <TextView
         android:id="@+id/tvFrameBadge"
-        android:layout_width="22dp"
-        android:layout_height="22dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:minWidth="22dp"
+        android:minHeight="22dp"
         android:layout_gravity="top|start"
         android:layout_margin="4dp"
+        android:paddingHorizontal="4dp"
         android:background="@drawable/bg_frame_order_badge"
         android:gravity="center"
+        android:includeFontPadding="false"
         android:textColor="@color/text_on_primary"
-        android:textSize="11sp"
+        android:textSize="@dimen/text_caption"
         android:textStyle="bold"
         tools:text="1" />
 </FrameLayout>

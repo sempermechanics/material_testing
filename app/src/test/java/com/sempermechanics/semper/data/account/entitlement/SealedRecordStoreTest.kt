@@ -72,6 +72,15 @@ class SealedRecordStoreTest {
             mark = false
             return true
         }
+
+        /** Writes through [EntitlementDisk.update], the quick path, counted. */
+        var updates = 0
+
+        override fun update(record: String) {
+            step("update")
+            stored = record
+            updates++
+        }
     }
 
     private val record = SealedEntitlement.Record(
@@ -130,6 +139,44 @@ class SealedRecordStoreTest {
         assertFalse(SealedRecordStore.save(refusing, record))
 
         assertEquals(StoredEntitlement.Nothing, SealedRecordStore.load(fake))
+    }
+
+    @Test
+    fun `a clock update on a sealed record is a quick write, not a durable commit`() {
+        // readiness TE1-006: the once-a-minute clock persist ran commit() on
+        // the main thread. The record and key already exist, so nothing a
+        // crash could split is at stake.
+        val disk = saved()
+        val later = record.copy(clock = record.clock.copy(lastElapsedMs = record.clock.lastElapsedMs + 60_000L))
+
+        SealedRecordStore.update(disk, later)
+
+        assertEquals(1, disk.updates)
+        assertEquals(StoredEntitlement.Sealed(later), SealedRecordStore.load(disk))
+    }
+
+    @Test
+    fun `an update with no sealed record yet is a durable first seal`() {
+        val disk = FakeDisk()
+
+        SealedRecordStore.update(disk, record)
+
+        assertEquals(0, disk.updates)
+        assertEquals(StoredEntitlement.Sealed(record), SealedRecordStore.load(disk))
+    }
+
+    @Test
+    fun `a record a newer build sealed reads as no token, not tampering, and is resealed`() {
+        // readiness TE1-004: it read as tampered, i.e. demo while offline.
+        val disk = saved()
+        val newer = "{\"v\":2,\"token\":\"t\"}".toByteArray()
+        disk.stored = Base64Url.encode(newer) + "." + Base64Url.encode(disk.tagger.tag(newer))
+
+        assertEquals(StoredEntitlement.Nothing, SealedRecordStore.load(disk))
+        assertEquals(TokenStatus.NotUsed, statusOf(disk))
+        // The next /v1/config seals it in this build's version, under the same key.
+        assertTrue(SealedRecordStore.save(disk, record))
+        assertEquals(StoredEntitlement.Sealed(record), SealedRecordStore.load(disk))
     }
 
     @Test

@@ -65,7 +65,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
 import { ERR_CANCELLED, askInPage, codeCard, enrolInPage } from "./dialogs.js";
 import { clearPendingStatus, mark, setStatus } from "./status.js";
-import { reauthMethods } from "./util.js";
+import { authErrorText, reauthMethods } from "./util.js";
 
 // Hosting's /__/firebase/init.js is the classic-SDK script
 // (`firebase.initializeApp({...})`), not a module — there is nothing to
@@ -387,7 +387,7 @@ export function requireSignIn(onReady, { showApp = true } = {}) {
   const appEl = document.getElementById("app");
 
   signInBtn.addEventListener("click", () => {
-    signIn().catch((e) => setStatus(`Sign-in failed: ${e.code || e.message}`, true));
+    signIn().catch((e) => setStatus(`Sign-in failed: ${authErrorText(e)}.`, true));
   });
   signOutBtn.addEventListener("click", () => signOut(auth));
 
@@ -418,7 +418,7 @@ export function requireSignIn(onReady, { showApp = true } = {}) {
       }
       setStatus(e.code === "auth/totp-challenge-timeout"
         ? "That sign-in timed out before a code was accepted. Sign in again."
-        : `Sign-in failed: ${e.code || e.message}`, true);
+        : `Sign-in failed: ${authErrorText(e)}.`, true);
       return unfinished(e.code || e.message);
     });
 
@@ -475,7 +475,7 @@ export function requireSignIn(onReady, { showApp = true } = {}) {
           "then sign in again.", true);
         return;
       }
-      setStatus(`Could not open the dashboard: ${e.code || e.message}`, true);
+      setStatus(`Could not open the dashboard: ${authErrorText(e)}.`, true);
     }
   });
 }
@@ -522,6 +522,7 @@ export async function stepUpFresh(resume, what) {
             "authenticator code when asked."
           : "Then enter your authenticator code when asked."),
       password: true,
+      label: "Password",
       confirm: "Continue",
     });
     if (password === null || (!password && !can.google)) {

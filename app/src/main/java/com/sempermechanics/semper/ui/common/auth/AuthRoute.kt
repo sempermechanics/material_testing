@@ -7,6 +7,7 @@ import com.sempermechanics.semper.data.account.DevAuth
 import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.auth.AuthActivity
 import com.sempermechanics.semper.ui.auth.SplashActivity
+import java.util.UUID
 
 /**
  * Returns to the sign-in screen and clears the task behind it, so a signed-out
@@ -35,7 +36,25 @@ object AuthRoute {
         val target = if (devBypass) SplashActivity::class.java else AuthActivity::class.java
         return Intent(context, target).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            if (!devBypass && message != null) putExtra(IntentKeys.ROUTING_ERROR, message)
+            if (!devBypass && message != null) putMessage(this, message)
         }
     }
+
+    /**
+     * Puts [message] on [intent] for the sign-in screen, marked as this process's own.
+     * AuthActivity is exported (App Links), so another app can start it with any
+     * extras; it shows only a message that carries this mark ([messageOf]).
+     */
+    fun putMessage(intent: Intent, message: String) {
+        intent.putExtra(IntentKeys.ROUTING_ERROR, message)
+        intent.putExtra(IntentKeys.ROUTING_TOKEN, processToken)
+    }
+
+    /** The routing message on [intent] if this process put it there ([putMessage]), else null. */
+    fun messageOf(intent: Intent): String? =
+        intent.getStringExtra(IntentKeys.ROUTING_ERROR)
+            ?.takeIf { intent.getStringExtra(IntentKeys.ROUTING_TOKEN) == processToken }
+
+    /** Random per process: an app outside this one cannot know it. */
+    private val processToken: String = UUID.randomUUID().toString()
 }

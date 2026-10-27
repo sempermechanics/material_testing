@@ -2,13 +2,14 @@ package com.sempermechanics.semper.ui.analysis.load
 
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.DashPathEffect
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.PointF
 import android.util.AttributeSet
 import android.view.View
+import androidx.core.content.ContextCompat
+import com.sempermechanics.semper.R
 import com.sempermechanics.semper.report.BeamDeflection
 import com.sempermechanics.semper.ui.analysis.BeamEdgeTapActivity
 import kotlin.math.max
@@ -48,27 +49,29 @@ class BeamEdgeTapOverlay @JvmOverloads constructor(
         }
 
     private val density = resources.displayMetrics.density
+    private val markColor = ContextCompat.getColor(context, R.color.beam_tap_mark)
+    private val haloColor = ContextCompat.getColor(context, R.color.beam_tap_halo)
 
     private val guide = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = GUIDE_DP * density
-        color = MARK_COLOR
+        color = markColor
     }
     private val guideHalo = Paint(guide).apply {
         strokeWidth = GUIDE_HALO_DP * density
-        color = HALO_COLOR
+        color = haloColor
     }
     private val mark = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = STROKE_DP * density
-        color = MARK_COLOR
+        color = markColor
     }
     private val halo = Paint(mark).apply {
         strokeWidth = HALO_DP * density
-        color = HALO_COLOR
+        color = haloColor
     }
     private val probe = Paint(mark).apply {
-        color = PROBE_COLOR
+        color = ContextCompat.getColor(context, R.color.beam_tap_probe)
         pathEffect = DashPathEffect(floatArrayOf(DASH_DP * density, DASH_DP * density), 0f)
     }
 
@@ -140,8 +143,5 @@ class BeamEdgeTapOverlay @JvmOverloads constructor(
         const val GUIDE_HALO_DP = 2.5f
         const val RING_DP = 6f
         const val DASH_DP = 4f
-        val MARK_COLOR = Color.rgb(0x38, 0xBD, 0xF8)
-        val HALO_COLOR = Color.argb(0xAA, 0, 0, 0)
-        val PROBE_COLOR = Color.rgb(0xFB, 0xBF, 0x24)
     }
 }

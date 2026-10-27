@@ -54,8 +54,11 @@ reachable from the environment this record was written in).
    still hides or pauses, because it says nothing about the licence.
 4. **Anything that touches the cloud is checked by the backend on every
    request** (below). The app's own gates are presentation.
-5. **Share runs only on the device**, so it relies on the signed token. A
-   modified APK can unlock it; that risk is accepted (TD-274).
+5. **Share runs only on the device**, so no server check guards it: it follows
+   the cached `/v1/config`, which a signed token can only narrow, never widen
+   ([ADR-023](ADR-023-signed-offline-entitlement.md) decision 7); with no token
+   (none is issued until TD-215) the cache alone decides. A modified APK can
+   unlock it; that risk is accepted (TD-274).
 6. **The demo cap stays "stored at once"** (deleting an analysis frees its
    place), by the product owner's choice, and is now counted per device as well
    as per account (TD-275). A phone staff or IT take off an account stops
@@ -80,10 +83,10 @@ any other field 422 (`LicenseClaim`, `backend/app/models.py:182-191`). Auth is
 factor on a recent sign-in, or a signed device request. An unverified address is
 refused first, 403 `email_not_verified` (`licenses.py:236-237`). It runs the same
 `repo.activate_license` as the legacy route, so refusal codes and statuses are
-shared (`errors.STATUS`, `backend/app/errors.py:300-351`). A browser names no
+shared (`errors.STATUS`, `backend/app/errors.py:320-376`). A browser names no
 device, so no device lock is compared or bound
 (`backend/app/repo/activation.py:62-68`); the phone's next request binds it
-(`revalidate_device_lock`, `backend/app/repo/devlock.py:204`). It shares
+(`revalidate_device_lock`, `backend/app/repo/devlock.py:236`). It shares
 `license_activate_bucket` with the legacy route (`licenses.py:197`;
 `backend/app/rate_limit.py:123`, 0.2/s, burst 3) and declares it in the
 decorator, so a 429 leaves a signed request's nonce unspent. Each attempt logs
@@ -132,24 +135,26 @@ licence or seat device lock and drops to Demo on a mismatch or revocation
 
 | Route | Caller | Gates, in order |
 |---|---|---|
-| `POST /v1/sessions` (record an analysis) | signed device | rate limit; kill switch `upload` or `backup` → 503 `feature_paused`; files per session → 413; account cap: stored analyses (less `PROVISION_FAILED`) ≥ `maxSessions` → 409 `session_quota_exceeded`; **demo only**, device cap: every account's stored analyses from this device ≥ `maxSessions` → 409 `device_quota_exceeded` (TD-279; `backend/app/routers/sessions.py:335-366`, `backend/app/services/sessions.py:125-139`) |
+| `POST /v1/sessions` (record an analysis) | signed device | rate limit; kill switch `upload` or `backup` → 503 `feature_paused`; files per session → 413; account cap: stored analyses (less `PROVISION_FAILED`) ≥ `maxSessions` → 409 `session_quota_exceeded`; **demo only**, device cap: every account's stored analyses from this device ≥ `maxSessions` → 409 `device_quota_exceeded` (TD-279; `backend/app/routers/sessions.py:339-370`, `backend/app/services/sessions.py:125-139`) |
 | `POST /v1/files/{id}/complete` | signed device | rate limit; kill switch `upload` or `backup` → 503 (`backend/app/routers/files.py:139-143`) |
 | `GET /v1/files/{id}/content` (restore) | signed device | rate limit; kill switch `restore` → 503; demo → 403 `feature_not_licensed` (`files.py:38-58`) |
-| `GET /v1/sessions/{sid}/bundle` (download) | signed device, or browser with a second factor | rate limit; kill switch `restore` → 503; demo → 403 `feature_not_licensed` (`sessions.py:355-387`) |
-| `GET /v1/sessions` | user | lists; `quota.used` is the **account's** count (`sessions.py:131`) |
-| `DELETE /v1/sessions/{sid}` | signed device | rate limit only: a delete frees a place (`sessions.py:142-143`) |
+| `GET /v1/sessions/{sid}/bundle` (download) | signed device, or browser with a second factor | rate limit; kill switch `restore` → 503; demo → 403 `feature_not_licensed` (`sessions.py:278-310`) |
+| `GET /v1/sessions` | user | lists; `quota.used` is the **account's** count (`sessions.py:98`) |
+| `DELETE /v1/sessions/{sid}` | signed device | rate limit only: a delete frees a place (`sessions.py:109-110`) |
+| `GET /v1/sessions/{sid}/uploads` (resume) | signed device | rate limit; kill switch `upload` or `backup` → 503 `feature_paused` (`backend/app/routers/sessions.py:139-141`) |
+| `PUT /v1/sessions/{sid}/metadata` | signed device | rate limit; kill switch `upload` or `backup` → 503 `feature_paused` (`sessions.py:222-224`) |
 | `POST /v1/licenses/checkout` | user + `X-Device-Id` | floating pool; 409 `no_floating_seat` when full (`licenses.py:84-113`) |
 | `POST /v1/me/claim` | browser with a second factor, or signed device | activation rate limit; verified address; `activate_license`'s checks |
-| Share (PNG, GIF, PDF, CSV, ZIP) | — | **No route.** The app checks the licence and the token (`LicenseEntitlements.shareLicensed`, `data/account/LicenseEntitlements.kt:85-86`; `ShareCenter.access`, `ui/viewer/share/ShareCenter.kt:250-251`) |
+| Share (PNG, GIF, PDF, CSV, ZIP) | — | **No route.** The app checks the licence and the token (`LicenseEntitlements.shareLicensed`, `data/account/LicenseEntitlements.kt:85-86`; `ShareCenter.access`, `ui/viewer/share/ShareCenter.kt:247-248`; the sweep lattice's Save graph PNG takes the same check, `ui/analysis/VsgLatticeActivity.kt` `bindStrainControls`) |
 
 **Kill switches are enforced, not only published.** `deps.unless_paused`
-(`backend/app/deps.py:295-330`) runs after the ID token and approval and before
+(`backend/app/deps.py:301-336`) runs after the ID token and approval and before
 the route's own parameters, so a paused request reads no record and, on a signed
 route, leaves its nonce unspent. The refusal is 503 `feature_paused` with
 `Retry-After: 300` (`:293`), logged `event="feature_paused"` with the switch and
 route template; `feature_paused` is in `CLIENT_BRANCHED`
-(`backend/app/errors.py:284-287`). `share` has no route and stays published only
-(`backend/app/config.py:305-317`). The app holds the work: an upload is
+(`backend/app/errors.py:311-314`). `share` has no route and stays published only
+(`backend/app/config.py:336-349`). The app holds the work: an upload is
 `UploadErrors.Kind.PAUSED` → retry (`data/cloud/UploadErrors.kt:60`;
 `data/cloud/UploadWorkOutcomes.kt:33`), a restore or download is
 `DownloadFailure.Paused` and says "paused", not "failed"

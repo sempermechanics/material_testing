@@ -1,6 +1,7 @@
 package com.sempermechanics.semper.data.cloud
 
 import android.content.Context
+import androidx.annotation.StringRes
 import androidx.annotation.VisibleForTesting
 import androidx.annotation.WorkerThread
 import androidx.core.content.edit
@@ -77,8 +78,8 @@ object CloudSync {
         /** Checked recently — throttled to protect the Firestore read budget. Stay quiet. */
         data object Skipped : Outcome
 
-        /** The backend answered, and the answer was wrong. The user needs to know. */
-        data class Failed(val reason: String) : Outcome
+        /** The backend answered, and the answer was wrong. The user needs to know: [message] says it. */
+        data class Failed(@StringRes val message: Int) : Outcome
     }
 
     /**

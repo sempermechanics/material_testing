@@ -201,9 +201,9 @@ test("each other refused mint is explained, and the button comes back", async ()
     [() => json(403, { detail: "not_admin" }), "That account is not a Semper operator."],
     [() => json(422, { detail: [{ msg: "Value error, maxAnalyses must be at least 25", loc: ["body"] }] }),
       "Could not issue: maxAnalyses must be at least 25"],
-    [() => json(409, { detail: "email_already_licensed" }), "Could not issue: email_already_licensed"],
-    [() => new Response("<html>bad gateway</html>", { status: 502 }), "Could not issue: http_502"],
-    [offline, "Could not issue: Failed to fetch"],
+    [() => json(409, { detail: "email_already_licensed" }), "Could not issue: the server refused it (ref: email_already_licensed)"],
+    [() => new Response("<html>bad gateway</html>", { status: 502 }), "Could not issue: The server did not answer — try again in a moment."],
+    [offline, "Could not issue: The server could not be reached — check your connection and try again."],
   ]) {
     reset();
     await openDesk({ routes: { [MINT]: reply } });

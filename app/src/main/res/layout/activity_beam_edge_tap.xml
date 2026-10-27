@@ -146,6 +146,6 @@
             android:layout_marginStart="12dp"
             android:text="@string/reset"
             android:textColor="@color/viewer_on_dark"
-            app:strokeColor="#55FFFFFF" />
+            app:strokeColor="@color/beam_tap_reset_stroke" />
     </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

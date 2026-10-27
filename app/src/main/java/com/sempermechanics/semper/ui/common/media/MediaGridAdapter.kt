@@ -46,8 +46,12 @@ class MediaGridAdapter(
 
     override fun onBindViewHolder(holder: Holder, position: Int) {
         val item = items[position]
+        val selected = isSelected(item.uri)
         holder.video.isVisible = item.isVideo
-        holder.check.isVisible = isSelected(item.uri)
+        holder.check.isVisible = selected
+        // The tile is the TalkBack node: its file name, and "selected" once picked.
+        holder.itemView.contentDescription = item.name
+        holder.itemView.isSelected = selected
         holder.itemView.setOnClickListener { onClick(item) }
         thumbs.bind(holder.thumb, item)
     }

@@ -107,6 +107,7 @@ $("editForm").addEventListener("submit", async (ev) => {
         `${lic.duration === "timed" ? ` instead of ${isoDay(lic.expiresAt)}` : " (it was perpetual)"}` +
         ", for everyone on it." +
         `\n\nType ${label} to confirm:`,
+      label: "Licence key",
       anchor: $("editHint"),
     });
     if (typed !== label) {
@@ -204,7 +205,7 @@ $("convertForm").addEventListener("submit", async (ev) => {
     $("convertCancel").textContent = "Done";
     $("convertHint").className = "muted";
     $("convertHint").textContent = out.claimedByUid
-      ? "The holder is on the new roster, on the same device."
+      ? "The holder is on the new roster, on the same phone."
       : "Nobody had signed in yet: the invitation moved to the new licence.";
     showLicence(out.license);
     refreshLicence(lic.id);

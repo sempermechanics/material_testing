@@ -92,13 +92,13 @@ def test_a_clean_tree_passes(checker, tree, monkeypatch, capsys):
 
 
 def test_the_cli_exits_0_on_a_clean_tree_and_1_with_the_reference_listed(tree):
-    ok = subprocess.run([sys.executable, str(_SCRIPT), "--root", str(tree)],
+    ok = subprocess.run([sys.executable, str(_SCRIPT), "--root", str(tree)],  # noqa: S603 - argv is sys.executable and this repo's own script, no shell
                         capture_output=True, text=True, timeout=60)
     assert ok.returncode == 0, ok.stderr
     assert "every referenced path exists" in ok.stdout
 
     _plant(tree, "Gone: `app/src/Gone.kt`.")
-    bad = subprocess.run([sys.executable, str(_SCRIPT), "--root", str(tree)],
+    bad = subprocess.run([sys.executable, str(_SCRIPT), "--root", str(tree)],  # noqa: S603 - argv is sys.executable and this repo's own script, no shell
                          capture_output=True, text=True, timeout=60)
     assert bad.returncode == 1
     assert str(Path("app/src/Gone.kt")) in bad.stderr
@@ -106,7 +106,7 @@ def test_the_cli_exits_0_on_a_clean_tree_and_1_with_the_reference_listed(tree):
 
 
 def test_root_defaults_to_the_working_directory(tree):
-    run = subprocess.run([sys.executable, str(_SCRIPT)], cwd=tree, capture_output=True, text=True, timeout=60)
+    run = subprocess.run([sys.executable, str(_SCRIPT)], cwd=tree, capture_output=True, text=True, timeout=60)  # noqa: S603 - argv is sys.executable and this repo's own script, no shell
     assert run.returncode == 0, run.stderr
     assert "checked 3 markdown files" in run.stdout
 

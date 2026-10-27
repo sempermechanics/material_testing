@@ -112,6 +112,9 @@ object IntentKeys {
     const val ENGINE_STATS = "ENGINE_STATS"
     const val ROUTING_ERROR = "ROUTING_ERROR"
 
+    /** Marks [ROUTING_ERROR] as the app's own (`AuthRoute.putMessage`); AuthActivity is exported. */
+    const val ROUTING_TOKEN = "ROUTING_TOKEN"
+
     // ── AnalysisViewModel  DicUploadWorker (WorkManager Data)
     const val SESSION_LOCAL_ID = "SESSION_LOCAL_ID"
 

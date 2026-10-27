@@ -41,7 +41,7 @@ class TelemetrySummaryTest {
         val summary = TelemetrySummary.batch(listOf(ZnssdFrame(0.01f, 1), ZnssdFrame(0.05f, 3)))
 
         assertEquals(0.04f, summary.avgZnssd, 1e-6f)
-        assertEquals("Average ZNSSD (Correlation), all 2 frames", summary.avgZnssdLabel)
+        assertEquals("Average match error (ZNSSD), all 2 frames", summary.avgZnssdLabel)
     }
 
     @Test
@@ -55,7 +55,7 @@ class TelemetrySummaryTest {
     fun `batch stats that are the first frame's say so`() {
         val summary = TelemetrySummary.batch(listOf(ZnssdFrame(0.01f, 1), ZnssdFrame(0.05f, 3)))
 
-        assertEquals("Convergence Rate (first frame)", summary.convergenceLabel)
+        assertEquals("Points that converged (first frame)", summary.convergenceLabel)
         val note = checkNotNull(summary.scopeNote)
         assertTrue(note, note.contains("first frame"))
         assertTrue(note, note.contains("2 frames"))

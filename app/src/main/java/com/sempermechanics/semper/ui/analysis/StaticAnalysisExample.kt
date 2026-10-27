@@ -29,7 +29,7 @@ internal fun StaticAnalysisActivity.consumeExampleExtras() {
     }
     intent.getStringExtra(IntentKeys.PICKED_LOAD_CSV_URI)?.let {
         intent.removeExtra(IntentKeys.PICKED_LOAD_CSV_URI)
-        loadCard?.onCsvPicked(it.toUri())
+        labHooks.loadCard?.onCsvPicked(it.toUri())
     }
 }
 

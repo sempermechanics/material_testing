@@ -17,6 +17,10 @@
   --card: #1a2230;
   --line: rgba(255, 255, 255, 0.08);
   --line-strong: rgba(255, 255, 255, 0.2);
+  /* A text box's edge: a UI component boundary, so 3:1 against the box and the
+     card around it (WCAG 1.4.11; tests/css-contrast.test.mjs). --line-strong
+     is 1.7:1 there. */
+  --field-line: rgba(255, 255, 255, 0.42);
   --ink: #eef1f6;
   --muted: #a8b2c1;
   --accent: #d4a054;
@@ -46,7 +50,9 @@ a:hover { color: var(--accent); }
 /* Keyboard focus is always visible: the desk is driven by keyboard as much
    as by mouse, and the browsers' default ring was lost on the dark ground. */
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; }
+/* Text boxes show focus by their border and glow (below). The outline stays,
+   transparent: forced-colours mode drops the glow and paints the outline. */
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid transparent; }
 
 /* Until auth.js knows whether anyone is signed in (body[data-auth]), Sign in
    and the signed-out note stay out of sight: someone already signed in was
@@ -127,9 +133,9 @@ button.danger:hover { background: rgba(242, 184, 181, 0.08); }
 button[disabled] { opacity: .5; cursor: not-allowed; }
 input, select, textarea {
   font: inherit; padding: .55rem .7rem; border-radius: 8px;
-  border: 1px solid var(--line-strong); background: var(--bg-elevated); color: var(--ink);
+  border: 1px solid var(--field-line); background: var(--bg-elevated); color: var(--ink);
 }
-input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+input:focus, select:focus, textarea:focus { outline: 2px solid transparent; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
 input:disabled, select:disabled { opacity: .5; }
 
 /* Tables are read down a column as often as across a row, so the heading is
@@ -142,6 +148,15 @@ th {
   padding-top: .4rem; padding-bottom: .5rem; border-bottom-color: var(--line-strong);
 }
 td.actions { text-align: right; white-space: nowrap; }
+/* A sortable column's heading (roster.js): the heading's own look, as a
+   button, with the way it sorts shown beside it. */
+th button.sort {
+  font: inherit; color: inherit; background: none; border: 0; padding: 0; border-radius: 4px;
+}
+th button.sort:hover { color: var(--ink); background: none; }
+th button.sort::after { content: " ↕"; opacity: .5; }
+th[aria-sort="ascending"] button.sort::after { content: " ▲"; opacity: 1; }
+th[aria-sort="descending"] button.sort::after { content: " ▼"; opacity: 1; }
 /* Row buttons are a size down from a card's own, so a row of three does not
    outweigh the data beside it. */
 td.actions button, td.actions details.more > summary { padding: .35rem .75rem; font-size: .85rem; }
@@ -239,7 +254,10 @@ details.more .menu .secondary + .danger { margin-top: .5rem; }
 }
 #status.err:not(:empty) { border-color: currentColor; }
 .ok { color: var(--ok); }
-.wrap { overflow-x: auto; }
+/* The scroller is the containing block of what is positioned inside it: a
+   heading's visually hidden label ("Actions") placed against the page instead
+   stuck out past the right edge and let the whole desk scroll sideways. */
+.wrap { overflow-x: auto; position: relative; }
 
 /* Forms. The mint form is the only dense one, so the grid is defined once
    here rather than per page: two columns where there is room, one where a
@@ -433,6 +451,15 @@ table.test-accounts td.account { min-width: 16rem; overflow-wrap: break-word; }
   table.test-accounts td.account, table.licences td:nth-child(8) { white-space: nowrap; }
 }
 
+/* Tablet: a row's buttons wrap inside their cell (New device over Pause and
+   Remove) rather than run the Actions column past the card's edge, where
+   Remove was out of sight until the table was scrolled (AE2V-001). */
+@media (min-width: 601px) and (max-width: 900px) {
+  td.actions { white-space: normal; }
+  td.actions > button, td.actions > details.more { margin: .15rem 0 .15rem .4rem; }
+  td.actions .secondary + .danger { margin-left: .4rem; }
+}
+
 /* Phone. The header keeps to two rows: the brand, the page, who is signed in
    (cut short if long) and Sign out; then the dashboard switch, full width.
    The brand is its mark alone here: with the word beside it, a page named
@@ -480,6 +507,9 @@ table.test-accounts td.account { min-width: 16rem; overflow-wrap: break-word; }
   .wrap td.actions { flex-wrap: wrap; align-items: flex-start; white-space: normal; padding-top: .5rem; gap: .5rem; }
   .wrap td.actions .secondary + .danger { margin-left: 0; }
   .wrap td[colspan] { display: block; }
+  /* The term ("until May 12, 2027 (UTC) +14d") and the analyses count wrap
+     beside their label; kept on one line they ran past a 360 px card. */
+  table.licences td:nth-child(5), table.licences td:nth-child(6) { white-space: normal; }
   /* The count, then the phones under it at the card's full width. */
   .wrap td.phones { flex-wrap: wrap; }
   .phone-list { flex-basis: 100%; min-width: 0; }

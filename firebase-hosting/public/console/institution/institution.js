@@ -2,6 +2,7 @@ import { requireSignIn } from "../auth.js";
 import { api } from "../api.js";
 import { setStatus, markFirstData, whileWaiting } from "../status.js";
 import { esc, day, licenceStatePill, placeholderRows, retryRow } from "../util.js";
+import { explain } from "../messages.js";
 import { fetchRoster, wireRoster } from "../roster.js";
 import { mountSwitcher } from "../switcher.js";
 import { loadTiles, wireExport, wireImport } from "../roster-tools.js";
@@ -21,6 +22,7 @@ const fileName = () => (keyPrefix || licenseId).replace(/[^\w.-]+/g, "_");
 
 const renderRows = wireRoster({
   rows: $("rows"), email: $("addEmail"), add: $("add"), base, report: setStatus, reload: load,
+  filter: $("rowFilter"), count: $("rowCount"), head: $("rosterHead"),
 });
 
 wireExport({ button: $("exportRoster"), base, name: fileName, report: setStatus });
@@ -67,7 +69,7 @@ async function administersSomething(user) {
     setStatus("");
   } catch (e) {
     if (e.code !== "email_not_verified") {
-      setStatus(`Could not list your institution licences: ${e.message}`, true);
+      setStatus(`Could not list your institution licences: ${explain(e)}`, true);
       return true;
     }
     licenses = [];
@@ -141,7 +143,7 @@ async function load(started) {
     if (ticket !== rosterLoad) return;
     $("summary").innerHTML = "";
     if (e.code !== "license_not_found") {
-      $("rows").innerHTML = retryRow(5, `Could not load: ${e.message}`);
+      $("rows").innerHTML = retryRow(5, `Could not load: ${explain(e)}`);
     } else {
       $("rosterCard").hidden = true;
       $("importCard").hidden = true;
@@ -155,7 +157,7 @@ async function load(started) {
     setStatus(
       e.code === "license_not_found"
         ? "No licence with that id that you administer."
-        : `Could not load: ${e.message}`,
+        : `Could not load: ${explain(e)}`,
       true,
     );
   } finally {

@@ -84,6 +84,21 @@ class SettingsRotationTest {
     private val queued = RestoreRequest.Queued(1, RestoreStart.Counts(started = 1, alreadyRunning = 0))
 
     @Test
+    fun `an open section stays open when the screen is rebuilt`() {
+        val controller = settings()
+        val first = controller.get()
+        first.findViewById<View>(R.id.headerStorage).performClick()
+        idle()
+        assertEquals(View.VISIBLE, first.findViewById<View>(R.id.bodyStorage).visibility)
+
+        val rebuilt = controller.recreate().get()
+        idle()
+
+        assertEquals(View.VISIBLE, rebuilt.findViewById<View>(R.id.bodyStorage).visibility)
+        assertEquals(View.GONE, rebuilt.findViewById<View>(R.id.bodyYourData).visibility)
+    }
+
+    @Test
     fun `a restore answering across a rotation still queues and says so on the new screen`() {
         val controller = settings()
         val vm = viewModelOf(controller.get())

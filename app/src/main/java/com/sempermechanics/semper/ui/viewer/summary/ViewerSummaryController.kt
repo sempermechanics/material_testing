@@ -27,9 +27,9 @@ import com.sempermechanics.semper.field.FrameParams
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.FieldRangesStore
-import com.sempermechanics.semper.report.ReportBuilder
 import com.sempermechanics.semper.ui.common.SerialJob
 import com.sempermechanics.semper.ui.viewer.ResultViewerViewModel
+import com.sempermechanics.semper.ui.viewer.ScaleEndLabel
 import com.sempermechanics.semper.ui.viewer.ViewerViews
 import com.sempermechanics.semper.ui.viewer.mechanical.ViewerStressStrainHelper
 import kotlinx.coroutines.CancellationException
@@ -378,9 +378,9 @@ internal class ViewerSummaryController(
             if (DicResult.isStrainFieldIndex(dataIndex)) R.string.scale_unit_strain else R.string.scale_unit_px,
         )
         host.binding.tvScaleMax.text =
-            activity.getString(R.string.scale_max_fmt, ReportBuilder.formatMetric(bounds.max * multiplier), unit)
+            activity.getString(R.string.scale_max_fmt, ScaleEndLabel.format(bounds.max * multiplier), unit)
         host.binding.tvScaleMin.text =
-            activity.getString(R.string.scale_min_fmt, ReportBuilder.formatMetric(bounds.min * multiplier), unit)
+            activity.getString(R.string.scale_min_fmt, ScaleEndLabel.format(bounds.min * multiplier), unit)
     }
 
     private fun showScalePending() {

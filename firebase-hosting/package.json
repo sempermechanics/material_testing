@@ -1,0 +1,15 @@
+{
+  "name": "semper-console-tests",
+  "private": true,
+  "description": "Browser accessibility check for the consoles (tests/a11y): axe-core on each page in Chromium, against a stub API. Dev only; nothing here is deployed (Hosting serves public/).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test:a11y": "playwright test --config tests/a11y/playwright.config.mjs"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.64.1"
+  }
+}

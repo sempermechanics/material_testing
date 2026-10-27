@@ -342,7 +342,7 @@ before: with the setting on and no grant, every console step-up call fails close
 with 401 `invalid_token` (`backend/app/step_up.py:180-229`). The posture check passes 3.4-iam only on
 `roles/firebaseauth.admin`, `roles/firebase.admin`, or a custom role holding
 `firebaseauth.users.update` and `firebaseauth.users.delete`
-(`scripts/check_gcp_posture.sh:315-353`).
+(`scripts/check_gcp_posture.sh:345-383`).
 
 **Check:** `scripts/check_gcp_posture.sh --app-project $PROJECT --auth-project $AUTH_PROJECT --api-sa $API_SA --backup-bucket <FIRESTORE_BACKUP_BUCKET>` item `3.4-iam` is PASS;
 suspending a test account from the staff console writes an `ADMIN_REVOKE` audit row
@@ -381,7 +381,7 @@ gh variable set SEMPER_ENTITLEMENT_PUBKEYS --body "$KID:$PUB"
 - `deploy-backend.yml` mounts the key as `ENTITLEMENT_SIGNING_KEY=<secret>:latest`
   only when `ENTITLEMENT_SIGNING_SECRET` names a secret the deploy SA can see; a
   missing secret deploys without it, with a warning
-  (`.github/workflows/deploy-backend.yml:258-291`). Never pass the key with
+  (`.github/workflows/deploy-backend.yml:266-299`). Never pass the key with
   `--set-env-vars`.
 - **Order matters.** A revision whose runtime SA cannot read a mounted secret
   never starts. The deploy checks the grant before mounting
@@ -448,14 +448,14 @@ Everything above is required (or near enough). These are the rest of what
 | `LICENSE_LEASE_HOURS` · `LICENSE_LEASE_HEARTBEAT_MINUTES` | `8` · `30` | Floating-seat lease length and how often the app renews it. A crashed client parks a seat for at most the lease |
 | `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` | `30` | Wait between self-service device changes on one licence. `0` disables the wait. Staff-initiated changes ignore it |
 | `DEVICE_RELEASE_HOLD_HOURS` | `24` | How long the phone a device-lock clear released is refused at `POST /v1/devices/register`, so its upload worker cannot take the account back before the new phone signs in. Registering any other device ends it; `0` disables it. Not pinned by `deploy-backend.yml` |
-| `AUTH_ADMIN_CALLS_PER_SECOND` · `AUTH_ADMIN_BURST` | `10` · `20` | Per-instance budget for Firebase Auth Admin calls: the step-up revocation check, refresh-token revocation and Auth-user deletion share it (`backend/app/config.py:259-260`, `rate_limit.auth_admin_bucket`). Spent, a revoke or delete is skipped and reported as not done in its audit row, and the revocation check answers 503 `auth_check_busy` with `Retry-After`; each logs `auth_admin_rate_limited` (metric `semper_auth_admin_rate_limited`). Not pinned by `deploy-backend.yml` |
-| `CHECK_REVOKED_ON_STEP_UP` | `false` | `true` re-verifies a browser step-up caller's ID token with revocation checked, so a revoked or disabled user stops at once rather than when the token expires. Needs A8 step 1 first; without the grant it fails closed (`backend/app/config.py:232-247`) |
+| `AUTH_ADMIN_CALLS_PER_SECOND` · `AUTH_ADMIN_BURST` | `10` · `20` | Per-instance budget for Firebase Auth Admin calls: the step-up revocation check, refresh-token revocation and Auth-user deletion share it (`backend/app/config.py:290-291`, `rate_limit.auth_admin_bucket`). Spent, a revoke or delete is skipped and reported as not done in its audit row, and the revocation check answers 503 `auth_check_busy` with `Retry-After`; each logs `auth_admin_rate_limited` (metric `semper_auth_admin_rate_limited`). Not pinned by `deploy-backend.yml` |
+| `CHECK_REVOKED_ON_STEP_UP` | `false` | `true` re-verifies a browser step-up caller's ID token with revocation checked, so a revoked or disabled user stops at once rather than when the token expires. Needs A8 step 1 first; without the grant it fails closed (`backend/app/config.py:260-275`) |
 | `ENTITLEMENT_SIGNING_KEY` | empty | PEM of the EC P-256 key that signs `/v1/config`'s `entitlement`. From Secret Manager only (A8 step 2). Empty issues no token and fails nothing |
 | `ENTITLEMENT_KID` | `ent-1` | The key's id in the token header; the app pins keys by it |
 | `ENTITLEMENT_OFFLINE_GRACE_DAYS` | `14` | How long a token lets the app keep its entitlement offline, capped at a timed licence's end plus grace and a floating lease's end |
 | `MIN_SUPPORTED_VERSION_CODE` · `RECOMMENDED_VERSION_CODE` | `0` · `0` | Semper's release gate, published on `/v1/config` to Semper builds only; the app blocks new runs and cloud calls below the minimum and nudges below the recommended. The server refuses nothing on them. `0` = no gate |
 | `MIN_SUPPORTED_VERSION_CODE_SEMPER_CLASSROOM` · `RECOMMENDED_VERSION_CODE_SEMPER_CLASSROOM` | `0` · `0` | The same pair for Semper Classroom builds, which number their versionCodes separately (`settings.release_gate(app)`, `backend/app/config.py:308-335`). Each unset one falls back to its pre-rename name, `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` / `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING` (`_env_int_renamed`, `backend/app/config.py:18`; [ADR-030](../adr/ADR-030-semper-classroom-app-identity.md), until TD-330) |
-| `KILL_SWITCHES` | empty | Features switched off fleet-wide: any of `backup`, `share`, `restore`, `upload`, **space-separated**. An unknown name is logged and ignored (`backend/app/config.py:18-34`). Published on `/v1/config` and enforced by the backend (`backend/app/config.py:305-317`; `deps.unless_paused`, `backend/app/deps.py:295-330`): `upload` or `backup` refuse `POST /v1/sessions` and `POST /v1/files/{id}/complete`; `restore` refuses `GET /v1/files/{id}/content` and `GET /v1/sessions/{sid}/bundle`; each answers 503 `feature_paused` with `Retry-After: 300`, logged `event="feature_paused"`. `share` is the app's own export and is published only. A change is a new revision |
+| `KILL_SWITCHES` | empty | Features switched off fleet-wide: any of `backup`, `share`, `restore`, `upload`, **space-separated**. An unknown name is logged and ignored (`backend/app/config.py:28-44`). Published on `/v1/config` and enforced by the backend (`backend/app/config.py:336-349`; `deps.unless_paused`, `backend/app/deps.py:301-336`): `upload` or `backup` refuse `POST /v1/sessions` and `POST /v1/files/{id}/complete`; `restore` refuses `GET /v1/files/{id}/content` and `GET /v1/sessions/{sid}/bundle`; each answers 503 `feature_paused` with `Retry-After: 300`, logged `event="feature_paused"`. `share` is the app's own export and is published only. A change is a new revision |
 | `CONSOLE_ORIGINS` | `https://app.sempermechanics.com https://indicvision-dic-app-auth.firebaseapp.com` | Browser origins the API answers CORS for. The dashboards live on Firebase Hosting, never on the gateway host, so every console call is cross-origin and preflighted; an origin missing here renders a page whose every button silently does nothing. Exact origins, **space-separated** (the deploy action splits its `env_vars` on commas, so a comma-separated value is truncated), no wildcard. The phone sends no `Origin` and is unaffected. The gateway must also carry `allowCors` (step 3 below) or the preflight never reaches Cloud Run |
 
 > **`MAX_SESSIONS_PER_USER` and `PRO_MAX_SESSIONS_PER_USER` are no longer
@@ -473,11 +473,11 @@ Everything above is required (or near enough). These are the rest of what
 > `MIN_SUPPORTED_VERSION_CODE`, `RECOMMENDED_VERSION_CODE`, their `_SEMPER_CLASSROOM` pair (falling back to the
 > `_MATERIAL_TESTING` variables) and `KILL_SWITCHES` from repository
 > variables of the same name, with the defaults above when a variable is unset
-> (`.github/workflows/deploy-backend.yml:308-334`), and mounts `ENTITLEMENT_SIGNING_KEY`
+> (`.github/workflows/deploy-backend.yml:331-361`), and mounts `ENTITLEMENT_SIGNING_KEY`
 > from the secret `ENTITLEMENT_SIGNING_SECRET` names (A8). Its `release_train` input
 > (empty: the newest `v*` tag reachable from the deployed commit) is set as the
 > Cloud Run label `release-train` on the service and the new revision
-> (`.github/workflows/deploy-backend.yml:39-47`, `:136-156`, `:300-301`); a deploy
+> (`.github/workflows/deploy-backend.yml:39-47`, `:144-164`, `:308-309`); a deploy
 > by hand with `gcloud run deploy` sets it with
 > `--update-labels release-train=<train>`.
 > `deploy-cloudrun` *merges* env into the live revision, so a retired variable

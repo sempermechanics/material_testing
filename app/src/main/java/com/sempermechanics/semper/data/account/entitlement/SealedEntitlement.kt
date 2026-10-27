@@ -30,8 +30,19 @@ object SealedEntitlement {
 
         /** The tag does not match, or the body is not a record this build wrote. */
         data object Tampered : Unsealed
+
+        /**
+         * The tag matches, and the body says a newer build wrote it: a phone
+         * that went back a version. Nothing was edited, so it is no token,
+         * not tampering (readiness TE1-004).
+         */
+        data object Newer : Unsealed
     }
 
+    /**
+     * The record's format. A bump must keep reading the older versions a
+     * phone may still hold: SealedEntitlementTest unseals a committed v1.
+     */
     private const val VERSION = 1
 
     fun seal(record: Record, tagger: Tagger): String {
@@ -54,12 +65,18 @@ object SealedEntitlement {
         val body = Base64Url.decode(text.substringBefore('.', missingDelimiterValue = ""))
         val tag = Base64Url.decode(text.substringAfter('.', missingDelimiterValue = ""))
         val expected = body?.let { runCatching { tagger.tag(it) }.getOrNull() }
-        val record = if (expected != null && tag != null && MessageDigest.isEqual(expected, tag)) {
-            body.let(CompactJws::jsonObject)?.let(::record)
+        val json = if (expected != null && tag != null && MessageDigest.isEqual(expected, tag)) {
+            CompactJws.jsonObject(body)
         } else {
             null
         }
-        return if (record != null) Unsealed.Ok(record) else Unsealed.Tampered
+        val version = (json?.get("v") as? JsonPrimitive)?.longOrNull
+        val record = json?.let(::record)
+        return when {
+            version != null && version > VERSION -> Unsealed.Newer
+            record != null -> Unsealed.Ok(record)
+            else -> Unsealed.Tampered
+        }
     }
 
     private fun record(json: JsonObject): Record? = runCatching {
