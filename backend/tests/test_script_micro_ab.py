@@ -310,6 +310,7 @@ def test_main_run_mode_runs_each_build_under_its_own_app_id(ab, tmp_path, monkey
     runners = [c[-1].split()[-1] for c in device.calls if "am instrument" in c[-1]]
     assert runners == [f"org.example.{build}.test/androidx.test.runner.AndroidJUnitRunner"
                        for build in ("old", "new", "new", "old")]
-    uninstalled = [c[-1] for c in device.calls if "uninstall" in c]
-    assert uninstalled[:2] == ["org.example.old.test", "org.example.old"]
-    assert uninstalled[2:4] == ["org.example.new.test", "org.example.new"]
+    # Every round clears both builds' apps, so neither is left installed beside the other.
+    first_round = [c[-1] for c in device.calls[:4]]
+    assert first_round == ["org.example.old.test", "org.example.old", "org.example.new.test", "org.example.new"]
+    assert all("uninstall" in c for c in device.calls[:4])
