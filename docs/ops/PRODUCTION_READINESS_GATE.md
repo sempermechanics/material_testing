@@ -210,7 +210,7 @@ pre-launch report and staged rollout need a track. Counsel review of the Terms
       `claude/semper-classroom-app`: `libsemper_core.so` and AndroidX's
       `libdatastore_shared_counter.so`, every LOAD segment 16384, both stored at
       16 KB offsets.
-- [ ] **Play App Signing keeps the existing key (TD-318).** Choose "use existing
+- [ ] **Play App Signing keeps the existing key (TD-349).** Choose "use existing
       app signing key" and upload the release key (alias `materialtesting`). A new
       Play key would change the signing certificate, and with it the device id
       ADR-030 relies on, the `assetlinks.json` entry and the Firebase SHA, and
@@ -230,11 +230,11 @@ pre-launch report and staged rollout need a track. Counsel review of the Terms
 - [ ] **Play app-signing SHA-256 in Firebase and assetlinks (TD-229).** The day the
       Play app is created: link the project under App integrity and confirm the
       app-signing SHA-256 is the fingerprint `assetlinks.json` already lists (it is,
-      if TD-318 kept the key). Semper Classroom's Firebase Android app is registered
+      if TD-349 kept the key). Semper Classroom's Firebase Android app is registered
       with the release SHA-1 (`app/google-services.json`, 2026-10-26); add the
       SHA-256 there too, and its App Check (Play Integrity) registration is still an
       ADR-030 action item.
-- [ ] **Reviewer access (TD-334).** A new account starts PENDING unless
+- [ ] **Reviewer access (TD-350).** A new account starts PENDING unless
       auto-approved (`backend/app/repo/users.py:65-79`, `:267`), so a reviewer's
       fresh sign-up can stall. App access gets a pre-approved
       [ADR-027](../adr/ADR-027-test-accounts.md) test account, already past the
