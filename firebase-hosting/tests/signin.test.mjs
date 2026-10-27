@@ -127,6 +127,29 @@ test("an enrolled session that proved its factor opens the dashboard once", asyn
   assert.equal(ready[1].resume, null);
 });
 
+test("a remembered sign-in Firebase can no longer renew says to sign in again, with Sign in shown", async () => {
+  // The browser kept yesterday's sign-in; its refresh token was revoked since.
+  const ready = await start(readyUser({ tokenStale: true, refreshError: "auth/user-token-expired" }));
+  assert.equal(ready.length, 0);
+  assert.equal($("status").textContent, "Your sign-in has expired. Sign in again.");
+  assert.equal($("status").className, "muted err");
+  assert.equal(fake.callsTo("signOut").length, 1);
+  assert.equal($("app").hidden, true);
+  assert.equal($("signIn").hidden, false);
+  assert.equal($("signOut").hidden, true);
+});
+
+test("a code entered after the challenge lapsed says the sign-in timed out, not 'unexpected'", async () => {
+  returningFromRevokeStepUp();
+  const user = readyUser();
+  fake.redirectResult = fake.mfaError({ user, reject: "auth/invalid-multi-factor-session" });
+  codes.answer("123456");
+  const ready = await start(user);
+  assert.equal($("status").textContent,
+    "That sign-in timed out before a code was accepted. Sign in again.");
+  assert.equal(ready[0].resume.reauthFailed, "auth/invalid-multi-factor-session");
+});
+
 test("a session without its second factor never reaches onReady", async () => {
   const ready = await start(new FakeUser({ factors: [{}], secondFactor: false }));
   assert.equal(ready.length, 0);

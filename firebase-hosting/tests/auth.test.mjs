@@ -553,6 +553,55 @@ test("stepUpFresh asks in its own words, and is a no-op on a fresh sign-in", asy
   assert.deepEqual(JSON.parse(storage.getItem(RESUME)), resume);
 });
 
+test("stepUpFresh steps up on Google's clock when this computer's runs slow", async () => {
+  // Signed in 100 s ago; this computer's clock is a minute slow. By its own
+  // clock the sign-in was 40 s old, so the step-up was skipped, and the
+  // backend (120 s, on its own clock) refused the change straight after.
+  signIn(readyUser({ authAgeSeconds: 100, clockSkewSeconds: 60 }));
+  assert.ok(await stillPending(auth.stepUpFresh({ action: "testAccountEnd", uid: "u1" },
+    "end this test account")));
+  assert.equal(fake.callsTo("reauthenticateWithRedirect").length, 1);
+});
+
+test("stepUpFresh trusts a fresh sign-in when this computer's clock runs fast", async () => {
+  // Signed in 30 s ago, the clock five minutes fast: by its own clock every
+  // change went back to Google, however recently the code was accepted.
+  signIn(readyUser({ authAgeSeconds: 30, clockSkewSeconds: -300 }));
+  await auth.stepUpFresh({ action: "testAccountEnd", uid: "u1" }, "end this test account");
+  assert.equal(fake.callsTo("reauthenticateWithRedirect").length, 0);
+  assert.deepEqual(fake.callsTo("getIdTokenResult"), [["uid-1", true]], "a freshly minted token");
+});
+
+test("stepUpFresh on a remembered sign-in that cannot be renewed signs out, asking nothing", async () => {
+  signIn(readyUser({ authAgeSeconds: 7200, refreshError: "auth/user-token-expired" }));
+  const e = await rejection(auth.stepUpFresh({ action: "testAccountEnd", uid: "u1" },
+    "end this test account"));
+  assert.equal(e.code, "invalid_token");
+  assert.equal(fake.callsTo("signOut").length, 1);
+  assert.equal(fake.callsTo("reauthenticateWithRedirect").length, 0, "no trip to Google for it");
+  assert.equal(prompts.asked.length, 0, "and no password asked for");
+});
+
+test("a backend invalid_token signs the page out and is not retried", async () => {
+  signIn(readyUser());
+  net.reply(json(401, { detail: "invalid_token" }));
+  const e = await rejection(auth.api("/v1/admin/licenses", { method: "POST" }));
+  assert.ok(e instanceof auth.ApiError);
+  assert.deepEqual([e.code, e.status], ["invalid_token", 401]);
+  assert.equal(net.requests.length, 1);
+  assert.equal(fake.callsTo("signOut").length, 1);
+  assert.equal(fake.auth.currentUser, null);
+});
+
+test("a token Firebase can no longer refresh is invalid_token, and nothing is sent", async () => {
+  signIn(readyUser({ tokenStale: true, refreshError: "auth/user-token-expired" }));
+  const e = await rejection(auth.api("/v1/admin/licenses", { method: "POST" }));
+  assert.ok(e instanceof auth.ApiError);
+  assert.equal(e.code, "invalid_token");
+  assert.equal(net.requests.length, 0);
+  assert.equal(fake.callsTo("signOut").length, 1);
+});
+
 /* ------------------------------------------------------ confirmByTyping */
 
 test("confirmByTyping accepts only the exact label", async () => {
