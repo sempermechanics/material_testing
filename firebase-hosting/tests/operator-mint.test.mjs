@@ -227,6 +227,24 @@ test("a licence issued whose row cannot be re-read says so instead", async () =>
   assert.deepEqual(labels(), ["SEMP-IND1", "SEMP-UNI1"]);
 });
 
+test("Close takes the issued key out of the page; reopening shows an empty card", async () => {
+  await openDesk({ routes: {
+    [MINT]: () => json(200, { key: "SEMP-SHOWN-ONCE", license: { id: NEW.id } }),
+    [`GET /v1/admin/licenses/${NEW.id}`]: () => json(200, NEW),
+  } });
+  $("openIssue").click();
+  $("emailLock").value = "new@lab.org";
+  await mint();
+  assert.equal($("mintedKey").textContent, "SEMP-SHOWN-ONCE");
+  $("closeIssue").click();
+  assert.equal($("issueCard").hidden, true);
+  assert.equal($("mintedBox").hidden, true);
+  assert.equal($("mintedKey").textContent, "", "not left in the page");
+  $("openIssue").click();
+  assert.equal($("issueCard").hidden, false);
+  assert.equal($("mintedBox").hidden, true, "the last key is not shown again");
+});
+
 /* ------------------------------------------------------------------ copy */
 
 /** Run `fn` with `navigator.clipboard.writeText` answering `write`. */

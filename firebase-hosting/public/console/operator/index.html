@@ -477,8 +477,6 @@
       <section class="card" id="testAccountsCard">
         <div class="card-head">
           <h2>Test accounts</h2>
-          <span class="spacer"></span>
-          <button id="loadTestAccounts" class="secondary">Show</button>
         </div>
         <p class="muted">
           For QC staff and CI only, never a customer. The address must be on one
@@ -512,15 +510,20 @@
             <button id="taCreate">Create test account</button>
           </div>
         </details>
-        <div class="wrap" id="testAccountsWrap" hidden>
-          <table class="test-accounts">
-            <thead>
-              <tr><th>Account</th><th>Purpose</th><th>Ends</th><th>Phones</th>
-                <th>Status</th><th>Note</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr>
-            </thead>
-            <tbody id="testAccountRows"></tbody>
-          </table>
-        </div>
+        <!-- The list folds like the form above it, and is read afresh each
+             time it opens (test-accounts.js). -->
+        <details class="fold" id="testAccountsBox">
+          <summary id="loadTestAccounts">All test accounts</summary>
+          <div class="wrap" id="testAccountsWrap">
+            <table class="test-accounts">
+              <thead>
+                <tr><th>Account</th><th>Purpose</th><th>Ends</th><th>Phones</th>
+                  <th>Status</th><th>Note</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr>
+              </thead>
+              <tbody id="testAccountRows"></tbody>
+            </table>
+          </div>
+        </details>
       </section>
 
       <!-- The password of a test account just created or reset. Shown once:
@@ -546,23 +549,25 @@
       <section class="card" id="deletedCard">
         <div class="card-head">
           <h2>Recently deleted</h2>
-          <span class="spacer"></span>
-          <button id="loadDeleted" class="secondary">Show</button>
         </div>
         <p class="muted">
           A deleted licence is held for 30 days, then purged for good. Restore
           puts it and its holders back — except anyone who has taken another
           licence since.
         </p>
-        <div class="wrap" id="deletedWrap" hidden>
-          <table>
-            <thead>
-              <tr><th>Key</th><th>Kind</th><th>Locked to</th><th>Was</th>
-                <th>Deleted</th><th>Purged in</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr>
-            </thead>
-            <tbody id="deletedRows"></tbody>
-          </table>
-        </div>
+        <!-- Read afresh each time it opens (lifecycle.js). -->
+        <details class="fold" id="deletedBox">
+          <summary id="loadDeleted">Deleted licences</summary>
+          <div class="wrap" id="deletedWrap">
+            <table>
+              <thead>
+                <tr><th>Key</th><th>Kind</th><th>Locked to</th><th>Was</th>
+                  <th>Deleted</th><th>Purged in</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr>
+              </thead>
+              <tbody id="deletedRows"></tbody>
+            </table>
+          </div>
+        </details>
       </section>
     </div>
 

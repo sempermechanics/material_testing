@@ -27,7 +27,13 @@ $("openIssue").addEventListener("click", () => {
   const individual = [...kindRadios()].find((r) => r.checked)?.value !== "institution";
   $(individual ? "emailLock" : "domainLock").focus();
 });
-$("closeIssue").addEventListener("click", () => { $("issueCard").hidden = true; });
+// Close takes the issued key out of the page, as closing a test account's
+// password does: it is shown once, and reopening the card showed it again.
+$("closeIssue").addEventListener("click", () => {
+  $("issueCard").hidden = true;
+  $("mintedBox").hidden = true;
+  $("mintedKey").textContent = "";
+});
 
 $("duration").addEventListener("change", () => {
   const timed = $("duration").value === "timed";
