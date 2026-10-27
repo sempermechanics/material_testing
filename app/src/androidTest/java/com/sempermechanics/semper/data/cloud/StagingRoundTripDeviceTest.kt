@@ -28,7 +28,7 @@ import java.security.MessageDigest
 import java.util.UUID
 
 /**
- * One signed-in round trip against a live backend (TD-313): sign in, `GET
+ * One signed-in round trip against a live backend (TD-248): sign in, `GET
  * /v1/config`, register this emulator's key, back up one small file (create,
  * upload to Drive, complete), see it listed, then delete the analysis.
  *
@@ -81,8 +81,8 @@ class StagingRoundTripDeviceTest {
         assertEquals("ci", config.testAccount?.purpose)
         api.registerDevice(token)
 
-        val bytes = "TD-313 round trip ${UUID.randomUUID()}\n".toByteArray()
-        val upload = File(context.cacheDir, "td313-${System.currentTimeMillis()}.txt").also {
+        val bytes = "TD-248 round trip ${UUID.randomUUID()}\n".toByteArray()
+        val upload = File(context.cacheDir, "td248-${System.currentTimeMillis()}.txt").also {
             it.writeBytes(bytes)
             file = it
         }
@@ -90,9 +90,9 @@ class StagingRoundTripDeviceTest {
         val created = api.createSession(
             token,
             SessionCreateRequest(
-                specimen = "TD-313 round trip",
+                specimen = "TD-248 round trip",
                 files = listOf(FileSpecDto(upload.name, ArtifactRoles.EXTRAS, bytes.size.toLong(), sha256)),
-                localSessionId = "td313-${UUID.randomUUID()}",
+                localSessionId = "td248-${UUID.randomUUID()}",
             ),
         )
         val sessionId = created.sessionId

@@ -8,7 +8,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 /**
- * Which decoded frames are stretched to full range (TD-134): video unless the
+ * Which decoded frames are stretched to full range (TD-137): video unless the
  * stream says otherwise, and the codec's output format before the container's.
  */
 @RunWith(RobolectricTestRunner::class)

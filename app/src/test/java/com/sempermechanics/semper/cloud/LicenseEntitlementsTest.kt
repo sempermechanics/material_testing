@@ -123,7 +123,7 @@ class LicenseEntitlementsTest {
 
     @Test
     fun `the screens show the cap the gate enforces once the server has reported one`() {
-        // TD-263: the quota line and the limit screen read shownAnalysisCap.
+        // TD-209: the quota line and the limit screen read shownAnalysisCap.
         // With a token lapsed it is demo's (EntitlementPolicyTest); with none,
         // as here, it is the server's ceiling, exactly as analysisCap.
         assertEquals("unknown until the server reports", 0, LicenseEntitlements.shownAnalysisCap(ctx))

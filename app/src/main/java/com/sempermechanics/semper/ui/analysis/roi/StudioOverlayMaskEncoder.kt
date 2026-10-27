@@ -18,7 +18,7 @@ import androidx.core.graphics.createBitmap
  * grid, and the engine drops any point whose subset touches a void pixel
  * (`engine/src/pipeline/full_field_solver.cpp`, "PURE SUBSETS ONLY"). A void
  * background would cost a subset-radius band of points along every crop edge.
- * That only holds because the crop is always a rectangle (TD-74).
+ * That only holds because the crop is always a rectangle (TD-98).
  */
 object StudioOverlayMaskEncoder {
 

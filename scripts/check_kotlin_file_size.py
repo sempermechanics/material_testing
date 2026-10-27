@@ -4,7 +4,7 @@
 ADR-015 (docs/adr/ADR-015-package-layout.md, "File size") says a file that
 grows past about 500 lines is split. Until 2026-10-19 nothing checked it, and
 `data/cloud/SessionMetadataDoc.kt` reached 506 lines with five more files just
-under the line (TD-292). This is that check: every `*.kt` under
+under the line (TD-229). This is that check: every `*.kt` under
 `app/src/main/` is counted, and one over the budget fails CI.
 
 Two things are not counted against the budget:

@@ -6,7 +6,7 @@ user would lose when the screen rotates does not run on the Activity's
 `lifecycleScope`; it goes to the screen's ViewModel, an application-lifetime
 run, or WorkManager. Until 2026-10-19 only review enforced it, and Home's
 restore and sign-in broke it until #457. Its 2026-10-19 amendment asks for a
-check; this is that check (TD-291), a source heuristic rather than a lint rule:
+check; this is that check (TD-228), a source heuristic rather than a lint rule:
 
 * **Launch sites.** A `lifecycleScope.launch { }` / `async { }` (any
   `launch*`), or a call that takes the scope as an argument and a trailing

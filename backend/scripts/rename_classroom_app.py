@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rename Material Testing to Semper Classroom in stored records (ADR-030, TD-330).
+"""Rename Material Testing to Semper Classroom in stored records (ADR-030, TD-56).
 
 Material Testing became Semper Classroom in 2026-10: its short name changed
 from `materialtesting` to `semperclassroom` and its per-app field suffix from
@@ -7,7 +7,7 @@ from `materialtesting` to `semperclassroom` and its per-app field suffix from
 hold the old names. The backend reads both (`apps.canonical`,
 `apps.read_field`) and writes both (`apps.written_fields`), so nothing breaks
 without this; it is hygiene, and it makes the new fields complete so that
-TD-330 can stop reading and writing the old ones.
+TD-56 can stop reading and writing the old ones.
 
   users/{uid}                   <name>SemperClassroom made equal to <name>MaterialTesting
   licenses/{id}                   "
@@ -21,7 +21,7 @@ field a previous backend left behind is stale. The old field is never modified
 or deleted. Documents whose new field differed or was deleted are counted and
 listed. Audit and event collections are never touched: their rows are history.
 
-`--retag` is TD-330's first step, not this rename's: a backend from before the
+`--retag` is TD-56's first step, not this rename's: a backend from before the
 rename reads `semperclassroom` as an unknown app, so tags stay
 `materialtesting` (`apps.stored_name`) while one could serve or be rolled
 back to.
@@ -33,7 +33,7 @@ Run order:
   2. `--apply`, once the backend that dual-writes both names serves all
      traffic and rolling back past it is ruled out:
          python scripts/rename_classroom_app.py --project indicvision-dic-app --apply
-  3. For TD-330, right before reads and tags move to the new names: `--apply`
+  3. For TD-56, right before reads and tags move to the new names: `--apply`
      again, then `--apply --retag`.
 
 Safe to re-run: a tag already renamed and a field already copied are skipped,
@@ -266,7 +266,7 @@ def main() -> int:
     parser.add_argument("--project", required=True)
     parser.add_argument("--apply", action="store_true", help="write (default: dry-run)")
     parser.add_argument("--retag", action="store_true",
-                        help="also rename the app tags: TD-330 only, once no backend "
+                        help="also rename the app tags: TD-56 only, once no backend "
                              "from before the rename can serve")
     args = parser.parse_args()
 

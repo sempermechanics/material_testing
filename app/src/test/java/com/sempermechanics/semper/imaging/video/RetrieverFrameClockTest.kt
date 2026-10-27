@@ -5,7 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/** The retriever rung's frame times (TD-207), from a sample walk fed by hand. */
+/** The retriever rung's frame times (TD-194), from a sample walk fed by hand. */
 class RetrieverFrameClockTest {
 
     /** A clip's frame starts at 30 fps, in µs: 0, 33 333, 66 667, … */

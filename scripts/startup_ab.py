@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare two app builds' startup on one phone, interleaved (TD-135).
+"""Compare two app builds' startup on one phone, interleaved (TD-6).
 
 A fixed-millisecond gate (``benchmark/gates.json``) cannot tell a regression
 from a warm phone: on a Pixel 6 the same build's cold start moved 30-40 % in six

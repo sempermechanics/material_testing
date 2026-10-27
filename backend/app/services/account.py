@@ -1,4 +1,4 @@
-"""The account flows behind `routers/account.py` (TD-293): the streamed data
+"""The account flows behind `routers/account.py` (TD-230): the streamed data
 export and the erasure, in the order each step has to run."""
 import logging
 import time

@@ -13,14 +13,14 @@ material_testing: any Hosting deploy replaces the whole site.
 - [x] **Google credentials** for whoever runs steps 1, 4 and 5: Firestore index
       admin and Firebase Hosting admin on `indicvision-dic-app`, plus
       `roles/monitoring.editor` and `roles/logging.configWriter`.
-- [x] **Revocation (TD-214)** (acceptance owed), optional for the first deploy. Grant
+- [x] **Revocation (TD-9)** (acceptance owed), optional for the first deploy. Grant
       `gcloud projects add-iam-policy-binding indicvision-dic-app-auth --member=serviceAccount:indic-api@indicvision-dic-app.iam.gserviceaccount.com --role=roles/firebaseauth.admin`,
       then set the repo variable `CHECK_REVOKED_ON_STEP_UP=true`. Not before the
       grant: without it the check fails closed and refuses every step-up.
       (2026-10-22: the grant is in place and the variable is set, for production
       from its next deploy; staging has it deployed. 2026-10-23: live on
-      `semper-api-39900623312-1`. Owed: the acceptance check, TD-214.)
-- [ ] **Offline entitlement (TD-215)**, optional for the first deploy. Follow
+      `semper-api-39900623312-1`. Owed: the acceptance check, TD-9.)
+- [ ] **Offline entitlement (TD-10)**, optional for the first deploy. Follow
       [BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A8 in its order:
       create the P-256 key in Secret Manager; grant the runtime SA
       `secretAccessor` on it and the deploy SA `secretmanager.viewer`; only then
@@ -28,7 +28,7 @@ material_testing: any Hosting deploy replaces the whole site.
       `SEMPER_ENTITLEMENT_PUBKEYS`. The deploy checks the runtime SA's grant
       (`scripts/check_secret_access.sh`) and stops with the command to run when it
       is missing. Without a key the backend behaves as today and issues no token.
-- [ ] **New-device mail (TD-295, TD-309)**, optional, and only once #457 is merged.
+- [ ] **New-device mail (TD-232, TD-245)**, optional, and only once #457 is merged.
       Verify a sender in Resend (for example `Semper security <security@yourdomain.com>`),
       then set the repo variable `NOTIFY_SECURITY_FROM` (the workflow passes it since
       `a02ef2f`, `deploy-backend.yml:340`) and redeploy. Unset, that mail is off and the
@@ -45,11 +45,11 @@ material_testing: any Hosting deploy replaces the whole site.
       it in `env_vars` (`TEST_ACCOUNT_DOMAINS=${{ vars.TEST_ACCOUNT_DOMAINS }}`);
       unset, it is empty and every create answers 403 `test_accounts_disabled`.
 
-## 1. Firestore indexes (TD-216, TD-271)
+## 1. Firestore indexes (TD-11, TD-47)
 
 - [x] `PROJECT=indicvision-dic-app scripts/deploy-firestore.sh indexes`. Never
       with `--force`: it deletes any TTL policy the file omits. (2026-10-22: it stopped
-      on a 409 before creating anything, TD-316; the missing indexes went in by gcloud
+      on a 409 before creating anything, TD-250; the missing indexes went in by gcloud
       and the REST API, as the [CHANGELOG](CHANGELOG.md) entry shows.)
 - [x] Wait for READY: the composite `audit_logs (licenseId ASC, ts DESC)`, and
       the `seats.uid` / `deleted_seats.uid` collection-group overrides
@@ -72,7 +72,7 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
 - [x] **Production:** `environment=production`, first `gateway_mode=dry-run`,
       then `apply`. The candidate revision is smoke-tested on `/readyz` before
       traffic moves, and rolls back on failure.
-- [x] **Licence fan-out task (TD-294, [ADR-026](../adr/ADR-026-licence-fanout-marker.md))**,
+- [x] **Licence fan-out task (TD-231, [ADR-026](../adr/ADR-026-licence-fanout-marker.md))**,
       once #457 is merged. A staff revoke or terms edit schedules a Cloud Task on
       `TASKS_QUEUE`, so check that the environment's `TASKS_QUEUE` and
       `TASKS_TARGET_BASE_URL` are set (provisioning already uses them); unset, no task
@@ -122,7 +122,7 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       (`$env:API_BASE_URL = gh variable get INDIC_API_BASE_URL`) and run the script
       through Git Bash; PowerShell 5.1 drops quotes nested inside `bash -c "…"`.
       The deploy publishes the **legal pages** too (`/privacy`, `/terms`). While
-      `main` holds legal text counsel has not cleared (TD-277; #474 since 2026-10-22),
+      `main` holds legal text counsel has not cleared (TD-51; #474 since 2026-10-22),
       deploy from a worktree with those two `index.html` files checked out from the
       last cleared commit (`b940cc29`), then compare the live pages with it.
 - [x] The script runs `scripts/check_live_console.py`; it must pass (no `__`
@@ -131,7 +131,7 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       "Redeem a claim code" card; `/terms` shows 6.6 "No purchases in the App";
       the operator desk's search works.
 
-## 5. Monitoring (TD-217)
+## 5. Monitoring (TD-12)
 
 - [x] Dry run:
       `scripts/apply-monitoring.sh --project indicvision-dic-app --notification-channel <id> --staging-service semper-api-staging`.
@@ -168,9 +168,9 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       `device_quota_exceeded`; `feature_paused` only if a kill switch was set;
       5xx rate; Cloud Tasks backlog. Once #457 is in: `license_fanout_enqueue_failed`
       = 0, and each `license_fanout_finished_late` is a revoke or edit whose call died
-      part-way and the task finished (TD-294).
+      part-way and the task finished (TD-231).
 - [ ] One erasure of a test account: its `ACCOUNT_DELETE` row says
-      `seatScanComplete: true` (TD-271).
+      `seatScanComplete: true` (TD-47).
 - [ ] With test accounts, on staging: create a QC account (`days: 1`), sign it in
       on two phones or emulators (both licensed, no new-device mail), check its
       upload lands under `Research Storage/_test/{uid}`, then end it from the
@@ -182,7 +182,7 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       (`SESSION_CREATE` `testAccount: true`, three `UPLOAD_COMPLETE`), which
       `session_provision.py:102` sends under `_test/` (the Drive folder itself not
       listed). End it from the console, then check the audit rows and the Auth user.
-- [x] **Audit retention, backfill and lock (TD-237, TD-246).** Retention is decided:
+- [x] **Audit retention, backfill and lock (TD-199, TD-34).** Retention is decided:
       **365 days** (owner, 2026-10-22; `AUDIT_RETENTION_DAYS`, default 365), and the
       one-time backfill is approved (owner, 2026-10-22). In this order, by the
       commands in [FIRESTORE_DATA_PROTECTION.md](../backend/FIRESTORE_DATA_PROTECTION.md),
@@ -192,7 +192,7 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       2. The backfill, which stamps `licenseId` and `expireAt` (= `ts` + 365 days)
          on older rows: `python backend/scripts/stamp_audit_licence_ids.py --project indicvision-dic-app`
          (dry run; read both counts), then the same with `--apply --decision
-         "TD-246: backfill approved by <owner>, 2026-10-22"`. A rerun reports 0 to
+         "TD-34: backfill approved by <owner>, 2026-10-22"`. A rerun reports 0 to
          stamp. **Done 2026-10-23** (dry run, then `--apply`; the rerun: 6145 rows, all with
          `expireAt`, 0 to stamp).
       3. The `audit-trail` log bucket at `--retention-days=365`, the sink on
@@ -212,12 +212,12 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
          would create it early: run none until step 2 is done.
          `PROJECT=indicvision-dic-app scripts/deploy-firestore.sh indexes` can
          also do this step: it now runs a pinned `firebase-tools@15.33.0`, which
-         matches the six live composites and the five live overrides (TD-316,
+         matches the six live composites and the five live overrides (TD-250,
          fixed in file), so it writes only this policy. After the `gcloud`
          command, run the script once anyway: it should print no "not present"
-         line and write nothing, which closes TD-316. Never with `--force`.
+         line and write nothing, which closes TD-250. Never with `--force`.
          **Done 2026-10-23** by the script after step 2: no "not present" line, deploy
-         complete, the policy `CREATING` (TD-316 closed).
+         complete, the policy `CREATING` (TD-250 closed).
 - [ ] Move the merged-and-deployed entries from [CONTEXT.md](../../CONTEXT.md)
       "Current state" into [CHANGELOG.md](CHANGELOG.md), in both repos.
 
@@ -227,12 +227,12 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       (material_testing#139). Both now require **Android 11 (minSdk 30)**.
       Steps: [RELEASING.md](RELEASING.md).
 - [ ] Set `SEMPER_ENTITLEMENT_PUBKEYS` before the release build if offline tokens
-      should be enforced; `SEMPER_API_CERT_PINS` is optional (TD-218).
-- [ ] Device smoke (TD-219): installs on Android 11 and is refused on Android 10;
+      should be enforced; `SEMPER_API_CERT_PINS` is optional (TD-13).
+- [ ] Device smoke (TD-14): installs on Android 11 and is refused on Android 10;
       Refresh licence; a demo account sees locked features; the device-limit
       screen.
 - [ ] Only after those builds are out, raise `MIN_SUPPORTED_VERSION_CODE` if
-      older builds must update; drill it on staging first (TD-220). It reaches
+      older builds must update; drill it on staging first (TD-15). It reaches
       only builds released after `v1.2-beta.4` (versionCode 1036): that build and
       every earlier one have no version gate and no client kill switch, so for
       them the levers are the server-side `KILL_SWITCHES` (503 `feature_paused`)

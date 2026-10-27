@@ -18,7 +18,7 @@ let keyPrefix = "";     // the open licence's, for file names
 let members = new Map(); // uid → address, from the last roster read
 
 // The staff-tier roster routes: any institution licence, whether or not
-// this account is among its adminEmails (TD-191). Reads (summary, export,
+// this account is among its adminEmails (TD-182). Reads (summary, export,
 // audit) are `admin`; the import changes the roster, so it is `admin-stepup`
 // and a stale sign-in is re-authenticated by api() like every other change.
 const rosterBase = () => (roster ? `/v1/admin/licenses/${encodeURIComponent(roster.id)}` : "");

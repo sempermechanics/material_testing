@@ -1,4 +1,4 @@
-"""Every Firestore round trip carries a deadline under the gateway's (TD-197).
+"""Every Firestore round trip carries a deadline under the gateway's (TD-185).
 
 Without one the client's GAPIC defaults apply (60 s for a get or a write,
 300 s for a query or `get_all`, retried on DEADLINE_EXCEEDED), and the JSON

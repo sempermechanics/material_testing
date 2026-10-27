@@ -50,7 +50,7 @@ def register_device(body: DeviceReg, request: Request, user=Depends(current_user
     _audit_rotated(user["uid"], registered.get("rotated"), app, body.deviceId)
     audit.record(user["uid"], body.deviceId, action="DEVICE_REBIND" if healed else "DEVICE_REGISTER",
                  detail={"app": app, "stepUpEligible": eligible, **({"testAccount": True} if tag else {})})
-    if not healed and tag is None:  # A new device tells its holder (TD-295); a heal is not one.
+    if not healed and tag is None:  # A new device tells its holder (TD-232); a heal is not one.
         notify.device_registered(user["uid"], repo.verified_address(user), body.deviceId, app,
                                  model=body.model)
     return {"deviceId": body.deviceId, "healed": healed}
@@ -59,7 +59,7 @@ def register_device(body: DeviceReg, request: Request, user=Depends(current_user
 def _audit_refused(uid: str, code: str, device_id: str, app: str) -> None:
     """The DENIED row for a refused registration: the phone bound to another
     account (`device_in_use`, naming it), or a phone staff released from
-    this test account (TD-314), which may not take its place back."""
+    this test account (TD-249), which may not take its place back."""
     if code == errors.DEVICE_IN_USE:
         audit.record(uid, device_id, action="DEVICE_IN_USE", outcome="DENIED",
                      detail={"owner": (repo.get_device(device_id) or {}).get("uid")})
@@ -69,7 +69,7 @@ def _audit_refused(uid: str, code: str, device_id: str, app: str) -> None:
 
 
 def _audit_rotated(uid: str, rotated, app: str, by: str) -> None:
-    """One row per phone a full CI test account gave up for `by` (TD-313)."""
+    """One row per phone a full CI test account gave up for `by` (TD-248)."""
     for old in rotated or ():
         audit.record(uid, old, action="DEVICE_ROTATED",
                      detail={"app": app, "by": by, "testAccount": True})

@@ -31,7 +31,7 @@ import java.io.File
 
 /**
  * The PDF report's field images draw a frame the way the viewer draws it
- * (ADR-011, TD-139): on the frame's own photo with the viewer's displaced map
+ * (ADR-011, TD-141): on the frame's own photo with the viewer's displaced map
  * ([VisualizationEngine.generateFrameHeatmap]), else on the reference with the
  * reference-position map. Through [ViewerReportFactory.buildReportData], the
  * path the share sheet's PDF takes. Native graphics; the field images are

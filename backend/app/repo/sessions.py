@@ -70,7 +70,7 @@ SESSION_NAME_MAX_CHARS = 200
 def session_name_of(metadata: dict) -> str:
     """The analysis name a metadata.json carries, as a session doc keeps it:
     `name` trimmed and cut to [SESSION_NAME_MAX_CHARS]. "" when it is absent,
-    blank or not a string, which leaves the stored name alone (TD-208)."""
+    blank or not a string, which leaves the stored name alone (TD-195)."""
     name = metadata.get("name")
     if not isinstance(name, str):
         return ""
@@ -83,7 +83,7 @@ def replace_file_content(sid: str, file_id: str, size_bytes: int, sha256: str, d
     and checksums, so the restore's size check and the bundle manifest match
     what Drive now holds. The session's `updatedAt` moves with it, and so does
     its `name` when [name] is not blank: a rename after the backup reaches the
-    backup list (TD-208)."""
+    backup list (TD-195)."""
     _update_doc(db().collection("files").document(file_id), {
         "sizeBytes": size_bytes,
         "sha256": sha256,
@@ -165,7 +165,7 @@ def upload_target(file_id: str, url: str, f: dict) -> dict:
         "role": f.get("role"),
         "sizeBytes": f.get("sizeBytes", 0),
         # The hash the file was declared with: the app resumes a pending upload
-        # only with bytes that hash to it, not just the same size (TD-281).
+        # only with bytes that hash to it, not just the same size (TD-221).
         "sha256": f.get("sha256"),
     }
 
@@ -234,7 +234,7 @@ def start_provisioning(sid: str) -> dict | None:
     `PROVISIONING_GRACE` (`session_provision.provisioning_in_progress`). A
     Cloud Tasks retry can start long after the session's last write, and
     without the stamp a delete during its Drive work went ahead and left the
-    folder it then created (TD-296). Read and stamp share a transaction, so a
+    folder it then created (TD-233). Read and stamp share a transaction, so a
     delete that lands first wins and the retry finds nothing; any other
     status is read back untouched.
     """
@@ -313,7 +313,7 @@ def session_app(session: dict | None) -> str:
 
 
 #: The fields `_listed_session` reads, and all a listing fetches of a session
-#: (`select()`, TD-198): the document also holds the upload's bookkeeping,
+#: (`select()`, TD-186): the document also holds the upload's bookkeeping,
 #: which a page of fifty would otherwise pull whole.
 LISTED_SESSION_FIELDS = (
     "localSessionId", "specimen", "name", "status", "fileCount", "completedCount",
@@ -327,7 +327,7 @@ def _listed_session(doc_id: str, s: dict) -> dict:
         "sessionId": doc_id,
         "localSessionId": s.get("localSessionId") or "",
         "specimen": s.get("specimen"),
-        # The analysis's name (TD-208); "" for a session from an app that sent
+        # The analysis's name (TD-195); "" for a session from an app that sent
         # none, which the app then names from `specimen`.
         "name": s.get("name") or "",
         "status": s.get("status"),

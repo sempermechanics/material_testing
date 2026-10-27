@@ -13,7 +13,7 @@ import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
  * do not carry: the ROI as drawn, each frame's date, size and clip time, the
  * frame order, and the sweep's axes. Frozen on Main with the run's images
  * (`snapshotRunInputs`), so the run on the native thread reads none of the
- * wizard's fields (TD-173).
+ * wizard's fields (TD-171).
  */
 internal class RerunSetup(
     val hasCustomRoi: Boolean,

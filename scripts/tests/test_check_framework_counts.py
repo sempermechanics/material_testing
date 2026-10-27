@@ -23,19 +23,19 @@ _spec.loader.exec_module(cov)
 
 
 def _repo(root: Path, prose: str) -> Path:
-    """Items 1.1 (PASS) and 1.2 (GAP, owned by TD-1); every Part B-E key PASS."""
+    """Items 1.1 (PASS) and 1.2 (GAP, owned by TD-61); every Part B-E key PASS."""
     ops = root / "docs" / "ops"
     ops.mkdir(parents=True)
     markers = "\n".join(cov.PART_KEYS.values())
     (ops / "READINESS_FRAMEWORK_2026-10.md").write_text(
         f"# F\n\n| # | Item |\n|---|---|\n| 1.1 | a |\n| 1.2 | b |\n\n{markers}\n", encoding="utf-8")
-    rows = ["| 1.1 | r | PASS | e | — |", "| 1.2 | r | GAP | e | TD-1 |"]
+    rows = ["| 1.1 | r | PASS | e | — |", "| 1.2 | r | GAP | e | TD-61 |"]
     rows += [f"| {k} | r | PASS | e | — |" for k in cov.PART_KEYS]
     (ops / "PRODUCTION_READINESS_GATE.md").write_text(
         "# Gate\n\nPASS 1, PARTIAL 0, GAP 9, EXTERNAL 0, N-A 0 (outside the section)\n\n"
         "## Framework cross-check\n\n" + prose + "\n\n| Item | Req | Status | Evidence | Owner |\n|---|---|---|---|---|\n"
         + "\n".join(rows) + "\n\n## Risk acceptance\n", encoding="utf-8")
-    (ops / "TECH_DEBT.md").write_text("| ID | Item |\n|---|---|\n| TD-1 | x |\n", encoding="utf-8")
+    (ops / "TECH_DEBT.md").write_text("| ID | Item |\n|---|---|\n| TD-61 | x |\n", encoding="utf-8")
     (ops / "FUTURE_IMPROVEMENTS.md").write_text("# Future\n", encoding="utf-8")
     return root
 

@@ -35,7 +35,7 @@ import org.robolectric.annotation.GraphicsMode
  *
  * Both wizards are destroyed after the test: one left open keeps its frame
  * list registered with the main thread's GapWorker, and it and its themes
- * outlive the test (TD-200). Destroying cancels the run, which would hand
+ * outlive the test (TD-188). Destroying cancels the run, which would hand
  * the flag to the engine, so the engine is swapped for a no-op meanwhile.
  */
 @RunWith(RobolectricTestRunner::class)

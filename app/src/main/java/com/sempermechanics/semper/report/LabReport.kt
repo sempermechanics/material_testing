@@ -201,7 +201,7 @@ object LabReport {
     /**
      * Elastic for the fitted run, Plastic from there to the peak, Break point
      * after it — the regions the handwritten table marks in its margin. A
-     * peak off the curve (TD-147) ends Plastic at the last row before it.
+     * peak off the curve (TD-148) ends Plastic at the last row before it.
      */
     internal fun tensileBrackets(curve: StressStrain.Curve, modulus: ElasticModulus.Fit?): List<Bracket> {
         val points = curve.points

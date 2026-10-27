@@ -50,7 +50,7 @@ internal object SemperApiHttp {
      * would be the bare [path], which OkHttp rejects with an unchecked
      * IllegalArgumentException that killed the process wherever a caller only
      * expected [IOException]. [CloudNotConfiguredException] is an
-     * [IOException], so every caller treats it like offline (TD-90).
+     * [IOException], so every caller treats it like offline (TD-109).
      */
     fun endpoint(base: String, path: String): String =
         if (base.isBlank()) throw CloudNotConfiguredException() else base + path

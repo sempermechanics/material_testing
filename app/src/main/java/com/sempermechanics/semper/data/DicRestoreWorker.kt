@@ -109,8 +109,8 @@ class DicRestoreWorker internal constructor(
      * the bundle's `.part` (nothing will resume it), or retry. A retry unpacks
      * afresh (the session dir is cleared at the top of [doWork]) and refetches
      * every file but the bundle, whose `.part` a [DownloadFailure.Transient]
-     * keeps (TD-307), as does a stop WorkManager reruns ([clearStoppedRestore],
-     * TD-283) or process death (no way out): the next attempt resumes it — see
+     * keeps (TD-243), as does a stop WorkManager reruns ([clearStoppedRestore],
+     * TD-223) or process death (no way out): the next attempt resumes it — see
      * [RestoreDownloadOutcomes]; the bundle's sha256 catches a bad resume.
      */
     private fun onFailure(failure: DownloadFailure, cloudSessionId: String, targetLocalId: String): Result {
@@ -177,7 +177,7 @@ class DicRestoreWorker internal constructor(
  * it afresh). The bundle download's `.part` stays for a stop WorkManager runs
  * again — lost connectivity, quota, the system — so the rerun resumes it
  * rather than starting from byte 0; the app's own cancel drops it, as nothing
- * will resume it ([keepsDestinationOnStop], TD-283).
+ * will resume it ([keepsDestinationOnStop], TD-223).
  */
 internal fun clearStoppedRestore(context: Context, cloudSessionId: String, localId: String, stopReason: Int) {
     runCatching { CloudRestore.clearPartialArtifacts(context, localId) }

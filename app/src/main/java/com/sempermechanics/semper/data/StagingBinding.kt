@@ -21,7 +21,7 @@ import java.io.IOException
  * staging is resumed only under the pointer it was declared to, with the bytes
  * it declared. A finished staging under any other pointer (an older build's
  * leftovers, or a pointer stored by a run that died before writing this) is not
- * resumed; its session is released and the files are declared afresh (TD-282).
+ * resumed; its session is released and the files are declared afresh (TD-222).
  * The staged bytes themselves are never touched here (CLAUDE.md: identical
  * across attempts).
  */

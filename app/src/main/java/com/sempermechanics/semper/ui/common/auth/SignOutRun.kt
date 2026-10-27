@@ -78,7 +78,7 @@ object SignOutRun {
             // The user asked to leave, so the local exit happens whatever this
             // throws. [scope] is never cancelled, so a CancellationException
             // caught here (a cancelled Firebase Task, say) is a failure like any
-            // other; the check only rethrows a real cancellation (TD-171).
+            // other; the check only rethrows a real cancellation (TD-169).
             try {
                 signOut()
             } catch (@Suppress("TooGenericExceptionCaught") e: Throwable) {

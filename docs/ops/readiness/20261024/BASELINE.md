@@ -70,7 +70,7 @@ Both were re-run; the counts above are from the re-runs.
 ## Incident: one instrumented test reached live staging
 
 The baseline was meant to exclude every test that signs in to live services, because
-staging shares the production Firestore (TD-209/TD-248). Through AGP only the **first**
+staging shares the production Firestore (TD-7/TD-36). Through AGP only the **first**
 entry of a comma-separated `notClass` argument takes effect (confirmed with `log=true`
 dry runs), so in S `StagingRoundTripDeviceTest` ran with the local test account that
 `~/.gradle/gradle.properties` supplies. It signed in to Firebase Auth, called

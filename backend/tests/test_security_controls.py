@@ -106,7 +106,7 @@ def test_firestore_indexes_declare_ttl_policies():
         ("challenges", "expireAt"),
         ("deleted_licenses", "purgeAt"),
         ("deleted_seats", "purgeAt"),
-        # TD-237: rows are kept AUDIT_RETENTION_DAYS (one year), then deleted.
+        # TD-199: rows are kept AUDIT_RETENTION_DAYS (one year), then deleted.
         ("audit_logs", "expireAt"),
     }
     defaults = [
@@ -116,7 +116,7 @@ def test_firestore_indexes_declare_ttl_policies():
     ]
     for field in ttl.values():
         assert _modes(field) == defaults
-    # The other overrides enable a collection-group index (TD-243's seat search,
+    # The other overrides enable a collection-group index (TD-202's seat search,
     # tests/test_firestore_query_indexes.py) and restate the same defaults.
     others = {key: field for key, field in overrides.items() if key not in ttl}
     assert set(others) == {("seats", "uid"), ("deleted_seats", "uid")}
@@ -125,7 +125,7 @@ def test_firestore_indexes_declare_ttl_policies():
 
 
 def test_firestore_index_deploy_pins_a_cli_that_matches_the_live_indexes():
-    # TD-316: Firestore stores every composite with `density: SPARSE_ALL` and a
+    # TD-250: Firestore stores every composite with `density: SPARSE_ALL` and a
     # trailing `__name__` in the direction of its last field. The file leaves
     # both implicit, a form 13.x and 15.x both match against the live indexes,
     # and 14.11.0 matches against none, so it re-created `sessions` and stopped

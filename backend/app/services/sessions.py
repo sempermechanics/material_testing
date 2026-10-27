@@ -1,4 +1,4 @@
-"""The session flows behind `routers/sessions.py` (TD-293): verifying a listed
+"""The session flows behind `routers/sessions.py` (TD-230): verifying a listed
 page against Drive, the quota and the steps of recording an analysis, and the
 streamed one-analysis archive."""
 import io
@@ -100,7 +100,7 @@ def _device_quota_detail(cap: int) -> str:
     Says neither how many analyses the device holds nor whose they are: the
     other analyses may belong to another account, and the caller must not
     learn that one exists, let alone its count. Its own code, not the
-    account's (TD-279): the app's Re-check counts the account, finds room,
+    account's (TD-219): the app's Re-check counts the account, finds room,
     and would lift a stop the next upload refuses again. A build that
     predates the code fails that one backup as refused (`Kind.REJECTED`).
     """

@@ -251,7 +251,7 @@ async def test_inline_create_hands_back_what_the_uploads_listing_would(
 async def test_a_pending_upload_carries_the_hash_its_file_was_declared_with(
     store, queued, client, monkeypatch,
 ):
-    """TD-281: the app pairs a pending upload with its staged file by role, name,
+    """TD-221: the app pairs a pending upload with its staged file by role, name,
     size and this hash, so other bytes of the same size are never resumed into
     a session that declared the old ones."""
     monkeypatch.setattr(rate_limit.listing_bucket, "allow", lambda uid: True)
@@ -707,7 +707,7 @@ async def test_a_session_stuck_provisioning_can_still_be_deleted(store, queued, 
 
 
 async def test_a_late_retry_holds_off_a_delete_while_it_runs(store, queued, client, monkeypatch):
-    """TD-296: a Cloud Tasks retry that starts past the grace after the
+    """TD-233: a Cloud Tasks retry that starts past the grace after the
     session's last write stamps `updatedAt` first, so a delete that lands
     while it creates the Drive folder is refused (409), not left behind."""
     import asyncio

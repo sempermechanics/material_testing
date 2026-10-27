@@ -19,7 +19,7 @@ import java.io.File
 /**
  * The AVI rung end to end: an uncompressed 8-bit AVI, written here byte by
  * byte, through [VideoFrameExtractor.extract]. Key frames mode follows the
- * `idx1` flags (TD-154), and every frame keeps its own start time in the clip
+ * `idx1` flags (TD-153), and every frame keeps its own start time in the clip
  * and the exact bytes that went in.
  */
 @RunWith(RobolectricTestRunner::class)

@@ -36,7 +36,7 @@ const val LEGACY_AUTH_HOST = "indicvision-dic-app-auth.firebaseapp.com"
  * Every host an auth continue link may legitimately arrive on. The manifest
  * declares an App Link filter for each; `AuthActivity` refuses the rest.
  * Shrinks back to [AUTH_HOST] alone once no build declaring only the legacy
- * host is installed (TD-29).
+ * host is installed (TD-1).
  */
 val AUTH_HOSTS: Set<String> = setOf(AUTH_HOST, LEGACY_AUTH_HOST)
 

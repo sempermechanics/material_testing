@@ -68,7 +68,7 @@ def parse_import(text: str) -> list[ImportRow]:
     find it. A row with nothing in the address column is still a row: it is
     answered `invalid` rather than silently dropped. The address is read
     through `undefused`, so a cell the export quoted for a spreadsheet comes
-    back as the address it was (TD-267).
+    back as the address it was (TD-213).
 
     A file the reader cannot parse is refused with the line its bad record
     starts on (`line <n>`): for a quote never closed the reader only fails at
@@ -161,7 +161,7 @@ def _render(header: list[str], rows: list[list]) -> str:
 
 
 #: The roster export's columns. `email` first, so the file imports back as it is.
-#: Semper Classroom's lock keeps its old column name until TD-330, so IT's
+#: Semper Classroom's lock keeps its old column name until TD-56, so IT's
 #: sheets keyed on it still read it (ADR-030).
 ROSTER_COLUMNS = [
     "email", "status", "uid",

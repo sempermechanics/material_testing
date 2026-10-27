@@ -6,7 +6,7 @@ one-field ordered queries, `.count()`,
 batches, and a pass-through transaction. Install it with `install(monkeypatch)`.
 
 Every method that is a round trip on the real client takes its `retry` and
-`timeout` keywords and records them in `CALLS` (TD-197). A call that app code
+`timeout` keywords and records them in `CALLS` (TD-185). A call that app code
 reached without them also lands in `UNTIMED`, which `conftest` checks after
 every test.
 """

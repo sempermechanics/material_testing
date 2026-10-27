@@ -121,7 +121,7 @@ def test_nothing_imports_the_retired_facade():
     assert users == []
 
 
-#: What each licensing module may import from the package (TD-64). Claims and
+#: What each licensing module may import from the package (TD-92). Claims and
 #: invites are leaves; `holders` (the one-licence rule) reads through invites;
 #: everything else builds on them.
 LICENSING_IMPORTS = {

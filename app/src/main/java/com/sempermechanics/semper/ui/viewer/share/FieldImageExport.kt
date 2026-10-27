@@ -47,7 +47,7 @@ internal class FieldImageExport(
 
     /**
      * Annotated PNG of one field for one frame's data, drawn as the viewer draws
-     * that frame (ADR-011, TD-139): on the frame's own photo with the map at the
+     * that frame (ADR-011, TD-141): on the frame's own photo with the map at the
      * displaced positions ([VisualizationEngine.generateFrameHeatmap]), else on
      * the reference. Composited at the
      * [VisualizationEngine.REPORT_MAX_EDGE]-capped size rather than full sensor

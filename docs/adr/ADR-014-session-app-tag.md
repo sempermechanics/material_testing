@@ -4,7 +4,7 @@
 **Date:** 2026-10-01
 **Deciders:** product owner, backend owner
 
-[2026-10-26: Material Testing is renamed Semper Classroom (`com.sempermechanics.semperclassroom`), and its sessions are still tagged `materialtesting` (`apps.stored_name`), which a backend from before the rename reads; the tag is read, compared (`apps.same_app`) and answered as `semperclassroom` until TD-330 retags it (`backend/scripts/rename_classroom_app.py --retag`) and drops the alias. See [ADR-030](ADR-030-semper-classroom-app-identity.md).]
+[2026-10-26: Material Testing is renamed Semper Classroom (`com.sempermechanics.semperclassroom`), and its sessions are still tagged `materialtesting` (`apps.stored_name`), which a backend from before the rename reads; the tag is read, compared (`apps.same_app`) and answered as `semperclassroom` until TD-56 retags it (`backend/scripts/rename_classroom_app.py --retag`) and drops the alias. See [ADR-030](ADR-030-semper-classroom-app-identity.md).]
 
 ## Context
 
@@ -99,7 +99,7 @@ Every app call already names its app (`X-App-Id`, ADR-010), resolved once in
   Testing backup missed by the backfill disappears from that app until tagged.
 - A phone that restored the other app's backup before this change keeps a
   backed-up row the new list does not show. Its reconcile would have marked it
-  PENDING and uploaded it again as a duplicate (TD-153), so the app's
+  PENDING and uploaded it again as a duplicate (TD-152), so the app's
   reconcile asks `?app=all` once whenever a SYNCED row is missing from its own
   list, and leaves a row SYNCED when another app's COMPLETED backup holds its
   local id or its stored cloud id (`CloudReconcile.list`). If that listing
@@ -119,7 +119,7 @@ Every app call already names its app (`X-App-Id`, ADR-010), resolved once in
       75 sessions tagged, 68 `semper` and 7 `materialtesting`.
 - [x] Deploy the console, then the backend; re-run the backfill: 2026-10-01,
       production run 36844645753, `semper-gw` `v202610010948-83`; 0 left to tag.
-- [x] TD-153: settle rows restored across apps before the deploy: the app's
+- [x] TD-152: settle rows restored across apps before the deploy: the app's
       reconcile checks `?app=all` before it repairs a missing row
       (`app/src/main/java/com/sempermechanics/semper/data/cloud/CloudReconcile.kt`,
       `CrossAppReconcileTest`). No backend or gateway change: the gateway

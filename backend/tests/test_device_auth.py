@@ -137,7 +137,7 @@ async def test_nonce_replay_rejected(wired):
 
 
 async def test_the_hash_and_the_signature_check_run_off_the_event_loop(wired, monkeypatch):
-    """TD-198: the body hash (up to a few ms for a 4 MiB body) and the ECDSA
+    """TD-186: the body hash (up to a few ms for a 4 MiB body) and the ECDSA
     verify run in the threadpool, as the Firestore lookups beside them do,
     not on the thread that serves every other request."""
     import threading

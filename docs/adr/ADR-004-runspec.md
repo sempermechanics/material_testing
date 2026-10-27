@@ -20,7 +20,7 @@ answer is spread across:
 - a ROI that exists twice: the requested one on the ViewModel and the resolved,
   inset one in `BatchAnalysisParams.finalRect*` (`RoiResolveHelper.resolve`).
 
-The fault this causes is TD-61: `AnalysisNavHelper.openResults` reads the
+The fault this causes is TD-90: `AnalysisNavHelper.openResults` reads the
 ViewModel after the run, so it passes the *requested* ROI, the slider values
 at the moment of opening, and `last*` fields that a sweep path never resets.
 The saved session carries the resolved ROI and the run's real values, so the
@@ -69,7 +69,7 @@ data class RunSpec(
 | Scalability | New run parameters get one home |
 | Team familiarity | Plain Kotlin data class, like `BatchAnalysisParams` |
 
-**Pros:** fixes TD-61 at the source; the engine's inputs are unchanged by
+**Pros:** fixes TD-90 at the source; the engine's inputs are unchanged by
 construction. **Cons:** one more type between the UI and the engine.
 
 ### B: Hoist all wizard state into `StateFlow` UI state
@@ -139,7 +139,7 @@ derived field for field; the proof is mechanical (identical `.dat` hashes).
   It used to inherit the previous run's stop code, reference and planned-frame
   count.
 - **Verification changed.** Two runs of the *same* build on the emulator do not
-  give bit-identical `.dat` files (TD-65), so equal hashes could not show that
+  give bit-identical `.dat` files (TD-93), so equal hashes could not show that
   this change left the engine alone. Instead, a temporary uncommitted patch
   logged SHA-256 of every JNI input (reference, each frame, mask) plus ROI,
   step, subset, strain window and interpolator, before and after the change:
@@ -148,13 +148,13 @@ derived field for field; the proof is mechanical (identical `.dat` hashes).
   reopened-from-Home `ViewerArgs` now agree on every field except `defPath`
   (ADR-003), for a single run and for a sweep.
 - *Later (2026-10-01):* engine 0.2.3 made the Path B flood fill deterministic
-  (TD-65), so a `.dat` hash comparison is a valid check again.
+  (TD-93), so a `.dat` hash comparison is a valid check again.
 - *Later (2026-10-03):* `RoiResolveHelper.resolve`, named in the sketch above
   as the source of `roiResolved`, is deleted (#331); the run's ROI is
   `Roi.forSolve` (`field/Roi.kt`). What `RunSpec` still leaves out (reference
   bytes and size, frame paths) the batch loop reads from the view model:
-  TD-173.
-- *Later (2026-10-12, TD-173):* the run's images are frozen too.
+  TD-171.
+- *Later (2026-10-12, TD-171):* the run's images are frozen too.
   `launchBatchAnalysis` and `launchSweep` take `snapshotRunInputs()` on Main,
   before the run leaves for the native dispatcher, and hand it to the run
   (`ui/analysis/run/BatchRun.kt`): `RunInputs.Reference` (bytes, size, name)

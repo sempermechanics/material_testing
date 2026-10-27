@@ -1,7 +1,7 @@
 """The step-up tiers: a caller held to an attested device, or to a second
 factor on a recent sign-in.
 
-Split out of `deps.py` (TD-293), which keeps identity (`current_user`,
+Split out of `deps.py` (TD-230), which keeps identity (`current_user`,
 `admin_user`) and device attestation (`verified_device`). This module builds
 on those, never the reverse: `deps` does not import it.
 """
@@ -194,7 +194,7 @@ def _require_not_revoked(request: Request, uid: str) -> None:
     already handle `invalid_token`, and a new wire code would reach neither.
 
     The one exception is this instance's own Auth Admin budget
-    (`rate_limit.auth_admin_bucket`, TD-239). Spent, the check is not asked
+    (`rate_limit.auth_admin_bucket`, TD-200). Spent, the check is not asked
     and the answer is 503 `auth_check_busy` with Retry-After, logged as
     `auth_admin_rate_limited`: the token may well be fine, and telling the
     caller it is invalid would sign a working console out.

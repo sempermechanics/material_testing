@@ -248,7 +248,7 @@ def resolve_user_config(user: dict) -> dict:
             else settings.DAT_CODEC_ENCODING_ENABLED
         ),
         # Only while the licence entitles: the app shows "Licensed as …"
-        # whenever this is set (TD-145), and a Demo key, a lapsed or revoked
+        # whenever this is set (TD-146), and a Demo key, a lapsed or revoked
         # licence, or a floating seat with no lease all run as Demo. /v1/me
         # still names a held licence's prefix, under its own `held` flag.
         "licensePrefix": summary["prefix"] if is_licensed else "",

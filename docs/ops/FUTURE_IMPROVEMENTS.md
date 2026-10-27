@@ -44,7 +44,7 @@ exist only in slider/radio views until params are built. The authoritative
 record only exists once `SessionRepository.buildSessionRecord` assembles it at
 commit. "What settings did this run actually use?" has no single answer until
 then — and the viewer opened straight after a run reads the ViewModel instead,
-which is TD-61. **Decided:** [ADR-004](../adr/ADR-004-runspec.md).
+which is TD-90. **Decided:** [ADR-004](../adr/ADR-004-runspec.md).
 
 **Done** (run-spec PR): `RunSpec` is built once at Compute; the batch params,
 the sweep, both session records and the viewer the run opens read it or the
@@ -60,7 +60,7 @@ went in and what stayed out: [ADR-004 As built](../adr/ADR-004-runspec.md#as-bui
 which carries Drive upload capability URIs — for testers on an older build,
 unless the caller sent a device header or `REQUIRE_ATTESTED_UPLOADS=1` was set.
 
-**Done** (2026-09-26, TD-45 shim 2): the flag had been `1` on both services, and
+**Done** (2026-09-26, TD-4 shim 2): the flag had been `1` on both services, and
 Cloud Logging over the full 30-day retention showed 0 `legacy_unattested_uploads`
 events and 73 `/uploads` reads with none refused. The wrapper, the flag and its
 startup warning are gone; `/uploads` is plain `verified_device`, and
@@ -118,7 +118,7 @@ twice.
   ceilings, 100 and 1000) and the `page` response dict three times each;
   `routers/files.py` has the file-doc variant of the guard twice.
 
-**Done** (TD-54 in the backend-dedupe PR, the rest in the app-reuse PR):
+**Done** (TD-86 in the backend-dedupe PR, the rest in the app-reuse PR):
 
 - `data/cloud/restore/DownloadProgress` publishes both workers' progress; their keys are
   `IntentKeys.PHASE_DOWNLOAD` / `IntentKeys.DOWNLOAD_ERROR`, and both give up on
@@ -160,7 +160,7 @@ console offers the button per licence with nothing between it and the click.
 The cheap fix is a cap with a "showing the first N" note; the durable one is to
 denormalise the answer — stamp the seat when the holder is next seen, so the
 report is a subcollection scan and no user reads at all. The reads are one
-`db().get_all()` batch since TD-62 (`backend/app/repo/reconcile.py`), so the
+`db().get_all()` batch since TD-91 (`backend/app/repo/reconcile.py`), so the
 cost is documents read, not round trips.
 
 **Four hours is the worst case for a revoke reaching an idle device.**
@@ -184,7 +184,7 @@ shipped):
   moves (`UploadProgressSamplerTest`).
 - `SettingsActivity` calls `listCompleted` (`SettingsActivity.kt:250`), which has
   no cache. The dead `listRestorable` pair and its 60-second cache were deleted
-  (TD-51), so a cache for `listCompleted` would be new code, and it would need
+  (TD-83), so a cache for `listCompleted` would be new code, and it would need
   the invalidation the old one had after restores and erasures. Only worth it
   if the settings open is measurably slow.
 - A session's file collection is paged twice on the **inline** provision path —
@@ -200,7 +200,7 @@ shipped):
 New product capability the readiness framework
 ([READINESS_FRAMEWORK_2026-10.md](READINESS_FRAMEWORK_2026-10.md)) asks for and
 Semper does not have. Deferred controls and external actions from the same
-cross-check are rows in [TECH_DEBT.md](TECH_DEBT.md) (TD-214 onward); the item-by-item
+cross-check are rows in [TECH_DEBT.md](TECH_DEBT.md) (TD-9 onward); the item-by-item
 mapping is the "Framework cross-check (2026-10-18)" section of
 [PRODUCTION_READINESS_GATE.md](PRODUCTION_READINESS_GATE.md). Each entry names the
 framework item and takes the framework's **Verify** text as its acceptance test.
@@ -293,7 +293,7 @@ written to `audit_logs` with the token's id. A separate route tier in
 
 **Now.** Deprovisioning is manual. IT removes or holds a seat
 (`roster.py:335`, `:369`); staff suspend an account, which also revokes its
-refresh tokens (`backend/app/routers/admin.py:70-87`), best-effort until TD-214's
+refresh tokens (`backend/app/routers/admin.py:70-87`), best-effort until TD-9's
 IAM grant. A device that is offline keeps its signed entitlement until its
 `graceUntil` (`backend/app/entitlement_token.py:201-215`).
 
@@ -331,7 +331,7 @@ gating UX", for one institution while another stays ungated.
 **Framework** 8.5 ("per tenant").
 
 **Now.** Per user: `GET /v1/me/export` (`backend/app/routers/account.py:192`) and
-`DELETE /v1/me` (`:294`), which also deletes the Firebase Auth user when TD-214's
+`DELETE /v1/me` (`:294`), which also deletes the Firebase Auth user when TD-9's
 grant is in place (`:350`). Per licence: delete into a 30-day hold
 (`backend/app/routers/admin.py:292`), which drops holders to Demo and leaves their
 data untouched by design. Nothing exports or erases every member's data for one
@@ -353,7 +353,7 @@ roster seat, an email-locked individual licence, or a one-time claim code
 redeemed on the web account page (`POST /v1/me/claim`,
 `backend/app/routers/licenses.py:195-256`). The app is consumption-only: it sells
 nothing and links to no payment page. There is no Play listing or developer
-account linked to the project (TD-229, TD-230), so there is nothing to buy
+account linked to the project (TD-23, TD-24), so there is nothing to buy
 through Play either.
 
 **Proposal.** A fourth source: a Google Play purchase (a subscription or a
@@ -366,7 +366,7 @@ do (`licenseId`, `mode`, mirrored terms), so one licence per person, grace and
 revocation apply unchanged. Real-time developer notifications (Pub/Sub) end or
 renew it; a refund or chargeback revokes it at the next request. Buying moves
 the app off consumption-only, so it needs its own decision record and a Data
-safety update (TD-232). Needs TD-229 (a Play developer account linked to the
+safety update (TD-26). Needs TD-23 (a Play developer account linked to the
 project) first.
 
 **Acceptance** (the framework has no Play Billing item; this one is ADR-024's). A Play test purchase, made with a licence-tester account on an

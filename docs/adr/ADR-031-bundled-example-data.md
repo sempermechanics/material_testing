@@ -60,7 +60,7 @@ documentation and/or other materials".
    - the `CREDIT.txt` that travels with every copy Save to phone makes.
 
    A DICe set's page there carries its `LICENSE.DICe` in full. Since
-   2026-10-27 (TD-349) the screen is one list of every part of the app with
+   2026-10-27 (TD-57) the screen is one list of every part of the app with
    its licence (the example sets, the engine, and every library from the
    AboutLibraries plugin); the full texts and the Play services notices are on
    sempermechanics.com/licences/, and the app keeps only the short notices that
@@ -101,7 +101,7 @@ documentation and/or other materials".
 - A new set needs `example.json`, `README.md` and `CREDIT.txt`, plus its licence
   file if the licence asks for one. `ExampleCatalogTest` fails without them.
 - The app now has a licences screen. The AndroidX, Firebase and OkHttp
-  Apache-2.0 notices are still missing from it (TD-349).
+  Apache-2.0 notices are still missing from it (TD-57).
 - semperdic-app has none of this until it is ported. ADR-025's
   `materialTesting` flavour would own the lab sets; the DICe sets and the
   screens suit both apps.

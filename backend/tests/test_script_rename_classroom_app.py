@@ -1,9 +1,9 @@
-"""ADR-030 / TD-330: the one-off rename of Material Testing to Semper Classroom
+"""ADR-030 / TD-56: the one-off rename of Material Testing to Semper Classroom
 in stored records. Each `...MaterialTesting` field on users, licences and
 seats is copied to its `...SemperClassroom` name (refreshed where it went
 stale), a `...SemperClassroom` field with no old twin is deleted, and the old
 field is left as it is. The `app` tags on devices and sessions are renamed only
-with `retag=True` (`--retag`, TD-330): a backend from before the rename reads
+with `retag=True` (`--retag`, TD-56): a backend from before the rename reads
 `semperclassroom` as an unknown app."""
 import copy
 import sys
@@ -79,7 +79,7 @@ def test_dry_run_counts_and_writes_nothing(store):
     tallies = _run(store, apply=False)
     assert store._data == before
 
-    # Tags are not this rename's (`--retag`, TD-330).
+    # Tags are not this rename's (`--retag`, TD-56).
     assert set(tallies) == {"users", "licenses", "licenses/*/seats"}
 
     users = tallies["users"].counts

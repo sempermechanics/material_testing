@@ -1,4 +1,4 @@
-"""`scripts/micro_ab.py`: the interleaved A/B hot-path microbenchmark gate (TD-199).
+"""`scripts/micro_ab.py`: the interleaved A/B hot-path microbenchmark gate (TD-187).
 
 Analysis is held on small microbenchmark JSON files laid out as pulled rounds
 (`1-A/`, `2-B/`, ...). Run mode is driven through a fake `subprocess.run`, so

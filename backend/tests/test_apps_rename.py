@@ -4,7 +4,7 @@ Devices, sessions and audit rows still say `materialtesting`, and every
 account not yet migrated holds its Classroom phone and locks in the
 `*MaterialTesting` fields. A backend from before the rename can serve beside
 this one during a deploy, or again after a rollback, so the old names stay the
-stored truth while TD-330 is open. These pin that the backend reads both short
+stored truth while TD-56 is open. These pin that the backend reads both short
 names as the one app, still stores the old one (`apps.stored_name`), reads only
 the old field (`apps.read_field`), writes both fields, and still serves the
 builds that send the old application id, bar registration (410 `app_retired`).
@@ -82,7 +82,7 @@ def test_field_names_for_each_app():
 
 def test_stored_name_keeps_the_old_short_name_for_semper_classroom():
     # A backend from before the rename reads `semperclassroom` as an unknown
-    # app, so the tag every backend reads is the one stored (TD-330).
+    # app, so the tag every backend reads is the one stored (TD-56).
     assert apps.stored_name(SC) == OLD
     assert apps.stored_name(OLD) == OLD
     assert apps.stored_name(" SemperClassroom ") == OLD
@@ -104,7 +104,7 @@ def test_read_field_reads_the_old_field_only():
     assert apps.read_field({"activeDeviceIdSemperClassroom": "new"}, "activeDeviceId", SC,
                            "none") == "none"
     # Every backend writes the old field, one from before the rename too, so
-    # a new field it did not write is stale: the old one wins (TD-330).
+    # a new field it did not write is stale: the old one wins (TD-56).
     both = {"activeDeviceIdMaterialTesting": "old", "activeDeviceIdSemperClassroom": "stale"}
     assert apps.read_field(both, "activeDeviceId", SC) == "old"
     assert apps.read_field(both, "activeDeviceId", OLD) == "old"
@@ -233,7 +233,7 @@ async def test_the_new_app_heals_its_legacy_phone_and_writes_both_fields(client,
     assert user["activeDeviceIdSemperClassroom"] == "and-classroom"
     assert user["activeDeviceIdMaterialTesting"] == "and-classroom"
     assert "activeDeviceId" not in user, "Semper's binding is its own"
-    # The record keeps the name every backend reads (TD-330).
+    # The record keeps the name every backend reads (TD-56).
     assert store._data["devices"]["and-classroom"]["app"] == OLD
 
 

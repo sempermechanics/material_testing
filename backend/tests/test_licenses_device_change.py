@@ -99,7 +99,7 @@ def test_a_second_self_service_change_inside_the_cooldown_is_refused(store):
         repo.clear_device_lock(license_id, "solo-1", actor=repo.ACTOR_SELF)
 
     assert refused.value.code == "device_change_too_soon"
-    # The refusal says when (TD-116): a cooldown from the change just made.
+    # The refusal says when (TD-123): a cooldown from the change just made.
     changed = store._data["licenses"][license_id]["deviceChangedAt"]
     next_allowed = changed + timedelta(days=settings.SELF_DEVICE_CHANGE_COOLDOWN_DAYS)
     assert refused.value.suffix == next_allowed.isoformat()
@@ -436,7 +436,7 @@ def test_a_release_stamps_updated_at(store):
 
 # A clear releases the phone only where it would also restore the mode. A held
 # or revoked seat, or a revoked licence, leaves its holder on Demo, and a Demo
-# account does not get to change phone (TD-126).
+# account does not get to change phone (TD-131).
 
 
 def test_new_device_on_a_held_seat_keeps_the_phone(store):
@@ -643,7 +643,7 @@ async def test_the_holder_cannot_change_device_twice_over_http(client, monkeypat
     resp = await client.post("/v1/licenses/unbind")
 
     assert resp.status_code == 429
-    # The code, then when the holder may change again (TD-116).
+    # The code, then when the holder may change again (TD-123).
     code, _, when = resp.json()["detail"].partition(": ")
     assert code == "device_change_too_soon"
     assert datetime.fromisoformat(when) > datetime.now(timezone.utc)

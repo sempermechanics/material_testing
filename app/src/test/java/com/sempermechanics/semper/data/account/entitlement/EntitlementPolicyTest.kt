@@ -95,7 +95,7 @@ class EntitlementPolicyTest {
     }
 
     @Test
-    fun `with the token lapsed the shown ceiling is the demo cap that is enforced (TD-263)`() {
+    fun `with the token lapsed the shown ceiling is the demo cap that is enforced (TD-209)`() {
         val late = DeviceTime(serverMs + 8 * DAY_MS, 1_000L + 8 * DAY_MS, 1)
         val bound = EntitlementPolicy.bound(evaluate(sealed(), late).first, DEMO)
         val serverMax = 999
@@ -123,7 +123,7 @@ class EntitlementPolicyTest {
     }
 
     @Test
-    fun `a floating seat whose token ran past its lease needs the seat screen (TD-266)`() {
+    fun `a floating seat whose token ran past its lease needs the seat screen (TD-212)`() {
         val pastLease = DeviceTime(serverMs + 8 * DAY_MS, 1_000L + 8 * DAY_MS, 1)
         val graceOver = evaluate(sealed(), pastLease).first
         assertEquals(TokenStatus.Lapsed("GRACE_OVER"), graceOver)
@@ -145,7 +145,7 @@ class EntitlementPolicyTest {
     }
 
     @Test
-    fun `only a key with no record and no seal in flight reads as tampering (TD-265)`() {
+    fun `only a key with no record and no seal in flight reads as tampering (TD-211)`() {
         fun reading(hasRecord: Boolean, key: KeyPresence, sealing: Boolean = false) =
             EntitlementPolicy.reading(hasRecord, key, sealing)
 

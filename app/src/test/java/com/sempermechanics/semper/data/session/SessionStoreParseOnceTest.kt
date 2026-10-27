@@ -14,7 +14,7 @@ import org.robolectric.RobolectricTestRunner
 import java.io.File
 
 /**
- * [SessionStore] parses `index.json` at most once per change (TD-284): the rows
+ * [SessionStore] parses `index.json` at most once per change (TD-224): the rows
  * it last parsed or wrote are kept, keyed by the file's length and modified
  * time, so a change, a removal or a lookup does not decode the whole list again,
  * while a file changed behind its back is still read afresh.

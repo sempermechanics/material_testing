@@ -10,7 +10,7 @@ Release levers: [RELEASING.md](RELEASING.md) "Rollback levers". Production is
 `semper-gw` ([ENVIRONMENTS.md](ENVIRONMENTS.md)).
 
 Response targets per severity are a business commitment and are set in
-[SUPPORT_POLICY.md](SUPPORT_POLICY.md) (TBD there; TD-258).
+[SUPPORT_POLICY.md](SUPPORT_POLICY.md) (TBD there; TD-45).
 
 ## Severity
 
@@ -38,7 +38,7 @@ requires, on becoming aware of a personal-data breach:
 Until then the Privacy Policy's own commitment applies (notify the competent
 authority within the period required by law and affected users without undue
 delay, `docs/legal/PRIVACY_POLICY.md:233-239`). Counsel review of this playbook
-and a tabletop exercise are owed (TD-241).
+and a tabletop exercise are owed (TD-33).
 
 **Playbook.**
 
@@ -52,7 +52,7 @@ and a tabletop exercise are owed (TD-241).
    report is due from it.
 4. **Notify** affected principals by email to the account address, and the Board
    through its prescribed channel, without waiting for the full analysis. The
-   Grievance Officer named in the policy (TD-36) is the contact on both.
+   Grievance Officer named in the policy (TD-3) is the contact on both.
 5. **Report** to the Board within 72 hours: facts, cause, personal data and
    principals affected, measures taken, contact.
 6. **Review** and record what changed.
@@ -77,7 +77,7 @@ it cannot license a device the backend never licensed.
    and runs on the cached config as before tokens.
 2. **Disable the secret version** (`gcloud secrets versions disable <v>
    --secret=<name> --project indicvision-dic-app`) and find how it leaked
-   (Secret Manager Data Access logs, TD-225).
+   (Secret Manager Data Access logs, TD-20).
 3. **New key, new `kid`** (`ent-2`), as in [BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A8.
    Release a build whose `SEMPER_ENTITLEMENT_PUBKEYS` pins **only** `ent-2`. It
    ignores tokens signed with the old key: an unverifiable token counts as no
@@ -105,7 +105,7 @@ activation-anomaly alert.
    fresh step-up). **Seats:** IT or staff remove seats
    (`DELETE …/licenses/{id}/seats/{uid}`). **Accounts:** suspend
    (`POST /v1/admin/users/{uid}/revoke`), which also revokes refresh tokens once
-   TD-214 is done.
+   TD-9 is done.
 2. **Online devices** drop to Demo on their next request carrying `X-Device-Id`
    (`backend/app/deps.py:181-188`) and their next `/v1/config` carries a demo
    token. **Offline devices** keep their entitlement until their token's
@@ -169,4 +169,4 @@ threshold), or users of a genuine build refused with `app_check_required`.
    deploy re-applies `enforce`. If traffic is pinned by a revision rollback, that
    update serves 0 %: follow **After a revision rollback** in RELEASING.md.
 2. Find the build that lacks a token (`appId`, `appVersion` on `app_check_missing`
-   lines), and do not return to `enforce` while it is installed (TD-226).
+   lines), and do not return to `enforce` while it is installed (TD-21).

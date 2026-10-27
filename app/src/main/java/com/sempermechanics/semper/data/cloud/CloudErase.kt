@@ -81,7 +81,7 @@ internal object CloudErase {
             eraseCloud = eraseCloud,
             deleteIdentity = { auth.deleteIdentity().isSuccess },
             wipeLocal = { SessionStore.deleteAll(appContext) },
-            // No seat release: the erase gave the seat back (TD-206).
+            // No seat release: the erase gave the seat back (TD-193).
             signOut = { auth.signOut(releaseSeat = false) },
         )
     }
@@ -116,7 +116,7 @@ internal object CloudErase {
      * `current_user`, `GET /v1/me` included: it re-creates an empty profile for
      * an erased account (`get_or_create_user`), and mails support when that
      * profile is pending. `GET /v1/me/erasure` checks the ID token alone and
-     * answers whether this phone's device record is gone (TD-206):
+     * answers whether this phone's device record is gone (TD-193):
      *
      * - `erased: true`: the erase landed.
      * - `erased: false`: the account and this phone's record are still there

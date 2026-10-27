@@ -399,7 +399,7 @@ object SessionUploadBundler {
             )
             val defImg = originalDefImg?.scale(coverW, coverH) ?: baseImg
             // On the frame's own photo the field images are drawn as the viewer
-            // draws the frame: on it, at the displaced positions (TD-139).
+            // draws the frame: on it, at the displaced positions (TD-141).
             val reportData = ReportBuilder.buildReport(
                 reportParams(record, frameIndex, data, baseImg, defImg)
                     .copy(fieldsOnFramePhoto = originalDefImg != null),

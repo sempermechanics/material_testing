@@ -2,7 +2,7 @@
 
 **Status:** Accepted, built. Amended 2026-10-03 for the layout after the quality
 program's second move (#331), and 2026-10-19 when CI began checking the file-size
-guide (TD-292): see [Amendments](#amendments)
+guide (TD-229): see [Amendments](#amendments)
 **Date:** 2026-10-01
 **Deciders:** app owner
 
@@ -94,8 +94,8 @@ count of started screens (the upload worker reads it; `ManagedConfigReader` and
 `ui/analysis/run/RunEnd` with `WizardRunOutcomes` deleted (19), `ui/auth/AuthViewModel`
 and `AuthScreen` (13), `ui/common/transfer/RestoreRequest` (5), `ui/home/HomeViewModel`
 and `HomeNewAnalysis` (19), `util/SafCopy` (12), `imaging/video/RetrieverFrameClock`
-(8, TD-207) and `data/cloud/SessionMetadataSerializers` (24). CI now checks the size guide
-(TD-292, [Amendments](#amendments)). `data/cloud/SessionMetadataDoc.kt` reached 506 lines
+(8, TD-194) and `data/cloud/SessionMetadataSerializers` (24). CI now checks the size guide
+(TD-229, [Amendments](#amendments)). `data/cloud/SessionMetadataDoc.kt` reached 506 lines
 and was its one listed exception until its field serializers moved to
 `SessionMetadataSerializers.kt` the same day (482 lines, `b85e0a5`); no main file is over
 the guide now, and the exception list is empty.
@@ -232,7 +232,7 @@ cleanup (the rules are in CONTRIBUTING's "Code style"): the stateful
 their content, and `DriveDownload` has its own file. Renames are not moves,
 so no mapping replays them; [FORK_SYNC](../ops/FORK_SYNC.md) lists each one.
 
-**2026-10-19, the size guide is checked in CI (TD-292).**
+**2026-10-19, the size guide is checked in CI (TD-229).**
 `scripts/check_kotlin_file_size.py` counts every `*.kt` under `app/src/main` and
 fails when one passes 500 lines. It runs in the `legal-pages` job, on every event
 ([CI.md](../ops/CI.md)), since it needs no build.

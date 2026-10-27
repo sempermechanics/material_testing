@@ -261,7 +261,7 @@
     saveGraph and graphExport.share present, no licence call. The same is true in M (VsgLatticeActivity.kt:440).
   proposed_fix: 'Gate btnSaveGraph with ShareCenter.access(): alpha BLOCKED_ALPHA, and on tap blockedMessage() -> CrispToast,
     as ResultViewerActivity.kt:262-269 does. Or record in ADR-024 that the sweep graph is deliberately free. Owner decision;
-    client-only either way (TD-274).'
+    client-only either way (TD-49).'
   files_touched:
   - app/src/main/java/com/sempermechanics/semper/ui/analysis/VsgLatticeActivity.kt
   effort: S
@@ -294,7 +294,7 @@
     reader comparing 'Exx max 1.23 mε' in stats to 'exx 1.23e-3' in rows sees a 1000x gap with only the stats row labelled)
   proposed_fix: Do not rescale values. Rename the point columns exx_strain,eyy_strain,exy_strain (or add '# point_strain_unit,strain
     (dimensionless)' to the preamble) and bump semper_csv_version to 2. The values are untouched, so .dat/GIF oracles are
-    unaffected, but CSV goldens or tests (TD-39 shared header) need updating and downstream parsers need the version bump.
+    unaffected, but CSV goldens or tests (TD-75 shared header) need updating and downstream parsers need the version bump.
   files_touched:
   - app/src/main/java/com/sempermechanics/semper/field/DicResult.kt
   - app/src/main/java/com/sempermechanics/semper/report/AnalysisCsvWriter.kt
@@ -769,7 +769,7 @@
   - .github/workflows/release.yml:136-137 (SEMPER_API_CERT_PINS from secret; 'Empty means system trust only; check_release_apk.py
     warns on it'); release.yml:186 runs the check without a pin requirement
   - docs/ops/CI.md:49 ('it warns when no certificate pin is compiled in, which is always the case here')
-  - 'Known: TD-218 (docs/ops/TECH_DEBT.md:486) open only on the pin decision; DEPLOY_CHECKLIST_2026-10.md §7 calls pins optional'
+  - 'Known: TD-13 (docs/ops/TECH_DEBT.md:486) open only on the pin decision; DEPLOY_CHECKLIST_2026-10.md §7 calls pins optional'
   reproduce: 'S=/c/Users/chand/Downloads/app_dev/semperdic-readiness
 
     grep -n ''"cert-pins", "WARN"'' $S/scripts/check_release_apk.py
@@ -789,7 +789,7 @@
   effort: S
   fix_risk: medium — a wrong or unrotated pin locks every installed build out of the API; needs the backup pin and a rotation
     runbook first
-  external_action: Admin decision on pinning (TD-218) and setting the SEMPER_API_CERT_PINS secret; or record pins as an accepted
+  external_action: Admin decision on pinning (TD-13) and setting the SEMPER_API_CERT_PINS secret; or record pins as an accepted
     criterion-conflict.
   status: confirmed
   verdict: CONFIRMED
@@ -870,7 +870,7 @@
   - 'app/build/generated/source/buildConfig/release/com/sempermechanics/semper/BuildConfig.java:21 (local release build: SEMPER_ENTITLEMENT_PUBKEYS
     = "")'
   - backend/app/entitlement_token.py:264-266, 281-283; backend/app/config.py:289 (no key -> no token)
-  - docs/ops/TECH_DEBT.md:483 (TD-215, open, operator task); docs/adr/ADR-023-signed-offline-entitlement.md:3 ('not yet live')
+  - docs/ops/TECH_DEBT.md:483 (TD-10, open, operator task); docs/adr/ADR-023-signed-offline-entitlement.md:3 ('not yet live')
   reproduce: 'cd C:/Users/chand/Downloads/app_dev/semperdic-readiness
 
     grep -n "if (pins.isEmpty) return TokenStatus.NotUsed" app/src/main/java/com/sempermechanics/semper/data/account/entitlement/EntitlementStore.kt
@@ -882,9 +882,9 @@
     grep -n "SEMPER_ENTITLEMENT_PUBKEYS" .github/workflows/release.yml   # only passed through, never checked
 
     '
-  proposed_fix: 'Operator: provision the P-256 key and SEMPER_ENTITLEMENT_PUBKEYS (TD-215, BACKEND_SETUP_GCP.md A8), and ship
+  proposed_fix: 'Operator: provision the P-256 key and SEMPER_ENTITLEMENT_PUBKEYS (TD-10, BACKEND_SETUP_GCP.md A8), and ship
     a release that pins it. Code: add an `entitlement-pins` check to scripts/check_release_apk.py mirroring `cert-pins` (WARN
-    while TD-215 is open, FAIL once the key exists, e.g. behind a --require-entitlement-pins flag the release workflow sets
+    while TD-10 is open, FAIL once the key exists, e.g. behind a --require-entitlement-pins flag the release workflow sets
     from a repo variable), so a release built without pins cannot go out unnoticed after the key is live.'
   files_touched:
   - scripts/check_release_apk.py
@@ -893,7 +893,7 @@
   effort: S
   fix_risk: low — the check is additive and WARN-only until the key exists
   external_action: 'Admin: create the signing key in Secret Manager, set ENTITLEMENT_SIGNING_SECRET and SEMPER_ENTITLEMENT_PUBKEYS
-    repo variables, grant the deploy/runtime SA roles (TD-215)'
+    repo variables, grant the deploy/runtime SA roles (TD-10)'
   status: confirmed
   verdict: CONFIRMED
   verified_by_command: cd S; the four greps as written; sed -n 88,95p app/build.gradle.kts; sed -n 1,5p docs/adr/ADR-023-signed-offline-entitlement.md  [Git
@@ -1022,7 +1022,7 @@
     PyJWKClient redirect, GHSA-42vr-xj54-vc7v and GHSA-x33g-cr3x-6449 fixed only in 2.15.0)
   - backend/requirements.lock:878 urllib3==2.7.0 (GHSA-vxq7-64xx-v4gw, GHSA-gh4c-6fx4-qh6g, GHSA-8988-9cw3-xx77; fix 2.8.0)
   - backend/app/google_auth.py:14,202 (firebase_admin.app_check.verify_token, which verifies through PyJWT's PyJWKClient;
-    reached when APP_CHECK_MODE is monitor/enforce, TD-226)
+    reached when APP_CHECK_MODE is monitor/enforce, TD-21)
   - docs/ops/MASVS_ASSESSMENT.md CODE-3 row ('on the backend lock' is not what the gate does)
   - 'Baseline: scratchpad/baseline/backend/S_2_pip_audit.log (''No known vulnerabilities found'' on requirements.txt) vs scratchpad/readiness/lanes/te5work/S_pip_audit_lock.txt
     (EXIT=1, ''Found 19 known vulnerabilities in 3 packages'')'
@@ -1088,7 +1088,7 @@
   effort: S
   fix_risk: low — one attribute and a test; the improvement opt-in rate will drop
   external_action: Owner and counsel decide whether a pre-ticked consent holds under DPDP s.6 (the docs record it as a product
-    decision); a Hosting deploy is the Admin's, and the legal pages are held for counsel (TD-277).
+    decision); a Hosting deploy is the Admin's, and the legal pages are held for counsel (TD-51).
   status: confirmed
   verdict: CONFIRMED
   verified_by_command: the two greps as written; sed -n 88,96p app/src/main/res/layout/activity_terms.xml  [Git Bash (POSIX
@@ -1100,8 +1100,8 @@
 - id: TE5-003
   axis: technical
   gate: G2
-  title: Grievance Officer and data-fiduciary identity are still bracketed placeholders on the published Privacy Policy (TD-36);
-    TD-36's line list has gone stale
+  title: Grievance Officer and data-fiduciary identity are still bracketed placeholders on the published Privacy Policy (TD-3);
+    TD-3's line list has gone stale
   type: gap
   severity: P1
   criterion: 'TE5 check 5 (DPDP notice): the notice names the Data Fiduciary and gives the Grievance Officer''s contact (DPDP
@@ -1111,12 +1111,12 @@
     OFFICER EMAIL]), :18
   - firebase-hosting/public/privacy/index.html:25,31 (same placeholders in the rendered page)
   - docs/legal/TERMS_OF_SERVICE.md:6,450,451
-  - docs/ops/TECH_DEBT.md:472 TD-36 cites TERMS ':438, :439' (now :450, :451) and PRIVACY ':153' (no placeholder there now);
+  - docs/ops/TECH_DEBT.md:472 TD-3 cites TERMS ':438, :439' (now :450, :451) and PRIVACY ':153' (no placeholder there now);
     9 fields, not 10
   reproduce: grep -noE '\[[A-Z][A-Z /]{4,}\]' C:/Users/chand/Downloads/app_dev/semperdic-readiness/docs/legal/PRIVACY_POLICY.md
     C:/Users/chand/Downloads/app_dev/semperdic-readiness/docs/legal/TERMS_OF_SERVICE.md C:/Users/chand/Downloads/app_dev/semperdic-readiness/firebase-hosting/public/privacy/index.html
   proposed_fix: Operator supplies the values; fill docs/legal/*.md, run scripts/render_legal_pages.py, deploy Hosting via
-    deploy-console.sh. Refresh TD-36's line list now (PRIVACY :5 x2, :7 x2, :18; TERMS :6 x2, :450, :451).
+    deploy-console.sh. Refresh TD-3's line list now (PRIVACY :5 x2, :7 x2, :18; TERMS :6 x2, :450, :451).
   files_touched:
   - docs/legal/PRIVACY_POLICY.md
   - docs/legal/TERMS_OF_SERVICE.md
@@ -1125,20 +1125,20 @@
   - docs/ops/TECH_DEBT.md
   effort: S
   fix_risk: low — text only
-  external_action: Operator provides legal name, registered address, Grievance Officer name and email (TD-36); counsel hold
-    on the legal pages applies (TD-277).
+  external_action: Operator provides legal name, registered address, Grievance Officer name and email (TD-3); counsel hold
+    on the legal pages applies (TD-51).
   status: confirmed
   verdict: CONFIRMED
   verified_by_command: grep -noE '\[[A-Z][A-Z /]{4,}\]' on PRIVACY_POLICY.md, TERMS_OF_SERVICE.md, firebase-hosting/public/privacy/index.html;
     sed -n 472p docs/ops/TECH_DEBT.md  [Git Bash (POSIX syntax, no adaptation needed)]
-  verified_observation: PRIVACY :5 x2, :7 x2, :18; TERMS :6 x2, :450, :451 (9 fields); index.html :25 x4, :31. TD-36 still
+  verified_observation: PRIVACY :5 x2, :7 x2, :18; TERMS :6 x2, :450, :451 (9 fields); index.html :25 x4, :31. TD-3 still
     cites :153 and :438/:439. The live hosted page was not fetched (repo copy only).
   severity_final: P1
 - id: TE5-004
   axis: technical
   gate: G2
   title: Privacy Policy still omits Firebase Analytics, App Check / Play Integrity and IP addresses / IP-derived location
-    (TD-317); TD-317's §2.4 line reference drifted
+    (TD-55); TD-55's §2.4 line reference drifted
   type: gap
   severity: P1
   criterion: 'TE5 check 5 / framework 8.4: the linked policy matches the Play Data safety answers and names every processor
@@ -1146,18 +1146,18 @@
   evidence:
   - 'docs/legal/PRIVACY_POLICY.md:19 (subprocessor row: Auth, Firestore, Drive, Crashlytics, Cloud Logging/Run, Resend; no
     Analytics, no App Check / Play Integrity)'
-  - docs/legal/PRIVACY_POLICY.md:63 (§2.4 now at :63; TD-317 says ':56')
+  - docs/legal/PRIVACY_POLICY.md:63 (§2.4 now at :63; TD-55 says ':56')
   - app/src/main/java/com/sempermechanics/semper/SemperApp.kt:42,91-96 (Play Integrity App Check provider installed on every
     launch with a backend, independent of the diagnostics consent; tokens fetched by data/net/AppCheckHeader.kt:28 on API
     calls)
   - backend/app/routers/health.py:18-29 (the backend reads client IPs from X-Forwarded-For); no 'IP' or 'location' anywhere
     in the policy
-  - docs/legal/DATA_MAP.md:96 (Analytics location derived from the masked IP); docs/ops/TECH_DEBT.md:529 TD-317
+  - docs/legal/DATA_MAP.md:96 (Analytics location derived from the masked IP); docs/ops/TECH_DEBT.md:529 TD-55
   reproduce: 'grep -n -i ''analytics\|app check\|play integrity\|location\|ip address'' C:/Users/chand/Downloads/app_dev/semperdic-readiness/docs/legal/PRIVACY_POLICY.md
     ; sed -n 19p C:/Users/chand/Downloads/app_dev/semperdic-readiness/docs/legal/PRIVACY_POLICY.md   # no Analytics / App
     Check in the processor row; no ''location'' / ''IP'' line'
   proposed_fix: Policy owner adds Firebase Analytics and App Check / Play Integrity to §1, adds IP addresses (request logs)
-    and IP-derived approximate location (Analytics, consent only) to §2, regenerates and deploys. Update TD-317's ':56' to
+    and IP-derived approximate location (Analytics, consent only) to §2, regenerates and deploys. Update TD-55's ':56' to
     ':63'.
   files_touched:
   - docs/legal/PRIVACY_POLICY.md
@@ -1165,13 +1165,13 @@
   - docs/ops/TECH_DEBT.md
   effort: S
   fix_risk: low — text only
-  external_action: Policy owner / counsel edits the text (TD-317); Admin deploys Hosting.
+  external_action: Policy owner / counsel edits the text (TD-55); Admin deploys Hosting.
   status: confirmed
   verdict: CONFIRMED
   verified_by_command: grep -n -i 'analytics\|app check\|play integrity\|location\|ip address' docs/legal/PRIVACY_POLICY.md;
     sed -n 19p ...; sed -n 529p docs/ops/TECH_DEBT.md  [Git Bash (POSIX syntax, no adaptation needed)]
   verified_observation: Analytics is named in the policy (§2.4 heading :63, table :146) but not in the :19 subprocessor row;
-    no App Check / Play Integrity, IP or location anywhere. Title overstates 'omits Firebase Analytics'. TD-317 row (:529)
+    no App Check / Play Integrity, IP or location anywhere. Title overstates 'omits Firebase Analytics'. TD-55 row (:529)
     cites §2.4 as ':56'; it is now :63 (drift confirmed).
   severity_final: P1
 - id: TE6-001
@@ -1184,8 +1184,8 @@
     a person (framework 7.2 Verify: ''SLO dashboard and burn-rate alerts'')'
   evidence:
   - docs/ops/DEPLOY_CHECKLIST_2026-10.md:135-146 (dry run only; "no notification channel in either project"; --apply unticked)
-  - docs/ops/TECH_DEBT.md:485 (TD-217, "Operator task")
-  - docs/ops/PRODUCTION_READINESS_GATE.md:531 (External register "Monitoring applied ... Not applied (TD-217)")
+  - docs/ops/TECH_DEBT.md:485 (TD-12, "Operator task")
+  - docs/ops/PRODUCTION_READINESS_GATE.md:531 (External register "Monitoring applied ... Not applied (TD-12)")
   - ops/monitoring/policies/*.json notificationChannels = ["__NOTIFICATION_CHANNEL__"]
   - docs/ops/INCIDENT_RESPONSE.md:123 (the outage runbook starts with "Uptime or burn-rate alert fires")
   reproduce: 'grep -n "no notification channel\|- \[ \] The same with .--apply" docs/ops/DEPLOY_CHECKLIST_2026-10.md
@@ -1195,8 +1195,8 @@
     '
   proposed_fix: Create an email (or PagerDuty) channel for the on-call address. Then run `scripts/apply-monitoring.sh --project
     indicvision-dic-app --notification-channel <id> --staging-service semper-api-staging --apply` and the run.invoker grant
-    it prints under 'By hand, once'. Send a test notification on the channel (TD-252 asks for 'Alert routing test'), record
-    it in the gate, and close TD-217.
+    it prints under 'By hand, once'. Send a test notification on the channel (TD-40 asks for 'Alert routing test'), record
+    it in the gate, and close TD-12.
   files_touched:
   - docs/ops/PRODUCTION_READINESS_GATE.md
   - docs/ops/DEPLOY_CHECKLIST_2026-10.md
@@ -1224,7 +1224,7 @@
   evidence:
   - docs/ops/PRODUCTION_READINESS_GATE.md:40-52 (18 FAIL, 0 UNKNOWN; FAIL 2.1 lien/tag/owners/groups, 2.4 unrestricted keys,
     3.7 Data Access logs, 2.7-delete-protection, 3.1 APP_CHECK_MODE=off, 3.5 no entitlement key; 3.4 check-revoked since flipped)
-  - docs/ops/TECH_DEBT.md:489-495 (TD-221 to TD-227)
+  - docs/ops/TECH_DEBT.md:489-495 (TD-16 to TD-22)
   - 'This session: the posture run was refused by the permission classifier; no result'
   reproduce: 'sed -n 36,52p docs/ops/PRODUCTION_READINESS_GATE.md
 
@@ -1233,7 +1233,7 @@
     browser, billing viewer, API keys viewer and Identity Toolkit read on both projects) and pastes the table into the gate
     in place of the 2026-10-22 run. Then fix the FAILs in risk order: Firestore delete protection (`gcloud firestore databases
     update --database=''(default)'' --delete-protection --project=indicvision-dic-app`), a lien and a second owner granted
-    through a group (2.1), API-key app/site restrictions (2.4), Data Access audit logs (3.7). Each is TD-221 to TD-225.'
+    through a group (2.1), API-key app/site restrictions (2.4), Data Access audit logs (3.7). Each is TD-16 to TD-20.'
   files_touched:
   - docs/ops/PRODUCTION_READINESS_GATE.md
   - docs/ops/TECH_DEBT.md
@@ -2089,7 +2089,7 @@
   - firebase-hosting/public/console/account/account.js
   - docs/legal/TERMS_OF_SERVICE.md
   effort: S
-  fix_risk: low — copy. The Terms change goes through docs/legal + render_legal_pages.py and counsel (TD-277).
+  fix_risk: low — copy. The Terms change goes through docs/legal + render_legal_pages.py and counsel (TD-51).
   external_action: Terms wording via counsel
   status: confirmed
   verdict: CONFIRMED
@@ -2458,7 +2458,7 @@
     is not set'
   type: gap
   severity: P2
-  criterion: TE5 check 3 ('AD_ID removed') and the Play Data safety advertising-ID answer (TD-232), for com.sempermechanics.materialtesting.
+  criterion: TE5 check 3 ('AD_ID removed') and the Play Data safety advertising-ID answer (TD-26), for com.sempermechanics.materialtesting.
   evidence:
   - 'M app/src/main/AndroidManifest.xml: no AD_ID / ACCESS_ADSERVICES_* tools:node="remove" and no google_analytics_adid_collection_enabled
     (S has them at :16-27, :53-57)'
@@ -2637,7 +2637,7 @@
     (data/account/LicenseEntitlements.kt:64,72-73,88-90) -> EntitlementStore.status (data/account/entitlement/EntitlementStore.kt:79)
     -> read() :95 (KeyStore load, HMAC, ES256 verify on first read) and save() every PERSIST_EVERY_MS=60 s :49,:104 -> prefs.commit()
     :226-229, on the main thread
-  - Latent until SEMPER_ENTITLEMENT_PUBKEYS is set (EntitlementStore.status returns NotUsed when pins are empty, :80; TD-215
+  - Latent until SEMPER_ENTITLEMENT_PUBKEYS is set (EntitlementStore.status returns NotUsed when pins are empty, :80; TD-10
     unset)
   - 'Pass: no runBlocking in app/src/main; other commit(true) calls (AccountDeletionMarker) run from suspend API paths; Home/Settings
     SessionStore.list run under Dispatchers.IO (HomeActivity.kt:246, SettingsAnalysesSection.kt:128); RoiDrawActivity reads
@@ -2758,7 +2758,7 @@
   - 'docs/engine/TESTING.md:26-31: tier 5 builds arm64 (no run); tier 3 runs EnginePipelineSmokeTest on the x86_64 emulator'
   - 'engine/.github/workflows/ci.yml:22,78,151,221: every engine job is ubuntu-latest x86_64; no arm/aarch64/qemu job (grep
     = 0)'
-  - 'On-device numbers at the current pin owed: TD-212 (docs/ops/TECH_DEBT.md:481); TD-65 4x bit-identical recipe was an emulator
+  - 'On-device numbers at the current pin owed: TD-8 (docs/ops/TECH_DEBT.md:481); TD-93 4x bit-identical recipe was an emulator
     AVD'
   reproduce: 'S=/c/Users/chand/Downloads/app_dev/semperdic-readiness
 
@@ -2774,7 +2774,7 @@
   - docs/ops/RELEASING.md
   effort: M
   fix_risk: low — CI only
-  external_action: 'Admin/device owner: run the arm64 smoke (TD-212/TD-219 device checks).'
+  external_action: 'Admin/device owner: run the arm64 smoke (TD-8/TD-14 device checks).'
   status: confirmed
   verdict: CONFIRMED
   verified_by_command: the record's grep | wc -l and sed; grep runs-on engine/.github/workflows/ci.yml
@@ -3216,7 +3216,7 @@
     mapped)'
   - 'app/src/test/java/com/sempermechanics/semper/ui/limit/UpdateRequiredActivityTest.kt:46-79 (the screen itself: mapped)'
   - 'backend/tests/test_release_gate_and_events.py:61-66 (old build still served: mapped)'
-  - 'docs/ops/TECH_DEBT.md:487 (TD-219: gate opened on emulators 2026-10-22, manual)'
+  - 'docs/ops/TECH_DEBT.md:487 (TD-14: gate opened on emulators 2026-10-22, manual)'
   reproduce: 'cd C:/Users/chand/Downloads/app_dev/semperdic-readiness/app/src
 
     grep -rn "openUpdateRequired\|openUpdateGateOnce\|update_recommended" test androidTest   # -> no output
@@ -3253,7 +3253,7 @@
     adid_collection_enabled=false)
   - 'scripts/check_release_apk.py:11-27 (checks: debuggable, debug-components, appcheck-debug, cleartext, min-sdk, r8-mapping,
     cert-pins; none for consent meta-data or AD_ID)'
-  - docs/ops/TECH_DEBT.md:499 TD-232 (AD_ID removal verified once, by reading the merger report by hand)
+  - docs/ops/TECH_DEBT.md:499 TD-26 (AD_ID removal verified once, by reading the merger report by hand)
   - No match for 'firebase_crashlytics_collection_enabled' or 'firebase_analytics_collection_enabled' under app/src/test,
     app/src/androidTest, scripts, backend/tests
   reproduce: cd C:/Users/chand/Downloads/app_dev/semperdic-readiness && grep -rln 'firebase_crashlytics_collection_enabled\|firebase_analytics_collection_enabled\|AD_ID'
@@ -3331,7 +3331,7 @@
     semper_auth_admin_rate_limited.yaml (each is referenced only by dashboards/*.json)
   - backend/app/config.py:250-266 (CHECK_REVOKED_ON_STEP_UP fails closed; a lost roles/firebaseauth.admin refuses every console
     step-up)
-  - docs/ops/TECH_DEBT.md:482 (TD-214, CHECK_REVOKED_ON_STEP_UP=true live in production since 2026-10-23)
+  - docs/ops/TECH_DEBT.md:482 (TD-9, CHECK_REVOKED_ON_STEP_UP=true live in production since 2026-10-23)
   - ops/monitoring/README.md:142-144 ("failures alone a lost roles/firebaseauth.admin": the diagnosis is written, but nothing
       alerts on it)
   reproduce: 'for m in semper_revocation_check_failed semper_app_check_failed semper_devlock_drop semper_checkout semper_auth_admin_rate_limited;
@@ -3414,7 +3414,7 @@
     only warns)
   - .github/workflows/deploy-backend.yml:474-475 (image pin is continue-on-error, so it never triggers failure())
   - .github/workflows/deploy-backend.yml:508-520 (rollback on failure() after promote, with nothing to detect a bad live revision)
-  - docs/ops/PRODUCTION_READINESS_GATE.md:644 (D5: revision rollback not drilled, TD-220)
+  - docs/ops/PRODUCTION_READINESS_GATE.md:644 (D5: revision rollback not drilled, TD-15)
   reproduce: 'sed -n 386,520p .github/workflows/deploy-backend.yml | grep -n "name:\|continue-on-error\|curl"
 
     # only one curl (the candidate /readyz); no step between promote and rollback calls the live service
@@ -3425,7 +3425,7 @@
     token, then the app rejects it, which proves the router and auth stack loaded. (b) Add a post-promote step that hits the
     service URL''s /readyz and the same /v1/config probe a few times. Its failure then drives the existing rollback step.
     (c) Drill the rollback on staging once: dispatch with a deliberately failing post-promote check and record the run in
-    RELEASING ''Rollback levers'' (closes the D5 revision-rollback part of TD-220).'
+    RELEASING ''Rollback levers'' (closes the D5 revision-rollback part of TD-15).'
   files_touched:
   - .github/workflows/deploy-backend.yml
   - docs/ops/RELEASING.md
@@ -3479,7 +3479,7 @@
   effort: S
   fix_risk: 'low: docs only'
   external_action: 'Admin: confirm which lever variables are environment-scoped in `production` (Settings > Environments),
-    and include a revision rollback plus an env change in the TD-220 staging drill'
+    and include a revision rollback plus an env change in the TD-15 staging drill'
   status: confirmed
   verdict: CONFIRMED
   verified_by_command: the record's grep and sed; plus sed -n 136,150p docs/ops/RELEASING.md
@@ -3686,7 +3686,7 @@
     -> PASS 12, PARTIAL 41, GAP 9, EXTERNAL 12, N-A 2
   - docs/ops/PRODUCTION_READINESS_GATE.md:574 (row 1.3 now PASS; it changed GAP -> PASS in merge 90d48b93 =
   - ? docs/ops/PRODUCTION_READINESS_GATE.md:606 (6.1 "the recommended nudge not yet") vs docs/ops/RELEASING.md:169-175 and
-      TECH_DEBT.md:488 (TD-220
+      TECH_DEBT.md:488 (TD-15
     : RECOMMENDED_VERSION_CODE drilled 2026-10-22, run 39762144670)
   - docs/ops/PRODUCTION_READINESS_GATE.md:520-529 (register: 2.1/2.5/2.6/3.7 "Not read", 3.4 "Not granted as of 2026-10-18")
       vs :40-52 (all read 2026-10-22; 2.5, 2.6 and 3.4-iam PASS) and :578 (row 2.1 "not run")
@@ -3729,7 +3729,7 @@
   evidence:
   - docs/ops/TECH_DEBT.md:468 (register columns ID | Category | Item | I | R | E | P | Status: no owner column; 'Operator
       task' appears only in free text)
-  - docs/ops/DEPLOY_CHECKLIST_2026-10.md:231-236 ('Still external' names TD-277, TD-229-232, TD-226, TD-221-225, TD-240 only)
+  - docs/ops/DEPLOY_CHECKLIST_2026-10.md:231-236 ('Still external' names TD-51, TD-23-232, TD-21, TD-16-225, TD-32 only)
   - docs/ops/PRODUCTION_READINESS_GATE.md:512-531 (a second, partly stale, register; see TE6-012)
   - CONTEXT.md 'Checklist still open' / 'Release blockers' / 'Owed' (a third copy)
   reproduce: 'sed -n 468p docs/ops/TECH_DEBT.md
@@ -3744,31 +3744,31 @@
     path, done-when) to DEPLOY_CHECKLIST_2026-10.md, and link it from the gate and CONTEXT instead of repeating it. Consolidated
     from this review:
 
-    (1) notification channel + apply-monitoring --apply + run.invoker grant (TD-217, TE6-001)
+    (1) notification channel + apply-monitoring --apply + run.invoker grant (TD-12, TE6-001)
 
     (2) posture re-run, then delete protection, lien/owners via group, API-key restrictions, Data Access logs, Firestore location
-    (TD-221..225, TD-227, TE6-011)
+    (TD-16–TD-20, TD-22, TE6-011)
 
-    (3) TD-214 acceptance: disable a test user, step-up within the hour -> 401 invalid_token, AUTH_DENIED stage revoked
+    (3) TD-9 acceptance: disable a test user, step-up within the hour -> 401 invalid_token, AUTH_DENIED stage revoked
 
-    (4) entitlement signing key per BACKEND_SETUP A8 (TD-215)
+    (4) entitlement signing key per BACKEND_SETUP A8 (TD-10)
 
-    (5) TD-220 remaining drills: _MATERIAL_TESTING pair, ENTITLEMENT_OFFLINE_GRACE_DAYS, revision rollback (TE6-004/005)
+    (5) TD-15 remaining drills: _MATERIAL_TESTING pair, ENTITLEMENT_OFFLINE_GRACE_DAYS, revision rollback (TE6-004/005)
 
     (6) staff/IT phones re-register with TOTP; 24 h log watch; erasure check; end the staging QC account (checklist §6)
 
-    (7) Crashlytics velocity alerts + routing test (TD-252)
+    (7) Crashlytics velocity alerts + routing test (TD-40)
 
-    (8) Play account, signing SHA, Data safety, pre-launch, closed-track rollout rehearsal (TD-229..232, TD-231), then App
-    Check monitor->enforce (TD-226)
+    (8) Play account, signing SHA, Data safety, pre-launch, closed-track rollout rehearsal (TD-23–TD-26, TD-25), then App
+    Check monitor->enforce (TD-21)
 
-    (9) counsel: Terms (TD-277), breach playbook + tabletop (TD-241), operator legal fields (TD-36)
+    (9) counsel: Terms (TD-51), breach playbook + tabletop (TD-33), operator legal fields (TD-3)
 
-    (10) support response targets (TD-258)
+    (10) support response targets (TD-45)
 
-    (11) pentest (TD-240)
+    (11) pentest (TD-32)
 
-    (12) device smoke of the next release (TD-219; RELEASING step 5)
+    (12) device smoke of the next release (TD-14; RELEASING step 5)
 
     '
   files_touched:
@@ -3781,8 +3781,8 @@
   status: confirmed
   verdict: CONFIRMED
   verified_by_command: the record's sed, sed and for-loop
-  verified_observation: TECH_DEBT:468 header has no owner column; 'Still external' names TD-277, 229-232, 226, 221-225, 240
-    only; TD-252, 241, 258, 36, 227 appear 0 times in the checklist.
+  verified_observation: TECH_DEBT:468 header has no owner column; 'Still external' names TD-51, 229-232, 226, 221-225, 240
+    only; TD-40, TD-33, TD-45, TD-3, TD-22 appear 0 times in the checklist.
   severity_final: P2
 - id: AE1-007
   axis: aesthetic
@@ -4212,14 +4212,14 @@
   - The app's own access line logs scope['path'] only, no query string, through _ALLOWED (backend/app/main.py:219-239; observability.py:23-32,
     :286). uvicorn's line is '<client_addr> - "GET /path?query HTTP/1.1" status' and is not filtered
   - 'The one query that carries an address is the deprecated GET /v1/admin/licenses?q= (backend/app/routers/admin.py:149-174).
-    That is open TD-273 (docs/ops/TECH_DEBT.md:520), which this widens: the address reaches the app''s stdout, not only the
+    That is open TD-48 (docs/ops/TECH_DEBT.md:520), which this widens: the address reaches the app''s stdout, not only the
     platform request log'
   - _ALLOWED holds no email, name or address field. An AST scan of every log/log_event and audit.record call in backend/app
     found no email or name value. Audit rows hash addresses (audit.py:27-40, services/licenses.py:10-14; test_audit_addresses.py)
   reproduce: 'cd S/backend && grep -n ''CMD'' Dockerfile && grep -n ''uvicorn.access'' app/observability.py   # CMD has no
     --no-access-log; the formatter is applied, the logger is not disabled'
   proposed_fix: Add --no-access-log to the Dockerfile CMD; semper.access already writes one sanitised line per request. Close
-    TD-273 on its schedule.
+    TD-48 on its schedule.
   files_touched:
   - backend/Dockerfile
   effort: S
@@ -4264,7 +4264,7 @@
 
     '
   proposed_fix: 'Reword ADR-023''s note, ADR-024 decision 5, the CONTEXT trap and the entitlement_token docstring: the token
-    only narrows the cached /v1/config (ADR-023 decision 7); with no token (today, TD-215) share and offline licence rest
+    only narrows the cached /v1/config (ADR-023 decision 7); with no token (today, TD-10) share and offline licence rest
     on the TLS-delivered cache alone. Refresh the ADR-023 config.py cites.'
   files_touched:
   - docs/adr/ADR-023-signed-offline-entitlement.md
@@ -4386,7 +4386,7 @@
     true\|appcheck' app/build.gradle.kts ; grep -n '@router.get("/v1/me/export\|@router.delete("/v1/me"' backend/app/routers/account.py
     ; grep -n 'ec.ECDSA\|async def verified_device' backend/app/deps.py ; grep -n 'Strict-Transport' backend/app/main.py
   proposed_fix: Re-cite each row at the current main sha (and say so in the header), cite symbols beside line numbers, and
-    correct the CODE-3 and PLATFORM-1 sentences. Before the pentest hand-off (TD-240).
+    correct the CODE-3 and PLATFORM-1 sentences. Before the pentest hand-off (TD-32).
   files_touched:
   - docs/ops/MASVS_ASSESSMENT.md
   effort: S
@@ -4445,7 +4445,7 @@
   - 'STALE: CONTEXT.md ''material_testing merges this main (last 9d116f2, material_testing#142, 2026-10-22)'' vs M: git log
     -1 = 839d4285 #144 sync/semperdic-968637c'
   - CONTEXT.md 'The posture check's 18 FAILs' vs PRODUCTION_READINESS_GATE.md:49-50 (3.4 check-revoked true since 2026-10-23)
-  - docs/ops/DEPLOY_CHECKLIST_2026-10.md:16-21 (TD-214 box unticked though grant and variable are live, TECH_DEBT.md:482)
+  - docs/ops/DEPLOY_CHECKLIST_2026-10.md:16-21 (TD-9 box unticked though grant and variable are live, TECH_DEBT.md:482)
   - docs/ops/DEPLOY_CHECKLIST_2026-10.md:196 vs :212 (step 3 'Done 2026-10-23', then 'Step 3 is still open')
   reproduce: 'grep -n "material_testing\*\* merges\|18 FAILs" CONTEXT.md
 
@@ -4455,7 +4455,7 @@
 
     '
   proposed_fix: 'CONTEXT: ''last 968637cb, material_testing#144, 2026-10-22'' (re-check fork main first) and ''posture: 17
-    FAIL after the 2026-10-23 deploy''. Checklist: tick §0 TD-214 with ''(acceptance owed)'', delete ''Step 3 is still open''.'
+    FAIL after the 2026-10-23 deploy''. Checklist: tick §0 TD-9 with ''(acceptance owed)'', delete ''Step 3 is still open''.'
   files_touched:
   - CONTEXT.md
   - docs/ops/DEPLOY_CHECKLIST_2026-10.md
@@ -4467,7 +4467,7 @@
   verified_by_command: the record's three commands (git -C ../material_testing-readiness ...); sed -n 16,21p and 180,216p
     docs/ops/DEPLOY_CHECKLIST_2026-10.md
   verified_observation: CONTEXT:151 'last 9d116f2, material_testing#142' vs M HEAD 839d4285 (#144); CONTEXT:137 '18 FAILs'.
-    Checklist :16 TD-214 box unticked though :20-21 say grant and variable are set; :196 step 3 'Done 2026-10-23' vs :214
+    Checklist :16 TD-9 box unticked though :20-21 say grant and variable are set; :196 step 3 'Done 2026-10-23' vs :214
     'Step 3 is still open'.
   severity_final: P3
 - id: TE6-014
@@ -4483,11 +4483,11 @@
   - 'RELEASING.md:140, BACKEND_SETUP_GCP.md:457 (and M: RELEASING.md:148): config.py:293-300 -> release_gate is backend/app/config.py:314-321'
   - 'BACKEND_SETUP_GCP.md:458, PRODUCTION_READINESS_GATE.md:609: config.py:305-317 -> KILL_SWITCHES is config.py:322-335;
     gate 6.4 '':275'' grace -> config.py:296'
-  - 'INCIDENT_RESPONSE.md:159, TECH_DEBT.md:494 (TD-226): deploy-backend.yml:324 -> APP_CHECK_MODE is .github/workflows/deploy-backend.yml:340;
-    TD-226 config.py:230 -> config.py:248'
-  - 'TECH_DEBT.md:488 (TD-220): deploy-backend.yml:327-334 -> :345-350; config.py:278-317 -> :296-335. BACKEND_SETUP_GCP.md:475:
+  - 'INCIDENT_RESPONSE.md:159, TECH_DEBT.md:494 (TD-21): deploy-backend.yml:324 -> APP_CHECK_MODE is .github/workflows/deploy-backend.yml:340;
+    TD-21 config.py:230 -> config.py:248'
+  - 'TECH_DEBT.md:488 (TD-15): deploy-backend.yml:327-334 -> :345-350; config.py:278-317 -> :296-335. BACKEND_SETUP_GCP.md:475:
     deploy-backend.yml:308-334 -> :323-351'
-  - 'TECH_DEBT.md:512 (TD-252): ops/monitoring/README.md:104-108 -> :158-162; ops/monitoring/README.md:66 audit.py:64-69 ->
+  - 'TECH_DEBT.md:512 (TD-40): ops/monitoring/README.md:104-108 -> :158-162; ops/monitoring/README.md:66 audit.py:64-69 ->
     audit_denied is backend/app/audit.py:85-89'
   reproduce: 'grep -n "def unless_paused\|def release_gate\|KILL_SWITCHES = " backend/app/deps.py backend/app/config.py
 
@@ -4558,14 +4558,14 @@
   - 'positives: FAQ redirects on failures (FaqRedirect), Undo on queued deletes (DeleteFeedback.kt:37-45), confirmation on
     every destructive action'
   reproduce: sed -n '115p;314p;469p;556p;588p;976p;1074p;1076p;1082p;1083p' C:/Users/chand/Downloads/app_dev/semperdic-readiness/app/src/main/res/values/strings.xml
-  proposed_fix: Rewrite the beta notice to match the consent model (counsel, with TD-277) - treat it as privacy copy. Plain,
+  proposed_fix: Rewrite the beta notice to match the consent model (counsel, with TD-51) - treat it as privacy copy. Plain,
     calm system errors with a next step ('Couldn't check your account. Try again.'). Sentence-case 'Check status'. Title the
     auth screen 'Sign in'. Engine-code failures point to the FAQ.
   files_touched:
   - app/src/main/res/values/strings.xml
   effort: S
   fix_risk: low — copy only; beta notice wording needs counsel
-  external_action: 'Counsel: beta-notice wording versus Privacy Policy opt-in (with TD-277)'
+  external_action: 'Counsel: beta-notice wording versus Privacy Policy opt-in (with TD-51)'
   status: confirmed
   verdict: CONFIRMED
   verified_by_command: Git Bash; <SP> replaced by the scratchpad readiness path; sed -n '115p;314p;469p;556p;588p;976p;1074p;1076p;1082p;1083p'
@@ -4701,13 +4701,13 @@
   status: confirmed
   verdict: CONFIRMED
   verified_by_command: Phase 5 second re-verify at 6324ea7f, Read after/sheet_settingsused_360_light_fs1.png
-  verified_observation: Found during the second re-verify; the stats' 5 decimals are TD-342 (owner decision), not this finding.
+  verified_observation: Found during the second re-verify; the stats' 5 decimals are TD-268 (owner decision), not this finding.
   severity_final: P3
   admin_decision: '"Fix in the same batch (Recommended)" (Checkpoint 2, 2026-10-26)'
 - id: MT-TE3-001
   axis: technical
   gate: G3
-  title: 'Fork backend has no fork-only code; it differs from S only by S''s newer #482 (device_released) and the TD-316 test,
+  title: 'Fork backend has no fork-only code; it differs from S only by S''s newer #482 (device_released) and the TD-250 test,
     and its deploy job is guarded'
   type: observation
   severity: observation
@@ -4715,7 +4715,7 @@
   evidence:
   - 'diff -rq S/backend/app M/backend/app: errors.py, repo/devices.py, routers/devices.py differ. In each case S has #482''s
     DEVICE_RELEASED (S errors.py:33-36, :286, :357; repo/devices.py:212) and M has the older device_conflict'
-  - 'Test diffs: test_security_controls.py (S''s TD-316 firebase-tools pin test, missing in M), test_test_accounts.py:525
+  - 'Test diffs: test_security_controls.py (S''s TD-250 firebase-tools pin test, missing in M), test_test_accounts.py:525
     (device_released vs device_conflict), test_script_micro_ab.py:73 / test_script_startup_ab.py:75 (M accepts the materialtesting
     app id: fork-only, test-side, correct), test_audit_append_only.py (known Windows-only failure in M, Phase 0)'
   - 'M/.github/workflows/deploy-backend.yml:70-73 runs only if github.repository == ''sempermechanics/semperdic-app'', so
@@ -4785,7 +4785,7 @@
   evidence:
   - engine/CMakeLists.txt:66,122; engine/adapters/android/CMakeLists.txt:25 (-O3 -flto -ffast-math -fopenmp); engine/tests/CMakeLists.txt:25
   - 'Deliberate: CONTEXT.md ''Quality gates'' (''Keep -O3 -ffast-math / OpenMP / LTO on release''); app/build.gradle.kts:144-147
-    NDK pinned for it (TD-37)'
+    NDK pinned for it (TD-73)'
   - '-ffp-contract set nowhere; FMA contraction and cross-build drift ARE documented: engine/docs/TESTING.md:240-258 (FMA-based
     SIMD, expected drift table) and :568-580 (''There is no exact cross-ABI gate''); no doc or test claims arm64/x86_64 bit-equality
     (the .dat/GIF oracles are engine-independent)'
@@ -4796,7 +4796,7 @@
     sed -n 240,244p $S/engine/docs/TESTING.md
 
     '
-  proposed_fix: None in code. Admin records the decision against the criterion (cite TD-37 and engine/docs/TESTING.md 'Numerical
+  proposed_fix: None in code. Admin records the decision against the criterion (cite TD-73 and engine/docs/TESTING.md 'Numerical
     reproducibility contract').
   files_touched: []
   effort: S
@@ -4890,7 +4890,7 @@
     must all be this install''s`, `the same token on another device is refused`'
   - A WRONG_DEVICE_KEY / WRONG_DEVICE token -> NotUsed -> UNBOUNDED (EntitlementPolicy.kt:184, :92; EntitlementPolicyTest
     `a token that does not verify here is no token, never demo`)
-  - 'Accepted residuals: TD-261 (deleting the HMAC key = no token), TD-274 (share on a patched APK); server routes re-resolve
+  - 'Accepted residuals: TD-46 (deleting the HMAC key = no token), TD-49 (share on a patched APK); server routes re-resolve
     the account per request (backend/app/deps.py:175-188)'
   reproduce: 'cd C:/Users/chand/Downloads/app_dev/semperdic-readiness/backend
 
@@ -4899,7 +4899,7 @@
     grep -n "is Verification.Rejected, null -> TokenStatus.NotUsed" ../app/src/main/java/com/sempermechanics/semper/data/account/entitlement/EntitlementPolicy.kt
 
     '
-  proposed_fix: 'None required for dkt on the backend. Owner decision for after TD-215: once a build pins keys and has stored
+  proposed_fix: 'None required for dkt on the backend. Owner decision for after TD-10: once a build pins keys and has stored
     a Valid token, consider treating an authoritative licensed /v1/config that arrives without a verifiable token as demo
     for share only (the one feature with no server route), keeping ADR-023''s ''never demote on a pin mismatch'' for everything
     else.'
@@ -4912,7 +4912,7 @@
   verified_by_command: cd S/backend; grep -rn 'entitlement_token.verify\|ent\.verify(' app; grep -n 'is Verification.Rejected,
     null -> TokenStatus.NotUsed' ../app/.../EntitlementPolicy.kt  [Git Bash (POSIX syntax, no adaptation needed)]
   verified_observation: No server-side verify call (exit 1); EntitlementPolicy.kt:184 Rejected/null -> NotUsed. Observation
-    stands; settling the share-only demotion is an owner decision after TD-215.
+    stands; settling the share-only demotion is an owner decision after TD-10.
   severity_final: observation
 - id: TE5-011
   axis: technical
@@ -4948,7 +4948,7 @@
 - id: TE5-012
   axis: technical
   gate: G2
-  title: Release builds ship no certificate pin; check_release_apk.py only warns (TD-218, decision open)
+  title: Release builds ship no certificate pin; check_release_apk.py only warns (TD-13, decision open)
   type: observation
   severity: observation
   criterion: 'TE5 check 2: ''SEMPER_API_CERT_PINS empty in release? check_release_apk.py treats missing pins as warning only''.'
@@ -4957,19 +4957,19 @@
     only when pins set)
   - .github/workflows/release.yml:135-137 (from secrets.SEMPER_API_CERT_PINS)
   - scripts/check_release_apk.py:26-27,375-376 (WARN, not FAIL)
-  - app/src/main/res/xml/network_security_config.xml:4 (cleartext off; no pin-set); docs/ops/TECH_DEBT.md:486 TD-218
+  - app/src/main/res/xml/network_security_config.xml:4 (cleartext off; no pin-set); docs/ops/TECH_DEBT.md:486 TD-13
   reproduce: grep -n 'cert-pins' C:/Users/chand/Downloads/app_dev/semperdic-readiness/scripts/check_release_apk.py
-  proposed_fix: Owner decision under TD-218 (pins need a backup pin and must follow the gateway's chain). MASVS L1 does not
+  proposed_fix: Owner decision under TD-13 (pins need a backup pin and must follow the gateway's chain). MASVS L1 does not
     require pinning; no change proposed.
   files_touched: []
   effort: S
   fix_risk: n/a
-  external_action: Admin decides on pins (TD-218).
+  external_action: Admin decides on pins (TD-13).
   status: confirmed
   verdict: CONFIRMED
   verified_by_command: grep -n cert-pins scripts/check_release_apk.py  [Git Bash (POSIX syntax, no adaptation needed)]
   verified_observation: Doc line :26 'cert-pins WARN when no sha256/ pin'; :373 PASS, :375 WARN result. No FAIL path. Pinning
-    itself is the open TD-218 owner decision.
+    itself is the open TD-13 owner decision.
   severity_final: observation
 - id: TE6-016
   axis: technical

@@ -212,7 +212,7 @@ def _touch_existing(cur: dict, claims: dict, device_id: str | None) -> dict:
 
 def _refresh_seat_address(user: dict, email: str) -> None:
     """Give the seat `user` holds on their institution licence their new
-    verified address (TD-297).
+    verified address (TD-234).
 
     The seat keeps a copy of the address it was claimed with, and the roster
     and reconcile show that copy. An unverified address is not copied: it is
@@ -322,7 +322,7 @@ def release_account_device(uid: str) -> dict[str, str]:
     """Free the account's registered phones so a new one can register.
     `{app: released id}`, naming only the apps that had one; raises `Refusal`.
 
-    Staff only, on the holder's request (decided 2026-09-26, TD-126). A Demo
+    Staff only, on the holder's request (decided 2026-09-26, TD-131). A Demo
     account has no licence lock to clear, so before this its first phone was its
     only phone: registration refuses any device but `activeDeviceId`
     (`device_conflict`), and only suspending the account emptied it. The release

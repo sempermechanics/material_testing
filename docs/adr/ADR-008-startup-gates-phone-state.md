@@ -1,7 +1,7 @@
 # ADR-008: Real-device startup gates check the phone's state, and a trip is settled A/B
 
 **Status:** Accepted, built (references not yet re-taken here). In semperdic-app: ported 2026-10-01;
-its Pixel 6 references taken 2026-10-05 for the tests that stayed at status 0; the rest are owed (its TD-155).
+its Pixel 6 references taken 2026-10-05 for the tests that stayed at status 0; the rest are owed (its TD-154).
 **Date:** 2026-09-26
 **Deciders:** app owner
 
@@ -10,7 +10,7 @@ its Pixel 6 references taken 2026-10-05 for the tests that stayed at status 0; t
 `benchmark/gates.json` gates a Pixel 6 run at 30 % over single reference
 medians, taken on 2026-09-25 in a state nobody recorded. On 2026-09-25/26 the
 wizard cold start read +23 % at `1b4253db`, on battery and at full charge. The
-investigation (TD-135) found no code cause:
+investigation (TD-6) found no code cause:
 
 - The reference build (`05aac72`), run interleaved with `1b4253db` on the same
   phone, read 439–623 ms and failed its own gate in 2 of 4 rounds.
@@ -76,12 +76,12 @@ signed with the same debug key, and it restores the installed APK at the end.
 - `gates.json` carries `state` and `abMargin`. Adding a phone means taking its
   references under the same state rules.
 - A test with no reference in `gates.json` is not gated. On Semper's Pixel 6 that is
-  the startup cold and warm start and the wizard cold start (TD-155).
-- Lowering `COLD_START_ITERATIONS` back to 5 reopens TD-135.
+  the startup cold and warm start and the wizard cold start (TD-154).
+- Lowering `COLD_START_ITERATIONS` back to 5 reopens TD-6.
 
 ## Action items
 
 - [x] `DeviceStateRule`, the state check in `ci_test_report.py`, `startup_ab.py`,
       15 cold-start iterations.
 - [ ] Re-take the Pixel 6 references under the protocol and label their state
-      (TD-135 item 4).
+      (TD-6 item 4).

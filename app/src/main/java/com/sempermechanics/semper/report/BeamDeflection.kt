@@ -317,7 +317,7 @@ object BeamDeflection {
          * The [slope] line's two ends as (δ mm, W N), across the load steps it
          * was fitted to: first measured δ to last. Drawn from δ = 0 instead, a
          * free intercept below zero pulled the graph's load axis negative
-         * (TD-94). Null without a slope.
+         * (TD-113). Null without a slope.
          */
         fun slopeLine(): List<Pair<Float, Float>>? = slope?.takeIf { loadSteps.isNotEmpty() }?.let { line ->
             listOf(loadSteps.minOf { it.deflectionMm }, loadSteps.maxOf { it.deflectionMm })

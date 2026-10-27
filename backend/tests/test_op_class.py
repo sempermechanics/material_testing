@@ -65,7 +65,7 @@ def _declared_routes():
 
 
 def test_static_segments_are_not_ids():
-    """TD-44: `activate` is eight characters; it used to log as `{id}`."""
+    """TD-79: `activate` is eight characters; it used to log as `{id}`."""
     list(_declared_routes())
     assert obs.classify_route("POST", "/v1/licenses/activate") == (
         "license",

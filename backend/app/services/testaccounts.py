@@ -147,7 +147,7 @@ def reset_password(uid: str, admin_uid: str) -> dict:
 
 
 def release_device(actor_uid: str, uid: str, device_id: str) -> dict:
-    """Release one ACTIVE phone of the test account (TD-314), so another can
+    """Release one ACTIVE phone of the test account (TD-249), so another can
     take its place without ending the account. The released phone may not
     register for this account again (`repo.staff_released_from`); its
     sessions stay. 404 `user_not_found` for a uid that is not a test account,

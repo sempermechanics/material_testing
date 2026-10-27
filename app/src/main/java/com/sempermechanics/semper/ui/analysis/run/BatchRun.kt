@@ -26,7 +26,7 @@ internal class BatchRun(
 /**
  * The images a run solves, frozen on the main thread when it is launched
  * ([snapshotRunInputs]), so the run on the native thread reads nothing the
- * wizard may write meanwhile (TD-173). The rest of what it solves is its
+ * wizard may write meanwhile (TD-171). The rest of what it solves is its
  * [RunSpec] (ADR-004); the session it writes is resolved inside the run,
  * after the quota check, from the wizard's [working] session as it stood at
  * launch (`openRunSession`).

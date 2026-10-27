@@ -13,7 +13,7 @@ is checked against the routers by `tests/test_gateway_parity.py`, but moving
 the *live* gateway to a new config is a manual runbook
 (`docs/backend/BACKEND_SETUP_GCP.md`, "Redeploying the gateway"). A route can be
 merged, tested and deployed to Cloud Run while the gateway still 404s it
-(TD-27) — which has bitten twice.
+(TD-68) — which has bitten twice.
 
 The runbook itself has three faults found in the 2026-09-23 audit:
 
@@ -69,11 +69,11 @@ unchanged; rollback built in. **Cons:** the deploy SA gains gateway admin.
 
 ### B: Separate dispatch workflow
 
-**Cons:** keeps the human ordering step that TD-27 exists to remove.
+**Cons:** keeps the human ordering step that TD-68 exists to remove.
 
 ### C: Replace API Gateway with a regional HTTPS load balancer + serverless NEG
 
-**Pros:** also removes the Tokyo→Mumbai hop (TD-30). **Cons:** moves JWT
+**Pros:** also removes the Tokyo→Mumbai hop (TD-2). **Cons:** moves JWT
 validation into Cloud Run or IAP; a migration, not a fix. Stays deferred.
 
 ## Trade-off analysis
@@ -87,7 +87,7 @@ the first run observational.
 - Easier: a route that passes the parity test is reachable after the deploy.
 - Harder: gateway permissions live on the deploy SA; review its bindings.
 - Revisit: when staging gets a gateway, drop the production-only guard (done
-  2026-09-26, below); if TD-30 is taken on, this job is replaced.
+  2026-09-26, below); if TD-2 is taken on, this job is replaced.
 
 ## Action items
 
@@ -102,7 +102,7 @@ the first run observational.
    with or without padding (#183). The third `dry-run` (run 35991624707) diffed
    cleanly, and `apply` (run 35992296245) created `v202609241122-44`, switched
    `semper-gw` and passed both checks.
-4. [x] Close TD-27 after the first successful `apply` (2026-09-24).
+4. [x] Close TD-68 after the first successful `apply` (2026-09-24).
 
 ## As built (2026-09-24)
 
@@ -126,7 +126,7 @@ the first run observational.
   `v202609241122-44`; `GET /v1/config` → 401, preflight → 200 with the
   console origin. The stored document of the old config (`gw-prod-semper.yaml`)
   matched a fresh render byte for byte apart from real changes (a comment and
-  the removed `/v1/campus` invite-revoke alias, TD-45), so an unchanged spec
+  the removed `/v1/campus` invite-revoke alias, TD-4), so an unchanged spec
   does hit the skip.
 - The stored document comes back as base64 that GNU `base64 -d` rejects; the
   diff step decodes it in Python (#183).

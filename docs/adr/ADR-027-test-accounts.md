@@ -4,12 +4,12 @@
 app merged in #460 (2026-10-20) and deployed 2026-10-22 from `b940cc29`, on for
 `TEST_ACCOUNT_DOMAINS=qa.sempermechanics.com`
 ([CHANGELOG](../ops/CHANGELOG.md)). Amended 2026-10-22 (product owner): a full
-CI account gives up its oldest phone instead of refusing a new one (TD-313);
+CI account gives up its oldest phone instead of refusing a new one (TD-248);
 staff may release one phone of a test account, and the released phone may not
-take its place back (TD-314).
+take its place back (TD-249).
 **Date:** 2026-10-19
 **Deciders:** product owner, backend owner
-**Register:** none open (TD-314, a test account's phone released on its own, closed by the per-phone release)
+**Register:** none open (TD-249, a test account's phone released on its own, closed by the per-phone release)
 
 Paths are from `backend/app/` unless they start at the repository root.
 
@@ -101,7 +101,7 @@ How the backend carries them out:
   the router audits each as `DEVICE_ROTATED` with `{app, by, testAccount}`. A
   `qc` account is still refused `device_conflict`, and no other account or app
   is touched.
-- **One phone released** (amendment, 2026-10-22, product owner; TD-314).
+- **One phone released** (amendment, 2026-10-22, product owner; TD-249).
   `POST /v1/admin/test-accounts/{uid}/devices/{device_id}/release` (fresh
   step-up) frees one ACTIVE phone without ending the account: in one
   transaction (`repo/testaccounts.py`, `release_test_device`) the device is
@@ -171,10 +171,10 @@ How the backend carries them out:
 - **A phone not yet registered is licensed while there is room.** For a config
   call only, as an unbound licence already is for a real account's first phone;
   every signed route still needs a registered device. A phone staff released
-  from the account is not such a phone: it is Demo (TD-314).
+  from the account is not such a phone: it is Demo (TD-249).
 - **A released phone is gone for good from that login.** A QC phone beyond
   `maxDevices` is refused at registration; staff free a place by releasing one
-  phone (TD-314). The phone released cannot register for the same account
+  phone (TD-249). The phone released cannot register for the same account
   again, by the product owner's decision, so a phone handed back to the bench
   needs a new account (End and create) to rejoin that login. The stamp lives on
   the device record, so the phone registering for another account in between
@@ -194,7 +194,7 @@ How the backend carries them out:
 ## Consequences
 
 - Deploy: `TEST_ACCOUNT_DOMAINS` (repo variable, passed by `deploy-backend.yml`),
-  `roles/firebaseauth.admin` for the runtime SA on the Auth project (as TD-214),
+  `roles/firebaseauth.admin` for the runtime SA on the Auth project (as TD-9),
   and the Cloud Scheduler job
   ([DEPLOY_CHECKLIST_2026-10.md](../ops/DEPLOY_CHECKLIST_2026-10.md)). Without the
   job nothing is erased at the end, but the licence has lapsed and the staff
@@ -207,7 +207,7 @@ How the backend carries them out:
   `STAGING_TEST_EMAIL` / `STAGING_TEST_PASSWORD` secrets, and skips otherwise.
 - `contracts/config_response.json` carries `testAccount`; the app's DTO reads it.
 - Routes: [ADMIN_API.md](../backend/ADMIN_API.md); the gateway declares the six
-  admin routes (the phone release since TD-314) and not the task.
+  admin routes (the phone release since TD-249) and not the task.
 
 ## Action items
 
@@ -221,10 +221,10 @@ How the backend carries them out:
       `Research Storage/_test/{uid}`, then End
       ([checklist](../ops/DEPLOY_CHECKLIST_2026-10.md) §6). Done 2026-10-22 but
       the End (a 7-day account on two emulators, one backup).
-- [x] TD-313: Tier 3 against staging with the CI test account, and CI rotation
+- [x] TD-248: Tier 3 against staging with the CI test account, and CI rotation
       (`StagingRoundTripDeviceTest` passed on an emulator against staging,
       2026-10-22; the rotation needs the backend deployed before CI runs it often).
-- [x] TD-314: release one phone (route, registration refusal, console **Release**);
+- [x] TD-249: release one phone (route, registration refusal, console **Release**);
       #468, deployed 2026-10-23 (backend and Hosting). Checked on staging the same
       day: the released phone fell back to Demo, its re-registration answered 409
       `device_conflict` (audit DENIED `staff_released`), and a third phone

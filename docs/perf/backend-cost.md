@@ -86,7 +86,7 @@ both services still cold-start.
 ## Deferred: latency
 
 API Gateway costs nothing at this volume. Its hop to Tokyo (asia-northeast1) and back
-to Mumbai stays accepted as TD-30 ([TECH_DEBT.md](../ops/TECH_DEBT.md)). Two options
+to Mumbai stays accepted as TD-2 ([TECH_DEBT.md](../ops/TECH_DEBT.md)). Two options
 remain for the day latency is worth money. The trigger is a latency complaint or a
 public launch.
 

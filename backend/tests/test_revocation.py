@@ -269,7 +269,7 @@ async def test_a_failed_auth_delete_still_erases_and_says_so(erasable, audited, 
         "authUserDeleted"] is False
 
 
-# ---------------- the Auth Admin budget (TD-239) ----------------
+# ---------------- the Auth Admin budget (TD-200) ----------------
 @pytest.fixture
 def spent(monkeypatch):
     """This instance's Firebase Auth Admin budget, already spent."""
@@ -368,7 +368,7 @@ async def test_a_quota_error_from_the_check_is_still_a_failed_check(
 ):
     """Under budget here, but the Auth project's own quota refuses: the
     fail-closed rule of `_require_not_revoked` applies, 401, logged as the
-    check failing (TD-239's acceptance)."""
+    check failing (TD-200's acceptance)."""
     from google.api_core import exceptions as google_exceptions
 
     monkeypatch.setattr(settings, "CHECK_REVOKED_ON_STEP_UP", True)

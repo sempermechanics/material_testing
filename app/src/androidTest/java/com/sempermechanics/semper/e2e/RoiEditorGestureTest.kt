@@ -108,7 +108,7 @@ class RoiEditorGestureTest {
             // the pinch's zoom, and so the distance, depends on the screen.
             val sweeps = ((canvas.left - photoOnScreen(scenario).left) / (to - from)).toInt() + EXTRA_SWEEPS
             // Where the canvas, photo and zoom were after each sweep: printed if the photo
-            // does not end on the edge (TD-146).
+            // does not end on the edge (TD-147).
             val trace = mutableListOf("start: ${state(scenario)}")
             repeat(sweeps) { i ->
                 twoFingers(

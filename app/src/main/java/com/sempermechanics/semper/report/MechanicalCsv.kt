@@ -61,7 +61,7 @@ internal object MechanicalCsv {
      * [TensileResults]: Young's modulus, its frames and R² (an empty value
      * means no straight run was found), `# yield_rp02_mpa` (empty when there is
      * none) and `# peak_stress_mpa,<MPa>,<frame>,<on_curve>`, where on_curve is
-     * false for a frame with a load but no strain (TD-147). Bending with a load
+     * false for a frame with a load but no strain (TD-148). Bending with a load
      * point gets the lab's observation table and both of its E values
      * ([BeamDeflection]). 1-based frame numbers, like the viewer and the report.
      */

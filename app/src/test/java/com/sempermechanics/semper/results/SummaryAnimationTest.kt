@@ -259,7 +259,7 @@ class SummaryAnimationTest {
     @Test
     fun `frames of different sizes give the ranges each frame gives on its own`() = runBlocking {
         // The pass reuses one frame buffer and one set of columns, growing them for a
-        // larger frame (TD-87): small after large and large after small must both
+        // larger frame (TD-107): small after large and large after small must both
         // match decoding every frame separately.
         val files = listOf(
             frame("big.dat", -3f, 2f, points = 300),

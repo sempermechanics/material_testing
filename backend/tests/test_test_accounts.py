@@ -454,7 +454,7 @@ async def test_a_new_password_replaces_the_old_and_revokes_tokens(client, world,
     assert password not in str(world["audit"]) and password not in caplog.text
 
 
-# ------------------------------------------------------------------ release one phone (TD-314)
+# ------------------------------------------------------------------ release one phone (TD-249)
 
 
 def _release(client, uid, device_id):

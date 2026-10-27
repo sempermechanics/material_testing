@@ -23,7 +23,7 @@ def _licence_event(event: str, license_id: str | None, refusal: Refusal | None =
     metrics that count them per licence and app (A7.3). `appId` and
     `appVersion` come from the request context; no email is logged.
 
-    `uid` is passed by the handler, which holds the user (TD-245): the
+    `uid` is passed by the handler, which holds the user (TD-204): the
     request's bound uid is set by `current_user` inside a threadpool
     dependency, whose context this handler does not share.
 
@@ -63,7 +63,7 @@ def activate_license(
     runs this same `repo.activate_license`. No released build ever offered
     a key field (v1.2-beta.4 carries an `activateLicense` client with no
     caller), and current builds do not call this route. Retire it with
-    TD-278.
+    TD-52.
     """
     rate_limit.enforce(rate_limit.license_activate_bucket, user["uid"])
     device_id = require_header_identifier(x_device_id, name="device_id", maximum=128)

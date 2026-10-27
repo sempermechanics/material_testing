@@ -1,7 +1,7 @@
 package com.sempermechanics.semper.ui.limit
 
 /**
- * Where an Update button sends the user (TD-268): the Play listing for a
+ * Where an Update button sends the user (TD-214): the Play listing for a
  * build Play installed, otherwise the page the build was downloaded from.
  * Builds are distributed from GitHub Releases as well as Play, and a
  * sideloaded build has no Play listing to update from.

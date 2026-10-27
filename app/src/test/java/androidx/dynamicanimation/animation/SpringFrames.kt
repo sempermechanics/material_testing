@@ -3,7 +3,7 @@ package androidx.dynamicanimation.animation
 import android.os.SystemClock
 
 /**
- * The main thread's spring frame loop, for tests (TD-200). It lives in this
+ * The main thread's spring frame loop, for tests (TD-188). It lives in this
  * package because [AnimationHandler] and a spring's target are package-private.
  *
  * A running spring sits in the thread's [AnimationHandler] until a frame ends

@@ -358,7 +358,7 @@ object CloudRestore {
     /**
      * Drop the bundle download a stopped restore of cloud session [sessionId]
      * kept for its rerun (the scratch and its `.part` / `.full`): the app
-     * cancelled it, so nothing will resume it (TD-283).
+     * cancelled it, so nothing will resume it (TD-223).
      */
     fun discardDownloads(context: Context, sessionId: String) {
         discard(scratchFile(context.applicationContext.cacheDir, sessionId, RestoreBundleFetcher.BUNDLE_SCRATCH))

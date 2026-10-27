@@ -422,7 +422,7 @@ class AuthRepositoryTest {
         api.onSetImprovementConsent = { _, _ -> throw IOException("no route") }
 
         assertTrue(repo.setImprovementConsent(false).isFailure)
-        // TD-306: the phone keeps the server's last accepted answer, not the refused one.
+        // TD-242: the phone keeps the server's last accepted answer, not the refused one.
         assertEquals(true, AccountCache.improvementConsent(context))
     }
 

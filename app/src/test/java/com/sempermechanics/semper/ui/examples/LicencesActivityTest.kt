@@ -19,7 +19,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /**
- * Credits & licences (ADR-031, TD-349): every part of the app with its
+ * Credits & licences (ADR-031, TD-57): every part of the app with its
  * licence, the full texts on the website, and the credits and short notices
  * that have to travel with the app on pages of their own.
  */

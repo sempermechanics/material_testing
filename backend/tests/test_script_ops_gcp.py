@@ -687,7 +687,7 @@ def test_monitoring_refuses_bad_input(tmp_path):
     assert proc.returncode == 2
 
 
-# ---------------------------------------------- secret access pre-check (TD-269)
+# ---------------------------------------------- secret access pre-check (TD-215)
 
 _SECRET_CHECK = _REPO / "scripts" / "check_secret_access.sh"
 _RUNTIME_SA = "api@demo-app-prod.iam.gserviceaccount.com"
@@ -788,7 +788,7 @@ def test_a_post_promote_health_check_can_trigger_the_rollback():
 
 
 def test_the_rollback_drill_fails_on_purpose_only_on_staging():
-    """TE6-004 (c): the D5 revision-rollback drill (TD-220) needs a deploy whose
+    """TE6-004 (c): the D5 revision-rollback drill (TD-15) needs a deploy whose
     post-promote check fails; never production."""
     yaml = pytest.importorskip("yaml")
     workflow = yaml.safe_load((_REPO / ".github" / "workflows" / "deploy-backend.yml").read_text(encoding="utf-8"))

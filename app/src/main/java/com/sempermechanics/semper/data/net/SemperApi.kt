@@ -104,7 +104,7 @@ class SemperApi @VisibleForTesting internal constructor(
     /**
      * GET /v1/me/erasure — whether this phone's account was erased. The backend
      * checks the ID token alone, so asking does not re-create the profile of
-     * an erased account (TD-206); the answer is about this phone's device id,
+     * an erased account (TD-193); the answer is about this phone's device id,
      * which [SemperApiCalls.bearer] sends.
      */
     override suspend fun getErasureStatus(idToken: String): ErasureStatus =

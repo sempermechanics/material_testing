@@ -22,7 +22,7 @@ fresh-run path (`AnalysisNavHelper.openResults`) both build it and call
 | `IMG_W/H` missing | decoded from the reference | — | 0 | — |
 
 Every one of those defaults is silent. The two writers also disagree on
-*values*, which is an accuracy fault (TD-61):
+*values*, which is an accuracy fault (TD-90):
 
 - ROI: a fresh run passes the ROI the user drew (`AnalysisNavHelper.kt:113-116`)
   while the session saves the resolved, inset ROI the engine actually ran on
@@ -109,7 +109,7 @@ no I/O.
        record fallback, defaults with no record.
 5. [x] Emulator: `ViewerEntryParityDeviceTest` (2), which covers the hop too
        instead of a separate `LatticeToViewerHopTest`.
-6. [x] Close TD-3 and TD-61.
+6. [x] Close TD-62 and TD-90.
 
 ## As built (2026-09-23)
 

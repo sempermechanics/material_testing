@@ -16,7 +16,7 @@ was deleted when their data was gone (fixed in #327 and #329). Run stops were
 back as "strain-window failure" (#330). Every failed session save was reported
 as the session limit, even when the index could not be read (#330). And
 `runCatching` around suspend calls turned cancellation into an ordinary
-failure at 21 sites (TD-41), so a cancelled export said "export failed".
+failure at 21 sites (TD-77), so a cancelled export said "export failed".
 
 ## Decision
 
@@ -112,7 +112,7 @@ and the tests pin them (`HttpFailureTest`, `AuthedTest`, `AfterSaveTest`,
 - detekt does not check cancellation handling: `SuspendFunSwallowedCancellation`
   needs type resolution, which `:app:detekt` does not run, and detekt 1.23.8's
   Kotlin 2.0 compiler cannot read the Kotlin 2.4 dependencies it would resolve
-  against. A source check does it instead (TD-171, 2026-10-19):
+  against. A source check does it instead (TD-169, 2026-10-19):
   `scripts/check_swallowed_cancellation.py` fails a broad catch or a `runCatching`
   around a suspend call that neither rethrows `CancellationException` first nor
   runs under `NonCancellable`; its allowlist is empty.
@@ -123,7 +123,7 @@ and the tests pin them (`HttpFailureTest`, `AuthedTest`, `AfterSaveTest`,
    (#323, #326, #327).
 2. [x] `RunStop` (#318) and its adoption (#325, #330); `UpsertOutcome` (#326,
    #330, #331); `DownloadFailure` (#326); `UploadFailures` (#327).
-3. [x] TD-171: checked in CI by `scripts/check_swallowed_cancellation.py` (step "No
+3. [x] TD-169: checked in CI by `scripts/check_swallowed_cancellation.py` (step "No
    swallowed coroutine cancellation (ADR-018)", 2026-10-19, `3e75188`) instead of
    detekt's `SuspendFunSwallowedCancellation`, which stays an option with detekt 2.x
-   (TD-69).
+   (TD-5).

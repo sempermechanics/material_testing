@@ -3,7 +3,7 @@
 **Status:** Accepted, built on #457 (2026-10-19), not merged or deployed; the task rides the provisioning queue (`TASKS_QUEUE`)
 **Date:** 2026-10-19
 **Deciders:** backend owner
-**Register:** TD-294
+**Register:** TD-231
 
 ## Context
 
@@ -23,7 +23,7 @@ repeat the action or reconciliation reports it. Neither call fits one
 transaction: a roster can pass the 500 writes a transaction may hold.
 
 `set_seat_enabled`, the third such write, touches one holder and was moved
-into the seat's transaction (TD-294, `e61eb09`).
+into the seat's transaction (TD-231, `e61eb09`).
 
 ## Decision
 

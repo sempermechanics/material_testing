@@ -39,7 +39,7 @@ class FailureLedger(private val fileName: String, private val key: PrefKey<Strin
     }
 }
 
-/** The failed backups Home has already told the user about (TD-166). */
+/** The failed backups Home has already told the user about (TD-164). */
 object BackupFailureLedger {
     private val ledger = FailureLedger(PrefFiles.BackupOutcomes.NAME, PrefFiles.BackupOutcomes.ANNOUNCED)
 

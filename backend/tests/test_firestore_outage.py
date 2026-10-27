@@ -1,4 +1,4 @@
-"""TD-250: a Firestore outage on any route answers 503 `firestore_unreachable`
+"""TD-38: a Firestore outage on any route answers 503 `firestore_unreachable`
 with `Retry-After`, as `/readyz` does, instead of 500 `internal_error`.
 
 The outage reaches the edge middleware as the exception api-core raised once

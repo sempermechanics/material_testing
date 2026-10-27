@@ -186,7 +186,7 @@ def _seats_of(uid: str, license_id: str) -> tuple[list, bool]:
 
 
 def _blank_seat_addresses(uid: str, license_id: str) -> tuple[int, bool]:
-    """Blank the address on every seat `uid` held, keeping the seat (TD-243).
+    """Blank the address on every seat `uid` held, keeping the seat (TD-202).
 
     The seat stays: it is what `seatsUsed`, reconciliation and the licence's
     audit export count, and its uid is opaque. A live seat still on the

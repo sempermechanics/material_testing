@@ -11,7 +11,7 @@ redirects the old URL, so the `mat` remote keeps working). It takes this `main` 
 branch.
 
 In the week to 2026-10-01, nine changes were written twice, once in each repo: the
-frame ceiling, the metadata route, TD-134, TD-77, TD-79/80 and TD-82..85 among them.
+frame ceiling, the metadata route, TD-137, TD-100, TD-101/TD-102 and TD-104–TD-105 among them.
 They ended up byte-identical, but they doubled the history, split the docs (ADR-013,
 WORKFLOWS C21) and collided TD numbers. The rules below stop that.
 
@@ -187,7 +187,7 @@ place would find them empty and lose sign-in, settings and its device key.
 
 [ADR-030](../adr/ADR-030-semper-classroom-app-identity.md) renames Material Testing
 Semper Classroom. The backend half (short name `semperclassroom`, field suffix
-`SemperClassroom`, the old names read and mirrored until TD-330) lands here and
+`SemperClassroom`, the old names read and mirrored until TD-56) lands here and
 deploys before the fork releases. On the fork, in the sync that takes it:
 
 1. Set `applicationId = "com.sempermechanics.semperclassroom"` and the app name to
@@ -335,7 +335,7 @@ Four of #457's commits are already in material_testing, cherry-picked by its #14
 `6a8f86e` (upload restage, its `4e384d51`), `e4e4dca` (Save-to-Files on a stop,
 `af5bd1e2`), `a95d104` (the detekt split, `6d38abf5`) and `e2c30bb` (PDF render,
 byte units, SAF copy, `91699d09`). The rest touch files the fork hooks into, so they
-arrive with the next sync (its TD-305), and these API changes need the fork's lab code
+arrive with the next sync (its TD-241), and these API changes need the fork's lab code
 fixed by hand:
 
 | Before | After |
@@ -349,11 +349,11 @@ fixed by hand:
 | The viewer Activity's frame-set copies, `afterFrameSet`, `whenFrameSetLoaded`, `summaryBatchFiles`, `detailStatsText` | `ResultViewerViewModel.state: StateFlow<ViewerState>`; `batchFiles` and the like are getters over the set it opened |
 | Home's restore on `lifecycleScope`; the **+** chooser and Re-run in `HomeActivity` | `HomeViewModel`; `HomeNewAnalysis` (where the fork's **Which test?** hand-off now goes) |
 | `UploadWorkOutcomes.ResumeKind`, `classifyResume`; three foreground checks | `Resume.of` (`data/UploadSessionPlanner.kt`); `data/AppForeground.kt` |
-| `AnalysisViewModel`'s 36 per-field `var`s (`viewModel.refBytes`, `viewModel.step`, …), `lateinit sweepController` | Gone (TD-308): read `viewModel.inputs.value`, write one `viewModel.edit { it.copy(…) }` per change (`ui/analysis/wizard/AnalysisViewModel.kt`); only `cancelRequested` is left. A lab field set through such a property (the fork's `LabRerun.applyTo`, for one) becomes a `WizardInputs` / `LabWizardState` field changed in that edit. `sweepController` is `by lazy` |
-| `SessionMetadataDoc`'s nested field serializers | Top-level `internal object`s of the same names in `data/cloud/SessionMetadataSerializers.kt` (TD-292), a pure move: a sync conflict there is a move, not a change |
-| `VideoFrameExtractor.getFrame` returning a `Bitmap`; retriever frames timed as asked | `RetrievedFrame(bitmap, isSyncFrame)`; times from `RetrieverFrameClock` (TD-207) |
+| `AnalysisViewModel`'s 36 per-field `var`s (`viewModel.refBytes`, `viewModel.step`, …), `lateinit sweepController` | Gone (TD-244): read `viewModel.inputs.value`, write one `viewModel.edit { it.copy(…) }` per change (`ui/analysis/wizard/AnalysisViewModel.kt`); only `cancelRequested` is left. A lab field set through such a property (the fork's `LabRerun.applyTo`, for one) becomes a `WizardInputs` / `LabWizardState` field changed in that edit. `sweepController` is `by lazy` |
+| `SessionMetadataDoc`'s nested field serializers | Top-level `internal object`s of the same names in `data/cloud/SessionMetadataSerializers.kt` (TD-229), a pure move: a sync conflict there is a move, not a change |
+| `VideoFrameExtractor.getFrame` returning a `Bitmap`; retriever frames timed as asked | `RetrievedFrame(bitmap, isSyncFrame)`; times from `RetrieverFrameClock` (TD-194) |
 
-material_testing took the rest of #457 with the sync of `14b279d6` (its TD-305, closed
+material_testing took the rest of #457 with the sync of `14b279d6` (its TD-241, closed
 there): the lab wizard state is one field of the inputs, `WizardInputs.lab`
 (`LabWizardState`), changed through `edit {}` / `editLab {}` with its Bundle keys unchanged
 (`putLab` / `restoreLab`); `LabInputs.kt` became pure functions of `WizardInputs`; the
@@ -403,7 +403,23 @@ adapted commit and name the fork commit in the message.
 
 ## TD and ADR numbers
 
-The two repos share one TD and one ADR number space. Before taking a number, read
-both registers (`docs/ops/TECH_DEBT.md`, `docs/adr/README.md`) on both `main`s and
-take the next number free in **both**. Update the reservation note at the top of the
-open register here when the fork has used new numbers.
+ADR numbers are shared: before taking one, read both `docs/adr/README.md`s on both
+`main`s and take the next number free in **both**.
+
+TD numbers are not, since 2026-10-27 ([ADR-032](../adr/ADR-032-own-td-numbers.md)):
+this repo restarted at TD-1, and `TD-n` in semperdic-app means its own row. Take the
+next free here from the note at the top of [TECH_DEBT.md](TECH_DEBT.md). A sync turns
+upstream numbers into this repo's before it applies anything:
+
+```bash
+git diff OLD NEW -- PATHS | python scripts/td_numbers.py translate > upstream.patch
+git apply -3 upstream.patch
+```
+
+`translate` maps each upstream number through
+[td-renumber-2026-10-27.csv](td-renumber-2026-10-27.csv), using only the rows marked
+`same_upstream`: TD-199 and TD-349–TD-353 meant other rows there. A number it cannot map
+(one semperdic-app took after 2026-10-26, one of those, or one this repo never cited)
+becomes `semperdic-app's TD-n` and is listed on stderr: give it a row and a number here
+if this repo carries it, otherwise leave the prefix. Run it only on upstream text, never
+on this repo's files: their numbers are already the new ones.

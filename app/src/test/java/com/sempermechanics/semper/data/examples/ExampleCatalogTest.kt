@@ -152,7 +152,7 @@ class ExampleCatalogTest {
         assertEquals(
             listOf(
                 // The short notices that travel with the app: the codecs OpenCV links into
-                // libsemper, and the MIT / BSD libraries (TD-349). The long texts are on the website.
+                // libsemper, and the MIT / BSD libraries (TD-57). The long texts are on the website.
                 "carotene-BSD-3-Clause.txt",
                 "checker-qual-MIT.txt",
                 "cpufeatures-Apache-2.0.txt",

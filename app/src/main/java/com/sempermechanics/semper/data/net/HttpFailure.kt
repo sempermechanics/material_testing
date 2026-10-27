@@ -58,7 +58,7 @@ data class HttpFailure(val kind: Kind, val cause: Throwable) {
         /** Any other [ApiException] status. */
         REJECTED,
 
-        /** Any other [IOException], [CloudNotConfiguredException] included (TD-90): no answer. */
+        /** Any other [IOException], [CloudNotConfiguredException] included (TD-109): no answer. */
         OFFLINE,
 
         /** Not an I/O failure at all. */

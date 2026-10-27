@@ -117,7 +117,7 @@ class VideoFrameExtractorTest {
         assertEquals(keyframes.last(), plan.timestampsUs.last())
     }
 
-    // ---- AVI rung: Key frames from the idx1 flags (TD-154) -----------------
+    // ---- AVI rung: Key frames from the idx1 flags (TD-153) -----------------
 
     /** 50 frames at 25 fps (0 … 1960 ms), keyframes where [key] says. */
     private fun avi(hasIndex: Boolean = true, key: (Int) -> Boolean) = AviReader.Video(

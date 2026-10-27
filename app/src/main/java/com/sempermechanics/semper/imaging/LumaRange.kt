@@ -1,7 +1,7 @@
 package com.sempermechanics.semper.imaging
 
 /**
- * Limited-range ("video") luma to full range (TD-134).
+ * Limited-range ("video") luma to full range (TD-137).
  *
  * A video decoder hands back the Y plane as stored, and an ordinary video stores
  * black at 16 and white at 235 (ITU-R BT.601 / BT.709). MJPEG and uncompressed

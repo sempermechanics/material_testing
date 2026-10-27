@@ -1,6 +1,6 @@
 """Device keys for tests that register a phone.
 
-One copy, imported by every test file that needs one (TD-131); a test module
+One copy, imported by every test file that needs one (TD-134); a test module
 importing a helper from another test module broke collection whenever that
 module was refactored.
 """

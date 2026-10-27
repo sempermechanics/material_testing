@@ -30,7 +30,7 @@ class NotApprovedException : IOException(ApiErrors.NOT_APPROVED)
 
 /**
  * No backend is configured (`SEMPER_API_BASE_URL` is empty). An [IOException],
- * so every caller treats it like offline instead of crashing (TD-90).
+ * so every caller treats it like offline instead of crashing (TD-109).
  */
 class CloudNotConfiguredException : IOException("Cloud backend is not configured (SEMPER_API_BASE_URL).")
 

@@ -16,7 +16,7 @@ import com.sempermechanics.semper.util.StrictObjectListSerializer
 import kotlinx.serialization.builtins.nullable
 
 // The field serializers [SessionMetadataDoc]'s `@Serializable(with = …)` names,
-// moved out of it under ADR-015's split rule (TD-292). Each reads its object or
+// moved out of it under ADR-015's split rule (TD-229). Each reads its object or
 // list by the org.json `opt…` rules (com.sempermechanics.semper.util.OrgJson).
 
 internal object FramesSerializer : StrictObjectListSerializer<Frame>(Frame.serializer())

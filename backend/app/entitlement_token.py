@@ -7,7 +7,7 @@ cached `/v1/config` grants (ADR-023 decision 7), so an edited response
 cannot widen past a token the app holds. A token that is absent or does not
 verify on the device (a copied one names another device's key, `dkt`) is no
 bound at all: the cache decides. With no signing key configured, no token is
-issued (TD-215), and the app's offline licence and share rest on the
+issued (TD-10), and the app's offline licence and share rest on the
 TLS-delivered, unsigned cache alone.
 
 The contract the Android verifier implements; change it only together with it:

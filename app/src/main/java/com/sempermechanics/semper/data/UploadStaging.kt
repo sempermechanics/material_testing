@@ -75,7 +75,7 @@ internal class UploadStaging(private val context: Context, private val record: S
      *
      * Under a pointer, a finished staging is reused only when its binding
      * ([StagingLayout.declared]) names that session and the bytes it declared
-     * (TD-282). One with no binding (an older build's, or a run that died
+     * (TD-222). One with no binding (an older build's, or a run that died
      * between storing the pointer and the binding) or another session's is
      * not: the caller releases the session and declares the staging afresh.
      */

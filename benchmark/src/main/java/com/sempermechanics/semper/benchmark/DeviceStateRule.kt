@@ -14,7 +14,7 @@ import org.junit.runner.Description
 import java.io.File
 
 /**
- * Records the phone's state at the start and end of each benchmark (TD-135).
+ * Records the phone's state at the start and end of each benchmark (TD-6).
  *
  * A startup time moves 30–40 % with heat, the charger and memory pressure, so a
  * median means little without the state it was taken in. This writes, next to

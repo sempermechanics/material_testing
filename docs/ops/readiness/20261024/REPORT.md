@@ -20,9 +20,9 @@ Re-verify (ADMIN_DECISIONS, Checkpoint 2):
   AE1-007's colour guard exempts the files that write output (`*Export.kt`, `*Encoder.kt`),
   an exemption the verifier judged sound.
 - **Round 3, at `2363b12b`.** AE1V-023 and AE1V-025 VERIFIED. TE1-006 passes its code
-  criterion for Home; the rest is TD-338, whose list of the calls left on main was
+  criterion for Home; the rest is TD-264, whose list of the calls left on main was
   corrected in `111f8060`.
-- **Rounds 4–5, at `47fef6b4` and `b0f614ca`.** TE1-006 VERIFIED; TD-338 names every
+- **Rounds 4–5, at `47fef6b4` and `b0f614ca`.** TE1-006 VERIFIED; TD-264 names every
   EntitlementStore call left on main. AE3-002 VERIFIED at `b0f614ca`, after round 4
   (support and feedback mails say Phone) and the lead's fix to the email-link landing page
   (`27ced315`, with the terminology test widened to the hosted landing pages).
@@ -89,13 +89,13 @@ backend contract/ops, G4 licensing, G5 Android, G6 release, UX (aesthetic).
 
 | Gate | Findings | Verified | P0/P1 not verified | Status | What is missing |
 |---|---:|---:|---|---|---|
-| G1 | 11 | 4 | — (P0 MT-TE2-001 VERIFIED; its fix is on fork `main`, material_testing#145) | **Go with conditions** for Semper. A Semper Classroom release waits on Phase 8 | Semper: real-data validation at the pin, TD-327 (A14); the arm64 smoke (A13); the precision decision, TD-342 (A12). Fork: the pin condition is met (A3 done); Phase 8 and the Zenodo compare (A15) remain |
+| G1 | 11 | 4 | — (P0 MT-TE2-001 VERIFIED; its fix is on fork `main`, material_testing#145) | **Go with conditions** for Semper. A Semper Classroom release waits on Phase 8 | Semper: real-data validation at the pin, TD-257 (A14); the arm64 smoke (A13); the precision decision, TD-268 (A12). Fork: the pin condition is met (A3 done); Phase 8 and the Zenodo compare (A15) remain |
 | G2 | 19 | 12 | TE5-003, TE5-004 (deferred) | **No-go** | TE5-003 and TE5-004 fixed by counsel and the owner (A11) or signed (A10). TE5-001's lock is live only after A4 |
 | G3 | 15 | 7 | TE6-001, TE6-011 (deferred) | **No-go** | Monitoring applied with a channel (A6); posture FAILs fixed (A9); or both signed (A10) |
-| G4 | 14 | 11 | — | **Go with conditions** | The entitlement key, TD-215 (A7), before offline licensing is enforced |
-| G5 | 4 | 3 | — | **Go with conditions** | The 1036 install-over smoke, TD-344 (A13); TE1-006's other screens, TD-338 |
+| G4 | 14 | 11 | — | **Go with conditions** | The entitlement key, TD-10 (A7), before offline licensing is enforced |
+| G5 | 4 | 3 | — | **Go with conditions** | The 1036 install-over smoke, TD-270 (A13); TE1-006's other screens, TD-264 |
 | G6 | 14 | 11 | TE1-001 (deferred) | **No-go** | Certificate pins chosen (A8) or TE1-001 signed (A10); the PR's first `CI OK` with the new release checks (A1) |
-| UX | 62 | 45 | — (AE1-009 VERIFIED in round 2) | **Go with conditions** | Owner decisions TD-340, TD-341 and TD-343 (A12) |
+| UX | 62 | 45 | — (AE1-009 VERIFIED in round 2) | **Go with conditions** | Owner decisions TD-266, TD-267 and TD-269 (A12) |
 
 ## 2. Gate statuses
 
@@ -134,14 +134,14 @@ or `gcloud` (A9):
 - 2.1: no lien, no `Prod` tag, one owner, granted to a user (×4 checks on each project, 8).
 - 2.4: Firebase API keys without app/site restriction (2).
 - 2.7: delete protection off on the app project (1).
-- 3.1: `APP_CHECK_MODE=off` on both services (2; TD-226).
-- 3.5: no `ENTITLEMENT_SIGNING_KEY` on both services (2; TD-215).
+- 3.1: `APP_CHECK_MODE=off` on both services (2; TD-21).
+- 3.5: no `ENTITLEMENT_SIGNING_KEY` on both services (2; TD-10).
 - 3.7: no DATA_READ + DATA_WRITE audit logs on either project (2).
 
 **Not run locally:**
 - gitleaks: not installed; CI's `secret-scan` job runs it.
 - shellcheck: not installed; CI runs it.
-- The API-30 instrumented suite: `VideoFrameExtractionDeviceTest` ×4 fails there, pre-existing (TD-328).
+- The API-30 instrumented suite: `VideoFrameExtractionDeviceTest` ×4 fails there, pre-existing (TD-258).
 - The new CI jobs `engine-pin` and `engine-host-sanitized`: never run in CI; they run on the PR.
 - The backend-lock workflow's Linux check of the lock regenerated on Windows (TE5-001).
 
@@ -173,17 +173,17 @@ means the commit only filed the TECH_DEBT row.
 | AE1V-012 | A | UX | P1 | Fix now | VERIFIED | `e6015560` |
 | AE2-002 | A | UX | P1 | Fix now | VERIFIED | `c2cfc227` |
 | AE2-004 | A | UX | P1 | Fix now | VERIFIED | `830f7cfc` |
-| TE1-001 | T | G6 | P1 | Defer (TECH_DEBT, with TD-218) | DEFERRED→TD-318 | `7535e69d` (TD row) |
+| TE1-001 | T | G6 | P1 | Defer (TECH_DEBT, with TD-13) | DEFERRED→TD-251 | `7535e69d` (TD row) |
 | TE3-006 | T | G3 | P1 | Fix now: snapshot only | VERIFIED | `e576f741` |
-| TE4-001 | T | G4 | P1 | Fix now (code half; key = TD-215) | VERIFIED | `c9fefccc` |
+| TE4-001 | T | G4 | P1 | Fix now (code half; key = TD-10) | VERIFIED | `c9fefccc` |
 | TE4-002 | T | G4 | P1 | Fix now | VERIFIED | `18b3ac65`, `64f87f65` |
 | TE4-003 | T | G4 | P1 | Duplicate; earlier decision applies | duplicate→TE3-001 | — |
 | TE5-001 | T | G2 | P1 | Fix now (Admin deploys) | VERIFIED | `4fc82b14` |
 | TE5-002 | T | G2 | P1 | Reject: keep pre-ticked | REJECTED | — |
-| TE5-003 | T | G2 | P1 | Defer (owner/counsel) | DEFERRED→TD-36 | `7535e69d` (TD row) |
-| TE5-004 | T | G2 | P1 | Defer (owner/counsel) | DEFERRED→TD-317 | `7535e69d` (TD row) |
-| TE6-001 | T | G3 | P1 | Defer to Admin actions | DEFERRED→TD-217 | — |
-| TE6-011 | T | G3 | P1 | Defer to Admin actions | DEFERRED→TD-221–TD-225 | — |
+| TE5-003 | T | G2 | P1 | Defer (owner/counsel) | DEFERRED→TD-3 | `7535e69d` (TD row) |
+| TE5-004 | T | G2 | P1 | Defer (owner/counsel) | DEFERRED→TD-55 | `7535e69d` (TD row) |
+| TE6-001 | T | G3 | P1 | Defer to Admin actions | DEFERRED→TD-12 | — |
+| TE6-011 | T | G3 | P1 | Defer to Admin actions | DEFERRED→TD-16–TD-20 | — |
 | AE1-003 | A | UX | P2 | Fix all now | VERIFIED | `e6015560` |
 | AE1-004 | A | UX | P2 | Fix all now; rework now (CP2) | VERIFIED (re-verify 2, `6324ea7f`) | `e6015560`, `dac42179`, `57e799b8` |
 | AE1-005 | A | UX | P2 | Fix all now | VERIFIED | `e6015560` |
@@ -191,13 +191,13 @@ means the commit only filed the TECH_DEBT row.
 | AE1-012 | A | UX | P2 | Fix all now | VERIFIED | `05cf4fa4` |
 | AE1-013 | T | UX | P2 | Fix all now | VERIFIED | `6707004b` |
 | AE1-015 | A | G4 | P2 | Fix all now | VERIFIED | `0718319e` |
-| AE1-017 | T | G1 | P2 | Fix all now | NEEDS_ADMIN→TD-342 | `93070031` |
+| AE1-017 | T | G1 | P2 | Fix all now | NEEDS_ADMIN→TD-268 | `93070031` |
 | AE1-019 | A | UX | P2 | Fix all now | VERIFIED | `0e6d6210` |
 | AE1V-011 | A | UX | P2 | Fix all now | VERIFIED | `adc4c4cf` |
 | AE1V-013 | A | UX | P2 | Duplicate; earlier decision applies | duplicate→AE1-019 | — |
 | AE1V-014 | A | UX | P2 | Fix all now | VERIFIED | `012d1b57`, `dde38d32` |
 | AE1V-015 | T | UX | P2 | Fix all now | VERIFIED | `7314c16b` |
-| AE1V-016 | A | UX | P2 | Fix all now | NEEDS_ADMIN→TD-343 | `9a34bf0b` |
+| AE1V-016 | A | UX | P2 | Fix all now | NEEDS_ADMIN→TD-269 | `9a34bf0b` |
 | AE1V-018 | A | UX | P2 | Fix all now | VERIFIED | `486fb59a` |
 | AE2-001 | A | UX | P2 | Fix all now | VERIFIED | `3a9fb8b5` |
 | AE2-003 | A | UX | P2 | Fix all now | VERIFIED | `056a1e36` |
@@ -211,7 +211,7 @@ means the commit only filed the TECH_DEBT row.
 | AE2V-003 | A | UX | P2 | Duplicate; earlier decision applies | duplicate→AE2-007 | — |
 | AE3-001 | A | UX | P2 | Fix all now | VERIFIED | `dc9dcffb`, `ffd468fd`, `ad5059d4` |
 | AE3-002 | A | UX | P2 | Fix all now; rework now (CP2); keep 'device' for the key (CP2 round 2) | VERIFIED (re-verify 5, `b0f614ca`) | `dc9dcffb`, `ad5059d4`, `e570834e`, `19bc78d3`, `22725410`, `47fef6b4`, `27ced315` |
-| AE3-003 | A | UX | P2 | Fix all now | NEEDS_ADMIN→TD-340, TD-341 | `dc9dcffb`, `ad5059d4` |
+| AE3-003 | A | UX | P2 | Fix all now | NEEDS_ADMIN→TD-266, TD-267 | `dc9dcffb`, `ad5059d4` |
 | AE3-004 | A | UX | P2 | Fix all now | VERIFIED | `ad5059d4` |
 | AE3-005 | A | UX | P2 | Fix all now | VERIFIED | `dc9dcffb`, `ad5059d4` |
 | AE3-006 | A | UX | P2 | Fix all now | VERIFIED | `dc9dcffb`, `ffd468fd` |
@@ -222,20 +222,20 @@ means the commit only filed the TECH_DEBT row.
 | MT-AE2-002 | A | UX | P2 | Fix with the P0 port | DEFERRED→Phase 8 (fork port) | — |
 | MT-AE3-001 | A | UX | P2 | Fix with the P0 port | DEFERRED→Phase 8 (fork port) | — |
 | MT-TE5-001 | T | G2 | P2 | Fix with the P0 port | DEFERRED→Phase 8 (fork port) | — |
-| TE1-003 | T | G5 | P2 | Fix all now | NEEDS_DEVICE→TD-344 | `53c09cb6` |
+| TE1-003 | T | G5 | P2 | Fix all now | NEEDS_DEVICE→TD-270 | `53c09cb6` |
 | TE1-004 | T | G5 | P2 | Fix all now | VERIFIED | `0444b326` |
 | TE1-005 | T | G5 | P2 | Fix all now | VERIFIED | `40bd4811` |
-| TE1-006 | T | G5 | P2 | Fix all now; rework now (CP2); rework once more (CP2 round 2) | VERIFIED (Home, re-verify 3) → TD-338 for the other screens | `98f8a050`, `49c8d25e`, `2afe8476`, `2c17cbef` |
+| TE1-006 | T | G5 | P2 | Fix all now; rework now (CP2); rework once more (CP2 round 2) | VERIFIED (Home, re-verify 3) → TD-264 for the other screens | `98f8a050`, `49c8d25e`, `2afe8476`, `2c17cbef` |
 | TE1-007 | T | G6 | P2 | Fix all now | VERIFIED | `1d33a1e1` |
-| TE2-002 | T | G1 | P2 | Fix all now; accept partial (CP2) | ACCEPTED-PARTIAL→TD-346 | `d5e5291a` |
+| TE2-002 | T | G1 | P2 | Fix all now; accept partial (CP2) | ACCEPTED-PARTIAL→TD-272 | `d5e5291a` |
 | TE2-003 | T | G1 | P2 | Fix all now | NEEDS_DEVICE→A13 (arm64 smoke) | `d8a7687e` |
-| TE2-004 | T | G1 | P2 | Fix all now; accept partial (CP2) | ACCEPTED-PARTIAL→TD-347, TD-326 | `c7c7b931` |
-| TE2-005 | T | G1 | P2 | Fix all now | NEEDS_ADMIN→TD-327 | `0c84ba52` |
+| TE2-004 | T | G1 | P2 | Fix all now; accept partial (CP2) | ACCEPTED-PARTIAL→TD-273, TD-256 | `c7c7b931` |
+| TE2-005 | T | G1 | P2 | Fix all now | NEEDS_ADMIN→TD-257 | `0c84ba52` |
 | TE2-006 | T | G1 | P2 | Fix all now | VERIFIED | `690f57e2` |
 | TE3-001 | T | G2 | P2 | Fix all now | VERIFIED | `75ec068b` |
 | TE3-002 | T | G2 | P2 | Fix all now | VERIFIED | `75ec068b` |
 | TE3-003 | T | G2 | P2 | Fix all now | VERIFIED | `75ec068b` |
-| TE3-007 | T | G3 | P2 | Fix all now; dependency not approved | DEFERRED→TD-319 | `7535e69d` (TD row) |
+| TE3-007 | T | G3 | P2 | Fix all now; dependency not approved | DEFERRED→TD-252 | `7535e69d` (TD row) |
 | TE3-008 | T | G3 | P2 | Fix all now | VERIFIED | `7ff2e9d3` |
 | TE3-009 | T | G3 | P2 | Fix all now | VERIFIED | `f6266ee8` |
 | TE4-004 | T | G4 | P2 | Fix all now | VERIFIED | `15beec58`, `b4134c33` |
@@ -243,8 +243,8 @@ means the commit only filed the TECH_DEBT row.
 | TE4-006 | T | G4 | P2 | Fix all now | VERIFIED | `7b28746f` |
 | TE5-005 | T | G2 | P2 | Fix all now | VERIFIED | `e8c74275` |
 | TE5-007 | T | G2 | P2 | Fix all now | VERIFIED | `2ca74d64` |
-| TE6-002 | T | G3 | P2 | Fix all now | NEEDS_ADMIN→TD-217 (gate A1) | `f2b50227` |
-| TE6-003 | T | G3 | P2 | Fix all now | NEEDS_ADMIN→TD-217 (gate A1) | `f2b50227` |
+| TE6-002 | T | G3 | P2 | Fix all now | NEEDS_ADMIN→TD-12 (gate A1) | `f2b50227` |
+| TE6-003 | T | G3 | P2 | Fix all now | NEEDS_ADMIN→TD-12 (gate A1) | `f2b50227` |
 | TE6-004 | T | G3 | P2 | Fix all now | VERIFIED | `8d3d77be` |
 | TE6-005 | T | G6 | P2 | Fix all now | VERIFIED | `58c368ad` |
 | TE6-006 | T | G6 | P2 | Fix all now | VERIFIED | `6bdffaae` |
@@ -255,7 +255,7 @@ means the commit only filed the TECH_DEBT row.
 | TE6-012 | T | G6 | P2 | Fix all now | VERIFIED | `8e19ecad` |
 | TE6-015 | T | G6 | P2 | Fix all now | VERIFIED | `66c9dacc` |
 | AE1-007 | A | UX | P3 | Fix all now; rework now (CP2) | VERIFIED (re-verify 2, `6324ea7f`) | `e6015560`, `e21afdb4` |
-| AE1-011 | A | UX | P3 | Fix all now; accept partial (CP2) | ACCEPTED-PARTIAL→TD-331 | `64631979` |
+| AE1-011 | A | UX | P3 | Fix all now; accept partial (CP2) | ACCEPTED-PARTIAL→TD-260 | `64631979` |
 | AE1-018 | T | G1 | P3 | Fix all now | VERIFIED | `b91a2fe7` |
 | AE1V-020 | A | UX | P3 | Fix all now | VERIFIED | `afdf7c3a` |
 | AE1V-021 | A | UX | P3 | Fix all now; rework now (CP2) | VERIFIED (re-verify 2, `6324ea7f`) | `afdf7c3a`, `9b54bc57`, `ba1f906b` |
@@ -305,18 +305,18 @@ as "gate A-n". Order matters for A1 → A4 → A5.
 | A2 | Secret scan | gitleaks was not installed here; nothing on this branch was scanned locally | — | The PR's `secret-scan` job passes; or `gitleaks detect --config .gitleaks.toml` |
 | A3 | **Done.** material_testing: push `claude/readiness-20261024-engine-pin` (`fb436770`) and open its PR. Merged as material_testing#145 into fork `main` `6e42ed00`, CI fully green. Still owed: confirm that no internal build of `839d4285` reached testers | `839d4285` pins engine v0.2.3; an incremental run fails with a missing JNI symbol (P0) | MT-TE2-001 | Fork `CI OK` green, including `check_jni_parity`; `git ls-tree origin/main engine` on the fork shows `f072da0` |
 | A4 | Deploy the backend from `main` after the merge: `deploy-backend.yml`, staging then production (required reviewer) | Lock bump: pyjwt 2.15.1, urllib3 2.8.0, certifi 2026.10.23; the live lock has 19 advisories. Kill switches on `GET …/uploads` and `PUT …/metadata` (`backend/app/routers/sessions.py:140`, `:223`). `/readyz` within 8 s. uvicorn `--no-access-log`. Device history answers 503 on a Firestore outage. Roster-import line numbers and 413. Quota wording. No gateway change: `backend/gateway/` is unchanged since `46ac8b5e` | TE5-001, TE4-004, TE3-010, TE3-011, TE3-008, AE2-008, AE3-001 | `/readyz` 200 on the candidate; the gateway job reports no diff; Tier 3 on `main` green after the staging deploy; a CHANGELOG entry with both revisions |
-| A5 | Deploy Hosting after A4, from a worktree of the merged `main`. Take `firebase-hosting/public/privacy/index.html` and `firebase-hosting/public/terms/index.html` from `b940cc29`. Then run `API_BASE_URL=<INDIC_API_BASE_URL> ./scripts/deploy-console.sh` ([checklist](../../DEPLOY_CHECKLIST_2026-10.md) §4) | Ships the console fixes (AE2-001…AE2-011, AE3 wording, AE3-002's **New phone**, which OPERATING_MANUAL already names). A plain-`main` deploy publishes #474's legal text, which counsel has not cleared (TD-277); that happened on 2026-10-26 and was redeployed the same day (#486). The import messages read the new backend's codes (AE2-008) | AE2-*, AE3-*, TE5-007 | `check_live_console.py` passes; the live `/privacy` and `/terms` equal `b940cc29`'s files; the IT roster shows a **Phone** column |
-| A6 | Create a notification channel, then run `scripts/apply-monitoring.sh --project indicvision-dic-app --notification-channel <id>` (dry run), then `--apply`, then the `run.invoker` grant it prints | No alert reaches anyone (P1). The new gateway uptime checks and the five new policies exist only as code | TE6-001, TE6-002, TE6-003; TD-217; gate A1 | 13 policies, 3 uptime checks and 4 dashboards exist; a test notification reaches the channel |
-| A7 | Provision the entitlement key ([BACKEND_SETUP_GCP.md](../../../backend/BACKEND_SETUP_GCP.md) A8), then set the release variables `SEMPER_ENTITLEMENT_PUBKEYS` and `SEMPER_REQUIRE_ENTITLEMENT_PINS=true` | TE4-001's code half is done: `release.yml` passes `--require-entitlement-pins` once either variable is set (`.github/workflows/release.yml:263`). Until the key exists, no token is issued and the cached licence decides offline | TE4-001; TD-215; gate A4 | `/v1/config` carries `entitlement`; posture 3.5 PASS; a release's `entitlement-pins` check PASS |
-| A8 | Decide certificate pins: set `SEMPER_API_CERT_PINS`, then have `--require-pins` added; or sign TE1-001 in Risk acceptance | The release gate never requires a pin (P1, deferred) | TE1-001, TE5-012; TD-318, TD-218; gate A5 | `cert-pins` PASS in a release, or the TE1-001 row signed |
-| A9 | Fix the 17 posture FAILs by console or `gcloud`, then re-run `scripts/check_gcp_posture.sh` | P1, deferred to the Admin | TE6-011; TD-221–TD-225, TD-226, TD-215; gate A2 | A run with FAIL only on 3.1 (until Play, gate A8) and 3.5 (until A7), recorded in the gate |
+| A5 | Deploy Hosting after A4, from a worktree of the merged `main`. Take `firebase-hosting/public/privacy/index.html` and `firebase-hosting/public/terms/index.html` from `b940cc29`. Then run `API_BASE_URL=<INDIC_API_BASE_URL> ./scripts/deploy-console.sh` ([checklist](../../DEPLOY_CHECKLIST_2026-10.md) §4) | Ships the console fixes (AE2-001…AE2-011, AE3 wording, AE3-002's **New phone**, which OPERATING_MANUAL already names). A plain-`main` deploy publishes #474's legal text, which counsel has not cleared (TD-51); that happened on 2026-10-26 and was redeployed the same day (#486). The import messages read the new backend's codes (AE2-008) | AE2-*, AE3-*, TE5-007 | `check_live_console.py` passes; the live `/privacy` and `/terms` equal `b940cc29`'s files; the IT roster shows a **Phone** column |
+| A6 | Create a notification channel, then run `scripts/apply-monitoring.sh --project indicvision-dic-app --notification-channel <id>` (dry run), then `--apply`, then the `run.invoker` grant it prints | No alert reaches anyone (P1). The new gateway uptime checks and the five new policies exist only as code | TE6-001, TE6-002, TE6-003; TD-12; gate A1 | 13 policies, 3 uptime checks and 4 dashboards exist; a test notification reaches the channel |
+| A7 | Provision the entitlement key ([BACKEND_SETUP_GCP.md](../../../backend/BACKEND_SETUP_GCP.md) A8), then set the release variables `SEMPER_ENTITLEMENT_PUBKEYS` and `SEMPER_REQUIRE_ENTITLEMENT_PINS=true` | TE4-001's code half is done: `release.yml` passes `--require-entitlement-pins` once either variable is set (`.github/workflows/release.yml:263`). Until the key exists, no token is issued and the cached licence decides offline | TE4-001; TD-10; gate A4 | `/v1/config` carries `entitlement`; posture 3.5 PASS; a release's `entitlement-pins` check PASS |
+| A8 | Decide certificate pins: set `SEMPER_API_CERT_PINS`, then have `--require-pins` added; or sign TE1-001 in Risk acceptance | The release gate never requires a pin (P1, deferred) | TE1-001, TE5-012; TD-251, TD-13; gate A5 | `cert-pins` PASS in a release, or the TE1-001 row signed |
+| A9 | Fix the 17 posture FAILs by console or `gcloud`, then re-run `scripts/check_gcp_posture.sh` | P1, deferred to the Admin | TE6-011; TD-16–TD-20, TD-21, TD-10; gate A2 | A run with FAIL only on 3.1 (until Play, gate A8) and 3.5 (until A7), recorded in the gate |
 | A10 | Sign the five Risk acceptance rows (owner, expiry, compensating control), or clear each by its fix | The Go rule (ADMIN_DECISIONS, Checkpoint 1) | TE1-001, TE5-003, TE5-004, TE6-001, TE6-011 | Each row signed in the gate, then the Sign-off table |
-| A11 | Counsel on the legal text | Operator fields are still bracketed. The Privacy Policy omits Analytics, App Check and IP data. #474's demo-upload text is held. The AE3 wording for the Terms and Privacy Policy was listed for counsel, not edited. Whether a pre-ticked consent holds under DPDP s.6 is TE5-002's external action | TE5-003, TE5-004, TE5-002, AE3-001/-003/-004/-008; TD-277, TD-36, TD-317; gate A10 | TD-36, TD-317 and TD-277 closed; pages re-rendered (`render_legal_pages.py --check`) and deployed by A5's method without the hold |
-| A12 | Owner decisions | The paid-tier name (TD-340). The capitalisation of Demo (TD-341). Precision per quantity, which changes reported output (TD-342). Sign-off of the beta-notice wording (TD-343). The support window for 1036 holders on Android 7–10 (TE1-008). Gate A14's two | AE3-003, AE1-017, AE1V-016, TE1-008; gate A14 | Each decision recorded in ADMIN_DECISIONS and its TD row |
-| A13 | Device checks | Install the 1036 release, create an analysis, install this build over it (TD-344). Run `EnginePipelineSmokeTest` on one arm64 phone or AVD ([RELEASING.md](../../RELEASING.md) step 5); no automated job runs the solver on arm64 | TE1-003, TE2-003; TD-344; gate A13 | Both recorded in CHANGELOG for the next release |
-| A14 | Real-data validation at the pin `f072da0`: DIC Challenge sample 5, PMMA 3-point bend and `steel_24` | [VALIDATION.md](../../../engine/VALIDATION.md) says "Not recorded at this pin" for them | TE2-005; TD-327 | Dated rows in VALIDATION.md |
+| A11 | Counsel on the legal text | Operator fields are still bracketed. The Privacy Policy omits Analytics, App Check and IP data. #474's demo-upload text is held. The AE3 wording for the Terms and Privacy Policy was listed for counsel, not edited. Whether a pre-ticked consent holds under DPDP s.6 is TE5-002's external action | TE5-003, TE5-004, TE5-002, AE3-001/-003/-004/-008; TD-51, TD-3, TD-55; gate A10 | TD-3, TD-55 and TD-51 closed; pages re-rendered (`render_legal_pages.py --check`) and deployed by A5's method without the hold |
+| A12 | Owner decisions | The paid-tier name (TD-266). The capitalisation of Demo (TD-267). Precision per quantity, which changes reported output (TD-268). Sign-off of the beta-notice wording (TD-269). The support window for 1036 holders on Android 7–10 (TE1-008). Gate A14's two | AE3-003, AE1-017, AE1V-016, TE1-008; gate A14 | Each decision recorded in ADMIN_DECISIONS and its TD row |
+| A13 | Device checks | Install the 1036 release, create an analysis, install this build over it (TD-270). Run `EnginePipelineSmokeTest` on one arm64 phone or AVD ([RELEASING.md](../../RELEASING.md) step 5); no automated job runs the solver on arm64 | TE1-003, TE2-003; TD-270; gate A13 | Both recorded in CHANGELOG for the next release |
+| A14 | Real-data validation at the pin `f072da0`: DIC Challenge sample 5, PMMA 3-point bend and `steel_24` | [VALIDATION.md](../../../engine/VALIDATION.md) says "Not recorded at this pin" for them | TE2-005; TD-257 | Dated rows in VALIDATION.md |
 | A15 | Permission to download the Zenodo source data (the gauge-point files and `3pointPMMA.zip`, about 749 MB) for the fork's `real_data_*.py compare` | [FORK_SYNC.md](../../FORK_SYNC.md) step 4 after an engine bump. The P0 fix was checked only against the arrays the fork's tests pin | MT-TE2-001 | `compare` run on the fork at `f072da0`; result in its CHANGELOG |
-| A16 | Semper Classroom Firestore migration: dry run `backend/scripts/rename_classroom_app.py --project indicvision-dic-app`, then `--apply` once the dual-writing backend serves all traffic and a rollback past it is ruled out | ADR-030's hygiene step; it has not run. Staging shares the production database | TD-330 | The dry run's counts, then `--apply`; a second run is a no-op |
+| A16 | Semper Classroom Firestore migration: dry run `backend/scripts/rename_classroom_app.py --project indicvision-dic-app`, then `--apply` once the dual-writing backend serves all traffic and a rollback past it is ruled out | ADR-030's hygiene step; it has not run. Staging shares the production database | TD-56 | The dry run's counts, then `--apply`; a second run is a no-op |
 | A17 | Delete `/sdcard/shot.png` on the Semper_API30 AVD | A screenshot from this run shows a credential | — | `adb -s <serial> shell ls /sdcard/shot.png` reports no such file |
 | A18 | Delete `posture_20261024.log` from the root of the main checkout (`semperdic-app`) | It is the unredacted posture output and names the owner account; only the redacted copy was used here | TE6-011 | The file is gone, and `git status` there does not list it |
 
@@ -332,11 +332,11 @@ as "gate A-n". Order matters for A1 → A4 → A5.
 - **Local tools.** gitleaks and shellcheck were not installed.
 - **Engine.** The engine's own repository: its tests are not this CI. `engine-host-sanitized`
   was never built here (no cmake or OpenCV). Left as handoffs to the engine repo: the
-  1-vs-N thread test (TD-346), an arm64 CI job (no TD row) and metamorphic tests (TD-347).
-- **Measurement validation.** Real-data validation at the pin (TD-327, A14) and the
+  1-vs-N thread test (TD-272), an arm64 CI job (no TD row) and metamorphic tests (TD-273).
+- **Measurement validation.** Real-data validation at the pin (TD-257, A14) and the
   Zenodo compare (A15).
-- **External testing.** No load test (TD-249). No pentest (TD-240). No schema fuzzing:
-  Schemathesis and Hypothesis were not approved (TE3-007, TD-319).
+- **External testing.** No load test (TD-37). No pentest (TD-32). No schema fuzzing:
+  Schemathesis and Hypothesis were not approved (TE3-007, TD-252).
 - **Licence states.** Demo-locked and offline states on the debug emulator: the bypass
   always installs a licensed account (AE1V-022).
 - **Fork.** material_testing beyond its P0 (Phase 8).
@@ -355,16 +355,16 @@ as "gate A-n". Order matters for A1 → A4 → A5.
    - keep the fork's CONTEXT and TECH_DEBT;
    - keep the fork's inverted `SessionIndexExtrasTest` "dropped" case.
 4. **Re-pick the TD ids against both registers before the merge.** The fork's register
-   holds TD-319–TD-329 for readiness and calls TD-318 its next free id. S took TD-318 and
-   TD-320–TD-347, and TD-330 is the rename's.
+   holds TD-252–TD-259 for readiness and calls TD-251 its next free id. S took TD-251 and
+   TD-56, TD-253–TD-273, and TD-56 is the rename's.
 5. **Fix the fork-only findings with the port** (Checkpoint 1: "Fix with the P0 port"):
    MT-001, MT-AE1-001, MT-AE2-001, MT-AE2-002, MT-AE3-001, MT-AE3-002 and MT-TE5-001.
    Each gets a failing-first test, as in Phase 4.
 6. **Fork-specific follow-ups.**
    - Set `SEMPER_RELEASE_CERT_SHA256` to the fork's own signer (TE1-007's default pins
      only S's key).
-   - Port `check_jni_parity` back to S (TD-339).
-   - The fork's `LabWorkflowDeviceTest` pinch failure on API 30 (TD-328).
+   - Port `check_jni_parity` back to S (TD-265).
+   - The fork's `LabWorkflowDeviceTest` pinch failure on API 30 (TD-258).
 7. **Gates on the fork.**
    - `ciReleaseGate`, `koverVerify` at 75/59 or higher (measured − 2);
      `compileDebugAndroidTestKotlin`.
@@ -377,16 +377,16 @@ as "gate A-n". Order matters for A1 → A4 → A5.
 ## 7. Inconsistencies in the run's records
 
 Resolved during the run (`7af1d73f`):
-- TD-345 was withdrawn as a duplicate of TD-331, which AE1-011 now cites.
-- TD-333 (AE1V-024) and TD-335 (AE1-009's residual) were closed, fixed and VERIFIED.
-- TD-334 was closed by the decision that the PDF is English-only (AE1-010).
+- TD-271 was withdrawn as a duplicate of TD-260, which AE1-011 now cites.
+- TD-261 (AE1V-024) and TD-263 (AE1-009's residual) were closed, fixed and VERIFIED.
+- TD-262 was closed by the decision that the PDF is English-only (AE1-010).
 
 Still open:
 - ADMIN_DECISIONS (Checkpoint 1) counts 11 observations. That is `type: observation`;
   `severity_final: observation` has 14, adding TE2-001, TE4-008 and AE1-020 (P2 →
   observation).
 - Two fixes have no finding record: TE6-017 (`e0b32dee`, posture script under Git Bash;
-  TD-325 cites it) and BASELINE-APK-UTF8 (`b33370fa`).
+  TD-255 cites it) and BASELINE-APK-UTF8 (`b33370fa`).
 - At `57e799b8` the rework log gave Kover lines as 81.96 % (19116 / 23323), while the gate
   printed 81.9721 %. This report uses the last full gate at `47fef6b4`: 82.22 %, as
   printed.

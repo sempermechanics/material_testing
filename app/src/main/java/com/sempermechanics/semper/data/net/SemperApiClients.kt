@@ -25,7 +25,7 @@ internal object SemperApiClients {
         .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .writeTimeout(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS) // large chunk PUTs to Drive
         .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        // No redirects (TD-161): OkHttp would carry every header but
+        // No redirects (TD-159): OkHttp would carry every header but
         // Authorization to the new host, X-App-Id, X-Firebase-AppCheck,
         // X-Device-Id, X-Nonce and X-Signature among them. Neither the
         // gateway nor Cloud Run sends one, and nothing on this client needs
@@ -59,7 +59,7 @@ internal object SemperApiClients {
     /**
      * The comma-separated [pins] for [baseUrl]'s host, or null when there are
      * none or no backend. Registered for the bare host name: the pinner matches
-     * host names only and refuses a `host:port` pattern (TD-160).
+     * host names only and refuses a `host:port` pattern (TD-158).
      */
     internal fun certificatePinner(pins: String, baseUrl: String): CertificatePinner? {
         val hashes = pins.split(',').map { it.trim() }.filter { it.isNotEmpty() }

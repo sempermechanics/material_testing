@@ -75,7 +75,7 @@ async def test_a_retired_app_may_not_replace_the_key(client, store, audited, mon
 @pytest.mark.asyncio
 async def test_a_retired_app_keeps_its_other_routes(client, store, monkeypatch):
     """Only registration is refused: the access log still has to show when no
-    build sends an old id (TD-176), and its reads cannot hurt the new app."""
+    build sends an old id (TD-174), and its reads cannot hurt the new app."""
     _bound(store)
     _as(store, monkeypatch)
 
@@ -118,7 +118,7 @@ async def test_registering_the_same_device_again_only_rewrites_its_key(client, s
 
 @pytest.mark.asyncio
 async def test_another_apps_registration_on_the_shared_id_is_put_back(client, store, audited, monkeypatch):
-    """The slot both apps share (TD-209): Semper Classroom on the same signing
+    """The slot both apps share (TD-7): Semper Classroom on the same signing
     key registers the same device id and takes the key; Semper registering
     again takes it back, and each app's binding stays where it was."""
     _bound(store)

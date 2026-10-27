@@ -52,8 +52,8 @@ deleted immediately; abandoned ones only disappear if Firestore is told to treat
    these two policies it is never purged. Restore still refuses one past
    `purgeAt`, so a missing policy only keeps data longer than promised.
 
-The fourth, `audit_logs.expireAt` (one-year audit retention, TD-237), was enabled
-on 2026-10-23, after the TD-246 backfill; the audit-trail log bucket was locked the same day
+The fourth, `audit_logs.expireAt` (one-year audit retention, TD-199), was enabled
+on 2026-10-23, after the TD-34 backfill; the audit-trail log bucket was locked the same day
 ([FIRESTORE_DATA_PROTECTION.md](FIRESTORE_DATA_PROTECTION.md), "The audit trail is
 append-only").
 
@@ -232,7 +232,7 @@ checks the token against.
 `GET /v1/sessions/{sid}/uploads` returns Drive upload capability URLs and always
 requires a device signature; there is nothing to set. The
 `REQUIRE_ATTESTED_UPLOADS` flag that used to open an ID-token-only window was
-retired on 2026-09-26 (TD-45) and is no longer read. If a service still carries
+retired on 2026-09-26 (TD-4) and is no longer read. If a service still carries
 it, remove it after the next promote (`--remove-env-vars REQUIRE_ATTESTED_UPLOADS`).
 
 ## 9. Verify in the browser

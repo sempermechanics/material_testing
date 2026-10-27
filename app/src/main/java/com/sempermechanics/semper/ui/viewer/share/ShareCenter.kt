@@ -201,7 +201,7 @@ internal class ShareCenter(private val activity: AppCompatActivity, private val 
         /**
          * The machine load behind the frame at position [index], or null without one.
          * Loads are per planned frame, so past a skipped frame this is not
-         * `loadsN[index]` (TD-91).
+         * `loadsN[index]` (TD-110).
          */
         fun loadAt(index: Int): Float? = loadsN.loadOfFrame(plannedAt(index))
 

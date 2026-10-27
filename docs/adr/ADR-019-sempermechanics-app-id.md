@@ -77,4 +77,4 @@ first install. The app is in testing and not on Play, so no store listing moves.
   the old id, would read the renamed prefs files and Keystore alias as empty and
   lose sign-in, settings and the device key.
 - The fallbacks (engine forwarders, old ids in `apps.py` and `assetlinks.json`,
-  `INDIC_*` keys) are removed once no build sends the old ids: TD-176.
+  `INDIC_*` keys) are removed once no build sends the old ids: TD-174.

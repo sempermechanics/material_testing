@@ -13,8 +13,8 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * The shared backend clients: they follow no redirect (TD-161), and the
- * certificate pins are registered for the backend's bare host name (TD-160).
+ * The shared backend clients: they follow no redirect (TD-159), and the
+ * certificate pins are registered for the backend's bare host name (TD-158).
  */
 class SemperApiClientsTest {
 

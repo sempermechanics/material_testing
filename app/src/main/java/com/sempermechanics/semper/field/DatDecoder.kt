@@ -13,7 +13,7 @@ import java.nio.channels.FileChannel
 /**
  * Reads `.dat` frames from disk for [DicResult.decodeDatFile] without holding a second
  * full-size [ByteArray]: memory-mapped, with a chunked-read fallback. [decodeInto] can
- * also refill a caller's array, for passes over a whole batch (TD-87).
+ * also refill a caller's array, for passes over a whole batch (TD-107).
  */
 object DatDecoder {
 

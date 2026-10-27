@@ -80,7 +80,7 @@ The workflow checks these five first and fails naming the ones that are empty.
 The drill project and the variables were set up on 2026-10-09, and the first
 drill passed on 2026-10-10 (an RTO of 111 s; recorded in
 [PRODUCTION_READINESS_GATE.md](../ops/PRODUCTION_READINESS_GATE.md)). Runs before
-that failed for want of them (TD-156). The one-time setup, should it be needed
+that failed for want of them (TD-155). The one-time setup, should it be needed
 again, is
 `scripts/setup-restore-drill.sh`, run by someone who can create projects, owns
 the billing account and the production backup bucket, and is a repo admin:
@@ -153,7 +153,7 @@ query on `uid` that needs the `seats.uid` / `deleted_seats.uid` COLLECTION_GROUP
 index (`backend/firestore.indexes.json:161-204`): deploy the indexes before the
 backend. Without it the search fails, only the current licence's seat is
 blanked, `seatScanComplete` is false and `erasure_seat_scan_failed` is logged
-(TD-271).
+(TD-47).
 
 `audit_logs` is deliberately excluded so security and deletion events remain
 available for incident response and proof of erasure. Audit records must not
@@ -169,16 +169,16 @@ so it keeps the address out of clear text; it does not stop someone with a list 
 candidate addresses from confirming one. A licence's free-text `note` is
 recorded by `ADMIN_LICENSE_EXTEND` only as changed and its length
 (`backend/app/routers/admin.py:29-40`). Access is server/admin-only under the deny-all client rules.
-Rows are kept **one year** (365 days; the owner's decision of 2026-10-22, TD-237):
+Rows are kept **one year** (365 days; the owner's decision of 2026-10-22, TD-199):
 each carries `expireAt` = its time + `AUDIT_RETENTION_DAYS` (`backend/app/config.py`,
 default 365), set as it is added (`add_audit_row`, `backend/app/repo/audit_log.py`),
 and a Firestore TTL policy on `audit_logs.expireAt` deletes it then. Rows from
-before the change get `expireAt` from the TD-246 backfill (below). Backups inherit
+before the change get `expireAt` from the TD-34 backfill (below). Backups inherit
 the same retention/legal-hold policy.
 
 ### The audit trail is append-only
 
-What the code holds (TD-237):
+What the code holds (TD-199):
 
 - Only `add_audit_row` writes `audit_logs`, and it only adds a document
   (`backend/app/repo/audit_log.py`). No other module names the collection, and
@@ -189,7 +189,7 @@ What the code holds (TD-237):
   `rewrites_append_only` (`backend/scripts/migrations/__init__.py`, `APPEND_ONLY`);
   the loader refuses one that does not. `001_stamp_schema_version` is the one
   that did, before the guard. The one other rewrite written,
-  `backend/scripts/stamp_audit_licence_ids.py` (TD-246: adds `licenseId` to
+  `backend/scripts/stamp_audit_licence_ids.py` (TD-34: adds `licenseId` to
   rows from before 2026-10-18 so a licence's export reaches them, and
   `expireAt` = `ts` + `AUDIT_RETENTION_DAYS` to rows written before
   `add_audit_row` set it, so TTL reaches them; nothing else, and never a field
@@ -211,7 +211,7 @@ edit or delete a row through the Admin API. The immutable copy is the log
 line, once a sink routes it to a bucket whose retention is locked; the `audit-trail` bucket (`asia-south1`, 365 days) and its sink on `jsonPayload.event="audit_row"` were created and the bucket locked on 2026-10-23. The
 retention is the one year decided above, the same as `AUDIT_RETENTION_DAYS`.
 In this order, after the backend that writes `expireAt` is deployed and the
-TD-246 backfill has run (dry run, then `--apply --decision "…"`), so every row
+TD-34 backfill has run (dry run, then `--apply --decision "…"`), so every row
 carries `expireAt` before TTL acts on any:
 
 ```bash

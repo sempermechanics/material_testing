@@ -1,5 +1,5 @@
 """`POST /v1/admin/licenses/search`: the desk's search with the address in a
-body, not the URL (TD-244). The GET with `q` is served for one more release
+body, not the URL (TD-203). The GET with `q` is served for one more release
 and logs `deprecated_query_search`, without the value."""
 import json
 import logging

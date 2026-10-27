@@ -157,7 +157,7 @@ def session_uploads(
     (POST /v1/sessions, POST /v1/files/{id}/complete) requires attestation, so a
     stolen ID token alone must not be able to recover them here either. (An
     ID-token-only read was accepted during the fleet migration; retired
-    2026-09-26 after 30 days of logs showed no such caller — TD-45.)
+    2026-09-26 after 30 days of logs showed no such caller — TD-4.)
     """
     user = ctx.user
     session = _owned_session(sid, user)
@@ -267,7 +267,7 @@ def replace_session_metadata(sid: SessionId, payload: dict = Body(...), ctx=Depe
         raise HTTPException(502, errors.DRIVE_WRITE_FAILED)
 
     # A rename is sent this way too: the session doc takes the new name, so the
-    # backup list shows it (TD-208). A body with no name leaves the old one.
+    # backup list shows it (TD-195). A body with no name leaves the old one.
     repo.replace_file_content(sid, file_id, len(data), hashlib.sha256(data).hexdigest(), written["md5"],
                               name=repo.session_name_of(payload))
     audit.record(user["uid"], ctx.device_id, action="SESSION_METADATA_REPLACE",

@@ -65,7 +65,7 @@ object FrameOrderHelper {
      *
      * Only the import's own copies, all in the import cache
      * ([FrameImportHelper.COMMITTED_DIR_NAME]), are renamed. Frames anywhere
-     * else keep their paths (TD-211): one a run moved into a session's
+     * else keep their paths (TD-197): one a run moved into a session's
      * `raw_deformed/` is that analysis's image, which its Home row names, and
      * renaming it broke Home, the exports and the backup. The run reads list
      * order, not path order, so the new order holds either way.

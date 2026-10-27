@@ -28,7 +28,7 @@ internal sealed interface Target {
 }
 
 /**
- * What Credits & licences shows (ADR-031, TD-349): one list of every part of
+ * What Credits & licences shows (ADR-031, TD-57): one list of every part of
  * the app and the licence it is under. The full texts, and the notices Google
  * bundles inside Play services and Firebase, are on the website
  * (`licences_full_url`, built by semper-website's `tools/build-licences.py`

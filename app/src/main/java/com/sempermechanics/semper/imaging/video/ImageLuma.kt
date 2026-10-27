@@ -17,7 +17,7 @@ internal object ImageLuma {
     /**
      * Copies the cropped Y plane of [image]; the caller still owns the image. A
      * [limitedRange] plane (see [isLimitedRange]) is stretched to 0–255, so video
-     * frames reach the engine at the same contrast as photos and MJPEG (TD-134).
+     * frames reach the engine at the same contrast as photos and MJPEG (TD-137).
      */
     fun of(image: Image, rotationDegrees: Int, limitedRange: Boolean): GrayPngEncoder.Luma {
         val plane = image.planes[0]
@@ -46,7 +46,7 @@ internal object ImageLuma {
     }
 
     /**
-     * Whether a decoder's Y plane holds limited-range luma (TD-134). The first of
+     * Whether a decoder's Y plane holds limited-range luma (TD-137). The first of
      * [formats] that names a colour range decides; with none, video's default
      * applies, which is limited. Only a stream that says full range is kept as stored.
      */

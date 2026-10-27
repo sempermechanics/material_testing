@@ -86,7 +86,7 @@ async def test_a_session_is_tagged_with_the_app_that_created_it(store, client):
     sessions = store._data["sessions"]
     assert sessions[semper.json()["sessionId"]]["app"] == apps.SEMPER
     # Stored by the old name, which a backend from before the rename lists too
-    # (`apps.stored_name`, TD-330); answered by the name of today.
+    # (`apps.stored_name`, TD-56); answered by the name of today.
     assert sessions[mt.json()["sessionId"]]["app"] == apps.LEGACY_MATERIAL_TESTING
     listed = await client.get("/v1/sessions", headers=MT_HEADER)
     assert {s["sessionId"]: s["app"] for s in listed.json()["sessions"]} == {
@@ -301,7 +301,7 @@ def test_backfill_attributes_by_the_sessions_device(backfill):
     tag_session_apps.tag_sessions(backfill, apply=True)
     tags = {sid: s.get("app") for sid, s in backfill._data["sessions"].items()}
     # A device tagged by either name is Semper Classroom's, and its sessions
-    # are tagged with the stored name (`apps.stored_name`, TD-330).
+    # are tagged with the stored name (`apps.stored_name`, TD-56).
     old = apps.LEGACY_MATERIAL_TESTING
     assert tags == {
         "s1": apps.SEMPER, "s2": old, "s3": apps.SEMPER, "s4": apps.SEMPER,

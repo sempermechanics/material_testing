@@ -116,7 +116,7 @@ class ApiErrorMappingTest {
     @Test
     fun `no backend configured is an IOException, not a bare path`() {
         // OkHttp throws IllegalArgumentException on "/v1/me"; callers only
-        // expect IOException, so a blank base must never reach it (TD-90).
+        // expect IOException, so a blank base must never reach it (TD-109).
         val ex = assertThrows(CloudNotConfiguredException::class.java) {
             SemperApiHttp.endpoint("", "/v1/me")
         }

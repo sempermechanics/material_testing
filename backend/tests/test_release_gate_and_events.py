@@ -193,7 +193,7 @@ async def test_a_redeemed_key_logs_an_activation(licensing, client, caplog):
     assert event["licenseId"] == minted["license"]["id"] == key_hash(minted["key"])
     assert event["appId"] == "com.sempermechanics.semper"
     assert event["appVersion"] == 35
-    # Passed by the handler, not read from the request context (TD-245).
+    # Passed by the handler, not read from the request context (TD-204).
     assert event["uid"] == "dev-user"
     assert "dev@local" not in caplog.text
 
@@ -273,7 +273,7 @@ def test_a_device_mismatch_logs_a_devlock_drop(store, caplog):
     assert user["mode"] == "demo"
     [event] = _events(caplog, "devlock_drop")
     assert (event["licenseId"], event["stage"], event["outcome"]) == (license_id, "mismatch", "demo")
-    # Logged before `current_user` binds the uid, so it is passed in (TD-245).
+    # Logged before `current_user` binds the uid, so it is passed in (TD-204).
     assert event["uid"] == "solo-1"
     assert "solo@lab.org" not in caplog.text
 

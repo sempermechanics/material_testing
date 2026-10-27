@@ -158,7 +158,7 @@ class VisualizationEngineTest {
     @Test
     fun `valueRanges over a reused, oversized buffer and columns matches a fresh call`() {
         // globalRanges reuses one frame buffer and one set of columns across a batch
-        // (TD-87): a smaller frame must read only its own floats, never the tail an
+        // (TD-107): a smaller frame must read only its own floats, never the tail an
         // earlier, larger frame left, and must ignore what the columns held before.
         val data = rampField(cols = 25, rows = 17, step = 4)
         val fields = intArrayOf(

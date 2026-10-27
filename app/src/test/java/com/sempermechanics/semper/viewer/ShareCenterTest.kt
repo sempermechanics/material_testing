@@ -130,7 +130,7 @@ class ShareCenterTest {
     @Test
     fun `past a skipped frame each frame keeps its own load`() {
         // Loads are per planned frame; frame_001 (200 N) was never written. By
-        // position the export read 300 N as frame 2's load, then gave up (TD-91).
+        // position the export read 300 N as frame 2's load, then gave up (TD-110).
         File(batchDir, "frame_001.dat").delete()
         val activity = viewer(listOf("a.png", "b.png", "c.png"), loadsN = listOf(100f, 200f, 300f))
 

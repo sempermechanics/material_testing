@@ -29,7 +29,7 @@ import org.robolectric.RobolectricTestRunner
  *   must be allowed to run; only its upload is gated elsewhere.
  * - The session ceiling is owned by [AppRemoteConfig]; [SessionQuota] reads it and
  *   computes the hard stop live from used-vs-max.
- * - One rule (TD-167): every start check and the save of a row no run's start
+ * - One rule (TD-165): every start check and the save of a row no run's start
  *   admitted ask [SessionQuota.blocked]. It used to be two, which disagreed on
  *   the forced stop, on a build with no backend, and on which local count.
  */
@@ -161,7 +161,7 @@ class QuotaGateTest {
     }
 
     @Test
-    fun `the device's stop outlives the account's fresh numbers (TD-279)`() {
+    fun `the device's stop outlives the account's fresh numbers (TD-219)`() {
         // The device half of the demo cap refused an upload; the account's own
         // count has room. A re-check that reconciles the account lifted the
         // stop, reported room, and the next upload was refused again.

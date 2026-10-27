@@ -85,7 +85,7 @@ def _access_entries(caplog) -> list[dict]:
 
 
 async def test_access_log_names_the_app_id_each_call_sends(client, caplog, monkeypatch):
-    """TD-176: the old `com.indicvision.*` ids can go once the log shows no
+    """TD-174: the old `com.indicvision.*` ids can go once the log shows no
     call sends them; a known id is logged as sent."""
     import logging
 

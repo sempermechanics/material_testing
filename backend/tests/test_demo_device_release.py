@@ -1,4 +1,4 @@
-"""A Demo account changing phone: staff release it on request (TD-126, decided 2026-09-26).
+"""A Demo account changing phone: staff release it on request (TD-131, decided 2026-09-26).
 
 A Demo account has no licence lock to clear, so before this its first phone was
 its only phone. Staff release the registered phone by the account's email; the
@@ -54,7 +54,7 @@ def test_a_licensed_account_is_sent_to_new_device(store):
 
 
 def test_a_holder_left_on_demo_by_a_revoked_licence_can_be_released(store):
-    """A lock clear skips them (TD-127); the staff release is their way to move."""
+    """A lock clear skips them (TD-132); the staff release is their way to move."""
     store._data["users"] = {}
     license_id = _mint_individual()["license"]["id"]
     user = repo.ensure_entitlement(_signed_in(store, "solo-1", "solo@lab.org"), None)

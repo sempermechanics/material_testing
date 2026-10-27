@@ -35,7 +35,7 @@ import java.io.IOException
  * test type stays on the Intent (not consumed): a recreation after process
  * death re-reads it, and the view model is authoritative once set. On a
  * [firstOpen] from Home's Re-run of a lab test, its dimensions and taps go in
- * before the load card reads them (TD-280); so do a bundled example's
+ * before the load card reads them (TD-220); so do a bundled example's
  * dimensions (Try it, ADR-031). On a first open it sets [strainWindow] to the
  * test's default; the slider keeps its own value across recreation.
  *

@@ -106,7 +106,7 @@ class HomeQuotaCard(
 
     private fun updateQuotaIndicator(localSessionCount: Int, max: Int) {
         // The cap the gate enforces, not the server's maxSessions: with the
-        // entitlement token lapsed that is demo's (TD-263): Lines.shownCap.
+        // entitlement token lapsed that is demo's (TD-209): Lines.shownCap.
         val used = AccountCache.quotaUsed(activity).coerceAtLeast(localSessionCount)
         if (max <= 0) {
             if (AppRemoteConfig.shouldHintSyncBlocked(activity) && SemperApi.get(activity).enabled) {

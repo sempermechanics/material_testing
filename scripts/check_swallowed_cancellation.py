@@ -6,8 +6,8 @@ ADR-018 (docs/adr/ADR-018-error-convention.md, "Cancellation"): a coroutine's
 `suspendRunCatching`, never `runCatching`, or rethrow `CancellationException`
 ahead of a generic catch. detekt's `SuspendFunSwallowedCancellation` would
 check it but needs type resolution, which detekt 1.23.8 cannot do here
-(TD-171); this is a source heuristic in its place, the way
-`check_activity_scope_work.py` stands in for a lint rule (TD-291):
+(TD-169); this is a source heuristic in its place, the way
+`check_activity_scope_work.py` stands in for a lint rule (TD-228):
 
 * **What is checked.** Every `try { } catch (e: Exception)` (or `Throwable`,
   `RuntimeException`, `IllegalStateException`: each one catches

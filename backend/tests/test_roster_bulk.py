@@ -401,14 +401,14 @@ async def test_the_roster_exports_as_a_csv_that_imports_back(it, client):
     assert r.headers["content-disposition"] == f'attachment; filename="roster-{it.a}.csv"'
     assert r.headers["cache-control"] == "no-store"
     lines = r.text.splitlines()
-    # Semper Classroom's lock keeps its old column until TD-330 (ADR-030).
+    # Semper Classroom's lock keeps its old column until TD-56 (ADR-030).
     assert lines[0].startswith("email,status,uid,deviceIdLock,deviceIdLockMaterialTesting,")
     assert lines[1].startswith("ana@uni-a.edu,active,ana,")
     # An address that reads as a formula is defused for the spreadsheet.
     assert lines[2].startswith("'=cmd@uni-a.edu,invited,,")
     assert [a["action"] for a in it.audited] == ["INSTITUTION_ROSTER_EXPORT"]
 
-    # The file as it was downloaded imports back: the guard is undone (TD-267).
+    # The file as it was downloaded imports back: the guard is undone (TD-213).
     again = await _import(client, it, r.text)
     assert [(x["email"], x["outcome"]) for x in again.json()["results"]] == [
         ("ana@uni-a.edu", "exists"), ("=cmd@uni-a.edu", "exists")]
@@ -416,7 +416,7 @@ async def test_the_roster_exports_as_a_csv_that_imports_back(it, client):
 
 @pytest.mark.asyncio
 async def test_addresses_that_start_with_a_sign_survive_an_export_and_import(it, client):
-    """TD-267: `-a@` and `+b@` are valid local parts, which the export quotes
+    """TD-213: `-a@` and `+b@` are valid local parts, which the export quotes
     as `'-a@` and `'+b@`. Re-importing the file used to answer `invalid`."""
     _account(it, "dash", "-a@uni-a.edu")
     attempt_add(repo.add_institution_member, it.a, "-a@uni-a.edu")
@@ -655,7 +655,7 @@ def test_csv_cells_are_written_for_a_spreadsheet():
 def test_the_roster_keeps_semper_classrooms_old_lock_column():
     """IT's sheets are keyed on `deviceIdLockMaterialTesting`, and the old field
     is the one every backend keeps current, so the column is read from it
-    until TD-330; a stale new field is not exported."""
+    until TD-56; a stale new field is not exported."""
     assert roster_io.ROSTER_COLUMNS[3:5] == ["deviceIdLock", "deviceIdLockMaterialTesting"]
     assert "deviceIdLockSemperClassroom" not in roster_io.ROSTER_COLUMNS
     seat = {"email": "a@x.edu", "status": "active", "uid": "a", "deviceIdLock": "semper-1",

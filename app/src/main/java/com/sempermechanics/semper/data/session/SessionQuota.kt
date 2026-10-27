@@ -8,7 +8,7 @@ import com.sempermechanics.semper.data.net.CloudApi
 import com.sempermechanics.semper.data.net.SemperApi
 
 /**
- * The one rule for whether the account may add another analysis (TD-167).
+ * The one rule for whether the account may add another analysis (TD-165).
  * Every check asks [blocked]: Home's new-analysis gate and quota line, the
  * limit screen's re-check, the wizard's start check, the run's own start
  * check, and [SessionStore.save] for a new row that no admitted run or
@@ -61,7 +61,7 @@ object SessionQuota {
     fun blockedNow(context: Context): Boolean = blocked(context, AccountCache.localCount(context))
 
     /**
-     * Whether the device half of the demo cap holds the stop (TD-279): an
+     * Whether the device half of the demo cap holds the stop (TD-219): an
      * upload was refused `device_quota_exceeded`, and the server still counts
      * the account as demo. The server holds a licensed account to its own cap
      * only, so a licence arriving lifts it with no further check.

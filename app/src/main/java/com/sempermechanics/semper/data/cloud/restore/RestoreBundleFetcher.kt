@@ -41,7 +41,7 @@ internal object RestoreBundleFetcher {
 
     private const val PERCENT = 100L
 
-    /** The scratch a split bundle downloads into ([PayloadFetch.scratch]); its `.part` outlives a stop (TD-283). */
+    /** The scratch a split bundle downloads into ([PayloadFetch.scratch]); its `.part` outlives a stop (TD-223). */
     const val BUNDLE_SCRATCH = "bundle.zip"
 
     /** One restore's source and destination: everything a payload fetch needs, travelling together. */
@@ -96,7 +96,7 @@ internal object RestoreBundleFetcher {
      * Download Session.zip with size checks, verify zip magic, unpack.
      * Deletes `.part` / `.full` sidecars so a corrupt transfer cannot stick,
      * except when the attempt will run again: a stop WorkManager reruns
-     * (TD-283) or a failure the worker retries ([keepsPartFor], TD-307)
+     * (TD-223) or a failure the worker retries ([keepsPartFor], TD-243)
      * resumes from them. A failed size, zip or sha256 check, or any failure
      * the worker gives up on, drops them, as does the worker when the app
      * cancelled or it gave up ([CloudRestore.discardDownloads]). The bundle's
