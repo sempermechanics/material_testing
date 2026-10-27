@@ -149,10 +149,12 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **CI.** Tiers follow the diff, floors rise with every test PR ([TESTING.md](docs/app/TESTING.md#coverage-floors)),
   `main` requires `CI OK`, and Tier 3 signs in to live staging, so a staging backend behind
   `main` fails it. Always-on: `engine-pin`, `console-a11y`; `engine-host-sanitized` follows
-  Tier 3. The OpenAPI snapshot is rewritten with `UPDATE_OPENAPI_SNAPSHOT=1` ([ADR-029](docs/adr/ADR-029-api-contract-snapshot.md)). Open on
-  `claude/ci-speedups-release-checks` (from material_testing#148 and #150): the release check
+  Tier 3. The OpenAPI snapshot is rewritten with `UPDATE_OPENAPI_SNAPSHOT=1` ([ADR-029](docs/adr/ADR-029-api-contract-snapshot.md)). Merged
+  2026-10-27 (#488, from material_testing#148 and #150): the release check
   fails a targetSdk below 36 or a `.so` off 16 KB pages; the `benchmark` build is R8-minified
   and launch-smoked; Macrobenchmarks dry-run on PRs; heavy tiers wait for `tier1-static` only.
+  Open on `claude/checkout-submodules-retry` (material_testing#152): submodules come through
+  `checkout-submodules` (Eigen cached by its pin, every fetch retried).
 - **Owed.** A device smoke of the next release ([RELEASING.md](docs/ops/RELEASING.md) step 5);
   TD-212 at the 0.6.1 pin; Pixel 6 benchmarks for #435; ADR-015's queued-work upgrade check;
   [WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a on a device; both apps on one phone; TD-36.

@@ -1,0 +1,37 @@
+name: Check out the engine submodules
+description: >
+  Initialise `engine` and its nested submodules (Eigen, OpenCV) after a plain
+  `actions/checkout`. Eigen's `.gitmodules` URL is gitlab.com, which refused
+  GitHub's runners "due to load" for hours on 2026-10-26; the workflows'
+  `GIT_CONFIG_*` env already sends it to a GitHub mirror (TD-348). Eigen's git
+  directory is also cached by its pinned commit, so a run whose pin is cached
+  fetches it from neither host, and every fetch still needed is retried with
+  backoff (retry.sh). Ported from the material_testing fork (its #152), which
+  shares `engine`. Every fetch is one commit deep, as `actions/checkout`
+  fetched them with `submodules: recursive`.
+
+runs:
+  using: composite
+  steps:
+    - name: Engine submodule
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/retry.sh" git submodule update --init --depth 1 engine
+
+    - name: Eigen pin
+      id: eigen
+      shell: bash
+      run: echo "sha=$(git -C engine rev-parse HEAD:third_party/eigen)" >> "$GITHUB_OUTPUT"
+
+    # A submodule's git directory sits under the superproject's .git, named by
+    # the submodule's name. With it restored, `git submodule update` reuses it
+    # and fetches only when the pinned commit is missing, which it never is
+    # under this key. A cache saved on main (the weekly schedule) serves every PR.
+    - name: Restore Eigen's git directory
+      uses: actions/cache@v6
+      with:
+        path: .git/modules/engine/modules/third_party/eigen
+        key: submodule-eigen-${{ steps.eigen.outputs.sha }}
+
+    - name: Nested submodules
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/retry.sh" git -C engine submodule update --init --recursive --depth 1

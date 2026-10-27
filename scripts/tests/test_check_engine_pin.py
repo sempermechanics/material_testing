@@ -164,7 +164,8 @@ class EngineHostJobTest(unittest.TestCase):
         job = _job(self.ci, "engine-host-sanitized")
         self.assertIn("needs: changes", job)
         self.assertIn("if: needs.changes.outputs.engine_host == 'true'", job)
-        self.assertIn("submodules: recursive", job)
+        # Engine, Eigen and OpenCV, through the cached, retried checkout.
+        self.assertIn("uses: ./.github/actions/checkout-submodules", job)
         self.assertIn("libopencv-dev", job)
         self.assertIn("working-directory: engine", job)
         for flag in ("-S tests", "-DDIC_REQUIRE_OPENCV=ON", "-DDIC_SANITIZER=address,undefined",
