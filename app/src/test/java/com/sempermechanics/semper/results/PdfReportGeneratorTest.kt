@@ -21,6 +21,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.ByteArrayOutputStream
 import java.util.Locale
+import kotlin.coroutines.EmptyCoroutineContext
 
 /**
  * The report's progress contract and failure handling: the share sheet drives
@@ -31,7 +32,10 @@ import java.util.Locale
  * "document is closed"), so drawing pages is covered on a device by
  * `PdfReportDeviceTest`; these cases never start a page. Its `writeTo` throws
  * the same way, so [ShadowPdfDocumentWrite] makes the final write a no-op: a
- * throw there could drop statuses still in the `flowOn` channel.
+ * throw there could drop statuses still in the `flowOn` channel. The status
+ * tests also render on the test's thread ([EmptyCoroutineContext]): on
+ * Dispatchers.Default that failure cancelled the collector before it had read
+ * the buffered statuses, and CI saw none (main at `035f5095`, 2026-10-26).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(shadows = [ShadowPdfDocumentWrite::class])
@@ -61,13 +65,15 @@ class PdfReportGeneratorTest {
         return collected.statuses
     }
 
+    private val onThisThread = EmptyCoroutineContext
+
     @Test
     fun `batch progress spreads frames over the middle of the bar`() {
-        val collected = collect(PdfReportGenerator.generateBatch(4, { null }, ByteArrayOutputStream()))
+        val collected = collect(
+            PdfReportGenerator.generateBatch(4, { null }, ByteArrayOutputStream(), renderContext = onThisThread),
+        )
         val events = collected.statuses
         // The write, last, has its own status rather than the last frame's.
-        // The failure goes in the message: CI once saw no status at all here,
-        // so the flow threw before its first emit, and the cause was swallowed.
         assertEquals(
             "statuses; the flow ended with: ${collected.failureText}",
             listOf(2, 25, 48, 71, 98),
@@ -81,7 +87,11 @@ class PdfReportGeneratorTest {
 
     @Test
     fun `batch with every frame unreadable has no telemetry page`() {
-        val events = statuses(PdfReportGenerator.generateBatch(2, { null }, ByteArrayOutputStream()))
+        val events = statuses(
+            PdfReportGenerator.generateBatch(2, { null }, ByteArrayOutputStream(), renderContext = onThisThread),
+        )
+        // Not vacuous: the frames' statuses and the write's arrived.
+        assertEquals(listOf(Stage.FRAME, Stage.FRAME, Stage.FINISHING), events.map { it.stage })
         assertTrue(events.none { it.stage == Stage.TELEMETRY })
     }
 

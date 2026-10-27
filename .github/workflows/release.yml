@@ -156,8 +156,9 @@ jobs:
       actions: write   # prune-cache
     steps:
       - uses: actions/checkout@v7
-        with:
-          submodules: recursive
+
+      # Submodules after checkout: Eigen from cache, fetches retried (GitLab outages).
+      - uses: ./.github/actions/checkout-submodules
 
       - uses: ./.github/actions/setup-android-build
         with:
