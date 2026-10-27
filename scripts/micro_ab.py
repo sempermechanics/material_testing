@@ -156,14 +156,17 @@ def adb(prefix: list[str], *args: str, check: bool = True) -> str:
     return result.stdout
 
 
-def run_round(prefix: list[str], number: int, build: str, apk_dir: Path, package: str, out: Path) -> None:
+def run_round(prefix: list[str], number: int, build: str, apk_dir: Path, package: str, out: Path,
+              others: tuple[str, ...] = ()) -> None:
     round_dir = out / f"{number}-{build}"
     round_dir.mkdir(parents=True, exist_ok=True)
     # Uninstall first: a build signed with another debug key (CI's smoke run
     # installs through Gradle) refuses to install over this one, and every round
-    # starts from the same clean install.
-    for installed in (f"{package}.test", package):
-        adb(prefix, "uninstall", installed, check=False)
+    # starts from the same clean install. `others` is the other build's id when
+    # it differs, so its app is not left installed beside this one.
+    for app in dict.fromkeys((package, *others)):
+        for installed in (f"{app}.test", app):
+            adb(prefix, "uninstall", installed, check=False)
     for apk in APKS:
         adb(prefix, "install", "-r", "-t", str(apk_dir / apk))
     media = [f"/sdcard/Android/media/{package}", f"/sdcard/Android/media/{package}.test"]
@@ -192,9 +195,10 @@ def run(args: argparse.Namespace) -> None:
         if missing:
             raise RuntimeError(f"{build_dir} is missing {', '.join(missing)}")
     args.out.mkdir(parents=True, exist_ok=True)
+    dirs = {"A": args.a, "B": args.b}
+    packages = {build: build_app_id(folder, args.package) for build, folder in dirs.items()}
     for number, build in enumerate(abba(args.rounds), start=1):
-        apk_dir = args.a if build == "A" else args.b
-        run_round(prefix, number, build, apk_dir, build_app_id(apk_dir, args.package), args.out)
+        run_round(prefix, number, build, dirs[build], packages[build], args.out, tuple(packages.values()))
 
 
 def main(argv: list[str]) -> int:
