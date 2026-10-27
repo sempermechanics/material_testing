@@ -21,6 +21,11 @@ Checks (FAIL exits 1; WARN is reported and does not fail):
                     security config (when one is set and resolvable) does not
                     permit cleartext in base-config or a domain-config
   min-sdk           the APK's minSdkVersion equals `minSdk` in app/build.gradle.kts
+  target-sdk        the APK's targetSdkVersion equals `targetSdk` in
+                    app/build.gradle.kts and is at least Play's floor (36)
+  native-16kb       every lib/<abi>/*.so is ELF with each LOAD segment aligned to
+                    16 KB or more, and a .so stored uncompressed starts at a 16 KB
+                    offset in the zip (Play: 16 KB page sizes); the APK has one
   r8-mapping        with --mapping: the file exists, is non-empty and holds
                     `a -> b` lines (evidence R8 ran)
   cert-pins         WARN when no `sha256/<base64>` pin string is in the dex,
@@ -47,6 +52,7 @@ import json
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -59,6 +65,11 @@ ANDROID_NS = "http://schemas.android.com/apk/res/android"
 COMPONENT_TAGS = ("activity", "activity-alias", "provider", "receiver", "service")
 DEBUG_APPCHECK = b"DebugAppCheckProviderFactory"
 PIN_RE = re.compile(rb"sha256/[A-Za-z0-9+/]{43}=")
+# Play refuses new apps and updates that target less, from 2026-08-31.
+PLAY_MIN_TARGET_SDK = 36
+# Android 15+ devices may run with 16 KB pages; Play requires native code to load there.
+PAGE_16K = 16384
+NATIVE_LIB_RE = re.compile(r"lib/[^/]+/[^/]+\.so")
 EXAMPLES = "assets/examples/"
 APK_BUDGET_MB = 150
 
@@ -203,12 +214,60 @@ def resource_file(dump: str, res_id: int) -> str | None:
     return None
 
 
+# --- native libraries --------------------------------------------------------
+
+
+def elf_load_aligns(data: bytes) -> list[int] | None:
+    """`p_align` of every PT_LOAD segment of an ELF file, or None when `data` is not ELF.
+
+    Reads ELF32 and ELF64 in either byte order: only the header's program-header
+    table fields and each entry's type and alignment.
+    """
+    if len(data) < 52 or data[:4] != b"\x7fELF" or data[4] not in (1, 2) or data[5] not in (1, 2):
+        return None
+    is64 = data[4] == 2
+    end = "<" if data[5] == 1 else ">"
+    if is64:
+        if len(data) < 64:
+            return None
+        (phoff,) = struct.unpack_from(end + "Q", data, 0x20)
+        phentsize, phnum = struct.unpack_from(end + "HH", data, 0x36)
+        align_at, align_fmt = 48, "Q"
+    else:
+        (phoff,) = struct.unpack_from(end + "I", data, 0x1C)
+        phentsize, phnum = struct.unpack_from(end + "HH", data, 0x2A)
+        align_at, align_fmt = 28, "I"
+    if phentsize < align_at + struct.calcsize(align_fmt) or phoff + phnum * phentsize > len(data):
+        return None
+    aligns = []
+    for i in range(phnum):
+        entry = phoff + i * phentsize
+        (p_type,) = struct.unpack_from(end + "I", data, entry)
+        if p_type == 1:  # PT_LOAD
+            aligns.append(struct.unpack_from(end + align_fmt, data, entry + align_at)[0])
+    return aligns
+
+
+def zip_data_offset(fh, info: zipfile.ZipInfo) -> int:
+    """Where an entry's bytes start: after its local header, name and extra field."""
+    fh.seek(info.header_offset)
+    header = fh.read(30)
+    name_len, extra_len = struct.unpack_from("<HH", header, 26)
+    return info.header_offset + 30 + name_len + extra_len
+
+
 # --- inputs from the repo ----------------------------------------------------
 
 
 def gradle_min_sdk(text: str) -> int | None:
     """`minSdk = 30` (or `minSdk(30)` / `minSdkVersion 30`) from a Gradle script."""
     m = re.search(r"^\s*minSdk(?:Version)?\s*(?:=|\(|\s)\s*(\d+)", text, re.MULTILINE)
+    return int(m.group(1)) if m else None
+
+
+def gradle_target_sdk(text: str) -> int | None:
+    """`targetSdk = 36` (or `targetSdk(36)` / `targetSdkVersion 36`) from a Gradle script."""
+    m = re.search(r"^\s*targetSdk(?:Version)?\s*(?:=|\(|\s)\s*(\d+)", text, re.MULTILINE)
     return int(m.group(1)) if m else None
 
 
@@ -260,6 +319,16 @@ class Result:
 
 
 @dataclass
+class NativeLib:
+    """One lib/<abi>/*.so: its LOAD alignments (None when not ELF) and how it sits in the zip."""
+
+    name: str
+    load_aligns: list[int] | None
+    stored: bool
+    data_offset: int
+
+
+@dataclass
 class ApkFacts:
     manifest: Element
     badging: dict
@@ -267,6 +336,7 @@ class ApkFacts:
     entries: list[str]
     nsc_tree: Element | None = None
     nsc_note: str = ""
+    native_libs: list[NativeLib] = field(default_factory=list)
     size: int = 0
     # Set id -> (every file its example.json lists, the ones the wizard opens); None when not read.
     examples: dict[str, tuple[list[str], list[str]]] | None = None
@@ -282,8 +352,19 @@ def example_files(doc: dict) -> tuple[list[str], list[str]]:
     return list(dict.fromkeys(listed)), opened
 
 
-def evaluate(facts: ApkFacts, *, expected_min_sdk: int | None, debug_names: set[str],
-             mapping: Path | None) -> list[Result]:
+def _native_problems(lib: NativeLib) -> list[str]:
+    if lib.load_aligns is None:
+        return [f"{lib.name}: not an ELF file"]
+    problems = [f"{lib.name}: LOAD p_align {a}" for a in lib.load_aligns if a < PAGE_16K]
+    if not lib.load_aligns:
+        problems.append(f"{lib.name}: no LOAD segment")
+    if lib.stored and lib.data_offset % PAGE_16K:
+        problems.append(f"{lib.name}: stored at zip offset {lib.data_offset}, not a multiple of {PAGE_16K}")
+    return problems
+
+
+def evaluate(facts: ApkFacts, *, expected_min_sdk: int | None, expected_target_sdk: int | None,
+             debug_names: set[str], mapping: Path | None) -> list[Result]:
     results: list[Result] = []
     app = facts.manifest.find("application") or Element("application", 0)
 
@@ -375,6 +456,39 @@ def evaluate(facts: ApkFacts, *, expected_min_sdk: int | None, debug_names: set[
     else:
         results.append(Result("min-sdk", "PASS", f"minSdk {expected_min_sdk}"))
 
+    # targetSdk
+    apk_target = as_int(uses_sdk.attrs.get("android:targetSdkVersion")) if uses_sdk else None
+    seen = {v for v in (apk_target, facts.badging.get("target_sdk")) if v is not None}
+    if expected_target_sdk is None:
+        results.append(Result("target-sdk", "FAIL", "could not read targetSdk from app/build.gradle.kts"))
+    elif not seen:
+        results.append(Result("target-sdk", "FAIL", "the APK declares no targetSdkVersion"))
+    elif seen != {expected_target_sdk}:
+        results.append(Result("target-sdk", "FAIL",
+                              f"APK targetSdk {sorted(seen)} != build.gradle.kts targetSdk {expected_target_sdk}"))
+    elif expected_target_sdk < PLAY_MIN_TARGET_SDK:
+        results.append(Result("target-sdk", "FAIL",
+                              f"targetSdk {expected_target_sdk} is below Play's floor {PLAY_MIN_TARGET_SDK}"))
+    else:
+        results.append(Result("target-sdk", "PASS",
+                              f"targetSdk {expected_target_sdk} (Play floor {PLAY_MIN_TARGET_SDK})"))
+
+    # 16 KB pages
+    libs = facts.native_libs
+    problems = [p for lib in libs for p in _native_problems(lib)]
+    if not libs:
+        results.append(Result("native-16kb", "FAIL", "no lib/<abi>/*.so in the APK: the engine must ship"))
+    elif problems:
+        results.append(Result("native-16kb", "FAIL", "; ".join(problems)))
+    else:
+        stored = sum(lib.stored for lib in libs)
+        where = [f"{stored} stored at 16 KB offsets"] if stored else []
+        if stored < len(libs):
+            where.append(f"{len(libs) - stored} compressed (extracted at install)")
+        results.append(Result("native-16kb", "PASS",
+                              f"{len(libs)} librar{'y' if len(libs) == 1 else 'ies'}, every LOAD segment "
+                              f">= 16 KB; {', '.join(where)}"))
+
     # R8 mapping
     if mapping is None:
         results.append(Result("r8-mapping", "SKIP", "no --mapping given"))
@@ -462,19 +576,30 @@ def _run(cmd: list[str]) -> str:
     return proc.stdout
 
 
+def native_libs(zf: zipfile.ZipFile, fh) -> list[NativeLib]:
+    """Every lib/<abi>/*.so in the APK; `fh` is the same file opened for raw reads."""
+    return [
+        NativeLib(info.filename, elf_load_aligns(zf.read(info)),
+                  info.compress_type == zipfile.ZIP_STORED, zip_data_offset(fh, info))
+        for info in zf.infolist() if NATIVE_LIB_RE.fullmatch(info.filename)
+    ]
+
+
 def gather(apk: Path, aapt2: str) -> ApkFacts:
     manifest = parse_xmltree(_run([aapt2, "dump", "xmltree", "--file", "AndroidManifest.xml", str(apk)]))
     badging = parse_badging(_run([aapt2, "dump", "badging", str(apk)]))
-    with zipfile.ZipFile(apk) as zf:
+    with zipfile.ZipFile(apk) as zf, apk.open("rb") as fh:
         entries = zf.namelist()
         dex = {n: zf.read(n) for n in entries if re.fullmatch(r"classes\d*\.dex", n)}
+        libs = native_libs(zf, fh)
         examples = {
             n[len(EXAMPLES):].split("/")[0]: example_files(json.loads(zf.read(n)))
             for n in entries if re.fullmatch(re.escape(EXAMPLES) + r"[^/]+/example\.json", n)
         }
         stored = {i.filename for i in zf.infolist() if i.compress_type == zipfile.ZIP_STORED}
     facts = ApkFacts(manifest=manifest, badging=badging, dex=dex, entries=entries,
-                     size=apk.stat().st_size, examples=examples, stored=stored)
+                     size=apk.stat().st_size, examples=examples, stored=stored,
+                     native_libs=libs)
     app = manifest.find("application")
     ref = app.attrs.get("android:networkSecurityConfig") if app else None
     if ref:
@@ -507,6 +632,7 @@ def main(argv: list[str] | None = None) -> int:
     results = evaluate(
         facts,
         expected_min_sdk=gradle_min_sdk(gradle_text),
+        expected_target_sdk=gradle_target_sdk(gradle_text),
         debug_names=debug_classes(args.debug_src, gradle_namespace(gradle_text)),
         mapping=args.mapping,
     )
