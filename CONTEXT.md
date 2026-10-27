@@ -159,7 +159,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   wizard state is `WizardInputs.lab`, changed through `edit {}`, and a run's result reads
   the lab test from its saved row (`ViewerArgs.of`). Metadata schema `/7` here (ours past
   `/3` are not the parent's numbers). Lab inputs ride its seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` (ADR-003),
-  `WizardDraft` (ADR-005). ADR and TD numbers are shared; semperdic-app took TD-318–TD-348 (TD-330 is the rename), the examples' rows here are TD-349–TD-351, next free TD-352.
+  `WizardDraft` (ADR-005). ADR and TD numbers are shared; semperdic-app took TD-318–TD-348 (TD-330 is the rename); here the examples' rows are TD-349–TD-351 and the Play listing's TD-352–TD-353, next free TD-354.
 - **#140 merged 2026-10-20** (`a66606d9`, the 2026-10-19 review; not released): load logs
   in kgf/tf, decimal commas and the delimiter read after a long preamble, logged time units;
   photo times matched within 1 s when any lacks EXIF sub-seconds; E refitted over 10–40 % of
@@ -197,6 +197,13 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   #13). Owed: that sync and deploy, the device pass §3c, TD-349–TD-351.
 - **Rename to Semper Classroom ([ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md)):** merged
   2026-10-26 (#147, `f25ebd01`), not released; still owed: the upstream deploy and the owner's Firebase app registration.
+- **Play submission ([gate](docs/ops/PRODUCTION_READINESS_GATE.md#google-play-submission-semper-classroom)):**
+  merged (#148). The release check now fails
+  a targetSdk below 36 or a native library off 16 KB pages; the rest is the operator's
+  (signing key TD-352, reviewer access TD-353, TD-36, TD-229–TD-232).
+- **Faster CI ([CI.md](docs/ops/CI.md)):** merged (#150). The `benchmark` build type is R8-minified and the benchmark job
+  cold-starts it first (`scripts/launch_smoke.py`), the only R8 run in CI; Macrobenchmarks
+  dry-run on PRs; heavy tiers wait for `tier1-static` only. Two unit-test workers reproduce TD-312, so it stays one.
 - **CI fixes after main's failures on 2026-10-26:** merged (#152, `fa7f0f2e`). Submodule
   checkout no longer needs GitLab when Eigen's pin is cached (`checkout-submodules`), and
   `PdfReportGeneratorTest` reads its statuses without a race.

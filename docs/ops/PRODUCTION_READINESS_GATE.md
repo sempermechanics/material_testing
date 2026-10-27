@@ -188,6 +188,71 @@ The item-by-item check against the external readiness framework (2026-10-18) is
       until the operator confirms both in the Firebase console and the Resend
       dashboard.
 
+### Google Play submission (Semper Classroom)
+
+Semper Classroom (`com.sempermechanics.semperclassroom`,
+[ADR-030](../adr/ADR-030-semper-classroom-app-identity.md)) has no Play listing;
+builds ship as signed APKs from GitHub Releases. Checked against a Play readiness
+review on 2026-10-26. Order: the first five before the first upload, the Play SHA
+on the day the Play app is created, reviewer access and payments in the
+submission. Upload to the internal testing track first: no review delay, and the
+pre-launch report and staged rollout need a track. Counsel review of the Terms
+(Compliance, above) is not a Play check and runs beside these.
+
+- [x] **Target API 36.** Play refuses new apps and updates that target less from
+      2026-08-31. `targetSdk = 36` (`app/build.gradle.kts:152`); the release
+      check's `target-sdk` fails an APK that targets less or differs from the build
+      script ([RELEASING.md](RELEASING.md), `build-release` step 5). Moving to 37 stays its
+      own decision (CLAUDE.md).
+- [x] **16 KB page sizes.** NDK r28 (`app/build.gradle.kts:147`), AGP 9.4.1; the
+      engine's `libsemper_core.so` links `-Wl,-z,max-page-size=16384` with OpenMP and
+      libc++ static (`engine/adapters/android/CMakeLists.txt:28-29`), OpenCV built
+      into it. The release check's `native-16kb` fails an APK with any
+      `lib/<abi>/*.so` whose LOAD segment is aligned below 16 KB or that is stored
+      off a 16 KB zip offset, an AAR's included. 2026-10-26, the local release APK of
+      `claude/semper-classroom-app`: `libsemper_core.so` and AndroidX's
+      `libdatastore_shared_counter.so`, every LOAD segment 16384, both stored at
+      16 KB offsets.
+- [ ] **Play App Signing keeps the existing key (TD-352).** Choose "use existing
+      app signing key" and upload the release key (alias `materialtesting`). A new
+      Play key would change the signing certificate, and with it the device id
+      ADR-030 relies on, the `assetlinks.json` entry and the Firebase SHA, and
+      sideloaded Semper Classroom builds could not update from Play. Material
+      Testing installs never upgrade to Semper Classroom either way: a new
+      package is a new app (ADR-030, Consequences).
+- [ ] **Data safety form (TD-232) and the delete-account page.** Semper Classroom is
+      its own listing with its own form; the answers in
+      [PLAY_DATA_SAFETY.md](../legal/PLAY_DATA_SAFETY.md) hold for it (same SDKs, same
+      manifest removals) once its two OWNER DECISIONs are settled. The page Play
+      asks for is described in OWNER DECISION 1; it need not call `DELETE /v1/me`,
+      and it lives on Hosting, which deploys from semperdic-app only.
+- [ ] **Policy identity (TD-36, TD-317).** Fill the bracketed operator fields with
+      the legal name and address exactly as on the D-U-N-S record of the Play
+      organisation account, which Play compares against the policy; and name
+      Analytics and App Check in the policy (TD-317) before the form links it.
+- [ ] **Play app-signing SHA-256 in Firebase and assetlinks (TD-229).** The day the
+      Play app is created: link the project under App integrity and confirm the
+      app-signing SHA-256 is the fingerprint `assetlinks.json` already lists (it is,
+      if TD-352 kept the key). Semper Classroom's Firebase Android app is registered
+      with the release SHA-1 (`app/google-services.json`, 2026-10-26); add the
+      SHA-256 there too, and its App Check (Play Integrity) registration is still an
+      ADR-030 action item.
+- [ ] **Reviewer access (TD-353).** A new account starts PENDING unless
+      auto-approved (`backend/app/repo/users.py:65-79`, `:267`), so a reviewer's
+      fresh sign-up can stall. App access gets a pre-approved
+      [ADR-027](../adr/ADR-027-test-accounts.md) test account, already past the
+      Terms, plus sample images and a load log, so an analysis runs without a
+      specimen.
+- [x] **No steering to outside payments.** Consumption-only
+      ([ADR-024](../adr/ADR-024-account-anchored-entitlements.md)): the lock note,
+      the analysis-limit screen, the licence-expiry notice and Refresh licence carry
+      no price, purchase or link (`app/src/main/res/values/strings.xml:468-470`,
+      `:1222-1228`, `:1269-1276`, `:1492-1495`, each with a comment saying so), and a
+      claim code is redeemed on the web account page, not in the app. Re-read that
+      copy whenever one of those screens changes.
+- [ ] **Pre-launch report and staged rollout (TD-230, TD-231)** on the internal,
+      then a closed, track before production.
+
 ### Legal rollout (branch `feat/legal-terms-clickwrap`)
 
 Pending before the rewritten Terms and the clickwrap gate go to real users.
@@ -633,7 +698,7 @@ owner id does not resolve.
 | 1.2 | Pre-launch report clean | EXTERNAL | No Play listing; builds ship as signed APKs from GitHub Releases ([RELEASING.md](RELEASING.md), release checklist step 6) | TD-230 |
 | 1.3 | Measurement records tamper-evident, survive process death and offline | PARTIAL | Offline and process death: analysis is on the phone, the wizard survives a kill ([ADR-005](../adr/ADR-005-wizard-process-death.md)). Tamper evidence: each run writes a signed `record_manifest.json` beside its `.dat` files (SHA-256 per file, run spec, app and engine pin, device-key ECDSA signature; the `.dat` bytes and oracles unchanged), committed last so a killed run leaves none; the viewer and the PDF cover show Verified (this phone's own key only) / Signed on another device / Changed / Not signed / Not recorded ([ADR-028](../adr/ADR-028-tamper-evident-records.md)). Verify: `RecordManifestTest`, `RecordManifestRunTest`, `RecordManifestBackupTest`; the kill-and-replay `RecordManifestProcessDeathTest` (instrumented) passed on the Semper_API30 AVD (API 30), 2026-10-22, 1 test, 0 failures; the device check (Verified, then Changed after a one-bit edit, then Signed on another device after a restore on a second emulator) passed 2026-10-23 ([ADR-028](../adr/ADR-028-tamper-evident-records.md) action items); this app's run of those checks is owed here since the 2026-10-26 sync (TD-247) | TD-247 |
 | 1.4 | Offline-first data layer, idempotent sync, conflict policy | PASS | Analyses are local; uploads are unique WorkManager work with `KEEP` (`data/cloud/CloudSync.kt:408`); an in-flight session is reused for the same `localSessionId` (`backend/app/repo/sessions.py:493-517`); file completion is idempotent (`backend/app/repo/sessions.py:596-603`); staged bytes are identical across attempts (CONTEXT.md, Invariants); metadata replace is [ADR-013](../adr/ADR-013-session-metadata-replace.md) | — |
-| 1.5 | Release build hardening, checked by APK inspection in CI | PARTIAL | R8 on release (`app/build.gradle.kts:236`), `DEV_AUTH_BYPASS` false in release (`:235`), Play Integrity is the only App Check provider (`:371`); `scripts/check_release_apk.py` in `.github/workflows/release.yml:258` and Tier 5 (`.github/workflows/ci.yml:950`). Not yet run on a real APK. Since the readiness run (2026-10-24) the check also: requires an R8 mapping that renames app classes (`r8-mapping`, `scripts/check_release_apk.py:430-447`, TE1-002); fails on consent collection left on (`consent-defaults`, `:509`, TE5-005); checks the release signer against the pinned certificate (`signing-key`, `:476-480`; `--expected-signer-sha256`, `.github/workflows/release.yml:262`, TE1-007); and fails a release without entitlement pins once a key variable is set (`:467`; `.github/workflows/release.yml:263`, TE4-001). `build-release` needs `verify-tag` and `verify-ci` (`.github/workflows/release.yml:140`; `scripts/check_release_tag.py`, `scripts/check_release_ci.py`; TE6-008, TE6-009). Certificate pins stay WARN (`:454-456`; TE1-001) | TD-218, TD-219 |
+| 1.5 | Release build hardening, checked by APK inspection in CI | PARTIAL | R8 on release (`app/build.gradle.kts:258`), `DEV_AUTH_BYPASS` false in release (`:257`), Play Integrity is the only App Check provider (`:441`); `scripts/check_release_apk.py` in `.github/workflows/release.yml:269` and Tier 5 (`.github/workflows/ci.yml:997`), also checking targetSdk against Play's floor and 16 KB alignment of every native library (2026-10-26, "Google Play submission" above); Tier 5 has run it on a signed release APK (TD-218). Since the readiness run (2026-10-24) the check also: requires an R8 mapping that renames app classes (`r8-mapping`, `scripts/check_release_apk.py:566-583`, TE1-002); fails on consent collection left on (`consent-defaults`, `:675`, TE5-005); checks the release signer against the pinned certificate (`signing-key`, `:642-655`; `--expected-signer-sha256`, `.github/workflows/release.yml:273`, TE1-007); and fails a release without entitlement pins once a key variable is set (`:633`; `.github/workflows/release.yml:274`, TE4-001). `build-release` needs `verify-tag` and `verify-ci` (`.github/workflows/release.yml:150`; `scripts/check_release_tag.py`, `scripts/check_release_ci.py`; TE6-008, TE6-009). Certificate pins stay WARN (`:592`; TE1-001) | TD-218, TD-219 |
 | 1.6 | Play app-signing SHA in Firebase | EXTERNAL | Release certificate in `firebase-hosting/public/.well-known/assetlinks.json`; no Play account linked (Licensing rollout, "Play developer account" above) | TD-229 |
 | 2.1 | Dev/staging/prod projects; Prod tag, lien, two or more owners, groups | EXTERNAL | `scripts/check_gcp_posture.sh:145-186` reports lien, tag, owners and groups; runs 2026-10-22 and 2026-10-24: FAIL on both projects (no lien, no `Prod` tag, one owner, a user not a group; checklist above). Staging shares the production project and database ([ENVIRONMENTS.md](ENVIRONMENTS.md)) | TD-221, TD-248 |
 | 2.2 | Rules default-deny; every collection has explicit rules | PASS | `firestore.rules:7-9` denies every client; tested per collection on the emulator (`firestore-rules-tests/rules.test.mjs:173-186`) for every collection the backend names (`firestore-rules-tests/collections.mjs:19-112`, guarded by `collections.test.mjs`). No Cloud Storage. Tenant-scoped rules have nothing to scope: no client reaches Firestore | — |
@@ -676,7 +741,7 @@ owner id does not resolve.
 | 8.1 | Data map | PARTIAL | [DATA_MAP.md](../legal/DATA_MAP.md), derived from the code. No DPIA; findings recorded | TD-241, TD-271 |
 | 8.2 | DPDP readiness by 13 May 2027; Rule 7 playbook | PARTIAL | [INCIDENT_RESPONSE.md](INCIDENT_RESPONSE.md) "Personal-data breach"; Grievance Officer and operator fields unfilled; no tabletop | TD-241, TD-36 |
 | 8.3 | GDPR for EU customers | N-A | The service is not offered in the EU, EEA or UK (`docs/legal/PRIVACY_POLICY.md:25-29`); revisit before serving them | — |
-| 8.4 | Play Data safety consistent with SDKs | EXTERNAL | Answers to submit in [PLAY_DATA_SAFETY.md](../legal/PLAY_DATA_SAFETY.md), from `app/build.gradle.kts:378-440` and the release APK's permissions; not submitted, two OWNER DECISIONs (delete-account URL, Analytics sharing settings). `AD_ID` and the `ACCESS_ADSERVICES_*` permissions are removed (`app/src/main/AndroidManifest.xml:16-27`). The app is consumption-only ([ADR-024](../adr/ADR-024-account-anchored-entitlements.md)); the Terms it links say so (6.6) and keep fees for access arranged outside the app, for counsel | TD-232, TD-277, TD-317 |
+| 8.4 | Play Data safety consistent with SDKs | EXTERNAL | Answers to submit in [PLAY_DATA_SAFETY.md](../legal/PLAY_DATA_SAFETY.md), from `app/build.gradle.kts:424-490` and the release APK's permissions; not submitted, two OWNER DECISIONs (delete-account URL, Analytics sharing settings). `AD_ID` and the `ACCESS_ADSERVICES_*` permissions are removed (`app/src/main/AndroidManifest.xml:16-27`). The app is consumption-only ([ADR-024](../adr/ADR-024-account-anchored-entitlements.md)); the Terms it links say so (6.6) and keep fees for access arranged outside the app, for counsel | TD-232, TD-277, TD-317 |
 | 8.5 | Export and deletion per tenant and per user | PARTIAL | Per user: `GET /v1/me/export`, `DELETE /v1/me` (`backend/app/routers/account.py:192`, `:294`), Auth user deleted after TD-214 (`:350`), which removes the sign-in for both apps (ADR-023 decision note; the app's confirmation says so, `app/src/main/res/values/strings.xml:362`); erasure also deletes the account's `auth_links` rows and blanks the address on every seat it held (`backend/app/repo/account.py:156-244`). Per institution: none. The seat search needs its index deployed first | FI-23, TD-271 |
 
 ### Parts B–E
@@ -689,7 +754,7 @@ owner id does not resolve.
 | B-clock | Part B "Clock-tampering resistance" | PARTIAL | `lastServerTime`, wall-clock high-water mark, 10-minute tolerance, `elapsedRealtime` across boots, HMAC under a Keystore key (`data/account/entitlement/EntitlementClock.kt:89-155`, `EntitlementStore.kt:186-226`). Deleting the key, with or without the record, reverts to the cached config (`EntitlementPolicy.kt:137-144`) | TD-261, TD-219 |
 | B-refresh | Part B "Refresh and check-in" | PARTIAL | `refreshAfter` 24 h in the token, read by the app (`data/account/entitlement/EntitlementRefresh.kt:57-61`); `/v1/config` every 4 h; after each floating checkout or heartbeat the app refetches `/v1/config` so the token follows the lease, and a failed fetch queues a retried one-off refresh (`data/account/SeatLease.kt:79-87`; `data/LicenseConfigWorker.kt:109-120`); a floating token past its lease opens the seat screen (`EntitlementPolicy.kt:126-129`); floating tokens capped at the lease end (`backend/app/entitlement_token.py:213-214`); "Refresh licence" in Settings and on the limit screen fetches on demand (`ui/limit/LicenseRefresh.kt:62-72`). No Integrity re-check | TD-234 |
 | B-revocation | Part B "Revocation, reassignment, replacement" | PARTIAL | Seat revoke frees the slot immediately (the "policy option"; `backend/app/repo/seats.py:366-372`); reassignment is add and remove, each with an audit-log row; device force-release (`backend/app/routers/admin.py:90-116`, `roster.py:335-367`); old tokens bounded by `graceUntil`. No device recall; no device confirmation | TD-238, TD-234 |
-| B-resilience | Part B "Resilience controls (MASVS-RESILIENCE)" | GAP | R8 only (`app/build.gradle.kts:236`); no signature, installer, debugger or Frida checks. Share has no server route, so a modified APK can share without a licence (accepted) | TD-235, TD-274 |
+| B-resilience | Part B "Resilience controls (MASVS-RESILIENCE)" | GAP | R8 only (`app/build.gradle.kts:258`); no signature, installer, debugger or Frida checks. Share has no server route, so a modified APK can share without a licence (accepted) | TD-235, TD-274 |
 | B-distribution | Part B "Distribution caveat" | EXTERNAL | Builds are sideloaded from GitHub Releases, so no Play Integrity verdict is available to them; staging is not a separate project | TD-229, TD-248 |
 | B-build-vs-buy | Part B "Build vs. buy" | PASS | Built in-house on the existing licensing backend; vendors rejected in [ADR-023](../adr/ADR-023-signed-offline-entitlement.md) "Options considered" | — |
 | C-tenancy | Part C "Tenancy" | PARTIAL | Tenant = institution licence, scoped by `adminEmails` with 404 across tenants (`backend/app/routers/institutions.py:35-55`); Identity Platform tenants rejected for now ([ADR-023](../adr/ADR-023-signed-offline-entitlement.md)). No per-tenant IdP | FI-17 |

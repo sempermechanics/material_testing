@@ -137,7 +137,10 @@ Readiness items 1.1, 6.3 and Part D5
 ([READINESS_FRAMEWORK_2026-10.md](READINESS_FRAMEWORK_2026-10.md)). Nothing here
 has been rehearsed: there is no Play listing or closed track yet (TD-229, TD-231).
 Play does not allow a staged rollout for an app's first production release, and a
-staged percentage never rises by itself.
+staged percentage never rises by itself. Start on the internal testing track: it
+has no review delay, and the pre-launch report needs a track. What the first
+submission needs is
+[PRODUCTION_READINESS_GATE.md](PRODUCTION_READINESS_GATE.md#google-play-submission-semper-classroom).
 
 | Stage | Users | Minimum soak before the next stage |
 |---|---|---|
@@ -340,7 +343,10 @@ fails.
    of R8's mapping), contains `DebugAppCheckProviderFactory` (dex or mapping) or a
    firebase-appcheck-debug version file, allows cleartext (manifest or network
    security config), has a `minSdkVersion` other than `minSdk` in
-   `app/build.gradle.kts`, loses a consent default (`<application>` meta-data
+   `app/build.gradle.kts`, has a `targetSdkVersion` other than `targetSdk` there
+   or below Play's floor of 36, ships a `lib/<abi>/*.so` with a LOAD segment
+   aligned below 16 KB or stored uncompressed off a 16 KB zip offset (Play's 16 KB
+   page-size rule; or ships no `.so` at all), loses a consent default (`<application>` meta-data
    `firebase_crashlytics_collection_enabled`, `firebase_analytics_collection_enabled`
    and `google_analytics_adid_collection_enabled` must be present and `false`;
    no `AD_ID` or `ACCESS_ADSERVICES_*` permission, TD-232), or R8's
