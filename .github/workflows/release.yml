@@ -27,6 +27,8 @@ concurrency:
 # actions/checkout's submodule clones, fetches it from the GitHub mirror instead.
 # The gitlink pins the commit (Eigen 5.0.1, bc3b3987 at engine f072da0), so
 # the source is identical; a mirror without that commit fails the checkout.
+# checkout-submodules caches Eigen's git directory by that pin, so a run that
+# restores it fetches Eigen from neither.
 env:
   GIT_CONFIG_COUNT: "1"
   GIT_CONFIG_KEY_0: url.https://github.com/eigen-mirror/eigen.git.insteadOf
@@ -156,8 +158,9 @@ jobs:
       actions: write   # prune-cache
     steps:
       - uses: actions/checkout@v7
-        with:
-          submodules: recursive
+
+      # Submodules after checkout: Eigen from cache, every fetch retried.
+      - uses: ./.github/actions/checkout-submodules
 
       - uses: ./.github/actions/setup-android-build
         with:
