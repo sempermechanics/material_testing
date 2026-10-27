@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The lattice's outlined Save graph label and outline: viewer_action_ink, faded
+     while the button cannot act, as the filled View beside it is (readiness AE1V-024). -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:alpha="0.38" android:color="@color/viewer_action_ink" android:state_enabled="false" />
+    <item android:color="@color/viewer_action_ink" />
+</selector>

@@ -9,8 +9,12 @@
    - files/sessions: the local session index plus per-session frames and
      reference images. Bulky (Auto Backup caps at 25 MB) and already
      recoverable through cloud sync for synced sessions.
+   - files/wizard_draft: an unfinished wizard's reference image, ROI mask and
+     frame list. Analysis content, and useless after a restore: its frames
+     live in cacheDir, which is never backed up.
 -->
 <full-backup-content>
     <exclude domain="sharedpref" path="." />
     <exclude domain="file" path="sessions" />
+    <exclude domain="file" path="wizard_draft" />
 </full-backup-content>

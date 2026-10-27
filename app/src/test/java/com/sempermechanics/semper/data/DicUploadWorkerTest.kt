@@ -112,6 +112,25 @@ class DicUploadWorkerTest : UploadWorkerHarness() {
     }
 
     @Test
+    fun `a paused backup while resuming waits, keeping the session, staging and row`() {
+        // The upload/backup kill switch also covers GET /uploads (TE4-004): 503
+        // feature_paused with Retry-After. A pause, never a failure.
+        seed(cloudSessionId = "cs1")
+        api.onSessionUploads = { throw apiError(503, "feature_paused") }
+
+        LogCapture().use { log ->
+            assertEquals(ListenableWorker.Result.retry(), run())
+            assertTrue(log.warnings.toString(), log.warnings.any { "feature_paused" in it })
+        }
+
+        assertTrue(api.deleted.isEmpty())
+        assertTrue(api.calls.none { it == "createSession" || it == "uploadResumable" })
+        assertEquals("cs1", row().cloudSessionId)
+        assertEquals(SessionRecord.SyncState.PENDING, row().syncState)
+        assertTrue(File(staging, "Session.zip").isFile)
+    }
+
+    @Test
     fun `a bare 404 while resuming is not proof the session is gone`() {
         seed(cloudSessionId = "cs1")
         // No `detail`: the route was not reachable (gateway), not "no such session".

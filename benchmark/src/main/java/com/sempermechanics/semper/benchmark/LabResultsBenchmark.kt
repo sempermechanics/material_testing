@@ -3,11 +3,13 @@ package com.sempermechanics.semper.benchmark
 import androidx.benchmark.macro.CompilationMode
 import androidx.benchmark.macro.ExperimentalMetricApi
 import androidx.benchmark.macro.FrameTimingMetric
+import androidx.benchmark.macro.MacrobenchmarkScope
 import androidx.benchmark.macro.TraceSectionMetric
 import androidx.benchmark.macro.junit4.MacrobenchmarkRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
 import androidx.test.uiautomator.By
+import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.Until
 import org.junit.Rule
 import org.junit.Test
@@ -61,10 +63,27 @@ class LabResultsBenchmark {
             "Results did not show a fit on the seeded $frameCount-frame tensile session"
         }
         repeat(TOGGLES) {
-            device.findObject(By.res(PACKAGE, ELASTIC_BUTTON))?.click()
+            clickWhenStable(ELASTIC_BUTTON)
             device.waitForIdle(IDLE_TIMEOUT_MS)
-            device.findObject(By.res(PACKAGE, WHOLE_BUTTON))?.click()
+            clickWhenStable(WHOLE_BUTTON)
             device.waitForIdle(IDLE_TIMEOUT_MS)
+        }
+    }
+
+    /**
+     * Clicks the toggle [id], finding it again if the page relaid it out between
+     * the find and the click: a 150-frame curve redraws long enough after the
+     * last toggle that the found view can go stale (CI, #153).
+     */
+    private fun MacrobenchmarkScope.clickWhenStable(id: String) {
+        repeat(STALE_RETRIES) {
+            val button = device.wait(Until.findObject(By.res(PACKAGE, id)), IDLE_TIMEOUT_MS) ?: return
+            try {
+                button.click()
+                return
+            } catch (_: StaleObjectException) {
+                // Relaid out under us; find it again.
+            }
         }
     }
 
@@ -78,5 +97,6 @@ class LabResultsBenchmark {
         private const val TOGGLES = 3
         private const val LAUNCH_TIMEOUT_MS = 120_000L
         private const val IDLE_TIMEOUT_MS = 5_000L
+        private const val STALE_RETRIES = 3
     }
 }

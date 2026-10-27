@@ -5,6 +5,7 @@ import androidx.work.ListenableWorker.Result
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.cloud.UploadErrors
 import com.sempermechanics.semper.data.cloud.UploadWorkOutcomes
+import com.sempermechanics.semper.data.net.ApiErrors
 import com.sempermechanics.semper.data.net.ApiException
 import com.sempermechanics.semper.data.net.CloudApi
 import com.sempermechanics.semper.data.net.FileSpecDto
@@ -73,8 +74,14 @@ internal sealed interface Resume {
     /**
      * The backend could not say (5xx, 429, a bare 404): keep the session and
      * its pointer, and ask again later. Not evidence the session is gone.
+     * [paused]: the upload or backup kill switch answered (503
+     * `feature_paused`, TE4-004), a pause like [UploadErrors.Kind.PAUSED].
      */
-    data class Unreachable(val requestId: String?) : Resume
+    data class Unreachable(val requestId: String?, val paused: Boolean = false) : Resume {
+        /** The retry reason for [UploadLog.retry]: [unavailable], or the pause. */
+        fun reason(unavailable: String): String =
+            if (paused) "upload state paused by the backend: ${ApiErrors.FEATURE_PAUSED}" else unavailable
+    }
 
     companion object {
         /**
@@ -180,7 +187,10 @@ internal class UploadSessionPlanner(
         return when (val state = stateBeforeRestage(cloudSessionId)) {
             Resume.Done -> SessionStep.Synced
             is Resume.Unreachable -> SessionStep.Retry(
-                UploadLog.retry("upload state unavailable — keeping session, not restaging", state.requestId),
+                UploadLog.retry(
+                    state.reason("upload state unavailable — keeping session, not restaging"),
+                    state.requestId,
+                ),
             )
             else -> {
                 Timber.w("Staging is not what the cloud session declared — deleting the session before restaging")
@@ -301,7 +311,7 @@ internal class UploadSessionPlanner(
             // creating a second one.
             Resume.Wait -> SessionStep.Retry(UploadLog.retry("still PROVISIONING after in-process poll budget"))
             is Resume.Unreachable -> SessionStep.Retry(
-                UploadLog.retry("upload state unavailable — keeping session", resumed.requestId),
+                UploadLog.retry(resumed.reason("upload state unavailable — keeping session"), resumed.requestId),
             )
         }
     }
@@ -356,6 +366,10 @@ internal class UploadSessionPlanner(
         return if (UploadErrors.isSessionGone(e.code, e.body)) {
             Timber.w("Cloud session gone (HTTP %d) — will rebuild", e.code)
             Resume.Rebuild
+        } else if (UploadErrors.classify(e.code, e.body) == UploadErrors.Kind.PAUSED) {
+            // The kill switch covers this query too: wait it out, staging kept.
+            Timber.i("Upload state paused by the backend (HTTP %d) — keeping the session", e.code)
+            Resume.Unreachable(e.requestId, paused = true)
         } else {
             Timber.w("Cannot query upload state (HTTP %d) — keeping the session", e.code)
             Resume.Unreachable(e.requestId)

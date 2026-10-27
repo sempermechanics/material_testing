@@ -79,7 +79,7 @@ class SessionLimitActivity : AppCompatActivity() {
     private fun emailSupport() {
         val email = AccountCache.cachedEmail(this) ?: getString(R.string.pending_unknown_account)
         val quota = "Quota: ${AccountCache.quotaUsed(this)}/${LicenseEntitlements.shownAnalysisCap(this)}" +
-            if (SessionQuota.deviceStop(this)) " (device limit)" else ""
+            if (SessionQuota.deviceStop(this)) " (phone limit)" else ""
         val context = SupportMail.contextLines(email, DeviceKeys.deviceId(this), extra = listOf(quota))
         SupportMail.open(
             this,

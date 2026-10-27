@@ -3,6 +3,7 @@ package com.sempermechanics.semper.ui.limit
 import android.app.Activity
 import android.os.Bundle
 import androidx.annotation.MainThread
+import androidx.annotation.VisibleForTesting
 import androidx.appcompat.app.AppCompatActivity
 import com.sempermechanics.semper.databinding.ActivityUpdateRequiredBinding
 import com.sempermechanics.semper.ui.common.Insets
@@ -39,7 +40,7 @@ class UpdateRequiredActivity : AppCompatActivity() {
         /** Whether Home has raised the gate since this process started; it raises it once. */
         @Volatile
         var shownThisProcess = false
-            private set
+            @VisibleForTesting internal set
 
         /**
          * Where this build updates from ([UpdateSource.urls]): installed by

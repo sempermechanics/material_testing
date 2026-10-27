@@ -7,7 +7,7 @@
  */
 import { api, apiBlob, saveBlob } from "./api.js";
 import { explain } from "./messages.js";
-import { esc, when, auditQuery } from "./util.js";
+import { esc, when, auditQuery, localDayRange } from "./util.js";
 
 /** A page in the panel; an export is one request of the backend's largest page. */
 const PAGE = 50;
@@ -60,7 +60,8 @@ export function wireAuditLog({ rows, since, until, show, more, csv, json, base, 
   let next = null;
   let ticket = 0; // the latest page asked for; an older answer is dropped
 
-  const range = () => ({ since: since.value, until: until.value });
+  // Local days, as the rows are shown (util.js `localDayRange`).
+  const range = () => localDayRange({ since: since.value, until: until.value });
 
   async function load(append) {
     const root = base();

@@ -72,7 +72,7 @@ def test_the_session_listing_does_not_pull_whole_documents(store, monkeypatch, a
     monkeypatch.setattr(sessions, "_listed_session",
                         lambda doc_id, s: seen.append(s) or real(doc_id, s))
     page, token = repo.list_user_sessions("u1", limit=2, app=app)
-    assert [p["sessionId"] for p in page] == ["s0", "s1"] and token == "s1"
+    assert [p["sessionId"] for p in page] == ["s0", "s1"] and token == "s1"  # noqa: S105 - a page cursor
     assert page[0]["name"] == "n0" and page[0]["fileCount"] == 2
     assert all("notes" not in s and "metrics" not in s for s in seen)
     # The next page still positions on the token.

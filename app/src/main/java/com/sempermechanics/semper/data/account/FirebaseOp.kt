@@ -1,9 +1,28 @@
 package com.sempermechanics.semper.data.account
 
+import android.content.Context
+import androidx.annotation.StringRes
+import com.google.firebase.FirebaseNetworkException
+import com.google.firebase.FirebaseTooManyRequestsException
+import com.sempermechanics.semper.R
 import com.sempermechanics.semper.util.rethrowIfCallerCancelled
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+
+/**
+ * The user's text for a Firebase failure [e] its caller did not name: no
+ * network and too many attempts by name, anything else [fallback]. Firebase's
+ * own message ("An internal error has occurred. [ … ]") goes to the log only.
+ */
+internal fun firebaseFailureText(context: Context, e: Throwable, @StringRes fallback: Int): String =
+    context.getString(
+        when (e) {
+            is FirebaseNetworkException -> R.string.error_offline
+            is FirebaseTooManyRequestsException -> R.string.auth_too_many_requests
+            else -> fallback
+        },
+    )
 
 /**
  * Runs one Firebase Auth call, [op], on IO and turns what it throws into a
@@ -11,15 +30,16 @@ import timber.log.Timber
  *
  * [known] gives the outcome for the exceptions the caller names (a wrong
  * password, an unknown user) and null for the rest. Those are logged as
- * [failureLog] and fail with Firebase's message, or [fallbackMessage] when it
- * has none; the cause is kept.
+ * [failureLog] and fail with [firebaseFailureText] ([fallback] unless offline
+ * or throttled) as a [UserMessageException]; the cause is kept.
  *
  * Only the caller's own cancellation is rethrown. A Firebase Task cancelled
  * while the caller still waits is an ordinary failure ([rethrowIfCallerCancelled]).
  */
 internal suspend fun <T> firebaseOp(
+    context: Context,
     failureLog: String,
-    fallbackMessage: String,
+    @StringRes fallback: Int,
     known: (Exception) -> Result<T>? = { null },
     op: suspend () -> T,
 ): Result<T> = withContext(Dispatchers.IO) {
@@ -29,7 +49,7 @@ internal suspend fun <T> firebaseOp(
         e.rethrowIfCallerCancelled()
         known(e) ?: run {
             Timber.w(e, failureLog)
-            Result.failure(Exception(e.message ?: fallbackMessage, e))
+            Result.failure(UserMessageException(firebaseFailureText(context, e, fallback), e))
         }
     }
 }

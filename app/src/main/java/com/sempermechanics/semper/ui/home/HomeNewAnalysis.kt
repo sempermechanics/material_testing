@@ -22,6 +22,7 @@ import com.sempermechanics.semper.ui.common.dialog.Dialogs
 import com.sempermechanics.semper.ui.common.media.MediaPickerSheet
 import com.sempermechanics.semper.ui.common.media.MediaSourceChooser
 import com.sempermechanics.semper.ui.examples.ExamplesActivity
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -35,13 +36,19 @@ import kotlinx.coroutines.withContext
  * the hand-off to the wizard; a Re-run carries its record's lab test
  * ([LabRerun]).
  *
+ * Its gates read the licence, which reaches EntitlementStore (Keystore work on a
+ * first read or a clock re-seal), so they run on [io] and the screen acts after
+ * (readiness TE1-006): a tap never reads the entitlement on the main thread.
+ *
  * @param limitReached opens the limit screen and answers true when the
- *   account is at its analysis limit ([HomeQuotaCard.openLimitScreenIfReached]).
+ *   account is at its analysis limit ([HomeQuotaCard.openLimitScreenIfReached],
+ *   which checks off the main thread).
  */
 @MainThread
 internal class HomeNewAnalysis(
     private val activity: AppCompatActivity,
-    private val limitReached: () -> Boolean,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
+    private val limitReached: suspend () -> Boolean,
 ) {
 
     /** Files tab: Storage Access Framework (Drive, storage, DNG). */
@@ -67,13 +74,28 @@ internal class HomeNewAnalysis(
             mediaPicker?.onPermissionResult()
         }
 
+    /** True while a tap's gates are being checked, so a second tap does not open a second chooser. */
+    private var checking = false
+
     /**
-     * The + button, when new work may start: which test first (the wizard
-     * decides on open whether to ask for machine loads, so it has to know
-     * before any media is picked), then the source chooser.
+     * The + button, when new work may start (checked off the main thread):
+     * which test first (the wizard decides on open whether to ask for machine
+     * loads, so it has to know before any media is picked), then the source
+     * chooser.
      */
     fun start() {
-        if (!mayStart()) return
+        if (checking) return
+        checking = true
+        activity.lifecycleScope.launch {
+            try {
+                if (mayStart()) chooseTestType()
+            } finally {
+                checking = false
+            }
+        }
+    }
+
+    private fun chooseTestType() {
         val examples = { activity.startActivity(ExamplesActivity.intent(activity)) }
         TestTypeSheet.show(activity, onExamples = examples) { type ->
             pendingTestType = type
@@ -100,10 +122,10 @@ internal class HomeNewAnalysis(
      * blocked behind the persistent limit screen (email support) instead of
      * failing on upload.
      */
-    private fun mayStart(): Boolean = when {
+    private suspend fun mayStart(): Boolean = when {
         // A build the backend no longer supports: its gate screen is opened.
         !AnalysisNavHelper.ensureUpToDate(activity) -> false
-        LicenseEntitlements.isSeatRequiredToStart(activity) -> {
+        withContext(io) { LicenseEntitlements.isSeatRequiredToStart(activity) } -> {
             AnalysisNavHelper.openSeatRequired(activity)
             false
         }

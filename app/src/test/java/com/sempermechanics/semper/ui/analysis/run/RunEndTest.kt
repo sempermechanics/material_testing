@@ -90,8 +90,8 @@ class RunEndTest {
     }
 
     @Test
-    fun `a run that threw says what it said, else what it was`() {
-        assertEquals(RunEnd.Unexpected("boom"), RunEnd.unexpected(IllegalStateException("boom")))
+    fun `a run that threw keeps only what it was, never what it said`() {
+        assertEquals(RunEnd.Unexpected("IllegalStateException"), RunEnd.unexpected(IllegalStateException("boom")))
         assertEquals(RunEnd.Unexpected("IllegalStateException"), RunEnd.unexpected(IllegalStateException()))
     }
 }

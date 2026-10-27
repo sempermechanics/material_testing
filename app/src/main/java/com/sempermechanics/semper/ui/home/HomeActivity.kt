@@ -15,7 +15,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.snackbar.Snackbar
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.cloud.CloudBackupListing
 import com.sempermechanics.semper.data.cloud.SessionDeletes
 import com.sempermechanics.semper.data.net.AccountCache
@@ -236,7 +235,7 @@ class HomeActivity : AppCompatActivity() {
         onRefresh = { refresh() },
         onEraseLocally = { records, deviceOnly -> viewModel.eraseLocally(records, deviceOnly) },
         onDeviceOnlyDeleted = { showDeviceOnlyKeptSnackbar() },
-        restoreEnabled = { LicenseEntitlements.restoreEnabled(this) },
+        restoreEnabled = { viewModel.entitlements.restoreEnabled },
         onRestore = { records -> startRestore(records) },
         onRerun = { record -> newAnalysis.rerun(record) },
         onDeleteQueued = { workId, items ->
@@ -310,7 +309,7 @@ class HomeActivity : AppCompatActivity() {
         adapter.setSyncVisible(showsCloudState())
         binding.emptyState.isVisible = list.sessions.isEmpty()
         updateCloudBackups()
-        quotaCard.render(list.sessions.size)
+        quotaCard.render(list.sessions.size, list.entitlements.lines)
         // A refresh can drop rows out from under a selection.
         selection.updateSelectionBar()
         // No quota count stored from here: these rows leave out the ones a
@@ -322,8 +321,10 @@ class HomeActivity : AppCompatActivity() {
      * Whether this account sees any cloud state at all. Demo accounts record
      * analyses silently and have no restore, so every badge, bar, toast and
      * download offer tied to backup is withheld rather than shown greyed out.
+     * Read with the list, off the main thread ([HomeViewModel.HomeEntitlements]);
+     * false until it lands.
      */
-    private fun showsCloudState(): Boolean = LicenseEntitlements.cloudBackupEnabled(this)
+    private fun showsCloudState(): Boolean = viewModel.entitlements.cloudState
 
     // ── Row actions ──────────────────────────────────────────────────────
 
@@ -333,7 +334,7 @@ class HomeActivity : AppCompatActivity() {
             hasLocal -> startActivity(SessionOpenHelper.intentFor(this, record))
             // A demo account cannot pull its recorded copy back, so a row with
             // no local data is simply unopenable — no download offer.
-            record.isRestorable(hasLocal) && LicenseEntitlements.restoreEnabled(this) -> Dialogs.confirm(
+            record.isRestorable(hasLocal) && viewModel.entitlements.restoreEnabled -> Dialogs.confirm(
                 this,
                 getString(R.string.restore_analysis_title_fmt, record.name),
                 getText(R.string.restore_analysis_body),
@@ -351,7 +352,9 @@ class HomeActivity : AppCompatActivity() {
      * `RestoreStart.request` Settings uses, so a rotation does not lose them.
      */
     private fun startRestore(records: List<SessionRecord>) {
-        if (records.isEmpty() || !RestoreRequest.allowedOrSay(this)) return
+        if (records.isEmpty()) return
+        // The licence as Home's last list read it, off the main thread (TE1-006).
+        if (!viewModel.entitlements.restoreEnabled) return RestoreRequest.sayPaused(this)
         selection.clearSelection()
         viewModel.restoreRows(records)
     }

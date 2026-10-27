@@ -144,6 +144,29 @@ def test_grace_boundary_is_the_last_moment_of_grace(store, monkeypatch):
         assert repo.effective_mode(user) == expected, now
 
 
+def test_grace_boundary_at_the_production_default(store, monkeypatch):
+    """The 14-day default a mint writes: licensed at 13 d 23 h past expiry, demo at 14 d + 1 min.
+
+    The test above pins the boundary semantics at 10 days; this pins the value
+    every timed licence actually carries (readiness TE4-002).
+    """
+    assert settings.LICENSE_GRACE_DAYS_DEFAULT == 14
+    expiry = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    user = {
+        "uid": "u1", "mode": "licensed", "licenseDuration": "timed",
+        "licenseGraceDays": settings.LICENSE_GRACE_DAYS_DEFAULT, "licenseExpiresAt": expiry,
+    }
+    for after_expiry, mode, in_grace in [
+        (timedelta(days=13, hours=23), "licensed", True),
+        (timedelta(days=14, minutes=1), "demo", False),
+    ]:
+        now = expiry + after_expiry
+        repo.patch(monkeypatch, "_now", lambda now=now: now)
+        cfg = repo.resolve_user_config(user)
+        assert (cfg["mode"], cfg["inGrace"]) == (mode, in_grace), after_expiry
+        assert cfg["cloudBackupEnabled"] is (mode == "licensed"), after_expiry
+
+
 def test_zero_grace_is_a_hard_cliff(store):
     cfg = repo.resolve_user_config(_timed_user(-0.001, grace_days=0))
     assert cfg["mode"] == "demo"

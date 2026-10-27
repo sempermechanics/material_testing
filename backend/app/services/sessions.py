@@ -68,13 +68,13 @@ def verify_listed(uid: str, sessions: list[dict]) -> tuple[list[dict], int, int]
 #: something deleting one would fix, and saying so sent people to the wrong
 #: remedy. The code before the colon is what the app branches on, unchanged.
 _QUOTA_REMEDY = {
-    "": "Delete an older analysis to sync a new one.",
+    "": "Delete an older analysis to back up a new one.",
     repo.INACTIVE_LICENCE_ENDED:
-        "Your licence has ended, so the demo limit applies. Renew it to sync "
+        "Your licence has ended, so the demo limit applies. Renew it to back up "
         "new analyses; nothing stored has been removed.",
     repo.INACTIVE_NO_SEAT:
         "No shared seat is free right now, so the demo limit applies. New "
-        "analyses sync once you hold a seat; nothing stored has been removed.",
+        "analyses are backed up once you have a seat; nothing stored has been removed.",
 }
 
 
@@ -106,7 +106,7 @@ def _device_quota_detail(cap: int) -> str:
     """
     return (f"{errors.DEVICE_QUOTA_EXCEEDED}: the demo allows {cap} analyses stored "
             "from one device. Delete an older analysis from this device, or use a "
-            "licence, to sync a new one.")
+            "licence, to back up a new one.")
 
 
 def resumed(existing: dict) -> dict:

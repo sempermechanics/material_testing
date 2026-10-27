@@ -4,20 +4,19 @@
 
 package com.sempermechanics.semper.ui.analysis
 
-import android.app.Activity
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
 import android.widget.EditText
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.annotation.MainThread
+import androidx.annotation.VisibleForTesting
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
 import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.prefs.WizardDraft
@@ -35,9 +34,7 @@ import com.sempermechanics.semper.ui.analysis.frames.ReferenceSlotBusy
 import com.sempermechanics.semper.ui.analysis.frames.VideoSamplingSheet
 import com.sempermechanics.semper.ui.analysis.frames.WizardMediaPickers
 import com.sempermechanics.semper.ui.analysis.frames.checkFrameSizes
-import com.sempermechanics.semper.ui.analysis.load.AnalysisLoadCard
 import com.sempermechanics.semper.ui.analysis.recommend.SubsetRecommendationController
-import com.sempermechanics.semper.ui.analysis.rerun.LabRerun
 import com.sempermechanics.semper.ui.analysis.rerun.PickedReference
 import com.sempermechanics.semper.ui.analysis.rerun.RerunImportController
 import com.sempermechanics.semper.ui.analysis.rerun.RerunInputs
@@ -59,12 +56,12 @@ import com.sempermechanics.semper.ui.analysis.wizard.DraftRestore
 import com.sempermechanics.semper.ui.analysis.wizard.ReferencePreviewLoader
 import com.sempermechanics.semper.ui.analysis.wizard.WizardParamFields
 import com.sempermechanics.semper.ui.analysis.wizard.WizardStep
-import com.sempermechanics.semper.ui.analysis.wizard.lab
 import com.sempermechanics.semper.ui.common.CoachMarkController
 import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.Motion
 import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
 import com.sempermechanics.semper.ui.common.dialog.WarnChip
+import com.sempermechanics.semper.ui.common.letTitleWrap
 import com.sempermechanics.semper.ui.common.showUnlessEditing
 import kotlinx.coroutines.launch
 import java.io.File
@@ -94,12 +91,12 @@ class StaticAnalysisActivity :
 
     private var refPreviewBmp: Bitmap? = null
 
-    /** A Home Re-run's lab test until its photos are in ([showRerun]); null otherwise. */
-    private var labRerun: LabRerun? = null
-
     // Prominent progress overlay (compute + video extraction), and whether
     // the wizard is busy with either.
     private lateinit var chrome: RunChrome
+
+    /** The configuration this screen's views were inflated for ([onConfigurationChanged]). */
+    private lateinit var builtWith: Configuration
     private lateinit var status: RunStatusLine
     private lateinit var readyGate: AnalysisReadyGate
     private lateinit var wizardChrome: AnalysisWizardChrome
@@ -122,18 +119,12 @@ class StaticAnalysisActivity :
     private lateinit var referenceBusy: ReferenceSlotBusy
     private lateinit var rerun: RerunImportController
 
-    /** Only inflated for tests that take a load per frame; see [setupLoadCard]. */
-    internal var loadCard: AnalysisLoadCard? = null
-    internal val pickLoadCsv = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) loadCard?.onCsvPicked(uri)
-    }
-    internal val pickLoadPoint = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val taps = result.data?.getFloatArrayExtra(IntentKeys.BEAM_EDGE_TAPS)
-        if (result.resultCode == Activity.RESULT_OK) loadCard?.loadPoint?.onPicked(BeamEdgeTaps.fromArray(taps))
-    }
+    /** The lab test's load card, its result launchers and a Re-run's lab test. */
+    internal val labHooks = WizardLabHooks(this)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        builtWith = Configuration(resources.configuration)
         binding = ActivityStaticAnalysisBinding.inflate(layoutInflater)
         setContentView(binding.root)
         viewModel.attachDraft(WizardDraft(applicationContext))
@@ -160,11 +151,7 @@ class StaticAnalysisActivity :
         }
         goToStep(viewModel.inputs.value.step, animate = false)
 
-        labRerun = openLabTest(firstOpen = savedInstanceState == null)
-        // The slider keeps its own value across recreation; set it only on first open.
-        if (savedInstanceState == null) {
-            settings.sliderStrainWindow.value = viewModel.lab.testType.defaultStrainWindow.toFloat()
-        }
+        labHooks.rerun = openLabTest(firstOpen = savedInstanceState == null, settings.sliderStrainWindow)
         // Hand-off from Home's media picker: the selection type already
         // decided the branch — image becomes the reference, video enters
         // the extract-frames flow. Consumed once: a process death restores
@@ -191,7 +178,7 @@ class StaticAnalysisActivity :
         frameOrder = FrameOrderController(this, viewModel, binding, onReordered = {
             wizardSlots.refreshDefSlot()
             // A time-matched or typed load follows its photo to its new place.
-            loadCard?.refresh()
+            labHooks.loadCard?.refresh()
         })
         subsets = SubsetRecommendationController(this, viewModel, binding, settings, host = this)
         params = WizardParamFields(this, viewModel, settings, subsets, host = this, onGeometryChanged = ::checkReady)
@@ -253,7 +240,9 @@ class StaticAnalysisActivity :
         binding.toolbar.apply {
             title = getString(R.string.new_analysis_title)
             setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
+            setNavigationContentDescription(R.string.back)
             setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
+            letTitleWrap()
         }
         val maxFrames = AppSettings.maxFrames(this, AppRemoteConfig.maxFrames(this))
         binding.tvDefDropHint.text =
@@ -292,6 +281,24 @@ class StaticAnalysisActivity :
         if (isFinishing) viewModel.discardDraft()
         super.onDestroy()
     }
+
+    /**
+     * The manifest keeps this screen through config changes, since a recreate
+     * cancels a solve (onDestroy). Text size and density would then stay as
+     * the screen was built until it was reopened, so an idle wizard rebuilds
+     * for them, restoring as after a process death; a busy one keeps its run
+     * and picks them up next time (readiness AE1V-015).
+     */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        val built = builtWith
+        super.onConfigurationChanged(newConfig)
+        val textChanged = newConfig.fontScale != built.fontScale || newConfig.densityDpi != built.densityDpi
+        if (textChanged && ::chrome.isInitialized && !chrome.isBusy) recreate()
+    }
+
+    /** The run chrome, so a test can hold the wizard busy. */
+    @VisibleForTesting
+    internal fun chromeForTest(): RunChrome = chrome
 
     override fun onResume() {
         super.onResume()
@@ -402,7 +409,7 @@ class StaticAnalysisActivity :
 
     override fun checkReady() {
         // The deformed frames may have changed since the log was matched.
-        loadCard?.refresh()
+        labHooks.loadCard?.refresh()
         readyGate.apply(chrome.isBusy, sweepController)
     }
 
@@ -442,9 +449,7 @@ class StaticAnalysisActivity :
         val run = inputs.params
         params.applyRerun(run.subset, run.step, run.strainWindow, run.use6x6, run.refUpdateInterval)
         sweepController.showRerun()
-        // Typed masses onto the copied frames; step 1 when a load log must be imported again.
-        labRerun?.applyLoadsTo(viewModel)
-        labRerun = null
+        labHooks.applyRerunLoads(viewModel)
         onImagesChanged(newReference = true, newFrames = true)
         goToStep(viewModel.inputs.value.step, animate = false)
     }

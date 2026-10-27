@@ -94,7 +94,7 @@ data class FieldResult(
     val minValue: Float,
     val maxValue: Float,
     val meanValue: Float,
-    val meanType: String, // "Simple Mean" or "Mean Absolute"
+    val meanType: String, // ReportBuilder.meanLabel: "Mean" or "Mean of |value|"
     val stdDevValue: Float,
     val minCoordX: Int,
     val minCoordY: Int,
@@ -146,10 +146,10 @@ data class EngineStats(
     val icgnMs: Float = 0f,
 ) {
     fun meshSeedingLabel(): String = when (meshSeedingQuality) {
-        2 -> "Full Seed Mesh"
-        1 -> "Sparse Seed Mesh"
-        0 -> "Fallback (RGDIC-only, no mesh)"
-        else -> "Unknown (legacy data)"
+        2 -> "Full mesh"
+        1 -> "Sparse mesh"
+        0 -> "No mesh (grown from neighbours only)"
+        else -> "Not recorded (older analysis)"
     }
 
     companion object {

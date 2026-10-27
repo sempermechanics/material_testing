@@ -2,6 +2,7 @@ package com.sempermechanics.semper.auth
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.sempermechanics.semper.R
 import com.sempermechanics.semper.cloud.FakeCloudApi
 import com.sempermechanics.semper.cloud.FakeTokens
 import com.sempermechanics.semper.data.account.AuthRepository
@@ -71,7 +72,9 @@ class AuthCancellationTest {
         val result = repo.firebaseThen(SignInMethod.GOOGLE) { throw CancellationException("Task was cancelled") }
 
         assertTrue(result.isFailure)
-        assertEquals("Task was cancelled", result.exceptionOrNull()?.message)
+        // The user reads the app's words; the cancellation stays the cause (readiness AE1-009).
+        assertEquals(context.getString(R.string.auth_sign_in_failed), result.exceptionOrNull()?.message)
+        assertEquals("Task was cancelled", result.exceptionOrNull()?.cause?.message)
         assertEquals(listOf(SemperAnalytics.SIGN_IN_FAILED), events)
     }
 
@@ -81,7 +84,7 @@ class AuthCancellationTest {
 
         val result = repo.firebaseThen(SignInMethod.GOOGLE) { throw boom }
 
-        assertEquals("network down", result.exceptionOrNull()?.message)
+        assertEquals(context.getString(R.string.auth_sign_in_failed), result.exceptionOrNull()?.message)
         assertEquals(boom, result.exceptionOrNull()?.cause)
         assertEquals(listOf(SemperAnalytics.SIGN_IN_FAILED), events)
     }

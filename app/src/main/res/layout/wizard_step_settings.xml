@@ -11,6 +11,7 @@
         android:id="@+id/settingsColumn"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginHorizontal="@dimen/content_side_inset"
         android:orientation="vertical"
         android:paddingStart="@dimen/space_16"
         android:paddingTop="@dimen/space_8"

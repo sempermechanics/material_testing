@@ -198,7 +198,7 @@ def test_no_token_when_the_last_match_ends_the_account(store):
     page, token = repo.list_user_sessions(DEV_UID, limit=2, app=MT)
     assert [s["sessionId"] for s in page] == ["a", "b"]
     # "c" follows, so a token is issued; the next page is empty and final.
-    assert token == "b"
+    assert token == "b"  # noqa: S105 - a page cursor
     assert repo.list_user_sessions(DEV_UID, limit=2, page_token=token, app=MT) == ([], None)
 
     store._data["sessions"] = {"a": _session(MT), "b": _session(MT)}

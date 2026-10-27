@@ -40,6 +40,7 @@ Use these words. Do not invent synonyms.
 | VSG | Strain window: least-squares plane fit over the points within (window − 1) / 2 steps. The window is entered in data points (odd); VSG = `(window − 1) × step + 1` px (`SweepStudy.vsgFor`) is what the engine takes as its circle's diameter and what sessions store |
 | `.dat` | Binary field: 8 floats/point (`x y u v exx eyy exy znssd`), 32 bytes |
 | session | One saved analysis on disk (and optionally in the cloud) |
+| test | What Home's **Which test?** asks: tensile, bending or 2D DIC. In the copy, one test is one specimen's run, a reference and its deformed frames, saved as one analysis ("The whole test" is all of its frames) |
 
 Engine pipeline (`engine/docs/ARCHITECTURE.md`): anchor-lattice seeds (AKAZE + RANSAC homography + ICGN, engine 0.6.0) → Delaunay → RGDIC → ICGN → VSG → `.dat`.
 
@@ -137,8 +138,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   Tensile and Bending; a fork change to a shared screen runs only for a lab test.
   semperdic-app accepted making this a product flavour of its repo on 2026-10-22 ([ADR-025](docs/adr/ADR-025-test-type-extension-points.md), mirrored).
 - **Synced with `semperdic-app`** (forked at `bfe00e5`; `git log --merges
-  --grep=semperdic-app`; rules in its `docs/ops/FORK_SYNC.md`). Last: `25334af1`, 2026-10-26,
-  on `sync/semperdic-25334af`: its #471–#486, among them tamper-evident records (#471,
+  --grep=semperdic-app`; rules in its `docs/ops/FORK_SYNC.md`). Last: `6d2bde6c`, 2026-10-26,
+  on `sync/semperdic-6d2bde6`: its #487–#489, the production-readiness fixes (the readiness
+  guards, Semper's CSV version 2, so a lab CSV is version 3; one report name, here "Semper
+  Classroom Analysis Report"). Before: `25334af1`, 2026-10-26, on `sync/semperdic-25334af`: its #471–#486, among them tamper-evident records (#471,
   [ADR-028](docs/adr/ADR-028-tamper-evident-records.md)), the Data safety fixes (#475), the
   console redesign (#478) and the Semper Classroom rename's backend and consoles (#484,
   [ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md)). Before: `968637cb`, 2026-10-22,
@@ -156,7 +159,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   wizard state is `WizardInputs.lab`, changed through `edit {}`, and a run's result reads
   the lab test from its saved row (`ViewerArgs.of`). Metadata schema `/7` here (ours past
   `/3` are not the parent's numbers). Lab inputs ride its seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` (ADR-003),
-  `WizardDraft` (ADR-005). ADR numbers are shared; TD numbers are this repo's own since 2026-10-27 (ADR-032: restarted at TD-1, old numbers in `docs/ops/td-renumber-2026-10-27.csv`, upstream diffs through `scripts/td_numbers.py translate`). TD-56 is the rename, TD-57–TD-59 the example data, TD-60 and TD-61 the Play listing.
+  `WizardDraft` (ADR-005). ADR numbers are shared; TD numbers are this repo's own since 2026-10-27 (ADR-032: restarted at TD-1, old numbers in `docs/ops/td-renumber-2026-10-27.csv`, upstream diffs through `scripts/td_numbers.py translate`). TD-56 is the rename, TD-57 and TD-58 the examples', TD-59 and TD-60 the Play listing's; next free TD-276.
 - **#140 merged 2026-10-20** (`a66606d9`, the 2026-10-19 review; not released): load logs
   in kgf/tf, decimal commas and the delimiter read after a long preamble, logged time units;
   photo times matched within 1 s when any lacks EXIF sub-seconds; E refitted over 10–40 % of
@@ -191,24 +194,23 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   pairs (BSD-3) in `app/src/main/assets/examples/` (~80 MB), with ground truth and credits;
   Try it / Save to phone / Credits & licences. Terms §4.6 merged upstream (semperdic-app #487),
   not yet synced here or deployed to Hosting; the website's Examples page merged (semper-website
-  #13). The §3c device pass ran on a Galaxy S22 on 2026-10-27; its fixes and TD-59's
-  new numbers merged 2026-10-27 (#154). Owed: that sync and deploy, TD-57, TD-58.
+  #13). The §3c device pass ran on a Galaxy S22 on 2026-10-27; its fixes and TD-275's
+  new numbers merged (#154, `e0e697b2`). Owed: that sync and deploy, TD-57, TD-58.
 - **Rename to Semper Classroom ([ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md)):** merged
   2026-10-26 (#147, `f25ebd01`), not released; still owed: the upstream deploy and the owner's Firebase app registration.
 - **Play submission ([gate](docs/ops/PRODUCTION_READINESS_GATE.md#google-play-submission-semper-classroom)):**
-  merged 2026-10-27 (#148). The release check now fails
+  merged (#148). The release check now fails
   a targetSdk below 36 or a native library off 16 KB pages; the rest is the operator's
-  (signing key TD-60, reviewer access TD-61, TD-3, TD-23–TD-26).
-- **Faster CI ([CI.md](docs/ops/CI.md)):** merged 2026-10-27 (#150). The `benchmark` build type is R8-minified and the benchmark job
+  (signing key TD-59, reviewer access TD-60, TD-3, TD-23–TD-26).
+- **Faster CI ([CI.md](docs/ops/CI.md)):** merged (#150). The `benchmark` build type is R8-minified and the benchmark job
   cold-starts it first (`scripts/launch_smoke.py`), the only R8 run in CI; Macrobenchmarks
   dry-run on PRs; heavy tiers wait for `tier1-static` only. Two unit-test workers reproduce TD-54, so it stays one.
-- **TD numbers restarted at TD-1 ([ADR-032](docs/adr/ADR-032-own-td-numbers.md)):** branch
-  `claude/renumber-play-td` (#155). Open rows TD-1–TD-61, other cited numbers TD-62–TD-252, next free
-  TD-253; a sync runs upstream diffs through `scripts/td_numbers.py translate` first. #153 cites old
-  numbers until it takes main.
-- **CI fixes after main's failures on 2026-10-26:** merged as #152 (2026-10-27). Submodule
+- **CI fixes after main's failures on 2026-10-26:** merged (#152, `fa7f0f2e`). Submodule
   checkout no longer needs GitLab when Eigen's pin is cached (`checkout-submodules`), and
   `PdfReportGeneratorTest` reads its statuses without a race.
+- **TD numbers restarted at TD-1 ([ADR-032](docs/adr/ADR-032-own-td-numbers.md)):** branch
+  `claude/renumber-play-td` (#155). Open rows TD-1–TD-60, other cited numbers TD-61–TD-275, next free
+  TD-276; a sync runs upstream diffs through `scripts/td_numbers.py translate` first.
 - **Look it up; this list rots.** `gh pr list --state open`; history in
   [CHANGELOG.md](docs/ops/CHANGELOG.md); proposals in [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 

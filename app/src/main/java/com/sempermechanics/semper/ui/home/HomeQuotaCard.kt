@@ -1,9 +1,12 @@
 package com.sempermechanics.semper.ui.home
 
+import android.content.Context
 import android.content.Intent
 import android.widget.TextView
+import androidx.annotation.WorkerThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
+import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.net.AccountCache
@@ -12,7 +15,9 @@ import com.sempermechanics.semper.data.net.SemperApi
 import com.sempermechanics.semper.data.session.SessionQuota
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.ui.limit.SessionLimitActivity
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -21,36 +26,68 @@ import kotlinx.coroutines.withContext
  * the license-expiry notice ([licenseView]), and the
  * persistent limit screen every quota check on Home opens.
  *
+ * Everything here that reads the licence reaches EntitlementStore, whose first
+ * read opens the Keystore and whose clock re-seal is a Keystore HMAC, so none of
+ * it runs on the main thread (readiness TE1-006, ADR-016): the lines render from
+ * [Lines], read with Home's list on its IO dispatcher, and each limit check runs
+ * on [io] and then acts.
+ *
  * @param openSettings where a tap on the quota line goes while under the limit.
  */
-internal class HomeQuotaCard(
+class HomeQuotaCard(
     private val activity: AppCompatActivity,
     private val quotaView: TextView,
     private val licenseView: TextView,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
     private val openSettings: () -> Unit,
 ) {
+
+    /** The licence half of both lines, read off the main thread ([read]). */
+    data class Lines(
+        /** [LicenseEntitlements.shownAnalysisCap]: 0 while no ceiling is known. */
+        val shownCap: Int,
+        /** [LicenseEntitlements.expiryNoticeDays]. */
+        val expiryNoticeDays: Long?,
+        /** [LicenseEntitlements.isInGrace]. */
+        val inGrace: Boolean,
+    ) {
+        companion object {
+            /** Before the first read: no ceiling and no notice. */
+            val NONE = Lines(shownCap = 0, expiryNoticeDays = null, inGrace = false)
+
+            /** Reads the licence for both lines; reaches EntitlementStore, so never on the main thread. */
+            @WorkerThread
+            fun read(context: Context) = Lines(
+                shownCap = LicenseEntitlements.shownAnalysisCap(context),
+                expiryNoticeDays = LicenseEntitlements.expiryNoticeDays(context),
+                inGrace = LicenseEntitlements.isInGrace(context),
+            )
+        }
+    }
+
+    /** Whether the account is at its limit, read on [io] ([SessionQuota.blocked] reads the licence). */
+    private suspend fun blocked(localCount: Int?): Boolean = withContext(io) {
+        if (localCount != null) SessionQuota.blocked(activity, localCount) else SessionQuota.blockedNow(activity)
+    }
 
     /**
      * At the account's analysis limit ([SessionQuota.blocked]), opens the
      * persistent limit screen and says so; Home's every quota
      * gate goes through here. [localCount] is the phone's rows when the caller
      * has just counted them; a tap on the main thread uses the count the
-     * index's last write stored ([SessionQuota.blockedNow]).
+     * index's last write stored ([SessionQuota.blockedNow]). The check runs
+     * on [io]; the screen opens back on the caller's thread.
      */
-    fun openLimitScreenIfReached(localCount: Int? = null): Boolean {
-        val reached = if (localCount != null) {
-            SessionQuota.blocked(activity, localCount)
-        } else {
-            SessionQuota.blockedNow(activity)
-        }
+    suspend fun openLimitScreenIfReached(localCount: Int? = null): Boolean {
+        val reached = blocked(localCount)
         if (reached) activity.startActivity(Intent(activity, SessionLimitActivity::class.java))
         return reached
     }
 
-    /** Both lines, for a phone list of [localSessionCount] analyses. */
-    fun render(localSessionCount: Int) {
-        updateQuotaIndicator(localSessionCount)
-        updateLicenseNotice()
+    /** Both lines, for a phone list of [localSessionCount] analyses and the licence as [lines] read it. */
+    fun render(localSessionCount: Int, lines: Lines) {
+        updateQuotaIndicator(localSessionCount, lines.shownCap)
+        updateLicenseNotice(lines)
     }
 
     /**
@@ -60,17 +97,16 @@ internal class HomeQuotaCard(
      */
     suspend fun recordReconciled(quotaUsed: Int) {
         val localCount = withContext(Dispatchers.IO) { SessionStore.list(activity).size }
-        val wasLimited = SessionQuota.blocked(activity, localCount)
+        val wasLimited = blocked(localCount)
         // Ceiling is owned by AppRemoteConfig (refreshed by the same
         // reconcile's config fetch); only the used count is stored here.
         AccountCache.setQuota(activity, quotaUsed, localCount)
         if (!wasLimited) openLimitScreenIfReached(localCount)
     }
 
-    private fun updateQuotaIndicator(localSessionCount: Int) {
+    private fun updateQuotaIndicator(localSessionCount: Int, max: Int) {
         // The cap the gate enforces, not the server's maxSessions: with the
-        // entitlement token lapsed that is demo's (TD-209).
-        val max = LicenseEntitlements.shownAnalysisCap(activity)
+        // entitlement token lapsed that is demo's (TD-209): Lines.shownCap.
         val used = AccountCache.quotaUsed(activity).coerceAtLeast(localSessionCount)
         if (max <= 0) {
             if (AppRemoteConfig.shouldHintSyncBlocked(activity) && SemperApi.get(activity).enabled) {
@@ -91,7 +127,7 @@ internal class HomeQuotaCard(
             ),
         )
         quotaView.setOnClickListener {
-            if (!openLimitScreenIfReached()) openSettings()
+            activity.lifecycleScope.launch { if (!openLimitScreenIfReached()) openSettings() }
         }
     }
 
@@ -110,15 +146,15 @@ internal class HomeQuotaCard(
      * Informational only ([HomeLicenseNotice]): what the licence does and
      * until when, never a call to renew or buy.
      */
-    private fun updateLicenseNotice() {
-        val days = LicenseEntitlements.expiryNoticeDays(activity)
+    private fun updateLicenseNotice(lines: Lines) {
+        val days = lines.expiryNoticeDays
         if (days == null) {
             licenseView.isVisible = false
             return
         }
         licenseView.isVisible = true
         val notice = HomeLicenseNotice.of(
-            inGrace = LicenseEntitlements.isInGrace(activity),
+            inGrace = lines.inGrace,
             days = days,
             graceEndsAtMs = AppRemoteConfig.licenseGraceEndsAtMs(activity),
         )
@@ -136,7 +172,7 @@ internal class HomeQuotaCard(
         }
         licenseView.setTextColor(
             activity.getColor(
-                if (LicenseEntitlements.isInGrace(activity)) {
+                if (lines.inGrace) {
                     R.color.semantic_danger
                 } else {
                     R.color.text_secondary

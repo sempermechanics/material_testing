@@ -1,0 +1,34 @@
+{
+  "displayName": "__SERVICE__ gateway /healthz",
+  "monitoredResource": {
+    "type": "uptime_url",
+    "labels": {
+      "project_id": "__PROJECT__",
+      "host": "__GATEWAY_HOST__"
+    }
+  },
+  "httpCheck": {
+    "path": "/healthz",
+    "port": 443,
+    "useSsl": true,
+    "validateSsl": true,
+    "requestMethod": "GET",
+    "acceptedResponseStatusCodes": [
+      {
+        "statusClass": "STATUS_CLASS_2XX"
+      }
+    ]
+  },
+  "period": "600s",
+  "timeout": "10s",
+  "checkerType": "STATIC_IP_CHECKERS",
+  "selectedRegions": [
+    "ASIA_PACIFIC",
+    "EUROPE",
+    "USA_VIRGINIA"
+  ],
+  "userLabels": {
+    "app": "semper",
+    "managed_by": "ops-monitoring"
+  }
+}

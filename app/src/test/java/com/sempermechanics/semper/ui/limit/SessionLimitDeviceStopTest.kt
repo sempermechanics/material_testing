@@ -2,6 +2,7 @@ package com.sempermechanics.semper.ui.limit
 
 import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.view.View
 import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
@@ -25,6 +26,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.shadows.ShadowToast
 
@@ -73,6 +75,19 @@ class SessionLimitDeviceStopTest {
             limit.findViewById<TextView>(R.id.tvLimitBody).text.toString(),
         )
         assertEquals(View.GONE, limit.findViewById<View>(R.id.tvLimitQuota).visibility)
+    }
+
+    @Test
+    fun `the support mail calls the stop the phone's limit`() {
+        // A handset is a phone in what the user reads, their own mail draft included
+        // (readiness AE3-002); "device" stays only in the Device ID line.
+        val limit = open()
+
+        limit.findViewById<View>(R.id.btnEmailSupport).performClick()
+
+        val body = shadowOf(limit).nextStartedActivity.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
+        val quota = body.lines().single { it.startsWith("Quota: ") }
+        assertTrue(quota, quota.endsWith(" (phone limit)"))
     }
 
     @Test

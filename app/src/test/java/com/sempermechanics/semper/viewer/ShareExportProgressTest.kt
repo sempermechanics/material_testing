@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import androidx.core.graphics.createBitmap
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.field.FieldKind
+import com.sempermechanics.semper.fixtures.ShadowPdfDocumentWrite
 import com.sempermechanics.semper.fixtures.idleUntil
 import com.sempermechanics.semper.fixtures.launchViewer
 import com.sempermechanics.semper.fixtures.viewerArgs
@@ -25,6 +26,7 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
 import java.io.File
 
 /**
@@ -34,6 +36,7 @@ import java.io.File
  * PDF names its frames too, in string resources like the rest.
  */
 @RunWith(RobolectricTestRunner::class)
+@Config(shadows = [ShadowPdfDocumentWrite::class])
 class ShareExportProgressTest {
 
     @get:Rule
@@ -169,7 +172,8 @@ class ShareExportProgressTest {
         // Robolectric's PdfDocument does not really draw or write pages, so the
         // job may fail before it completes (PdfReportDeviceTest draws them);
         // what it reported on the way is the status under test.
-        runCatching { activity.reports(ShareKind.PDF, seen = seen) }
+        val failure = runCatching { activity.reports(ShareKind.PDF, seen = seen) }.exceptionOrNull()
+        assertTrue("the PDF job reported nothing; it failed with ${failure?.stackTraceToString()}", seen.isNotEmpty())
 
         val frames = (1..FRAMES).map { activity.getString(R.string.share_progress_pdf_frame_fmt, it, FRAMES) }
         assertEquals("Frame 1 of 3 · report pages", seen.first().second)

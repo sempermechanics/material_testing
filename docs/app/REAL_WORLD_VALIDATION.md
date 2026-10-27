@@ -576,7 +576,7 @@ spots.
 
 - **Steel** matches the Pixel 6's and the emulator's ΔL / L₀ runs above to the
   digit. Its `example.json` and README carried the 2026-09-23 region-mean value,
-  149.6 GPa (TD-59); they now carry this run's.
+  149.6 GPa (TD-275); they now carry this run's.
 - **PMMA** is the authors' 1.98 / 2.09 GPa within 1 %, as on the Pixel.
 - **Solve times** are this phone's own reference, not a comparison: the Pixel 6
   rows above are older engines, and the S22's PMMA run (65 s) is slower than the

@@ -35,11 +35,19 @@ EXPIRING_WINDOW = timedelta(days=30)
 class RosterRefused(ValueError):
     """A whole request refused before anything was read or written: an import
     that cannot be parsed, an audit range that is not one. `code` is the wire
-    code, answered as a 400 (or 413 for too many rows)."""
+    code, answered as a 400 (or 413 for too many rows or too much text);
+    `detail` adds the `suffix` when there is one (`<code>: <suffix>`, the
+    convention `errors.Refusal` uses), so a client reading the code before the
+    colon reads the same code."""
 
-    def __init__(self, code: str):
+    def __init__(self, code: str, suffix: str = ""):
         super().__init__(code)
         self.code = code
+        self.suffix = suffix
+
+    @property
+    def detail(self) -> str:
+        return f"{self.code}: {self.suffix}" if self.suffix else self.code
 
 
 @dataclass(frozen=True)
@@ -61,15 +69,24 @@ def parse_import(text: str) -> list[ImportRow]:
     answered `invalid` rather than silently dropped. The address is read
     through `undefused`, so a cell the export quoted for a spreadsheet comes
     back as the address it was (TD-213).
+
+    A file the reader cannot parse is refused with the line its bad record
+    starts on (`line <n>`): for a quote never closed the reader only fails at
+    the end of the file, and the line it stopped on would point there. More
+    than `MAX_IMPORT_CHARS` is refused unread.
     """
+    if len(text) > MAX_IMPORT_CHARS:
+        raise RosterRefused(errors.ROSTER_IMPORT_TOO_LARGE)
     reader = csv.reader(io.StringIO(text.lstrip("﻿")), strict=True)
     records = []
+    starts_on = 1
     try:
         for record in reader:
             if any(cell.strip() for cell in record):
                 records.append((reader.line_num, record))
+            starts_on = reader.line_num + 1
     except csv.Error as e:
-        raise RosterRefused(errors.ROSTER_IMPORT_MALFORMED) from e
+        raise RosterRefused(errors.ROSTER_IMPORT_MALFORMED, f"line {starts_on}") from e
     if not records:
         raise RosterRefused(errors.ROSTER_IMPORT_EMPTY)
     column = 0

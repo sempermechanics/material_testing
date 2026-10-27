@@ -299,7 +299,7 @@ def test_page_token_cannot_escape_the_collection(emulator_repo):
     assert sessions, "seeded session not listed"
 
     with pytest.raises(Exception):
-        emulator_repo.list_user_sessions(uid, limit=10, page_token="a/b")
+        emulator_repo.list_user_sessions(uid, limit=10, page_token="a/b")  # noqa: S106 - a page cursor
 
 
 # --------------------------------------------------------------- licensing

@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
+import androidx.activity.viewModels
 import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -21,11 +22,11 @@ import com.sempermechanics.semper.ui.analysis.sweep.StrainProfiles
 import com.sempermechanics.semper.ui.analysis.sweep.SweepGraphExport
 import com.sempermechanics.semper.ui.analysis.sweep.SweepLatticeView
 import com.sempermechanics.semper.ui.analysis.sweep.SweepPlotView
+import com.sempermechanics.semper.ui.analysis.sweep.SweepProfilesModel
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.sweep.animateCopyConfirmation
 import com.sempermechanics.semper.ui.analysis.sweep.bindCopyGestures
 import com.sempermechanics.semper.ui.analysis.sweep.latticeSummary
-import com.sempermechanics.semper.ui.analysis.sweep.readSweepFrameProfiles
 import com.sempermechanics.semper.ui.analysis.sweep.scrubReadout
 import com.sempermechanics.semper.ui.analysis.sweep.scrubToFraction
 import com.sempermechanics.semper.ui.analysis.sweep.skippedLatticeNodes
@@ -36,8 +37,11 @@ import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.dialog.CrispToast
 import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
 import com.sempermechanics.semper.ui.common.dialog.Feedback
+import com.sempermechanics.semper.ui.common.dialog.LicenseLock
+import com.sempermechanics.semper.ui.common.letTitleWrap
 import com.sempermechanics.semper.ui.common.onButtonChecked
 import com.sempermechanics.semper.ui.viewer.ViewerArgs
+import com.sempermechanics.semper.ui.viewer.share.ShareCenter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -61,8 +65,8 @@ import java.io.File
 class VsgLatticeActivity : AppCompatActivity() {
 
     private companion object {
-        /** Every combination of a sweep solves the same one deformed image. */
-        const val SWEEP_DEFORMED_IMAGES = 1
+        /** The solved combination selected, kept across a rotation (TE1-005). */
+        const val STATE_FOCUSED_FRAME = "lattice_focused_frame"
 
         val STRAIN_OPTIONS = listOf(
             R.string.field_exx to DicResult.IDX_EXX,
@@ -118,6 +122,9 @@ class VsgLatticeActivity : AppCompatActivity() {
 
     private val graphExport = SweepGraphExport(this)
 
+    /** The line-cut profiles, read once and kept across a rotation (TE1-005). */
+    private val profiles: SweepProfilesModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityVsgLatticeBinding.inflate(layoutInflater)
@@ -128,7 +135,9 @@ class VsgLatticeActivity : AppCompatActivity() {
 
         binding.toolbar.apply {
             setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
+            setNavigationContentDescription(R.string.back)
             setNavigationOnClickListener { finish() }
+            letTitleWrap()
         }
 
         val solved = solvedLatticeNodes(args.sweep)
@@ -154,7 +163,10 @@ class VsgLatticeActivity : AppCompatActivity() {
         bindStrainControls()
 
         if (solvedNodes.isNotEmpty()) {
-            selectFocus(solvedNodes.first().frameIndex)
+            // The combination picked before a rotation, while it is still one of these.
+            val kept = savedInstanceState?.getInt(STATE_FOCUSED_FRAME, -1)
+                ?.takeIf { frame -> solvedNodes.any { it.frameIndex == frame } }
+            selectFocus(kept ?: solvedNodes.first().frameIndex)
         } else {
             binding.stepperRow.visibility = View.GONE
             binding.btnView.isEnabled = false
@@ -163,6 +175,11 @@ class VsgLatticeActivity : AppCompatActivity() {
 
         loadStrainProfiles()
         maybeCoachTheGraph()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt(STATE_FOCUSED_FRAME, focusedFrameIndex)
     }
 
     /** Binds the strain-plot section views and wires their listeners. */
@@ -175,7 +192,12 @@ class VsgLatticeActivity : AppCompatActivity() {
         binding.btnNextNode.setOnClickListener { stepFocus(1) }
         binding.rgPlotMode.onButtonChecked { redrawStrainPlot() }
         binding.btnView.setOnClickListener { if (focusedFrameIndex >= 0) openViewer(focusedFrameIndex) }
-        binding.btnSaveGraph.setOnClickListener { saveGraph() }
+        // The PNG is a Share export (ADR-024): greyed, never hidden, as the viewer's Share.
+        LicenseLock.mark(binding.btnSaveGraph, ShareCenter.access(this))
+        binding.btnSaveGraph.setOnClickListener {
+            val blocked = ShareCenter.blockedMessage(ShareCenter.access(this))
+            if (blocked != null) CrispToast.show(this, getString(blocked), long = true) else saveGraph()
+        }
 
         binding.plotLatticeStrain.onScrub = { x, samples ->
             binding.tvStrainPlotReadout.text = scrubReadout(this, x, samples)
@@ -235,6 +257,14 @@ class VsgLatticeActivity : AppCompatActivity() {
 
     private fun showSummary(nodes: List<SweepLatticeView.Node>, solvedCount: Int, skippedCount: Int) {
         val summary = binding.tvLatticeSummary
+        if (nodes.isEmpty()) {
+            // No sweep reached this screen: nothing ran, so nothing failed (AE1V-020).
+            summary.text = getString(R.string.vsg_lattice_empty)
+            // Listener first: setting one, even null, makes the view clickable again.
+            summary.setOnClickListener(null)
+            summary.isClickable = false
+            return
+        }
         if (solvedCount == 0) {
             summary.text = getString(R.string.vsg_lattice_all_failed)
             summary.isClickable = true
@@ -243,8 +273,8 @@ class VsgLatticeActivity : AppCompatActivity() {
             }
             return
         }
-        summary.isClickable = false
         summary.setOnClickListener(null)
+        summary.isClickable = false
         summary.text = latticeSummary(resources, nodes, solvedCount, skippedCount, args.plannedFrames)
     }
 
@@ -268,9 +298,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         val components = SweepStudy.STRAIN_COMPONENTS.toIntArray()
 
         lifecycleScope.launch {
-            val loaded = withContext(Dispatchers.IO) {
-                readSweepFrameProfiles(File(batchDirPath), steps, baseStep, components, line)
-            }
+            val loaded = profiles.load(File(batchDirPath), steps, baseStep, components, line).await()
             if (loaded.isEmpty()) return@launch
             frameProfiles = loaded
             redrawStrainPlot()
@@ -441,39 +469,20 @@ class VsgLatticeActivity : AppCompatActivity() {
         }
     }
 
-    /** Study type, image names, and settings for the export header. */
+    /** Study type, image names, and settings for the export header ([vsgExportHeaderLines]). */
     private fun exportHeaderLines(series: List<SweepPlotView.Series>): List<String> {
-        val lines = mutableListOf<String>()
-        val horizontal = isLineCutHorizontal()
-        val axis = getString(if (horizontal) R.string.axis_x else R.string.axis_y)
         val index = binding.spinnerStrainComponent.selectedItemPosition.coerceIn(0, STRAIN_OPTIONS.lastIndex)
-        lines += getString(
-            R.string.vsg_export_title_fmt,
-            getString(R.string.settings_used_vsg),
-            getString(STRAIN_OPTIONS[index].first),
-            axis,
-        )
-        val ref = args.refName
-        if (ref.isNotBlank()) {
-            // A sweep solves one deformed image (`RunSpec.Sweep.frameIndex`) with
-            // every combination. `frameNames` holds the combination labels, and
-            // counting those made a 12-node sweep "12 deformed images".
-            lines += resources.getQuantityString(
-                R.plurals.vsg_export_images_fmt,
-                SWEEP_DEFORMED_IMAGES,
-                ref,
-                SWEEP_DEFORMED_IMAGES,
-            )
-        }
         val node = selectedNode()
-        if (node != null) {
-            lines += getString(R.string.vsg_lattice_param_labeled_fmt, node.subset, node.step, windowText(node))
-        }
         val isolate = binding.rgPlotMode.checkedButtonId == R.id.btnPlotIsolate
-        if (!isolate) {
-            lines += resources.getQuantityString(R.plurals.vsg_export_combos_fmt, series.size, series.size)
-        }
-        return lines
+        return vsgExportHeaderLines(
+            horizontal = isLineCutHorizontal(),
+            strainLabel = STRAIN_OPTIONS[index].first,
+            refName = args.refName,
+            nodeLabel = node?.let {
+                getString(R.string.vsg_lattice_param_labeled_fmt, it.subset, it.step, windowText(it))
+            },
+            comboCount = if (isolate) null else series.size,
+        )
     }
 
     private fun selectedStrainComponent(): Int {

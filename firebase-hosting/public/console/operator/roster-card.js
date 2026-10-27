@@ -8,6 +8,7 @@ import { wireRoster, fetchRoster } from "../roster.js";
 import { loadTiles, wireExport, wireImport } from "../roster-tools.js";
 import { wireAuditLog } from "../audit-log.js";
 import { placeholderRows, retryRow } from "../util.js";
+import { explain } from "../messages.js";
 import { $, labelOf } from "./state.js";
 import { refreshLicence } from "./licences.js";
 
@@ -45,6 +46,9 @@ const renderRoster = wireRoster({
   report: rosterReport,
   reload: reloadAfterChange,
   retry: () => loadRoster(),
+  filter: $("rosterFilter"),
+  count: $("rosterCount"),
+  head: $("rosterHead"),
 });
 
 wireExport({ button: $("rosterExport"), base: rosterBase, name: fileName, report: rosterReport });
@@ -105,6 +109,6 @@ async function loadRoster() {
     loadTiles($("rosterTiles"), rosterBase(), () => roster === open);
   } catch (e) {
     if (roster !== open) return;
-    $("rosterRows").innerHTML = retryRow(5, `Could not load the roster: ${e.message}`);
+    $("rosterRows").innerHTML = retryRow(5, `Could not load the roster: ${explain(e)}`);
   }
 }

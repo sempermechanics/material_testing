@@ -96,6 +96,17 @@ def test_every_app_route_is_reachable_through_the_gateway():
     )
 
 
+def test_unpublished_routes_stay_off_the_gateway():
+    """_NOT_PUBLISHED is only subtracted above, so re-publishing /readyz or a
+    Cloud Tasks callback in gateway/openapi.yaml would pass every other check
+    here (readiness TE3-009). It must stay absent."""
+    published = _gateway_surface() & {(m, _erase_params(p)) for m, p in _NOT_PUBLISHED}
+    assert not published, (
+        f"route(s) that must not be reachable through the gateway are declared there: "
+        f"{sorted(published)}. See _NOT_PUBLISHED for why each is private."
+    )
+
+
 def test_every_gateway_path_has_a_handler():
     orphaned = _gateway_surface() - _app_surface()
     assert not orphaned, (
@@ -140,7 +151,7 @@ def _spec_text() -> str:
 
 
 def test_gateway_spec_has_no_duplicate_keys():
-    yaml.load(_spec_text(), Loader=_StrictLoader)
+    yaml.load(_spec_text(), Loader=_StrictLoader)  # noqa: S506 - _StrictLoader is a yaml.SafeLoader subclass
 
 
 def test_gateway_responses_carry_only_swagger_keys():

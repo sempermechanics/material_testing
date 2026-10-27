@@ -24,6 +24,17 @@ dead. Shared by all four:
 - `util.js` — the DOM-free helpers (`esc`, `when`, `day`, and the roster cells
   both seat tables render), so `node --test` can run them.
 
+Words (`terminology.test.mjs` holds them): backup, not sync; phone, not device,
+to an account holder (operator copy may say device); Demo as the plan ("on
+Demo"); "after-expiry grace" and the phone's "offline allowance", never a bare
+"grace period"; a seat you *have*, that IT *pauses* and *resumes* (the stored
+status is still `disabled`) and *removes* (a seat is removed, a licence is
+revoked); "Give up my seat"; "your institution's IT".
+
+Times: every instant is `util.js` `when` (the browser's zone, named:
+"7 Oct 2026, 04:53 pm IST"); a licence end, a test account's end and a
+deletion are `day`, the UTC calendar day they are stored as, marked "(UTC)".
+
 A page imports each name from the module that owns it. `util.test.mjs` fails
 if `util.js`, `dialogs.js`, `status.js` or `messages.js` comes to load
 Firebase, or if `auth.js` re-exports anything; `check_console.py` fails a
@@ -31,19 +42,31 @@ page that does not `modulepreload` every module it runs.
 
 Shared beside them:
 - `roster.js` — one institution roster: the table, its actions, adding a
-  member, and what each refusal says. The institution page drives it on the IT
+  member, and what each refusal says. The rows read are drawn 100 at a time
+  (Show more), narrowed by a filter box (address, status or device) and sorted
+  by Member or Status (`aria-sort` on the heading), with "Showing n of m". The institution page drives it on the IT
   routes (`/v1/institutions/licenses/{id}`), the operator desk on the staff
   routes (`/v1/admin/licenses/{id}`); the backend serves both from
   `routers/roster.py`. It reads a paged roster to the end.
 - `roster-tools.js` — a roster's bulk tools: the seat-count tiles from
   `GET …/summary`, read after every roster load; Export roster CSV,
   `GET …/seats/export`; and the bulk import, `POST …/seats/import`, with a
-  row-count preview and one result line per row.
+  row-count preview and one result line per row. A file the CSV reader
+  cannot parse names its line (the backend's `roster_import_malformed: line <n>`),
+  and a file over 512,000 characters (413 `roster_import_too_large`) is said
+  as too large ([ADMIN_API.md](../../../docs/backend/ADMIN_API.md)).
 - `audit-log.js` — the licence's audit log, `GET …/audit`, read on demand
   with a date range, a page of 50 at a time, and exported as CSV or JSON, up
-  to 5,000 events each.
+  to 5,000 events each. From / To are local days, sent as instants
+  (`localDayRange`), because the rows are shown in local time.
 - `messages.js` — `explain(error, sentences, fallback)`: a page's own sentence
-  for a refusal code, else a common one, else the raw text; and `ACCOUNT`, the
+  for a refusal code, else a common one (`COMMON`), else the page's fallback
+  ("Could not delete: …") around why it failed: `REASONS` (platform refusals
+  such as `firestore_unreachable`, shared route ones such as `user_not_found`,
+  and `network` for a fetch with no answer), `GATEWAY` by status for a
+  non-JSON `http_<status>`, or "the server refused it (ref: <code>)" for a
+  code nobody wrote words for. A code is never the whole message. Firebase
+  codes go through `util.js` `authErrorText` the same way. And `ACCOUNT`, the
   account page's words, the claim card's refusal sentences among them. Its
   keys are camelCase: a snake_case key reads as a backend code to
   `check_console.py`, so the page maps codes onto them where it matches.
@@ -87,7 +110,7 @@ not declare.
 |---|---|---|
 | `/login` (`/console/`) | Anyone with an account | Signs in and forwards to whichever dashboard below is theirs. |
 | `/account` (`/console/account`) | Anyone with an account | See the licence field by field (mode, kind and key, seats, end, grace end, a shared seat's lease, all from `/v1/me`), what a phone does offline, and the saved analyses; give a floating seat back, move the licence to a new device, download an analysis, and, while no licence is attached, redeem a one-time claim code (`account/claim.js`, `POST /v1/me/claim`). The last three need **2FA**. Deleting the account is the app's (device-signed `DELETE /v1/me`); the page says where, and that it removes the sign-in for both apps. |
-| `/console/institution` | IT staff named in a licence's `adminEmails` | Add and remove roster members (one at a time or up to 500 from a CSV), withdraw an unclaimed invitation, see who holds a seat, put a member on hold, clear a device lock; seat counts, roster CSV export, and the licence's audit log with CSV / JSON export. |
+| `/console/institution` | IT staff named in a licence's `adminEmails` | Add and remove roster members (one at a time or up to 500 from a CSV), withdraw an unclaimed invitation, see who has a seat, pause a member's seat, clear a device lock; seat counts, roster CSV export, and the licence's audit log with CSV / JSON export. |
 | `/console/operator` | Semper staff (`ADMIN_EMAILS` / `role=admin`) **with 2FA** | Issue individual and institution licences, edit or upgrade one, revoke or delete a key (30-day restore), drive any institution roster with IT's tools (seat counts, CSV import and export, the audit log with CSV / JSON export), approve accounts, and create, list, extend, re-password and end the test accounts for QC and CI. |
 
 ## The front door
@@ -192,9 +215,19 @@ the fake `window.prompt` fails the test if anything calls it.
 `window.confirm` and `window.alert` are gone too, for the same reason. Every
 yes / no question is a `confirmInPage` card (the same card with no box,
 resolving true or false): the desk's who-is-affected step before a revoke or
-delete and the one after the return from Google, New device, the roster's
-Remove and Withdraw (on the desk and the institution page), and the account
-page's give-a-seat-back and move-a-device. Device history is a `tellInPage`
+delete and the one after the return from Google, New device (on a licence and
+on a roster row), the roster's Remove and Withdraw (on the desk and the
+institution page), the desk's Release phone, and the account page's
+give-a-seat-back and move-a-device. Each roster and release confirmation names
+the address it acts on, and each roster row's buttons carry it in their
+accessible name ("Remove ana@uni.edu"). The box of an ask card is named by its
+`label` ("Password", "Licence key", "Days"), or its title. Every card is a
+`role="alertdialog"` named by its heading and described by its message;
+Escape answers it as Cancel (a tell card: Close), and focus goes back to the
+control that opened it (`restoreFocus`; a closed More menu's summary for an
+item in it). When a change redraws the roster or the licence table, focus is
+put back on the same row (`refocus`), or the roster's Add box when the row is
+gone. Device history is a `tellInPage`
 card with one Close button; the card keeps single line breaks, one move a
 line. In the tests, `confirms` answers the yes / no cards and `alerts` records
 each tell card, and the fake `window.confirm` / `window.alert` fail the test
@@ -540,7 +573,7 @@ The other files cover `auth.js`, `api.js`, `dialogs.js`, `status.js`,
 | `router.test.mjs` | `/login` forwards staff, IT contacts (deep-linked to one licence) and everyone else, and offers a switcher when it cannot or should not choose |
 | `operator.test.mjs` | The desk only for `role=admin`; licence rows (seats, term, cap, state, which actions apply — no Delete on a system Demo key, only Delete on a revoked row); Show revoked / Show Demo refetch; Load more without duplicates; the filter, and the backend search after a 300 ms pause (a POST with the text in its body, never in a URL); revoke and delete: who-is-affected confirmation, typed key, `stepUpForRevoke` (a stale session goes to Google carrying the licence, nothing sent), the sent request and its message, each refusal's wording; the return leg finishes a revoke or delete after one plain confirmation, once, reads a licence past the first page first, refuses a gone or already-revoked one, and says a failed leg sent nothing; Edit prefill, a later end without a typed key, an earlier one only with it, clearing the cap, a Demo key's cap locked, a Demo key's hand-off to Issue (address filled, Individual ticked, nothing sent), each `editError` code in the dialog; New device; the roster card on the staff routes, with the same actions as IT, and a refusal said in the card |
 | `account.test.mjs` | Licence pills and explanation (licensed, Demo, perpetual, expired past grace, ended in grace, shared seat held or not, a backend without `held`); Move licence hidden without a held licence; "N of M", "N analyses stored", and the inactive-licence wording, also when the analyses answer first; each analysis row's state, file count and stored size ("—" for failed or nothing, "… when done" while uploading), Download disabled until something finished, a specimen name never markup; Show more; give a seat back and move the licence (confirmation, request, the cooldown instant from `device_change_too_soon: <ISO>`, each refusal); Download saves `semper-analysis-<id>.zip`, and its refusals; the licence's facts (mode, licence, seats, end, grace end, lease; none without a licence; an unknown value as it came), the offline line only with a licence, and the delete card naming both apps |
-| `institution.test.mjs` | Nothing of the roster for an address no licence names (or an unverified one); a failed check leaves the page usable; the deep link; "N of M seats taken" / "in use right now" with invites counted apart; member rows (New device, Hold / Resume, Remove; nothing for a removed member; invites with Withdraw); not-found wording; Hold / Resume / New device bodies and reload; Remove and Withdraw confirm first; `ACT_ERRORS`; adding a member (on now vs invited, each refusal, `claim_contended`); the licence picker; a roster longer than one page read to the end |
+| `institution.test.mjs` | Nothing of the roster for an address no licence names (or an unverified one); a failed check leaves the page usable; the deep link; "N of M seats taken" / "in use right now" with invites counted apart; member rows (New device, Pause / Resume, Remove; nothing for a removed member; invites with Withdraw); not-found wording; Pause / Resume / New device bodies and reload; New device, Remove and Withdraw confirm first, naming the address; row buttons named after the member; `ACT_ERRORS`; adding a member (on now vs invited, each refusal, `claim_contended`); the licence picker; a roster longer than one page read to the end |
 | `institution-tools.test.mjs` | The seat-count tiles (attention marked, a failure said in place, a late answer for another licence dropped); Export roster CSV saves `roster-<keyPrefix>.csv`; the import's row-count preview and 500-row stop, a chosen file, the sent body, every row's result, a roster reload only when someone was added, each whole-file refusal; another licence clears the results, one not yours hides the tools; the audit log read on demand with its dates, members named by address, Older events, an empty range, `invalid_audit_range`, a late page dropped, CSV and JSON exports and the 5,000-event note |
 | `operator-test-accounts.test.mjs` | The Test accounts card: the create body (QC days, CI `days: null`, phones), each form error before anything is sent, the password in its dialog only and gone from the page, the status line and storage once closed (Close or Escape), Copy; `test_accounts_disabled`, `email_in_use` and the step-up refusals; a stale sign-in sent to Google with the change stashed (no password in it) and nothing sent, and the return leg finishing a create, Extend or End now after one confirmation, or saying a failed leg sent nothing; the list on demand (purpose, end or Never, phones, status, note never markup, Retry, a late answer dropped); Extend's days, New password, End now behind the typed address |
 | `operator-roster-tools.test.mjs` | The desk's roster card on the staff routes: the tiles (a failure in place, another licence's late answer dropped); Export roster CSV; the import's preview, 500-row stop, chosen file, sent body, every row's result, and the roster and licence row re-read; a refused import; a stale sign-in sent to Google with nothing else sent; another licence clears the results and the log; the audit log by date and page, `invalid_audit_range`, CSV and JSON exports and the 5,000-event note; and both pages drawing the same HTML and sending the same requests for the same answers |
@@ -561,6 +594,21 @@ nothing. `openPage("operator", {...})` mounts a page and imports a fresh copy
 of its module (`?load=N`); a `resume` makes that load the return leg of a
 Google re-authentication. A new SDK function in `auth.js` needs a matching
 export in `tests/fakes/firebase-auth.mjs`.
+
+**In a browser** (CI job "Console accessibility"): `tests/a11y/` opens the
+sign-in page, the front door, the account page (licensed, and on Demo with the
+claim card), the institution roster (120 seats, so Show more is drawn) and the
+operator desk in Chromium at 360, 768 and 1280 px, and asserts that axe-core
+finds no serious or critical WCAG 2.1 A/AA violation, that no page scrolls
+sideways and that nothing throws. It also opens a confirmation card (role,
+name, focus in and back out on Escape) and checks that every roster action is
+in view at 768 px. `tests/a11y/stub-site.mjs` serves `public/` on 127.0.0.1,
+answers the gstatic SDK imports with the same fakes, answers the API (the
+`__API_BASE_URL__` placeholder stays, so calls are page-relative) from fixtures
+and refuses every other host. The only npm dependencies in the repository are
+here, pinned: `@playwright/test` and `@axe-core/playwright`
+(`firebase-hosting/package-lock.json`). Locally, from `firebase-hosting/`:
+`npm ci`, `npx playwright install chromium`, `npm run test:a11y`.
 
 What the fakes cannot prove is that Firebase itself still behaves the way
 they model it — the redirect round trip, the handler on the page's own host,

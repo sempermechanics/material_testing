@@ -1,7 +1,7 @@
 """`scripts/td_numbers.py`: semperdic-app's TD numbers turned into this repo's (ADR-032).
 
 `translate` is tested on a small map, and the real map is checked to be the one
-the 2026-10-27 restart wrote: the register's rows came first, TD-1..TD-61, in old order.
+the 2026-10-27 restart wrote: the register's rows came first, TD-1..TD-60, in old order.
 """
 from __future__ import annotations
 
@@ -20,8 +20,8 @@ _SCRIPT = _REPO / "scripts" / "td_numbers.py"
 pytestmark = pytest.mark.skipif(not _SCRIPT.is_file(), reason="scripts/ not present (backend-only checkout)")
 
 _MAP = {214: 9, 215: 10, 260: 198, 312: 54, 139: 141}
-# The register rows on 2026-10-27, which took TD-1..TD-61.
-_ROWS = 61
+# The register rows on 2026-10-27, which took TD-1..TD-60.
+_ROWS = 60
 
 
 @pytest.fixture(scope="module")
@@ -49,6 +49,11 @@ def test_an_unknown_number_is_named_as_upstream_and_listed(td):
     assert unknown == [351]
 
 
+def test_a_number_after_a_json_escape_is_rewritten(td):
+    out, _ = td.translate('"Retire it with\\nTD-312."', _MAP)
+    assert out == '"Retire it with\\nTD-54."'
+
+
 def test_a_range_becomes_the_runs_its_members_took(td):
     out, _ = td.translate("TD-214–TD-260 by the cross-check", _MAP)
     assert out == "TD-9–TD-10, TD-198 by the cross-check"
@@ -66,7 +71,7 @@ def test_a_heading_anchor_follows_its_number(td):
 
 
 def test_the_map_puts_the_register_rows_first(td):
-    mapping = td.load_map(td.MAP)
+    mapping = td.load_map(td.MAP, upstream_only=False)
     assert sorted(mapping.values()) == list(range(1, len(mapping) + 1))
     olds = list(mapping)
     with td.MAP.open(encoding="utf-8", newline="") as fh:
@@ -80,6 +85,21 @@ def test_the_map_puts_the_register_rows_first(td):
     row_ids = [int(n) for n in re.findall(r"^\|\s*TD-(\d+)\s*\|", register, re.M)]
     assert row_ids == sorted(row_ids)
     assert all(n <= _ROWS or n > len(mapping) for n in row_ids)
+
+
+def test_a_number_that_means_another_row_upstream_is_not_mapped(td, tmp_path):
+    path = tmp_path / "map.csv"
+    path.write_text("old,new,same_upstream\nTD-312,TD-54,yes\nTD-349,TD-57,no\n", encoding="utf-8")
+    out, unknown = td.translate("TD-312 and TD-349", td.load_map(path))
+    assert out == "TD-54 and semperdic-app's TD-349"
+    assert unknown == [349]
+    assert td.load_map(path, upstream_only=False) == {312: 54, 349: 57}
+
+
+def test_the_real_map_keeps_this_repos_last_shared_numbers_out(td):
+    upstream = td.load_map(td.MAP)
+    assert not {199, 349, 350, 351, 352, 353} & set(upstream)
+    assert upstream[312] == td.load_map(td.MAP, upstream_only=False)[312]
 
 
 def test_translate_reads_stdin_and_reports_on_stderr(td, tmp_path, monkeypatch, capsys):

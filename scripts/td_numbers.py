@@ -3,16 +3,17 @@
 
 This repo's TD numbers restarted at TD-1 on 2026-10-27; until then they were
 shared with semperdic-app, which keeps the old ones. ``docs/ops/td-renumber-2026-10-27.csv``
-maps every old number this repo cited to its new one. A sync runs upstream text
-through ``translate`` before applying it, so the code and docs it brings cite
-this repo's rows:
+maps every old number this repo cited to its new one, and says whether
+semperdic-app uses that old number for the same row (``same_upstream``; not for
+TD-199 or TD-349–TD-353). A sync runs upstream text through ``translate`` before
+applying it, so the code and docs it brings cite this repo's rows:
 
   git diff OLD NEW -- PATHS | python scripts/td_numbers.py translate > upstream.patch
 
 ``TD-a–TD-b`` covers the mapped numbers from a to b, written as runs (they need
 not be consecutive here). ``#…-td-n`` heading anchors follow their numbers. A
-number the map does not have (semperdic-app took it after 2026-10-26, or this
-repo never cited it) becomes ``semperdic-app's TD-n``, and each one is listed on
+number the map cannot use (semperdic-app took it after 2026-10-26, its row there
+differs, or this repo never cited it) becomes ``semperdic-app's TD-n``, and each one is listed on
 stderr: give it a row here if this repo carries it. Never run it on this repo's
 own files, whose numbers are already the new ones.
 
@@ -29,16 +30,23 @@ from pathlib import Path
 
 MAP = Path(__file__).resolve().parents[1] / "docs" / "ops" / "td-renumber-2026-10-27.csv"
 
-_ONE = r"(?<![\w])TD-(?P<n>\d+)(?!\d)"
+# Not inside a word; a JSON escape such as `\n` just before is fine.
+_START = r"(?:(?<=\\[ntr])|(?<![\w]))"
+_ONE = rf"{_START}TD-(?P<n>\d+)(?!\d)"
 _TD = re.compile(
-    rf"(?P<rng>TD-(?P<a>\d+)(?P<dash>\s*(?:–|to|through)\s*)TD-(?P<b>\d+)(?!\d))|(?P<one>{_ONE})"
+    rf"(?P<rng>{_START}TD-(?P<a>\d+)(?P<dash>\s*(?:–|to|through)\s*)TD-(?P<b>\d+)(?!\d))|(?P<one>{_ONE})"
 )
 _ANCHOR = re.compile(r"(?<=[#-])td-(\d+)(?=[-)\]#]|\b)")
 
 
-def load_map(path: Path) -> dict[int, int]:
+def load_map(path: Path, upstream_only: bool = True) -> dict[int, int]:
+    """Old number to new; by default only the numbers semperdic-app uses for the same row."""
     with path.open(encoding="utf-8", newline="") as fh:
-        return {int(r["old"][3:]): int(r["new"][3:]) for r in csv.DictReader(fh)}
+        return {
+            int(r["old"][3:]): int(r["new"][3:])
+            for r in csv.DictReader(fh)
+            if not upstream_only or r.get("same_upstream", "yes") == "yes"
+        }
 
 
 def _runs(news: list[int], dash: str) -> str:

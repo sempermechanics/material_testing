@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <int name="max_sessions" value="0" />
+    <int name="max_frames" value="200" />
+    <string name="mode">licensed</string>
+    <boolean name="cloud_backup_enabled" value="true" />
+    <boolean name="share_enabled" value="true" />
+    <string name="license_kind">institution</string>
+    <string name="license_duration">perpetual</string>
+    <string name="license_seating">assigned</string>
+    <long name="fetched_at" value="1760700000000" />
+</map>

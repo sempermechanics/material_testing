@@ -40,12 +40,12 @@
 
             <ImageButton
                 android:id="@+id/btnSweepInfo"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:layout_marginStart="@dimen/space_4"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/info"
-                android:padding="11dp"
+                android:padding="15dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_info_min"
                 app:tint="@color/viewer_chrome_muted" />
@@ -71,6 +71,7 @@
                 android:id="@+id/roiThumb"
                 android:layout_width="72dp"
                 android:layout_height="48dp"
+                android:forceDarkAllowed="false"
                 android:contentDescription="@string/region_of_interest" />
 
             <LinearLayout
@@ -133,11 +134,11 @@
 
                 <ImageButton
                     android:id="@+id/btnPasteParams"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/action_paste_params"
-                    android:padding="9dp"
+                    android:padding="13dp"
                     android:scaleType="fitCenter"
                     android:src="@drawable/ic_content_paste"
                     android:visibility="gone"
@@ -146,87 +147,105 @@
 
                 <ImageButton
                     android:id="@+id/btnAdvancedReset"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/action_reset"
-                    android:padding="9dp"
+                    android:padding="13dp"
                     android:scaleType="fitCenter"
                     android:src="@drawable/ic_reset"
                     app:tint="@color/viewer_chrome_text" />
             </LinearLayout>
 
-            <!-- Subset size, with the measured speckle beside it -->
-            <LinearLayout
+            <!-- Subset size, with the measured speckle under its label. A
+                 ConstraintLayout so the label wraps before the value is squeezed:
+                 at font scale 2.0 a LinearLayout left the value 0 px wide (AE1V-001). -->
+            <androidx.constraintlayout.widget.ConstraintLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_8"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:layout_marginTop="@dimen/space_8">
 
                 <TextView
+                    android:id="@+id/tvSubsetLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:minHeight="48dp"
                     android:text="@string/subset_size"
                     android:textColor="@color/viewer_chrome_text"
-                    android:textStyle="bold" />
+                    android:textStyle="bold"
+                    app:layout_constrainedWidth="true"
+                    app:layout_constraintEnd_toStartOf="@id/btnSubsetInfo"
+                    app:layout_constraintHorizontal_bias="0"
+                    app:layout_constraintHorizontal_chainStyle="packed"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent" />
 
                 <ImageButton
                     android:id="@+id/btnSubsetInfo"
-                    android:layout_width="18dp"
-                    android:layout_height="18dp"
-                    android:layout_marginStart="6dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/info"
+                    android:padding="15dp"
                     android:scaleType="fitCenter"
                     android:src="@drawable/ic_info_min"
+                    app:layout_constraintEnd_toStartOf="@id/etSubsetValue"
+                    app:layout_constraintStart_toEndOf="@id/tvSubsetLabel"
+                    app:layout_constraintBottom_toBottomOf="@id/tvSubsetLabel"
+                    app:layout_constraintTop_toTopOf="@id/tvSubsetLabel"
                     app:tint="@color/viewer_chrome_muted" />
-
-                <com.google.android.material.chip.Chip
-                    android:id="@+id/chipSpeckle"
-                    style="@style/Widget.Semper.Chip.Assist"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="@dimen/space_8"
-                    android:checkable="false"
-                    android:clickable="false"
-                    android:textSize="12sp"
-                    android:visibility="gone"
-                    app:chipMinHeight="24dp"
-                    app:ensureMinTouchTargetSize="false"
-                    tools:text="Speckle 4.3 px"
-                    tools:visibility="visible" />
-
-                <View
-                    android:layout_width="0dp"
-                    android:layout_height="1dp"
-                    android:layout_weight="1" />
 
                 <EditText
                     android:id="@+id/etSubsetValue"
-                    android:layout_width="52dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/space_8"
+                    android:layout_marginEnd="4dp"
                     android:background="@android:color/transparent"
                     android:gravity="end"
                     android:hint="@string/subset_size"
                     android:imeOptions="actionDone"
                     android:importantForAutofill="no"
                     android:inputType="number"
+                    android:maxEms="3"
                     android:maxLength="3"
+                    android:minEms="2"
                     android:paddingTop="0dp"
                     android:paddingBottom="0dp"
                     android:textColor="@color/sky_primary"
                     android:textStyle="bold"
+                    app:layout_constraintBottom_toBottomOf="@id/tvSubsetLabel"
+                    app:layout_constraintEnd_toStartOf="@id/tvSubsetUnit"
+                    app:layout_constraintTop_toTopOf="@id/tvSubsetLabel"
                     tools:text="41" />
 
                 <TextView
+                    android:id="@+id/tvSubsetUnit"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
                     android:text="@string/scale_unit_px"
                     android:textColor="@color/sky_primary"
-                    android:textStyle="bold" />
-            </LinearLayout>
+                    android:textStyle="bold"
+                    app:layout_constraintBaseline_toBaselineOf="@id/etSubsetValue"
+                    app:layout_constraintEnd_toEndOf="parent" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipSpeckle"
+                    style="@style/Widget.Semper.Chip.Assist"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checkable="false"
+                    android:clickable="false"
+                    android:textSize="12sp"
+                    android:visibility="gone"
+                    app:chipMinHeight="24dp"
+                    app:ensureMinTouchTargetSize="false"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toBottomOf="@id/tvSubsetLabel"
+                    tools:text="Speckle 4.3 px"
+                    tools:visibility="visible" />
+            </androidx.constraintlayout.widget.ConstraintLayout>
 
             <!-- The recommended band is drawn behind the track (SubsetBand); the
                  subset's ⓘ says what it means. -->
@@ -234,6 +253,7 @@
                 android:id="@+id/sliderSubsetSize"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:contentDescription="@string/subset_size"
                 android:stepSize="2"
                 android:value="41"
                 android:valueFrom="15"
@@ -266,11 +286,12 @@
 
                 <ImageButton
                     android:id="@+id/btnStepInfo"
-                    android:layout_width="18dp"
-                    android:layout_height="18dp"
-                    android:layout_marginStart="6dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="0dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/info"
+                    android:padding="15dp"
                     android:scaleType="fitCenter"
                     android:src="@drawable/ic_info_min"
                     app:tint="@color/viewer_chrome_muted" />
@@ -282,7 +303,7 @@
 
                 <EditText
                     android:id="@+id/etStepValue"
-                    android:layout_width="52dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:background="@android:color/transparent"
                     android:contentDescription="@string/step_size_density"
@@ -290,7 +311,9 @@
                     android:imeOptions="actionDone"
                     android:importantForAutofill="no"
                     android:inputType="number"
+                    android:maxEms="4"
                     android:maxLength="2"
+                    android:minEms="2"
                     android:paddingTop="0dp"
                     android:paddingBottom="0dp"
                     android:textColor="@color/sky_primary"
@@ -310,6 +333,7 @@
                 android:id="@+id/sliderStepSize"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:contentDescription="@string/step_size_density"
                 android:stepSize="1"
                 android:value="5"
                 android:valueFrom="1"
@@ -326,77 +350,95 @@
                 android:valueTo="99"
                 android:visibility="gone" />
 
-            <!-- Strain window, in data points, with the VSG in px beside the value -->
-            <LinearLayout
+            <!-- Strain window, in data points, with the VSG in px under its label
+                 (laid out as the subset row above, AE1V-001). -->
+            <androidx.constraintlayout.widget.ConstraintLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_16"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:layout_marginTop="@dimen/space_16">
 
                 <TextView
+                    android:id="@+id/tvStrainLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:minHeight="48dp"
                     android:text="@string/strain_window"
                     android:textColor="@color/viewer_chrome_text"
-                    android:textStyle="bold" />
+                    android:textStyle="bold"
+                    app:layout_constrainedWidth="true"
+                    app:layout_constraintEnd_toStartOf="@id/btnStrainInfo"
+                    app:layout_constraintHorizontal_bias="0"
+                    app:layout_constraintHorizontal_chainStyle="packed"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent" />
 
                 <ImageButton
                     android:id="@+id/btnStrainInfo"
-                    android:layout_width="18dp"
-                    android:layout_height="18dp"
-                    android:layout_marginStart="6dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/info"
+                    android:padding="15dp"
                     android:scaleType="fitCenter"
                     android:src="@drawable/ic_info_min"
+                    app:layout_constraintEnd_toStartOf="@id/etStrainValue"
+                    app:layout_constraintStart_toEndOf="@id/tvStrainLabel"
+                    app:layout_constraintBottom_toBottomOf="@id/tvStrainLabel"
+                    app:layout_constraintTop_toTopOf="@id/tvStrainLabel"
                     app:tint="@color/viewer_chrome_muted" />
-
-                <View
-                    android:layout_width="0dp"
-                    android:layout_height="1dp"
-                    android:layout_weight="1" />
-
-                <!-- The VSG the window gives at the current step. -->
-                <TextView
-                    android:id="@+id/tvStrainVsg"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="@dimen/space_8"
-                    android:textAppearance="@style/TextAppearance.Semper.Caption"
-                    tools:text="21 px VSG" />
 
                 <EditText
                     android:id="@+id/etStrainValue"
-                    android:layout_width="52dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/space_8"
+                    android:layout_marginEnd="4dp"
                     android:background="@android:color/transparent"
                     android:gravity="end"
                     android:hint="@string/strain_window"
                     android:imeOptions="actionDone"
                     android:importantForAutofill="no"
                     android:inputType="number"
+                    android:maxEms="3"
                     android:maxLength="3"
+                    android:minEms="2"
                     android:paddingTop="0dp"
                     android:paddingBottom="0dp"
                     android:textColor="@color/sky_primary"
                     android:textStyle="bold"
+                    app:layout_constraintBottom_toBottomOf="@id/tvStrainLabel"
+                    app:layout_constraintEnd_toStartOf="@id/tvStrainUnit"
+                    app:layout_constraintTop_toTopOf="@id/tvStrainLabel"
                     tools:text="5" />
 
                 <TextView
+                    android:id="@+id/tvStrainUnit"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
                     android:text="@string/strain_window_unit_points"
                     android:textColor="@color/sky_primary"
-                    android:textStyle="bold" />
-            </LinearLayout>
+                    android:textStyle="bold"
+                    app:layout_constraintBaseline_toBaselineOf="@id/etStrainValue"
+                    app:layout_constraintEnd_toEndOf="parent" />
+
+                <!-- The VSG the window gives at the current step. -->
+                <TextView
+                    android:id="@+id/tvStrainVsg"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textAppearance="@style/TextAppearance.Semper.Caption"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toBottomOf="@id/tvStrainLabel"
+                    tools:text="21 px VSG" />
+            </androidx.constraintlayout.widget.ConstraintLayout>
 
             <!-- In data points (SweepStudy.MIN_WINDOW_POINTS..MAX_WINDOW_POINTS). -->
             <com.google.android.material.slider.Slider
                 android:id="@+id/sliderStrainWindow"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:contentDescription="@string/strain_window"
                 android:stepSize="2"
                 android:value="5"
                 android:valueFrom="3"
@@ -437,11 +479,12 @@
 
                     <ImageButton
                         android:id="@+id/btnOverlapInfo"
-                        android:layout_width="18dp"
-                        android:layout_height="18dp"
-                        android:layout_marginStart="6dp"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="0dp"
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:contentDescription="@string/info"
+                        android:padding="15dp"
                         android:scaleType="fitCenter"
                         android:src="@drawable/ic_info_min"
                         app:tint="@color/viewer_chrome_muted" />
@@ -453,7 +496,7 @@
 
                     <EditText
                         android:id="@+id/etOverlapValue"
-                        android:layout_width="52dp"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:background="@android:color/transparent"
                         android:contentDescription="@string/subset_overlap"
@@ -461,7 +504,9 @@
                         android:imeOptions="actionDone"
                         android:importantForAutofill="no"
                         android:inputType="numberDecimal"
+                        android:maxEms="4"
                         android:maxLength="4"
+                        android:minEms="2"
                         android:paddingTop="0dp"
                         android:paddingBottom="0dp"
                         android:textColor="@color/sky_primary"
@@ -490,7 +535,8 @@
                         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense.ExposedDropdownMenu"
                         android:layout_width="168dp"
                         android:layout_height="wrap_content"
-                        android:contentDescription="@string/sub_pixel_interpolation_kernel">
+                        android:contentDescription="@string/sub_pixel_interpolation_kernel"
+                        app:boxStrokeColor="@color/input_box_stroke">
 
                         <com.google.android.material.textfield.MaterialAutoCompleteTextView
                             android:id="@+id/ddInterpolator"
@@ -523,7 +569,8 @@
                         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense.ExposedDropdownMenu"
                         android:layout_width="168dp"
                         android:layout_height="wrap_content"
-                        android:contentDescription="@string/reference_update_description">
+                        android:contentDescription="@string/reference_update_description"
+                        app:boxStrokeColor="@color/input_box_stroke">
 
                         <com.google.android.material.textfield.MaterialAutoCompleteTextView
                             android:id="@+id/ddReference"
@@ -576,6 +623,7 @@
                         android:id="@+id/imgSweepFrame"
                         android:layout_width="72dp"
                         android:layout_height="48dp"
+                        android:forceDarkAllowed="false"
                         android:background="@color/surface_outline"
                         android:contentDescription="@string/sweep_frame_enlarge"
                         android:foreground="?attr/selectableItemBackground"
@@ -616,11 +664,12 @@
                     <!-- Which frame to pick (sweep_frame_hint). -->
                     <ImageButton
                         android:id="@+id/btnSweepFrameInfo"
-                        android:layout_width="18dp"
-                        android:layout_height="18dp"
-                        android:layout_marginStart="6dp"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="0dp"
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:contentDescription="@string/info"
+                        android:padding="15dp"
                         android:scaleType="fitCenter"
                         android:src="@drawable/ic_info_min"
                         app:tint="@color/viewer_chrome_muted" />
@@ -668,11 +717,11 @@
                      it matches (activity_result_viewer.xml, activity_vsg_lattice.xml). -->
                 <ImageButton
                     android:id="@+id/btnLatticeSamples"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:background="@drawable/bg_chrome_ghost"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="@drawable/bg_chrome_ghost_touch"
                     android:contentDescription="@string/lattice_samples_settings"
-                    android:padding="8dp"
+                    android:padding="12dp"
                     android:scaleType="fitCenter"
                     android:src="@drawable/ic_settings_gear"
                     app:tint="@color/viewer_chrome_text" />
@@ -691,11 +740,12 @@
 
                 <ImageButton
                     android:id="@+id/btnSamplesInfo"
-                    android:layout_width="18dp"
-                    android:layout_height="18dp"
-                    android:layout_marginEnd="4dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginEnd="0dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/info"
+                    android:padding="15dp"
                     android:scaleType="fitCenter"
                     android:src="@drawable/ic_info_min"
                     app:tint="@color/viewer_chrome_muted" />
@@ -798,12 +848,12 @@
 
             <ImageButton
                 android:id="@+id/btnEngineFailFaq"
-                android:layout_width="28dp"
-                android:layout_height="28dp"
-                android:layout_marginStart="4dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="0dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/warn_faq_desc"
-                android:padding="4dp"
+                android:padding="14dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_info_min"
                 android:visibility="gone"

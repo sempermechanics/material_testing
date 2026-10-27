@@ -5,7 +5,7 @@
 import { api } from "../api.js";
 import { confirmInPage, tellInPage } from "../dialogs.js";
 import { setStatus } from "../status.js";
-import { esc, seatDevices, classroomField, APP_NAMES, placeholderRows, retryRow } from "../util.js";
+import { esc, seatDevices, classroomField, APP_NAMES, placeholderRows, retryRow, when } from "../util.js";
 import { explain } from "../messages.js";
 import { $, labelOf } from "./state.js";
 import { showLicence } from "./licences.js";
@@ -18,8 +18,8 @@ export async function clearLicenceDevice(id) {
   // nothing is re-issued and nothing is typed at the customer's end.
   if (!(await confirmInPage({
     title: `Unbind ${labelOf(id)}`,
-    message: `Unbind ${labelOf(id)} from the device it is on?\n\n` +
-      "The next device they sign in on takes it. Their entitlement and " +
+    message: `Unbind ${labelOf(id)} from the phone it is on?\n\n` +
+      "The next phone they sign in on takes it. Their entitlement and " +
       "their analyses are untouched — this is not a revoke.",
     confirm: "Unbind",
   }))) return;
@@ -28,7 +28,7 @@ export async function clearLicenceDevice(id) {
       method: "PATCH",
       body: JSON.stringify({ clearDeviceLock: true }),
     });
-    setStatus(`${labelOf(id)} unbound — the next device to sign in takes it.`);
+    setStatus(`${labelOf(id)} unbound — the next phone to sign in takes it.`);
     showLicence(out);
   } catch (e) {
     setStatus(explain(e, {}, (text) => `Could not unbind: ${text}`), true);
@@ -50,7 +50,7 @@ export async function showDeviceHistory(id) {
       const prevMt = classroomField(e.detail, "previousDeviceId") || "";
       const app = (e.detail && e.detail.app) || "";
       const who = e.uid || "—";
-      return `${e.ts || "?"}  ${e.action}  by ${who}` +
+      return `${when(e.ts)}  ${e.action}  by ${who}` +
         (app ? ` (${APP_NAMES[app] || app})` : "") +
         (prev ? `  left ${prev}` : "") +
         (released && released !== prev ? `  signed out ${released}` : "") +
@@ -59,13 +59,13 @@ export async function showDeviceHistory(id) {
     });
     // One move a line: the card keeps single line breaks.
     await tellInPage({
-      title: "Device history",
+      title: "Phone history",
       message: lines.length
-        ? `Device history for ${labelOf(id)}\n\n${lines.join("\n")}`
-        : `No device moves recorded for ${labelOf(id)} yet.`,
+        ? `Phone history for ${labelOf(id)}\n\n${lines.join("\n")}`
+        : `No phone moves recorded for ${labelOf(id)} yet.`,
     });
   } catch (e) {
-    setStatus(`Could not load device history: ${e.message}`, true);
+    setStatus(`Could not load phone history: ${explain(e)}`, true);
   }
 }
 
@@ -110,7 +110,7 @@ export async function loadUsers(started) {
       : '<tr><td colspan="4" class="muted">Nobody waiting.</td></tr>';
   } catch (e) {
     if (ticket !== usersLoad) return;
-    $("userRows").innerHTML = retryRow(4, `Could not load: ${e.message}`);
+    $("userRows").innerHTML = retryRow(4, `Could not load: ${explain(e)}`);
   } finally {
     if (ticket === usersLoad) $("reloadUsers").disabled = false;
   }
@@ -130,6 +130,16 @@ function showPendingCount(count, more) {
 $("releasePhone").addEventListener("click", async () => {
   const email = $("releaseEmail").value.trim();
   if (!email) return setStatus("Enter the account's email.", true);
+  // Signs the account's phone out and holds it off for a day, on a typed
+  // address: say whose before doing it.
+  if (!(await confirmInPage({
+    title: "Release phone",
+    message: `Release the phone of ${email}?
+
+` +
+      "It is signed out and cannot sign in again for 24 hours; the new phone can then sign in.",
+    confirm: "Release",
+  }))) return;
   const btn = $("releasePhone");
   btn.disabled = true;
   try {
@@ -149,7 +159,7 @@ $("releasePhone").addEventListener("click", async () => {
     $("releaseEmail").value = "";
   } catch (e) {
     setStatus(`Could not release: ${explain(e, {
-      license_device_clear_required: "That account is licensed: use New device on its licence.",
+      license_device_clear_required: "That account is licensed: use New phone on its licence.",
     })}`, true);
   } finally {
     btn.disabled = false;

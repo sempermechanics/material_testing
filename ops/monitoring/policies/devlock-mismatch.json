@@ -1,0 +1,43 @@
+{
+  "displayName": "semper: licence device-lock mismatches above __DEVLOCK_MISMATCHES_PER_LICENCE_PER_HOUR__ an hour",
+  "documentation": {
+    "content": "One licence dropped to Demo at the device lock (stage mismatch: not the locked device) more than __DEVLOCK_MISMATCHES_PER_LICENCE_PER_HOUR__ times in an hour (the licenseId label names it): a key shared across devices, or a release that lost its device identity. Runbook: ops/monitoring/README.md#devlock-mismatch",
+    "mimeType": "text/markdown"
+  },
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "devlock mismatches per licence per hour > __DEVLOCK_MISMATCHES_PER_LICENCE_PER_HOUR__",
+      "conditionThreshold": {
+        "filter": "metric.type=\"logging.googleapis.com/user/semper_devlock_drop\" AND resource.type=\"cloud_run_revision\" AND metric.label.stage=\"mismatch\"",
+        "aggregations": [
+          {
+            "alignmentPeriod": "3600s",
+            "perSeriesAligner": "ALIGN_DELTA",
+            "crossSeriesReducer": "REDUCE_SUM",
+            "groupByFields": [
+              "metric.label.licenseId"
+            ]
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": "__DEVLOCK_MISMATCHES_PER_LICENCE_PER_HOUR__",
+        "duration": "0s",
+        "trigger": {
+          "count": 1
+        }
+      }
+    }
+  ],
+  "alertStrategy": {
+    "autoClose": "172800s"
+  },
+  "severity": "WARNING",
+  "notificationChannels": [
+    "__NOTIFICATION_CHANNEL__"
+  ],
+  "userLabels": {
+    "app": "semper",
+    "managed_by": "ops-monitoring"
+  }
+}

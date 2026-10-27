@@ -56,7 +56,7 @@ Conventions:
 | A busy spinner over controls | `View.setBusy` (`ui/common/Busy.kt:15`) | |
 | A wait shown in one view slot, only past 300 ms, still with animations off | `InlineBusy` (`ui/common/InlineBusy.kt:32`), latest wins through `SerialJob` | A spinner shown at once, or nothing |
 | One refresh at a time, a burst folded into one more | `ConflatedRefresh` (`ui/common/ConflatedRefresh.kt:22`) | |
-| A feature the licence lacks | `LicenseLock.lock` / `LicenseLock.explain` (`ui/common/dialog/LicenseLock.kt:27`, `:17`), decided by `FeatureLocks` (`data/policy/FeatureLocks.kt:41`); since 2026-10-18, [ADR-024](ADR-024-account-anchored-entitlements.md) | Hiding the control; a price, a purchase or a link to either |
+| A feature the licence lacks | `LicenseLock.lock` / `LicenseLock.explain` (`ui/common/dialog/LicenseLock.kt:30`, `:20`); a single control that stays tappable (viewer Share, sweep Save graph) is `LicenseLock.mark` (`:47`: greyed, "Locked" state description, readiness AE1-015), decided by `FeatureLocks` (`data/policy/FeatureLocks.kt:41`); since 2026-10-18, [ADR-024](ADR-024-account-anchored-entitlements.md) | Hiding the control; a price, a purchase or a link to either |
 
 **Still hand-built, and why.**
 

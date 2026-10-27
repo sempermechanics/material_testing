@@ -96,7 +96,7 @@ ways, out of the count.
    reach it only through the next merge.
 3. **The undeployed copies drift.** The fork carries `backend/` (177 files),
    `firebase-hosting/` (69), `firestore.rules`, `contracts/` (15) and `ops/` (25).
-   They deploy only from this repo (`.github/workflows/deploy-backend.yml:73`,
+   They deploy only from this repo (`.github/workflows/deploy-backend.yml:81`,
    `if: github.repository == 'sempermechanics/semperdic-app'`; `mt:CONTEXT.md:289`).
    Twelve backend files already differ (205 lines of fixes missing), along with
    `scripts/check_secret_access.sh`. Three rows closed here on 2026-10-19 are still

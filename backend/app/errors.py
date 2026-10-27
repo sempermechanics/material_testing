@@ -19,7 +19,7 @@ from __future__ import annotations
 
 # --- authentication / authorisation ----------------------------------------
 MISSING_BEARER = "missing_bearer"
-INVALID_TOKEN = "invalid_token"
+INVALID_TOKEN = "invalid_token"  # noqa: S105 - an error code, not a credential
 NOT_APPROVED = "not_approved"
 NOT_ADMIN = "not_admin"
 TERMS_VERSION_MISMATCH = "terms_version_mismatch"
@@ -46,7 +46,7 @@ UNKNOWN_APP = "unknown_app"
 APP_RETIRED = "app_retired"
 
 # --- Cloud Tasks callback --------------------------------------------------
-INVALID_TASK_TOKEN = "invalid_task_token"
+INVALID_TASK_TOKEN = "invalid_task_token"  # noqa: S105 - an error code, not a credential
 NOT_TASK_INVOKER = "not_task_invoker"
 
 # --- sessions, files, quotas -----------------------------------------------
@@ -211,10 +211,12 @@ INVALID_EMAIL = "invalid_email"
 
 # --- roster import and audit export (routers/roster.py) ----------------------
 # Refusals of a whole bulk import, before any row is touched: nothing to
-# import, more rows than one request may hold, a file the CSV reader cannot
-# parse, or a header row with no `email` column.
+# import, more rows or more text than one request may hold, a file the CSV
+# reader cannot parse (sent as `roster_import_malformed: line <n>`, the line
+# its bad record starts on), or a header row with no `email` column.
 ROSTER_IMPORT_EMPTY = "roster_import_empty"
 ROSTER_IMPORT_TOO_MANY_ROWS = "roster_import_too_many_rows"
+ROSTER_IMPORT_TOO_LARGE = "roster_import_too_large"
 ROSTER_IMPORT_MALFORMED = "roster_import_malformed"
 ROSTER_IMPORT_NO_EMAIL_COLUMN = "roster_import_no_email_column"
 #: Not a refusal: one import row's `error` when it was not reached (the import

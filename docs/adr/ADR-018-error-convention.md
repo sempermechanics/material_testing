@@ -30,8 +30,8 @@ the user is told and to whether to retry, in one `when`.
 | A non-200 backend answer, inside the client | `ApiAnswer(code, body, requestId)` with per-route mappers (`failSigned`, `failMe`, `failApprovedOnly`) | `data/net/SemperApiHttp.kt:78`, `data/net/SemperApiCalls.kt:61-93` | Becomes the specific exception (`DeviceConflictException`, `NotApprovedException`, …) or an `ApiException` that `HttpFailure` classifies | — |
 | Why a run stopped | `RunStop` (sealed; `wireCode` is the stored `Int`, `fromWireCode` maps any `Int` back) | `field/RunStop.kt` | `EngineFailure.reasonRes` / `shortReason` (`ui/analysis/run/EngineFailure.kt:61`, `:90`); an unknown code is shown with its number, never as a known cause. Since 2026-10-19 a run's outcome is read once by the pure `RunEnd.of` (sealed `RunEnd`, `ui/analysis/run/RunEnd.kt:80`) and shown by one `when` (`BatchRunController.render`, `ui/analysis/run/BatchRunController.kt:75-91`) | A run is not retried; Compute is re-checked first, whatever the outcome (`BatchRunController.kt:76-77`) |
 | A restore or Save-to-Files download | `DownloadFailure`: `Rejected` (404/403), `Unusable` (corrupt or incomplete backup), `Paused` (503 `feature_paused`, the restore kill switch; since 2026-10-18), `Transient` | `data/cloud/restore/DownloadFailure.kt` | `Rejected`: the backend's licence message (`LicenseErrors.restoreMessage`); `Unusable`: "restore failed", the reason code only logged; `Paused`: restoring is paused, counted as no failure (`data/DicRestoreWorker.kt:115-140`) | `Transient` → `Result.retry()`; the other three end the work |
-| A backup upload | `UploadFailures`: one method per thrown failure, catch order in `DicUploadWorker` (`data/DicUploadWorker.kt:170-187`); HTTP refusals by `UploadErrors.classify` → `Kind` (`data/cloud/UploadErrors.kt:64`), `feature_paused` first as `Kind.PAUSED` | `data/UploadFailures.kt` | `run.failure(<string>)` writes the reason Home shows; quota opens the limit screen instead | `UploadLog.retry` keeps staging (`PAUSED` too, `data/UploadFailures.kt:102-105`); a stale session, an expired link or an integrity mismatch is discarded and rebuilt at most `RebuildBudget` times (`data/cloud/UploadErrors.kt:127`: 2 for integrity, 3 for a link, 3 for a stale session, `:110-116`; the stale count since 2026-10-19), then fails; terminal paths go through one `abandon` |
-| A session index write | `SessionStore.UpsertOutcome`: `SAVED`, `QUOTA_FULL`, `INDEX_UNAVAILABLE` | `data/session/SessionStore.kt:118` | `afterSave` (`ui/analysis/run/BatchAnalysis.kt:507`, called at `:469`): quota → the session-limit screen; unavailable index → "Couldn't save results". Sweeps go the same way: `finishSolvedSweep` (`ui/analysis/wizard/SweepAnalysis.kt:172`) saves through `persistSweepSession`, which returns `afterSave`'s reading (`:304`) | Not retried |
+| A backup upload | `UploadFailures`: one method per thrown failure, catch order in `DicUploadWorker` (`data/DicUploadWorker.kt:170-187`); HTTP refusals by `UploadErrors.classify` → `Kind` (`data/cloud/UploadErrors.kt:64`), `feature_paused` first as `Kind.PAUSED` | `data/UploadFailures.kt` | `run.failure(<string>)` writes the reason Home shows; quota opens the limit screen instead | `UploadLog.retry` keeps staging (`PAUSED` too, `data/UploadFailures.kt:102-105`; a paused `GET /v1/sessions/{sid}/uploads` is `Resume.Unreachable(paused = true)`, `data/UploadSessionPlanner.kt` `unreadable`, and a paused metadata replace is `SessionMetadataSync.Outcome.PAUSED`, retried for as long as it lasts, the row kept marked; TE4-004); a stale session, an expired link or an integrity mismatch is discarded and rebuilt at most `RebuildBudget` times (`data/cloud/UploadErrors.kt:127`: 2 for integrity, 3 for a link, 3 for a stale session, `:110-116`; the stale count since 2026-10-19), then fails; terminal paths go through one `abandon` |
+| A session index write | `SessionStore.UpsertOutcome`: `SAVED`, `QUOTA_FULL`, `INDEX_UNAVAILABLE` | `data/session/SessionStore.kt:112` | `afterSave` (`ui/analysis/run/BatchAnalysis.kt:510`, called at `:472`): quota → the session-limit screen; unavailable index → "Couldn't save results". Sweeps go the same way: `finishSolvedSweep` (`ui/analysis/wizard/SweepAnalysis.kt:172`) saves through `persistSweepSession`, which returns `afterSave`'s reading (`:304`) | Not retried |
 
 **Cancellation.**
 
@@ -56,6 +56,18 @@ the user is told and to whether to retry, in one `when`.
   (unexpected) failure, so they must not see the caller's own.
 - A scope that is never cancelled may use `runCatching` and must say so
   (`ui/settings/AccountDeletionRun.kt:110-115`, `ui/common/auth/SignOutRun.kt:77-80`).
+
+**User-facing text (2026-10-26, readiness AE1-009).** What a screen says is a
+string resource chosen at this boundary, never an exception's message, a
+server's `detail` or an HTTP status. `HttpFailure.userMessage(fallback)` names
+offline, a cloud that is not answering (5xx, 429) and a lapsed session (401) and
+gives `fallback` for the rest (`data/net/HttpFailure.kt`); a Firebase failure no
+caller named is offline, too many attempts, or the caller's fallback
+(`firebaseFailureText`, `data/account/FirebaseOp.kt`). A failure that already
+carries the app's own words is a `UserMessageException`
+(`data/account/AuthRepository.kt`), and a screen shows a thrown failure only as
+`error.userMessageOr(fallback)`. The cause, the server's hint and the status go
+to Timber.
 
 **Rule for new code.** A new backend call goes through `authed` and maps the
 `Authed` outcome where it is used; a new failure domain gets a sealed type (or

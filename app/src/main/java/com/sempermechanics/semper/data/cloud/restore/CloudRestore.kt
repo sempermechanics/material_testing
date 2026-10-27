@@ -1,9 +1,11 @@
 package com.sempermechanics.semper.data.cloud.restore
 
 import android.content.Context
+import androidx.annotation.StringRes
 import androidx.work.ExistingWorkPolicy
 import androidx.work.WorkManager
 import androidx.work.workDataOf
+import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.DicBundleDownloadWorker
 import com.sempermechanics.semper.data.DicRestoreWorker
 import com.sempermechanics.semper.data.cloud.CorruptTransferException
@@ -19,6 +21,7 @@ import com.sempermechanics.semper.data.net.Authed
 import com.sempermechanics.semper.data.net.CloudApi
 import com.sempermechanics.semper.data.net.CloudFileDto
 import com.sempermechanics.semper.data.net.CloudSessionDto
+import com.sempermechanics.semper.data.net.HttpFailure
 import com.sempermechanics.semper.data.net.SemperApi
 import com.sempermechanics.semper.data.net.TokenProvider
 import com.sempermechanics.semper.data.net.TokenSource
@@ -144,7 +147,9 @@ object CloudRestore {
         data object Empty : ListOutcome()
         data object NeedSignIn : ListOutcome()
         data object ApiOff : ListOutcome()
-        data class Failed(val reason: String) : ListOutcome()
+
+        /** The listing failed; [message] says so by kind (offline, cloud not answering), never its exception. */
+        data class Failed(@StringRes val message: Int) : ListOutcome()
     }
 
     /**
@@ -164,7 +169,12 @@ object CloudRestore {
             is Authed.Failed -> {
                 val cause = listed.failure.cause
                 Timber.e(cause, "listCompleted sessions failed")
-                ListOutcome.Failed(cause.message ?: cause.toString())
+                ListOutcome.Failed(
+                    when (listed.failure.kind) {
+                        HttpFailure.Kind.OFFLINE -> R.string.restore_list_offline
+                        else -> listed.failure.userMessage(R.string.restore_list_failed)
+                    },
+                )
             }
             is Authed.Ok -> {
                 val sessions = listed.value.filter { it.status == UploadWorkOutcomes.STATUS_COMPLETED }

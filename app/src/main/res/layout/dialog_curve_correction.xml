@@ -3,6 +3,7 @@
      scale and bias, for the session. Scrolls so all four boxes stay reachable
      above the keyboard. -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content">
 
@@ -26,7 +27,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="12dp"
-            android:hint="@string/curve_strain_scale_hint">
+            android:hint="@string/curve_strain_scale_hint"
+            app:boxStrokeColor="@color/input_box_stroke">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etStrainScale"
@@ -41,7 +43,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="12dp"
-            android:hint="@string/curve_strain_bias_hint">
+            android:hint="@string/curve_strain_bias_hint"
+            app:boxStrokeColor="@color/input_box_stroke">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etStrainBias"
@@ -56,7 +59,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="12dp"
-            android:hint="@string/curve_stress_scale_hint">
+            android:hint="@string/curve_stress_scale_hint"
+            app:boxStrokeColor="@color/input_box_stroke">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etStressScale"
@@ -70,7 +74,8 @@
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="@string/curve_stress_bias_hint">
+            android:hint="@string/curve_stress_bias_hint"
+            app:boxStrokeColor="@color/input_box_stroke">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etStressBias"

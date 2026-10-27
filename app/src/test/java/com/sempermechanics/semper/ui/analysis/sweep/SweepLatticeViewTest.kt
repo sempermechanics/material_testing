@@ -78,9 +78,10 @@ class SweepLatticeViewTest {
         view.draw(Canvas(Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)))
     }
 
-    // Compact gutters: 30dp left, 14dp right, 14dp top, 20dp bottom. The swept
-    // VSG range 21..61 is framed with a 12 % margin: (61 - 21) * 0.12 → 4, so
-    // the y axis runs 17..65.
+    // Compact gutters at font scale 1: 30dp left, 14dp right, 20dp bottom, and
+    // on top room for the "VSG (px)" title (two 11sp text heights and a 5dp gap).
+    // The swept VSG range 21..61 is framed with a 12 % margin: (61 - 21) * 0.12
+    // → 4, so the y axis runs 17..65.
     private fun columnX(index: Int, columns: Int = 2): Float {
         val left = 30f * density
         val right = W_DP * density - 14f * density
@@ -88,7 +89,7 @@ class SweepLatticeViewTest {
     }
 
     private fun rowY(vsg: Int, winMin: Int = 17, winMax: Int = 65): Float {
-        val top = 14f * density
+        val top = 2 * view.labelPaint.textSize + 5f * density
         val bottom = H_DP * density - 20f * density
         return bottom - (vsg - winMin).toFloat() / (winMax - winMin) * (bottom - top)
     }
@@ -231,8 +232,55 @@ class SweepLatticeViewTest {
         assertEquals("two columns draw their range labels without failing", View.VISIBLE, view.visibility)
     }
 
+    @Test
+    fun `the gutters grow to fit the tick labels at a large font scale`() {
+        val config = android.content.res.Configuration(context.resources.configuration).apply { fontScale = 2f }
+        view = SweepLatticeView(context.createConfigurationContext(config)).apply {
+            compact = true
+            setNodes(listOf(node(subset = 21, vsg = 15, frame = 0), node(subset = 41, vsg = 141, frame = 1)))
+        }
+        layoutAndDraw(W_DP, H_DP)
+
+        val paint = view.labelPaint
+        assertEquals(listOf("0", "39", "78", "117", "156"), view.yTickLabels)
+        val widest = view.yTickLabels.maxOf { paint.measureText(it) }
+        assertTrue("left gutter ${view.plotFrame.left} < $widest", view.plotFrame.left >= widest + 5f * density)
+        val xLabelBottom = view.plotFrame.bottom + paint.textSize + 5f * density + paint.descent()
+        assertTrue("x labels end at $xLabelBottom past ${H_DP * density}", xLabelBottom <= H_DP * density)
+    }
+
+    /**
+     * In the lattice screen's 136dp view at font scale 2.0 the five y ticks were
+     * drawn on top of each other (after-screenshot of AE1V-010); every labelled
+     * row now has a text height of room, and at font scale 1.0 all five stay.
+     */
+    @Test
+    fun `y tick labels never overlap in the screen's lattice height`() {
+        for ((scale, expectedStride) in listOf(1f to 1, 2f to 2)) {
+            val config = android.content.res.Configuration(context.resources.configuration).apply { fontScale = scale }
+            view = SweepLatticeView(context.createConfigurationContext(config)).apply {
+                compact = true
+                setNodes(listOf(node(subset = 21, vsg = 15, frame = 0), node(subset = 41, vsg = 141, frame = 1)))
+            }
+            layoutAndDraw(W_DP, SCREEN_H_DP)
+
+            // A label row is about 1.2 text sizes tall (ascent to descent).
+            val textHeight = view.labelPaint.textSize * 1.2f
+            val spacing = view.plotFrame.height() / SweepLatticeGutters.Y_TICKS
+            val stride = view.yTickStride
+            assertTrue(
+                "fs $scale: labels every $stride of $spacing px rows, text $textHeight",
+                spacing * stride >= textHeight,
+            )
+            assertEquals("fs $scale stride", expectedStride, stride)
+        }
+    }
+
     private companion object {
         const val W_DP = 320
         const val H_DP = 200
+
+        /** activity_vsg_lattice.xml's latticeView height. */
+        const val SCREEN_H_DP = 136
     }
 }

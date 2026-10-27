@@ -26,8 +26,12 @@ internal sealed interface RunEnd {
     /** The run solved, but the session index could not be read or written, so nothing was saved. */
     data object NotSaved : RunEnd
 
-    /** The run threw; [detail] is what it said. */
-    data class Unexpected(val detail: String) : RunEnd
+    /**
+     * The run threw an exception of class [kind]. What it said stays in the log the
+     * catch writes (RunChannels): it can name a path, a file or a specimen, and it is
+     * not the user's language, so the screen says the app's own words (ADR-018).
+     */
+    data class Unexpected(val kind: String) : RunEnd
 
     /**
      * Nothing was kept: the engine stopped the run with [code] on frame
@@ -97,8 +101,8 @@ internal sealed interface RunEnd {
             }
         }
 
-        /** A run that threw [e]: what it said, else what it was. */
-        fun unexpected(e: Exception): Unexpected = Unexpected(e.message ?: e::class.java.simpleName)
+        /** A run that threw [e]: what it was, never what it said. */
+        fun unexpected(e: Exception): Unexpected = Unexpected(e::class.java.simpleName)
 
         /** [outcome] kept nothing: the engine's code on its frame, or a first frame that kept no points. */
         private fun failed(outcome: BatchAnalysisOutcome): Failed {

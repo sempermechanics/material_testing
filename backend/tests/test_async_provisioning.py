@@ -550,15 +550,51 @@ def test_task_caller_rejects_an_unverifiable_token(oidc, monkeypatch):
     assert excinfo.value.status_code == 401
 
 
-async def test_task_route_is_unreachable_with_a_user_token(store, client, monkeypatch):
-    """It is not a user route: a perfectly valid app credential opens nothing."""
+def _task_routes() -> list[str]:
+    """Every POST route behind `tasks_caller`, read from the app itself, so a
+    new callback is covered by existing."""
+    from app.main import app, served_routes
+
+    def calls(dependant):
+        for sub in dependant.dependencies:
+            yield sub.call
+            yield from calls(sub)
+
+    return sorted(r.path for r in served_routes(app)
+                  if getattr(r, "dependant", None) and tasks.tasks_caller in set(calls(r.dependant)))
+
+
+def test_every_task_route_is_found():
+    assert _task_routes() == ["/v1/tasks/license-fanout", "/v1/tasks/provision-session",
+                              "/v1/tasks/test-account-expiry"]
+
+
+@pytest.mark.parametrize("path", _task_routes())
+@pytest.mark.parametrize("credential,status,detail", [
+    # A Firebase ID token is not signed by Google's OAuth2 certificates.
+    ("firebase-user-token", 401, "invalid_task_token"),
+    # A Google-signed token for a user's own account: verified, wrong principal.
+    ("google-user-token", 403, "not_task_invoker"),
+])
+async def test_task_route_is_unreachable_with_a_user_token(store, client, monkeypatch, path,
+                                                           credential, status, detail):
+    """It is not a user route: a perfectly valid app credential opens nothing,
+    on any of the three callbacks (readiness TE3-005)."""
+    from google.oauth2 import id_token as ga_id_token
+
     monkeypatch.setattr(settings, "DEV_INSECURE_AUTH", False)
-    r = await client.post(
-        "/v1/tasks/provision-session",
-        json={"sessionId": "s1"},
-        headers={"Authorization": "Bearer a-user-id-token"},
-    )
-    assert r.status_code in (401, 403)
+    monkeypatch.setattr(settings, "TASKS_INVOKER_SA", "tasks-invoker@test.iam.gserviceaccount.com")
+
+    def verify(token, _request, _audience):
+        if token == "firebase-user-token":  # noqa: S105 - a fake token
+            raise ValueError("Could not verify token signature.")
+        return {"email": "someone@gmail.com", "email_verified": True}
+
+    monkeypatch.setattr(ga_id_token, "verify_oauth2_token", verify)
+    r = await client.post(path, json={"sessionId": "s1"},
+                          headers={"Authorization": f"Bearer {credential}"})
+    assert r.status_code == status, r.text
+    assert r.json()["detail"] == detail
 
 
 async def test_upload_targets_are_recorded_in_one_batch(store, queued, client, monkeypatch):

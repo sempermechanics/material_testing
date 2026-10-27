@@ -1,6 +1,7 @@
 package com.sempermechanics.semper.data.account
 
 import android.content.Context
+import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.LicenseConfigWorker
 import com.sempermechanics.semper.data.account.AuthRepository.AccessLostException
 import com.sempermechanics.semper.data.account.entitlement.ConfigFetch
@@ -111,8 +112,11 @@ internal class AccessStatusResolver(
         }
         Kind.DEVICE_CONFLICT, Kind.DEVICE_IN_USE -> Result.failure(deviceBoundElsewhere(failure.cause))
         Kind.UNAUTHORIZED -> Result.failure(AccessLostException(unauthorizedMessage(failure.body)))
-        Kind.FORBIDDEN, Kind.NOT_FOUND, Kind.CONFLICT, Kind.RATE_LIMITED, Kind.SERVER, Kind.REJECTED ->
-            Result.failure(Exception("Could not verify account (server error ${failure.code})."))
+        Kind.FORBIDDEN, Kind.NOT_FOUND, Kind.CONFLICT, Kind.RATE_LIMITED, Kind.SERVER, Kind.REJECTED -> {
+            Timber.w(failure.cause, "Status check refused (HTTP %s)", failure.code)
+            val shown = appContext.getString(failure.userMessage(R.string.auth_account_check_failed))
+            Result.failure(UserMessageException(shown))
+        }
         // No answer about this account (the rest are IOExceptions that are not one).
         Kind.OFFLINE, Kind.DEVICE_NOT_ACTIVE, Kind.NO_SEAT, Kind.TERMS_MISMATCH, Kind.UNEXPECTED -> {
             Timber.d(failure.cause, "Status check failed offline; using cached status")
@@ -122,28 +126,25 @@ internal class AccessStatusResolver(
 
     /**
      * The gateway or backend rejected the Firebase ID token (wrong audience,
-     * expired, or malformed). A short server hint, when there is one, keeps
-     * "Session expired" from being the only clue to a misconfigured
-     * FIREBASE_PROJECT_ID / API Gateway JWT audience.
+     * expired, or malformed). The user is told the session expired; the
+     * server's short hint, the clue to a misconfigured FIREBASE_PROJECT_ID /
+     * API Gateway JWT audience, goes to the log, not the screen (AE1-009).
      */
     private fun unauthorizedMessage(body: String): String {
         val hint = ApiErrors.detailOf(body).lineSequence().firstOrNull().orEmpty()
             .take(API_ERROR_HINT_MAX_CHARS)
-        return if (hint.isNotBlank()) {
-            "Sign-in rejected by the API (401). $hint"
-        } else {
-            "Session expired. Please sign in again."
-        }
+        if (hint.isNotBlank()) Timber.w("Sign-in rejected by the API (401): %s", hint)
+        return appContext.getString(R.string.error_session_expired)
     }
 
     private fun deviceBoundElsewhere(cause: Throwable) = AccessLostException(
-        if ((cause as? DeviceConflictException)?.released == true) {
-            "Staff released this phone from this account, so it cannot be used with it " +
-                "again. Sign in with another account, or use another phone."
-        } else {
-            "This device is already linked to another account, or this account to " +
-                "another device. Sign in with that account, or ask an admin to reset the binding."
-        },
+        appContext.getString(
+            if ((cause as? DeviceConflictException)?.released == true) {
+                R.string.auth_phone_released
+            } else {
+                R.string.auth_phone_linked_elsewhere
+            },
+        ),
         cause,
     )
 
@@ -151,7 +152,7 @@ internal class AccessStatusResolver(
         if (AccountCache.cachedStatus(appContext) == AccessStatus.APPROVED) {
             Result.success(AccessStatus.OFFLINE_CACHE_APPROVED)
         } else {
-            Result.failure(Exception("Could not verify account. Check your connection and sign in again."))
+            Result.failure(UserMessageException(appContext.getString(R.string.auth_account_check_offline)))
         }
 
     /**
@@ -188,7 +189,7 @@ internal class AccessStatusResolver(
     }
 
     private companion object {
-        /** Cap server error detail length in user-facing 401 snackbars. */
+        /** Cap server error detail length in the 401 log line. */
         const val API_ERROR_HINT_MAX_CHARS = 120
     }
 }

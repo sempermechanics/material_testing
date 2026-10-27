@@ -40,11 +40,12 @@
 
             <ImageButton
                 android:id="@+id/btnLoadInfo"
-                android:layout_width="18dp"
-                android:layout_height="18dp"
-                android:layout_marginStart="6dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="@dimen/space_4"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/info"
+                android:padding="15dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_info_min"
                 app:tint="@color/viewer_chrome_muted" />
@@ -157,11 +158,11 @@
 
             <ImageButton
                 android:id="@+id/btnLoadClear"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/load_clear"
-                android:padding="10dp"
+                android:padding="14dp"
                 android:src="@drawable/ic_close"
                 app:tint="@color/viewer_chrome_muted" />
         </LinearLayout>

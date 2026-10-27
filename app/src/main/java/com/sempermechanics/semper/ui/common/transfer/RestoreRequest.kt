@@ -42,14 +42,15 @@ sealed interface RestoreRequest {
 /**
  * The one way a screen asks for restores: [RestoreRequest.Paused] when this
  * account may not restore, else [targets] started through [RestoreStart.startAll]
- * on [io] (it writes the index). Suspends; safe to call from the main thread.
+ * on [io] (it writes the index). The licence check runs on [io] too: it reaches
+ * EntitlementStore (readiness TE1-006). Suspends; safe to call from the main thread.
  */
 suspend fun RestoreStart.request(
     context: Context,
     targets: List<RestoreStart.Target>,
     io: CoroutineDispatcher = Dispatchers.IO,
 ): RestoreRequest {
-    if (!LicenseEntitlements.restoreEnabled(context)) return RestoreRequest.Paused
+    if (!withContext(io) { LicenseEntitlements.restoreEnabled(context) }) return RestoreRequest.Paused
     val counts = withContext(io) { startAll(context, targets) }
     return RestoreRequest.Queued(targets.size, counts)
 }

@@ -66,7 +66,12 @@ class PlotStyleTest {
         val histogram = FieldHistogramView(context)
         val axis = PlotStyle.gridPaint(context, R.color.viewer_plot_ink)
         assertSamePaint(histogram.paint("axisPaint"), axis, withColor = false)
-        assertSamePaint(histogram.paint("textPaint"), PlotStyle.axisTextPaint(context), withColor = false)
+        // Its labels are the Details sheet's caption, the app's sans, not the plots'
+        // monospace (readiness AE1V-025; FieldHistogramViewTest checks the face).
+        val caption = PlotStyle.labelTextPaint(context).apply {
+            textSize = context.resources.getDimension(R.dimen.text_caption)
+        }
+        assertSamePaint(histogram.paint("textPaint"), caption, withColor = false)
     }
 
     @Suppress("DEPRECATION") // scaledDensity: the sp scale, read independently of applyDimension

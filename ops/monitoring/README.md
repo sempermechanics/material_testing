@@ -1,7 +1,9 @@
 # Monitoring as code (semper-api)
 
-Log-based metrics, the `/readyz` uptime check, the availability SLO, the alert
-policies and four dashboards for the production Cloud Run service, applied by
+Log-based metrics, the uptime checks (`/readyz` on the Cloud Run service, and
+`/healthz` and `/v1/config` through API Gateway `semper-gw`, the path the app
+takes), the availability SLO, the alert policies and four dashboards for the
+production service, applied by
 [`scripts/apply-monitoring.sh`](../../scripts/apply-monitoring.sh). Readiness items
 A7.1–A7.3; the signals in [§17](../../docs/backend/CLOUD_ARCHITECTURE_GCP.md) of the
 architecture doc.
@@ -29,10 +31,13 @@ the run.
 | `__SERVICE__`, `__REGION__` | `--service`, `--region` | `semper-api`, `asia-south1` | Cloud Run service |
 | `__STAGING_SERVICE__` | `--staging-service` | `semper-api-staging` | Shown beside `__SERVICE__` on the service-health dashboard (same project) |
 | `__RUN_HOST__` | `--run-host` | looked up | The service's `*.run.app` host, for the uptime check |
+| `__GATEWAY_HOST__` | `--gateway-host` (`--gateway`, `--gateway-region`) | looked up (`semper-gw`, `asia-northeast1`) | The gateway's `defaultHostname`, for the two gateway uptime checks |
 | `__NOTIFICATION_CHANNEL__` | `--notification-channel` | — | Id or full `projects/…/notificationChannels/…` name |
 | `__ACTIVATIONS_PER_LICENCE_PER_DAY__` | `--activations-per-licence-per-day` | 25 | **N** for the activation anomaly: successful key redemptions on one licence in 24 h. Set it above the largest class an institution onboards in a day; a personal licence never comes near it |
 | `__AUTH_DENIED_PER_5MIN__` | `--auth-denied-per-5min` | 50 | AUTH_DENIED refusals in 5 min (the §17 starting point) |
-| `__UPTIME_CHECK_ID__`, `__SLO_SERVICE_ID__`, `__SLO_ID__` | — | from the created objects | Wired by the script |
+| `__DEVLOCK_MISMATCHES_PER_LICENCE_PER_HOUR__` | `--devlock-mismatches-per-licence-per-hour` | 5 | Device-lock `mismatch` drops on one licence in an hour. A phone that reinstalls drops once; five in an hour is a key in use on several devices |
+| `__LICENSING_REFUSALS_PER_HOUR__` | `--licensing-refusals-per-hour` | 20 | Refused activations, or refused checkouts other than `no_floating_seat`, from one build (`appId`, `appVersion`) in an hour; the halt criteria's "at least 20 attempts" |
+| `__UPTIME_CHECK_ID__`, `__UPTIME_CHECK_ID_GATEWAY_HEALTHZ__`, `__UPTIME_CHECK_ID_GATEWAY_CONFIG__`, `__SLO_SERVICE_ID__`, `__SLO_ID__` | — | from the created objects | Wired by the script |
 
 ## Log-based metrics (`metrics/`)
 
@@ -63,7 +68,7 @@ writes: `activation`, `checkout` and `devlock_drop` come with the licensing
 observability change, `audit_write_failed` with the audit change, and
 `semper_auth_denied` with the change that makes `audit.record()` log an
 `audit_denied` line (with `action` and `stage`) for every DENIED row as well as
-writing it to Firestore (`backend/app/audit.py:64-69`), and
+writing it to Firestore (`backend/app/audit.py:84-89`), and
 `semper_auth_admin_rate_limited` with the change that logs `auth_admin_rate_limited`
 from `backend/app/google_auth.py`. Until the backend that writes a line is deployed,
 its alert stays quiet and its chart flat, which is not the same as healthy.
@@ -75,7 +80,28 @@ its alert stays quiet and its chart flat, which is not the same as healthy.
 costs a Firestore read and a Drive call). Read the 503 detail in the access log
 (`firestore_unreachable`, `drive_unhealthy`, …): a dependency outage is not fixed by
 rolling back app code. If it started with a deploy, move traffic back to the previous
-revision (`gcloud run services update-traffic semper-api --to-revisions=<prev>=100`).
+revision (`gcloud run services update-traffic semper-api --to-revisions=<prev>=100
+--region asia-south1 --project indicvision-dic-app`), then follow "After a revision
+rollback" in [RELEASING.md](../../docs/ops/RELEASING.md) before any lever or redeploy.
+
+### uptime-gateway
+The path the app takes, API Gateway `semper-gw`, failed from two or more regions
+(`uptime/gateway-*.json`, every 10 min, no token: the gateway is public). Two probes:
+- **gateway /healthz** (2xx): `security: []`, so ESPv2 forwards it to Cloud Run with
+  the gateway service account. It fails when the gateway is down, its backend address
+  is wrong, or that account lost `roles/run.invoker` on `semper-api`, while
+  `uptime-readyz`, which calls `run.app` directly, stays green. Compare the two first.
+- **gateway /v1/config** (401 only): ESPv2 refuses a request with no Firebase token
+  before it reaches Cloud Run. A 404 is a live config that no longer declares the
+  route (ESPv2 is an allowlist; CONTEXT Traps); a 5xx is the gateway itself.
+
+Find the live config with `gcloud api-gateway gateways describe semper-gw --location
+asia-northeast1 --project indicvision-dic-app --format='value(apiConfig)'`. If the
+failure began with a gateway switch, `deploy-backend.yml`'s gateway job keeps the
+previous config's id in its log: switch back with `gcloud api-gateway gateways update
+semper-gw --api=semper-api --api-config=<previous> --location asia-northeast1 --project
+indicvision-dic-app`. The deploy job runs the same 401 probe, but only in
+`gateway_mode=apply` with a changed spec.
 
 ### http-5xx-ratio
 More than 2 % of requests answered 5xx over 10 min (Cloud Run's `request_count`, so
@@ -95,6 +121,42 @@ attack or a broken client release (an App Check or token change); one uid is one
 confused device. For an attack, tighten the API Gateway quota; for a release, roll the
 backend setting back (e.g. `APP_CHECK_MODE`) before touching the app.
 
+### app-check-refused
+Any `AUTH_DENIED` with `stage="app_check"` in 10 min (ERROR). Only `APP_CHECK_MODE=enforce`
+refuses, so this is silent in `monitor` and fires on the first refusal after enforce,
+long before `auth-denied-spike`'s total threshold. Read `semper_app_check_failed` on the
+semper-security dashboard for the app and build (`appId`, `appVersion`): one new build
+is a release without Play Integrity, every build is the provider or the Firebase
+project. Roll back with [INCIDENT_RESPONSE.md](../../docs/ops/INCIDENT_RESPONSE.md),
+"App Check enforcement rollback".
+
+### revocation-check-failed
+Any `revocation_check_failed` in 5 min (ERROR). With `CHECK_REVOKED_ON_STEP_UP=true` the
+step-up check fails closed, so every console step-up is refused 401 `invalid_token`
+until it answers again. If `semper_auth_admin_rate_limited` rose with it, it is
+throttling and passes. Failures alone mean the runtime account lost
+`roles/firebaseauth.admin` on the Auth project: check the grant with
+`gcloud projects get-iam-policy indicvision-dic-app-auth --flatten=bindings
+--filter='bindings.members:serviceAccount:indic-api@indicvision-dic-app.iam.gserviceaccount.com'`,
+restore it, or set `CHECK_REVOKED_ON_STEP_UP=false` and redeploy as the stopgap
+(TD-9; [RELEASING.md](../../docs/ops/RELEASING.md) "Rollback levers" on how a
+redeploy reaches a rolled-back service).
+
+### devlock-mismatch
+More than N device-lock `mismatch` drops on one licence in an hour (`licenseId`
+label). A licensed key in use on several devices, each knocking the other to Demo; or,
+across many licences at once, a release that lost its device identity (look at
+`appVersion` on the semper-licensing dashboard). Look the licence up in the staff
+console and contact the holder; a release-wide rise is a rollout halt.
+
+### licensing-refusals
+More than N refused activations, or refused seat checkouts other than
+`no_floating_seat` (a full pool, not an error), from one build in an hour (`appId`,
+`appVersion` labels). Group by `errorCode` in Logs Explorer: one code from many IPs on
+activation is key guessing (tighten the gateway quota); one new build is a release
+that broke licensing, a rollout halt ([RELEASING.md](../../docs/ops/RELEASING.md),
+"Halt criteria").
+
 ### audit-write-failed
 An audit row was lost: the request succeeded, the compliance record has a gap.
 Check Firestore health and quota, then note the time window in the incident log so an
@@ -104,8 +166,8 @@ audit export for that window is read with the gap in mind.
 One licence was redeemed more than N times in 24 h (`licenseId` label). An
 institution onboarding a class can do this; a personal licence cannot. Look the
 licence up in the staff console, compare with its seat count, and revoke or contact
-the holder if the key has leaked. Refusals are not counted here; see
-`semper_activation` with `outcome="refused"` for key guessing.
+the holder if the key has leaked. Refusals are not counted here; `licensing-refusals`
+alerts on them.
 
 ### slo-burn
 SLO: 99.5 % of requests not 5xx over a rolling 28 days (`slo/availability.json`;
@@ -133,8 +195,10 @@ to look when the ratio moves.
 ### semper-licensing
 Hourly counts on production: activations, seat checkouts and device-lock drops, each
 by outcome (or stage, for drops) and by app and build (`appId`, `appVersion`);
-activation and checkout refusals by `errorCode`. A new build whose refusals climb
-shows here before support hears of it. Per-licence counts are the activation-anomaly
+activation and checkout refusals by `errorCode`; and, daily, the refused share of
+activations and of checkouts (a full pool left out) per build, the two shares the
+rollout halt criteria compare ([RELEASING.md](../../docs/ops/RELEASING.md)). A new
+build whose refusals climb shows here before support hears of it. Per-licence counts are the activation-anomaly
 alert's, not a chart's.
 
 ### semper-security

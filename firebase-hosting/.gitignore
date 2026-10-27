@@ -1,0 +1,4 @@
+node_modules/
+# Playwright output (tests/a11y)
+test-results/
+playwright-report/

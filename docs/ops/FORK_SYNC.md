@@ -26,13 +26,17 @@ WORKFLOWS C21) and collided TD numbers. The rules below stop that.
 
 material_testing does not edit `backend/`; the backend deployed from here serves both
 apps. The deploy and Firestore workflows only run in this repo
-(`if: github.repository == …`).
+(`if: github.repository == …`). So every backend lever, the `_SEMPER_CLASSROOM`
+pair included, is a variable here: a sync keeps material_testing's RELEASING.md
+and INCIDENT_RESPONSE.md naming this repo on each `gh variable` and
+`deploy-backend.yml` step (`-R sempermechanics/semperdic-app`; its MT-001).
 
 ## Syncing into material_testing
 
-**Last sync:** semperdic-app `25334af1` (its #471–#486), merged on material_testing's
-`sync/semperdic-25334af` on 2026-10-26; before it `968637cb` (material_testing #144) and
-`14b279d6` (on `ccr-603fe346-1bw2fa`, 2026-10-21).
+**Last sync:** semperdic-app `6d2bde6c` (its #487–#489, the production-readiness fixes),
+merged on material_testing's `sync/semperdic-6d2bde6` on 2026-10-26; before it `25334af1`
+(material_testing #146), `968637cb` (material_testing #144) and `14b279d6` (on
+`ccr-603fe346-1bw2fa`, 2026-10-21).
 `git log --merges --grep=semperdic-app` on the fork lists them all.
 
 1. `git fetch semperdic main` and branch `sync/semperdic-<short sha>` from its `main`.
@@ -413,8 +417,9 @@ git apply -3 upstream.patch
 ```
 
 `translate` maps each upstream number through
-[td-renumber-2026-10-27.csv](td-renumber-2026-10-27.csv). A number the map does not
-have (one semperdic-app took after 2026-10-26, or one this repo never cited) becomes
-`semperdic-app's TD-n` and is listed on stderr: give it a row and a number here if
-this repo carries it, otherwise leave the prefix. Run it only on upstream text, never
+[td-renumber-2026-10-27.csv](td-renumber-2026-10-27.csv), using only the rows marked
+`same_upstream`: TD-199 and TD-349–TD-353 meant other rows there. A number it cannot map
+(one semperdic-app took after 2026-10-26, one of those, or one this repo never cited)
+becomes `semperdic-app's TD-n` and is listed on stderr: give it a row and a number here
+if this repo carries it, otherwise leave the prefix. Run it only on upstream text, never
 on this repo's files: their numbers are already the new ones.

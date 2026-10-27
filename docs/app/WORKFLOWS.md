@@ -265,7 +265,7 @@ session is saved with no test type, like one made before test types existed.
 | [ ] 3b.6 | Reopen that session from Home; back it up, delete it locally, restore it | The ⓘ row still shows the test after each reopen |
 | [ ] 3b.7 | Open a session made before this build | No **Test type** row; nothing else changes |
 | [ ] 3b.8 | Pick **2D DIC**, pick photos | The wizard is Semper's: no load card; the strain window starts at 5 points and its ⓘ reads as Semper's; **Compute** needs only the reference and a deformed frame |
-| [ ] 3b.9 | Finish a 2D DIC run | The viewer opens on the looping summary, not **Results**; ⓘ has no **Test type** row; Share has no **Lab report**; the CSV is `# semper_csv_version,1` with no load or stress columns |
+| [ ] 3b.9 | Finish a 2D DIC run | The viewer opens on the looping summary, not **Results**; ⓘ has no **Test type** row; Share has no **Lab report**; the CSV is `# semper_csv_version,2` with no load or stress columns |
 | [ ] 3b.10 | Pick **Bending**, then tap the strain window's ⓘ on step 2 | Semper's text, then a sentence on why bending starts at 9 points |
 | [ ] 3b.11 | Tap **+**, then **No photos yet? Try an example with published data** under the three tests | The sheet closes and **Example data** (§3c) opens |
 
@@ -431,6 +431,7 @@ Lattice, Session limit, or back to Home.
 |---|---|---|
 | [ ] 5.1.1 | Tap the reference dropzone | The **New analysis** sheet (§3a) opens on Images — the same sheet the Home FAB uses |
 | [ ] 5.1.2 | Pick a `.dng` or `.tif` via **Files** | Card shows the filename and `W × H`; no decode error |
+| [ ] 5.1.2f | With a reference loaded and nothing running, change the system font size (or display size) | The wizard redraws at the new size with the reference and settings kept; during an import or a run it keeps going and takes the new size when next opened (readiness AE1V-015) |
 | [ ] 5.1.2a | Pick a large `.dng` via **Files**, then a large JPEG | While each decodes (past ~0.3 s) the reference slot shows a grey placeholder thumbnail and "Decoding RAW · N MP" (no "· N MP" when the header gives no size), then "Decoding image" for the JPEG; a quick decode shows nothing; with animations off the placeholder does not pulse (`ReferenceSlotBusy`) |
 | [ ] 5.1.3 | Tap **Change** on the reference card | Source chooser reopens; the new image replaces the old |
 | [ ] 5.1.4 | Pick deformed frames from the sheet's grid (multi-select, then **Use N**) | Card shows "N frames" and the first…last filenames |
@@ -465,7 +466,7 @@ offers **Type loads (kg)**: the hanger mass of each photo, typed on the phone
 | # | Action | Expected |
 |---|---|---|
 | [ ] 5.1b.1 | Start a **Tensile** analysis | A **Machine load** card with an **Import load log** dropzone, a **Cross-section** field (mm²) and an X / Y **Strain axis** toggle |
-| [ ] 5.1b.2 | Start a **Bending** analysis | Same card, with a **Type loads (kg)** button above the dropzone (disabled, "Add the deformed photos first", until frames are in), the dropzone hint "Optional: a CSV with the load in newtons", and **Support span**, **Width** and **Thickness** (mm) in place of the cross-section |
+| [ ] 5.1b.2 | Start a **Bending** analysis | Same card, with a **Type loads (kg)** button above the dropzone (disabled, "Add the deformed frames first", until frames are in), the dropzone hint "Optional: a CSV with the load in newtons", and **Support span**, **Width** and **Thickness** (mm) in place of the cross-section |
 | [ ] 5.1b.3 | Load reference + frames, no log | **Next** is disabled with "import the machine load log to continue" (bending: "type the hanger load of each photo (kg) to continue") |
 | [ ] 5.1b.4 | Import a comma CSV with a `Load (N)` header and one row per frame | Card shows the filename, "N rows · N · one row per frame", no chip; **Next** now says "enter the specimen cross-section to continue" |
 | [ ] 5.1b.5 | Type a cross-section | **Next** enables |
@@ -881,12 +882,12 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.1.4 | Pinch to zoom | Zooms smoothly up to about 10×; panning is clamped to the image |
 | [ ] 8.1.5 | Zoom in and pan | The heatmap stays registered to the photo under it — no drift |
 | [ ] 8.1.6 | Zoom, then switch field | Zoom and pan are preserved |
-| [ ] 8.1.7 | Tap the colour scale bar | "Scale · U" dialog (Max / Min per field, **Auto**), prefilled with the bounds the bar shows (the auto ones until a custom scale is set); **Apply** without edits leaves the scale as it is |
+| [ ] 8.1.7 | Tap the colour scale bar | "Scale · U" dialog (Max / Min per field, **Auto**), prefilled with the bar's bounds at full precision (the bar rounds them to three significant figures; the auto ones until a custom scale is set); **Apply** without edits leaves the scale as it is |
 | [ ] 8.1.8 | Enter min ≥ max and apply | Rejected with a snackbar and a **Why?** that opens the custom-scale FAQ |
 | [ ] 8.1.9 | Enter valid bounds and apply | The heatmap and the scale labels both change |
 | [ ] 8.1.10 | Switch field, then switch back | The custom bounds are remembered *per field* |
 | [ ] 8.1.11 | Reopen the dialog and tap **Auto scale** | The override is dropped; the scale returns to this frame's clamped bounds — not to its true extrema |
-| [ ] 8.1.12 | Open ⓘ | Peek sheet shows the specimen name, max / min with coordinates, mean, a histogram of this field, and settings used |
+| [ ] 8.1.12 | Open ⓘ | Peek sheet shows the specimen name, max (raw) / min (raw) with coordinates and unit, the signed mean, a histogram of this field, and settings used |
 | [ ] 8.1.13 | Scrub frames without a custom scale | Scale labels follow each frame's own 2nd/98th-percentile clamp |
 
 ### 8.2 Frames
@@ -898,6 +899,7 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.2.1b | Open a sweep node | The title reads "Subset 15 · window 3": the node's subset and its strain window in data points (the step is left out). A sweep from before windows were counted in points keeps its stored label |
 | [ ] 8.2.1a | Open a batch the run skipped a frame of (one kept no points or would not read) | Every later frame keeps its own filename — in the edge title, the share CSV's `image` column, each PDF page title and the ZIP's `results/NNN_<name>/` folders, numbered as planned (frame 3 stays `003_…`) — matching the cloud backup's CSV and `Frame_N` folders |
 | [ ] 8.2.2 | Tap **Next** | Advances one frame; the heatmap and stats update |
+| [ ] 8.2.2u | Go to a frame whose `.dat` is damaged (truncate one `frame_NNN.dat`) | A message names it ("Frame 3 can't be read. Still showing frame 1."); the picture stays and the frame field goes back to the frame on screen (readiness AE1-013) |
 | [ ] 8.2.3 | Reach the last frame | **Next** disables and fades |
 | [ ] 8.2.4 | Reach the first frame | **Prev** goes back to the summary, not nowhere |
 | [ ] 8.2.5 | Tap Next rapidly | Keeps up without stuttering or showing a stale frame |
@@ -1007,15 +1009,15 @@ a centre double-tap brings the bars back when they have faded.
 | [ ] 8.5.3 | **All fields** | Five PNGs for the current frame, zipped for hand-off. Each PNG's stamp names the **source image**; the file names still come from the analysis name |
 | [ ] 8.5.3a | **Animations** `[single]` | Five GIFs, one per field, zipped; each loops when opened in a gallery app. Row is absent on a parameter sweep |
 | [ ] 8.5.3b | Same, immediately on entering the viewer `[single]` | Fields not built yet are built under the progress dialog — never silently missing |
-| [ ] 8.5.4 | **Report** | One PDF: every frame's pages plus a telemetry page. Each frame's field images sit on that frame's own photo with the map where the points moved to, as in the viewer (the reference when the photo is not on the phone) |
+| [ ] 8.5.4 | **Report** | One PDF, the Semper Classroom Analysis Report: every frame's pages plus an Engine details page in user terms. Each frame's field images sit on that frame's own photo with the map where the points moved to, as in the viewer (the reference when the photo is not on the phone) |
 | [ ] 8.5.4d | **Lab report** — after **Report**, tensile run with loads, not a sweep | A journal-style write-up in the layout of the student's handwritten report ([STUDENT_LAB_WORKFLOW.md](STUDENT_LAB_WORKFLOW.md)): experiment and title, Name / Date lines, Aim, Materials required, Theory, the reference photo with the analysed region, Observations (area filled in; lengths and diameters as blank lines), a **DIC gauge length along x/y (px)** line; the observation table (S.No, Frame (the viewer's frame number), Load kN, Extension px, Stress MPa, Strain — Extension ÷ gauge length ≈ Strain; "—" once an end of the region has left the view) with **Elastic / Plastic / Break point** bracketed in the margin, Calculation for row 1 (stress, strain, and ΔL in px over the gauge), the elastic-region and full stress–strain graphs with E boxed, Results (E and peak stress, with the approximate note), and ruled Conclusions lines |
 | [ ] 8.5.4e | **Lab report** on a bending run with taps | Offered after **Report** (absent until the thickness is tapped). Layout of Experiment 5: title, Aim, Experimental setup, Theory, procedure (a)–(d), the reference photo with the two taps and the probe circle, Observations (L, b, t, no-load reading = reference photo, mm/px), row-1 Calculation (M, y, I, σb, E), the table with **one row per load step** (unloaded frames left out; the **Frame** column gives the viewer's frame, or a range for a held load, so when the first frame carries no load, row 1 reads Frame 2), Results (average E, E from the graph) and the load–deflection graph with slope and E boxed |
 | [ ] 8.5.4f | Open Share on a plain 2D DIC run, on a sweep, or on a run without loads | No **Lab report** row: the sheet is Semper's |
-| [ ] 8.5.4a | **Report**, on a tensile run | Each cover has a **Mechanical Test** block (type, cross-section, strain, this frame's load and engineering stress); before telemetry a **Stress–Strain Curve** page with the plot, peak stress, and a **Modulus E (approx.)** with its frames and R², and a per-frame Load / Stress / Strain table continued over as many pages as needed. Progress shows "Stress–strain n / N…" first if the ⓘ sheet has not built the curve yet |
+| [ ] 8.5.4a | **Report**, on a tensile run | Each cover has a **Mechanical Test** block (type, cross-section, strain, this frame's load and engineering stress); before the Engine details page a **Stress–Strain Curve** page with the plot, peak stress, and a **Modulus E (approx.)** with its frames and R², and a per-frame Load / Stress / Strain table continued over as many pages as needed. Progress shows "Stress–strain n / N…" first if the ⓘ sheet has not built the curve yet |
 | [ ] 8.5.4b | **Report**, on bending | The cover block names that test's dimensions and flexural stress; the curve page is titled the same way |
 | [ ] 8.5.4c | **Report**, on a sweep | Cover block shows the type and dimensions only; no curve page |
-| [ ] 8.5.5 | **Data** | One CSV for the whole analysis: `#` preamble (version, reference, strain method, ROI, per-frame U/V/Exx/Eyy/Exy max/min/mean), blank line, then point header `image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd,shift_u_px,shift_v_px,shift_rot_deg` — the three motion columns are written for every session, empty when a frame admits no fit; sweeps insert `subset_px,step_px,strain_window,vsg_px` after `image` (`strain_window` in points, empty for a sweep stored before points; `vsg_px` the VSG) |
-| [ ] 8.5.5a | **Data**, on a tensile or bending run | `# semper_csv_version,2`: the preamble adds `# test_type`, `# stress_model` (`axial` / `flexural`), that model's dimensions (`# cross_section_mm2`, or `# span_mm` / `# width_mm` / `# thickness_mm`), `# load_axis` and `# load_unit,N`; every point row ends `load_N,stress_MPa` (empty for a frame with no load). A non-sweep tensile run ends with a `# mechanical_results` trailer. A plain 2D DIC run's CSV is Semper's version 1, without these |
+| [ ] 8.5.5 | **Data** | One CSV for the whole analysis: `#` preamble (`semper_csv_version` 2, reference, strain method, ROI, per-frame U/V/Exx/Eyy/Exy max/min/mean under `image,subset_px,step_px,vsg_px,field,max,min,mean,unit`, strain in mε), blank line, then point header `image,x_px,y_px,u_px,v_px,exx_strain,eyy_strain,exy_strain,znssd,shift_u_px,shift_v_px,shift_rot_deg` (raw strain; version 1 named them `exx,eyy,exy` and the stats VSG column `strain_window_px`, same values) — the three motion columns are written for every session, empty when a frame admits no fit; sweeps insert `subset_px,step_px,strain_window,vsg_px` after `image` (`strain_window` in points, empty for a sweep stored before points; `vsg_px` the VSG) |
+| [ ] 8.5.5a | **Data**, on a tensile or bending run | `# semper_csv_version,3` (2 before Semper's version 2 column names): the preamble adds `# test_type`, `# stress_model` (`axial` / `flexural`), that model's dimensions (`# cross_section_mm2`, or `# span_mm` / `# width_mm` / `# thickness_mm`), `# load_axis` and `# load_unit,N`; every point row ends `load_N,stress_MPa` (empty for a frame with no load). A non-sweep tensile run ends with a `# mechanical_results` trailer. A plain 2D DIC run's CSV is Semper's version 2, without these |
 | [ ] 8.5.6 | **Everything** | Raw photos, per-frame results for all five fields, the CSV and the PDF; single-setting also includes the five field GIFs under `animations/` |
 | [ ] 8.5.7 | Check the filename of anything you export | It carries the specimen / analysis name, not a generic `export.zip` |
 | [ ] 8.5.8 | Export a very large analysis | Determinate progress dialog, then either a file or a message naming the failure — never a crash, and never an OOM from rendering the report |

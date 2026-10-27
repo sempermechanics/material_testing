@@ -28,7 +28,7 @@ export async function revokeLicence(id) {
       "Their saved analyses are untouched — this withdraws entitlement, " +
       "it does not delete anything.\n\nContinue?",
   }))) return;
-  if (!(await confirmByTyping(label, "revoke this licence", { title: `Revoke ${label}` }))) {
+  if (!(await confirmByTyping(label, "revoke this licence", { title: `Revoke ${label}`, boxLabel: "Licence key" }))) {
     setStatus("Revoke cancelled — the key did not match.");
     return;
   }
@@ -113,6 +113,7 @@ export async function deleteLicence(id) {
   const typed = await askInPage({
     title: `Delete ${label}`,
     message: `Type ${label} to delete this licence:`,
+    label: "Licence key",
     confirm: "Delete",
   });
   if (typed !== label) {
@@ -172,7 +173,7 @@ async function loadDeleted() {
       ? rows.map(deletedRow).join("")
       : '<tr><td colspan="7" class="muted">Nothing deleted in the last 30 days.</td></tr>';
   } catch (e) {
-    $("deletedRows").innerHTML = retryRow(7, `Could not load: ${e.message}`);
+    $("deletedRows").innerHTML = retryRow(7, `Could not load: ${explain(e)}`);
   } finally {
     $("loadDeleted").disabled = false;
   }

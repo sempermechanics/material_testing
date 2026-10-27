@@ -24,6 +24,7 @@ build it. This page routes you to the rest.
 | Add or run app tests | [app/TESTING.md](app/TESTING.md) |
 | Benchmark the app, or check a perf claim | [app/TESTING.md — Performance benchmarks](app/TESTING.md#performance-benchmarks), then [perf/on-device-characterization.md](perf/on-device-characterization.md), [perf/round2-main-vs-branch.md](perf/round2-main-vs-branch.md), [perf/backup-restore-split.md](perf/backup-restore-split.md), [perf/request-volume.md](perf/request-volume.md), [perf/backend-cost.md](perf/backend-cost.md), [perf/startup.md](perf/startup.md), [perf/engine-viewer-check-2026-09.md](perf/engine-viewer-check-2026-09.md) |
 | Add or run engine tests | [engine/TESTING.md](engine/TESTING.md) |
+| Record or read the engine's reference-dataset validation, per pin | [engine/VALIDATION.md](engine/VALIDATION.md) |
 | Build, test or bump the engine pin | [../CONTRIBUTING.md](../CONTRIBUTING.md) |
 | Know why CI is red / how tiers work | [ops/CI.md](ops/CI.md) |
 | Cut a release | [ops/RELEASING.md](ops/RELEASING.md) |

@@ -3,17 +3,12 @@ package com.sempermechanics.semper.ui.analysis.roi
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Matrix
-import android.graphics.Paint
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 import android.widget.ImageView
-import androidx.core.graphics.toColorInt
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.Roi
 import kotlin.math.max
@@ -60,6 +55,9 @@ class StudioOverlayView @JvmOverloads constructor(
         }
 
     private var pendingRestoreRoi: RectF? = null
+
+    /** Erase rects in image px awaiting the image bounds ([restoreRelativeHoles]). */
+    private var pendingRestoreHoles: List<Hole>? = null
 
     fun updateImageBounds() {
         val imageView = imageView ?: return
@@ -155,6 +153,17 @@ class StudioOverlayView @JvmOverloads constructor(
         return true
     }
 
+    /** Every erase rect in image pixels, with its tool: what a saved state keeps (AE1V-004). */
+    fun relativeHoles(): List<Hole> = holes.map { it.copy(rect = viewRectToImage(it.rect)) }
+
+    /** Puts back erase rects [relativeHoles] gave, once the image is laid out, replacing any there. */
+    fun restoreRelativeHoles(saved: List<Hole>) {
+        pendingRestoreHoles = saved
+        if (!imageBounds.isEmpty) {
+            applyPendingRestore()
+        }
+    }
+
     /** Image-pixel bounds of the last erase rect, or empty if there are none. */
     fun lastHoleRelative(): RectF {
         val hole = holes.lastOrNull() ?: return RectF()
@@ -192,6 +201,12 @@ class StudioOverlayView @JvmOverloads constructor(
             invalidate()
         }
         pendingRestoreRoi = null
+        pendingRestoreHoles?.let { saved ->
+            holes.clear()
+            saved.mapTo(holes) { it.copy(rect = imageRectToView(it.rect)) }
+            invalidate()
+        }
+        pendingRestoreHoles = null
     }
 
     // --- 3. RESET ---
@@ -214,15 +229,7 @@ class StudioOverlayView @JvmOverloads constructor(
     data class Hole(val mode: RoiMode, val rect: RectF)
     val holes = mutableListOf<Hole>()
 
-    private val holeFillPaint = Paint().apply {
-        color = "#88FF0000".toColorInt()
-        style = Paint.Style.FILL
-    }
-    private val holeBorderPaint = Paint().apply {
-        color = Color.RED
-        style = Paint.Style.STROKE
-        strokeWidth = STROKE_WIDTH
-    }
+    private val paints = StudioOverlayPaints(context)
     var hasValidRoi = false
         private set
 
@@ -250,24 +257,6 @@ class StudioOverlayView @JvmOverloads constructor(
 
     /** The rect the grab moves: the grabbed hole, or the main ROI. */
     private val grabTarget: RectF get() = if (activeHoleIndex >= 0) holes[activeHoleIndex].rect else roiRect
-
-    private val borderPaint = Paint().apply {
-        color = Color.GREEN
-        style = Paint.Style.STROKE
-        strokeWidth = STROKE_WIDTH
-    }
-    private val handlePaint = Paint().apply {
-        color = Color.WHITE
-        style = Paint.Style.FILL
-    }
-    private val dimPaint = Paint().apply {
-        color = "#99000000".toColorInt()
-        style = Paint.Style.FILL
-    }
-    private val clearPaint = Paint().apply {
-        xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
-        style = Paint.Style.FILL
-    }
 
     // --- 4. ZOOM AND PAN ---
     // Two fingers pinch and pan; double-tap toggles 2x and fit. One finger
@@ -414,7 +403,7 @@ class StudioOverlayView @JvmOverloads constructor(
         if (!isDrawing && !hasValidRoi && holes.isEmpty()) return
 
         val layerId = canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), null)
-        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), dimPaint)
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paints.dimPaint)
         drawMainRect(canvas)
         drawHoles(canvas)
         canvas.restoreToCount(layerId)
@@ -427,11 +416,11 @@ class StudioOverlayView @JvmOverloads constructor(
      */
     private fun drawMainRect(canvas: Canvas) {
         val rect = shownMainRect() ?: return
-        canvas.drawRect(rect, clearPaint)
+        canvas.drawRect(rect, paints.clearPaint)
         val outlined = hasValidRoi || (isDrawing && !isSubtractMode)
-        if (outlined) canvas.drawRect(rect, borderPaint)
+        if (outlined) canvas.drawRect(rect, paints.borderPaint)
         // Main ROI handles show only in crop mode.
-        if (outlined && !isSubtractMode) drawHandles(canvas, rect, CROP_HANDLE_RADIUS, handlePaint)
+        if (outlined && !isSubtractMode) drawHandles(canvas, rect, CROP_HANDLE_RADIUS, paints.handlePaint)
     }
 
     /** The crop to clear: the one being drawn, the kept one, or the whole image under holes alone; else null. */
@@ -449,15 +438,15 @@ class StudioOverlayView @JvmOverloads constructor(
     private fun drawHoles(canvas: Canvas) {
         val shownHoles = if (isDrawing && !isSubtractMode) emptyList() else holes
         for (hole in shownHoles) {
-            canvas.drawRect(hole.rect, holeFillPaint)
-            canvas.drawRect(hole.rect, holeBorderPaint)
+            canvas.drawRect(hole.rect, paints.holeFillPaint)
+            canvas.drawRect(hole.rect, paints.holeBorderPaint)
             // In erase mode the handles show that the holes are editable.
-            if (isSubtractMode && !isDrawing) drawHandles(canvas, hole.rect, HOLE_HANDLE_RADIUS, handlePaint)
+            if (isSubtractMode && !isDrawing) drawHandles(canvas, hole.rect, HOLE_HANDLE_RADIUS, paints.handlePaint)
         }
         if (isDrawing && isSubtractMode) {
             val activeHoleRect = drawnRect(activeHoleScratch)
-            canvas.drawRect(activeHoleRect, holeFillPaint)
-            canvas.drawRect(activeHoleRect, holeBorderPaint)
+            canvas.drawRect(activeHoleRect, paints.holeFillPaint)
+            canvas.drawRect(activeHoleRect, paints.holeBorderPaint)
         }
     }
 
@@ -488,8 +477,5 @@ class StudioOverlayView @JvmOverloads constructor(
         const val HANDLE_SLOP = 45f
         const val CROP_HANDLE_RADIUS = 20f
         const val HOLE_HANDLE_RADIUS = 15f
-
-        /** Crop and hole outlines, view px. */
-        const val STROKE_WIDTH = 5f
     }
 }

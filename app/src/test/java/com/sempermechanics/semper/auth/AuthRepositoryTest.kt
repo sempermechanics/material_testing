@@ -7,6 +7,7 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.impl.WorkManagerImpl
 import androidx.work.testing.WorkManagerTestInitHelper
+import com.sempermechanics.semper.R
 import com.sempermechanics.semper.cloud.FakeCloudApi
 import com.sempermechanics.semper.cloud.FakeTokens
 import com.sempermechanics.semper.data.account.AccessStatus
@@ -239,13 +240,14 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun `a 401 loses access and carries the server's hint`() = runBlocking {
+    fun `a 401 loses access and says the session expired, not the server's hint`() = runBlocking {
         api.onMe = { throw ApiException(401, """{"detail":"bad audience"}""") }
         api.onGetConfig = { throw IOException("config down") }
 
         val error = repo.refreshStatus().exceptionOrNull()
         assertTrue("got $error", error is AuthRepository.AccessLostException)
-        assertTrue(error!!.message!!, "bad audience" in error.message!!)
+        // The hint is for the log; the user reads the app's words (readiness AE1-009).
+        assertEquals(context.getString(R.string.error_session_expired), error!!.message)
     }
 
     @Test
@@ -258,15 +260,21 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun `other refusals from the server are a server error with their status`() = runBlocking {
-        for (code in listOf(403, 404, 429)) {
+    fun `other refusals from the server are an error in the app's words, without their status`() = runBlocking {
+        val expected = mapOf(
+            403 to R.string.auth_account_check_failed,
+            404 to R.string.auth_account_check_failed,
+            429 to R.string.error_cloud_unavailable,
+            500 to R.string.error_cloud_unavailable,
+        )
+        for ((code, message) in expected) {
             api.onMe = { throw ApiException(code, "") }
             api.onGetConfig = { throw IOException("config down") }
 
             val error = repo.refreshStatus().exceptionOrNull()
 
             assertTrue("$code: got $error", error != null && error !is AuthRepository.AccessLostException)
-            assertEquals("Could not verify account (server error $code).", error!!.message)
+            assertEquals("$code", context.getString(message), error!!.message)
         }
     }
 
@@ -296,7 +304,9 @@ class AuthRepositoryTest {
 
         val lost = repo.refreshStatus().exceptionOrNull()
 
-        assertTrue(lost!!.message!!.startsWith("This device is already linked"))
+        assertTrue(lost!!.message!!, lost.message!!.startsWith("This phone is already linked"))
+        // The handset is a "phone" in user copy (readiness AE3-002).
+        assertFalse(lost.message!!, Regex("""\bdevice\b""").containsMatchIn(lost.message!!))
     }
 
     @Test

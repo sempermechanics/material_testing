@@ -11,6 +11,7 @@ import json
 import os
 import stat
 import struct
+import subprocess
 import sys
 import zipfile
 from pathlib import Path
@@ -251,13 +252,16 @@ def _by_check(results):
 def test_a_hardened_release_passes(apk, tmp_path):
     mapping = tmp_path / "mapping.txt"
     mapping.write_text("# compiler: R8\ncom.x.A -> a.a:\n    void f() -> a\n", encoding="utf-8")
-    res = _by_check(apk.evaluate(_facts(apk), expected_min_sdk=30, expected_target_sdk=36,
-                                 debug_names=_DEBUG, mapping=mapping))
+    res = _by_check(apk.evaluate(_facts(apk, dex=_dex_with(_PIN, f"ent-1:{_ENT_SPKI}")), expected_min_sdk=30,
+                                 expected_target_sdk=36, debug_names=_DEBUG, mapping=mapping,
+                                 require_entitlement_pins=True,
+                                 signer_sha256=_RELEASE_CERT, expected_signer_sha256=_RELEASE_CERT_COLONS))
     assert {k: r.status for k, r in res.items()} == {
         "debuggable": "PASS", "debug-components": "PASS", "appcheck-debug": "PASS",
         "cleartext": "PASS", "min-sdk": "PASS", "target-sdk": "PASS", "native-16kb": "PASS",
         "r8-mapping": "PASS", "cert-pins": "PASS",
         "example-assets": "SKIP", "apk-size": "SKIP",
+        "entitlement-pins": "PASS", "signing-key": "PASS", "consent-defaults": "PASS",
     }
 
 
@@ -297,6 +301,26 @@ def test_a_debug_build_fails_every_check_it_should(apk, tmp_path):
     assert res["min-sdk"].status == "FAIL" and "24" in res["min-sdk"].detail
     assert res["r8-mapping"].status == "FAIL"
     assert res["cert-pins"].status == "WARN"
+    # No meta-data at all: the SDKs' own default is collection ON.
+    assert res["consent-defaults"].status == "FAIL"
+    assert "firebase_crashlytics_collection_enabled missing" in res["consent-defaults"].detail
+
+
+def test_consent_defaults_fail_on_collection_on_or_an_ad_id_permission(apk):
+    """TE5-005: a manifest merge (a new Firebase / Play services artifact) can
+    flip a collection default or re-add the advertising-ID permissions; the
+    Play Data safety answers and the consent flow rely on both staying off."""
+    res = _by_check(apk.evaluate(_facts(apk, manifest="manifest_consent_broken.txt"),
+                                 expected_min_sdk=30, debug_names=_DEBUG, mapping=None))
+    detail = res["consent-defaults"].detail
+    assert res["consent-defaults"].status == "FAIL"
+    assert "firebase_crashlytics_collection_enabled=true" in detail
+    # Only <application>'s own meta-data counts; one inside an activity does not.
+    assert "firebase_analytics_collection_enabled missing" in detail
+    assert "google_analytics_adid_collection_enabled" not in detail
+    assert "com.google.android.gms.permission.AD_ID" in detail
+    assert "android.permission.ACCESS_ADSERVICES_ATTRIBUTION" in detail
+    assert "android.permission.INTERNET" not in detail
 
 
 def test_network_security_config_permitting_cleartext_fails(apk):
@@ -321,6 +345,155 @@ def test_missing_mapping_and_unreadable_min_sdk_fail(apk, tmp_path):
                                  debug_names=_DEBUG, mapping=tmp_path / "absent.txt"))
     assert res["min-sdk"].status == "FAIL"
     assert res["r8-mapping"].status == "FAIL"
+
+
+_APP = "com.sempermechanics.semper"
+_OBFUSCATED = (
+    "# compiler: R8\n"
+    "com.sempermechanics.semper.SemperApp -> com.sempermechanics.semper.SemperApp:\n"
+    "com.sempermechanics.semper.data.Store -> a.b:\n"
+    "    void f() -> a\n"
+    "com.sempermechanics.semper.debug.DebugViewerSeedActivity -> R8$$REMOVED$$CLASS$$12:\n"
+)
+
+
+def _mapping(tmp_path, text):
+    path = tmp_path / "mapping.txt"
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def test_r8_mapping_that_renames_no_app_class_fails(apk, tmp_path):
+    """TE1-002: `-dontobfuscate` still writes `a -> a` lines; any ' -> ' line
+    passed. Evidence of obfuscation is an app class under a new name."""
+    identity = ("com.sempermechanics.semper.SemperApp -> com.sempermechanics.semper.SemperApp:\n"
+                "com.sempermechanics.semper.data.Store -> com.sempermechanics.semper.data.Store:\n"
+                "okhttp3.OkHttpClient -> a.a:\n")
+    res = _by_check(apk.evaluate(_facts(apk), expected_min_sdk=30, debug_names=_DEBUG,
+                                 mapping=_mapping(tmp_path, identity), app_package=_APP))
+    assert res["r8-mapping"].status == "FAIL"
+    assert "no com.sempermechanics.semper class renamed" in res["r8-mapping"].detail
+    res = _by_check(apk.evaluate(_facts(apk), expected_min_sdk=30, debug_names=_DEBUG,
+                                 mapping=_mapping(tmp_path, _OBFUSCATED), app_package=_APP))
+    assert res["r8-mapping"].status == "PASS", res["r8-mapping"].detail
+    assert "1 of 2 com.sempermechanics.semper class(es) renamed" in res["r8-mapping"].detail
+
+
+def test_debug_classes_are_found_under_their_obfuscated_names(apk, tmp_path):
+    """TE1-002: R8 renames a class that is not kept, so a dex search by the
+    original name misses it; the mapping's left-hand side does not. A class R8
+    removed (R8$$REMOVED$$) is not shipped."""
+    text = _OBFUSCATED + (
+        "com.sempermechanics.semper.debug.DebugTool -> b.c:\n"
+        "com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory -> d.e:\n"
+    )
+    res = _by_check(apk.evaluate(
+        _facts(apk), expected_min_sdk=30, mapping=_mapping(tmp_path, text), app_package=_APP,
+        debug_names=_DEBUG | {"com.sempermechanics.semper.debug.DebugTool"}))
+    assert res["debug-components"].status == "FAIL"
+    assert res["debug-components"].detail == "mapping: com.sempermechanics.semper.debug.DebugTool -> b.c"
+    assert res["appcheck-debug"].status == "FAIL"
+    assert "mapping: com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory -> d.e" \
+        in res["appcheck-debug"].detail
+    # The removed seed activity alone is no finding.
+    res = _by_check(apk.evaluate(_facts(apk), expected_min_sdk=30, debug_names=_DEBUG,
+                                 mapping=_mapping(tmp_path, _OBFUSCATED), app_package=_APP))
+    assert res["debug-components"].status == "PASS"
+    assert res["appcheck-debug"].status == "PASS"
+
+
+def test_main_requires_a_mapping(apk, tmp_path, capsys):
+    """TE1-002: without --mapping r8-mapping was a SKIP, so a release could
+    pass with no evidence R8 ran. Both workflows pass it."""
+    with pytest.raises(SystemExit) as exc:
+        apk.main([str(tmp_path / "app.apk"), "--aapt2", "aapt2"])
+    assert exc.value.code == 2
+    assert "--mapping" in capsys.readouterr().err
+
+
+# An EC P-256 SubjectPublicKeyInfo, base64: the format SEMPER_ENTITLEMENT_PUBKEYS
+# pins (`kid:SPKI`, EntitlementPins.kt). 36 fixed header characters, 88 of key.
+_ENT_SPKI = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE" + "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+Pw=="
+
+
+def _dex_with(*strings: str) -> dict[str, bytes]:
+    return {"classes.dex": b"dex\n035\x00" + b"\x00".join(s.encode() for s in strings) + b"\x00"}
+
+
+def test_entitlement_pins_warn_while_none_is_compiled_in(apk):
+    """TE4-001: with SEMPER_ENTITLEMENT_PUBKEYS empty the app trusts its
+    unsigned /v1/config cache with no offline bound (TD-10). WARN today, like
+    cert-pins; a release built without the key after it is live must not go
+    out unnoticed."""
+    res = _by_check(apk.evaluate(_facts(apk, dex=_dex_with(_PIN)), expected_min_sdk=30,
+                                 debug_names=_DEBUG, mapping=None))
+    assert res["entitlement-pins"].status == "WARN"
+    assert "SEMPER_ENTITLEMENT_PUBKEYS" in res["entitlement-pins"].detail
+    res = _by_check(apk.evaluate(_facts(apk, dex=_dex_with(_PIN, f"ent-2026:{_ENT_SPKI},ent-2027:{_ENT_SPKI}")),
+                                 expected_min_sdk=30, debug_names=_DEBUG, mapping=None))
+    assert res["entitlement-pins"].status == "PASS"
+    assert res["entitlement-pins"].detail.startswith("2 entitlement key(s)")
+
+
+def test_entitlement_pins_fail_when_required(apk):
+    res = _by_check(apk.evaluate(_facts(apk, dex=_dex_with(_PIN)), expected_min_sdk=30, debug_names=_DEBUG,
+                                 mapping=None, require_entitlement_pins=True))
+    assert res["entitlement-pins"].status == "FAIL"
+    # A bare SPKI with no kid is not a pin EntitlementPins accepts.
+    res = _by_check(apk.evaluate(_facts(apk, dex=_dex_with(_ENT_SPKI)), expected_min_sdk=30, debug_names=_DEBUG,
+                                 mapping=None, require_entitlement_pins=True))
+    assert res["entitlement-pins"].status == "FAIL"
+    res = _by_check(apk.evaluate(_facts(apk, dex=_dex_with(f"k1:{_ENT_SPKI}")), expected_min_sdk=30,
+                                 debug_names=_DEBUG, mapping=None, require_entitlement_pins=True))
+    assert res["entitlement-pins"].status == "PASS"
+
+
+def test_release_workflow_requires_entitlement_pins_only_once_the_key_is_live():
+    """The flag is passed from repo variables, never unconditionally, so no
+    release fails while TD-10 is open (Admin decision 2026-10-24)."""
+    workflow = (_REPO / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    step = workflow[workflow.index("- name: Inspect release APK hardening"):]
+    step = step[:step.index("\n      - ")]
+    assert "--require-entitlement-pins" in step
+    assert "vars.SEMPER_ENTITLEMENT_PUBKEYS" in step and "vars.SEMPER_REQUIRE_ENTITLEMENT_PINS" in step
+    assert '${REQUIRE_ENTITLEMENT_PINS:+--require-entitlement-pins}' in step
+
+
+# The certificate every Semper release so far was signed with (release runs
+# 31565590316 to 39064532280, v1.2-beta.4 = versionCode 1036), as apksigner prints it.
+_RELEASE_CERT = "ff72a8b08f02a05d65b53d91250bef7e3b0ff7538af2b0168ee52d5f36b15c9a"
+_RELEASE_CERT_COLONS = ":".join(_RELEASE_CERT[i:i + 2] for i in range(0, 64, 2)).upper()
+
+
+@pytest.mark.parametrize(("signer", "expected", "status"), [
+    (_RELEASE_CERT, _RELEASE_CERT, "PASS"),
+    (_RELEASE_CERT, _RELEASE_CERT_COLONS, "PASS"),   # assetlinks' form
+    (_RELEASE_CERT.upper(), " " + _RELEASE_CERT_COLONS.lower() + "\n", "PASS"),
+    ("39" + _RELEASE_CERT[2:], _RELEASE_CERT, "FAIL"),
+    (_RELEASE_CERT, None, "WARN"),
+    (None, _RELEASE_CERT, "SKIP"),                   # unsigned (CI tier 5 without the keystore)
+    ("", _RELEASE_CERT, "SKIP"),
+    ("not-a-digest", _RELEASE_CERT, "FAIL"),
+])
+def test_signing_key_continuity(apk, signer, expected, status):
+    """TE1-007: the release gate only grepped assetlinks.json, which lists two
+    Semper certificates; a release signed with the other key would refuse to
+    install over 1036, and uninstalling deletes local analyses."""
+    res = _by_check(apk.evaluate(_facts(apk), expected_min_sdk=30, debug_names=_DEBUG, mapping=None,
+                                 signer_sha256=signer, expected_signer_sha256=expected))
+    assert res["signing-key"].status == status, res["signing-key"].detail
+
+
+def test_release_workflow_pins_the_release_certificate():
+    workflow = (_REPO / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    step = workflow[workflow.index("- name: Inspect release APK hardening"):]
+    step = step[:step.index("\n      - ")]
+    assert "vars.SEMPER_RELEASE_CERT_SHA256" in step
+    # The upstream repository's default is the certificate of every release so
+    # far; a fork (material_testing signs with its own key) gets no default.
+    assert f"github.repository == 'sempermechanics/semperdic-app' && '{_RELEASE_CERT}'" in step
+    assert '--signer-sha256 "$SIGNER"' in step
+    assert '${EXPECTED_SIGNER:+--expected-signer-sha256 "$EXPECTED_SIGNER"}' in step
 
 
 def test_no_dex_is_a_failure_not_a_pass(apk):
@@ -453,8 +626,7 @@ def _gradle(tmp_path: Path, min_sdk: int) -> Path:
 @pytest.mark.skipif(os.name == "nt", reason="fake aapt2 is a shebang script")
 def test_main_passes_a_release_apk(apk, tmp_path, capsys, monkeypatch):
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
-    mapping = tmp_path / "mapping.txt"
-    mapping.write_text("com.x.A -> a.a:\n", encoding="utf-8")
+    mapping = _mapping(tmp_path, _OBFUSCATED)
     code = apk.main([
         str(_zip(tmp_path, b"dex\n035\x00" + _PIN.encode())),
         "--aapt2", str(_fake_aapt2(tmp_path, "manifest_release.txt", "badging_release.txt")),
@@ -476,6 +648,7 @@ def test_main_fails_a_debug_apk_with_annotations(apk, tmp_path, capsys, monkeypa
         "--aapt2", str(_fake_aapt2(tmp_path, "manifest_debug.txt", "badging_debug.txt")),
         "--gradle", str(_gradle(tmp_path, 30)),
         "--debug-src", str(_REPO / "app" / "src" / "debug"),
+        "--mapping", str(_mapping(tmp_path, "")),
     ])
     captured = capsys.readouterr()
     assert code == 1
@@ -484,8 +657,47 @@ def test_main_fails_a_debug_apk_with_annotations(apk, tmp_path, capsys, monkeypa
     assert "check(s) failed" in captured.err
 
 
+@pytest.mark.skipif(os.name == "nt", reason="fake aapt2 is a shebang script")
+def test_main_require_entitlement_pins_fails_a_release_without_them(apk, tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    args = [
+        str(_zip(tmp_path, b"dex\n035\x00" + _PIN.encode())),
+        "--aapt2", str(_fake_aapt2(tmp_path, "manifest_release.txt", "badging_release.txt")),
+        "--gradle", str(_gradle(tmp_path, 30)),
+        "--debug-src", str(_REPO / "app" / "src" / "debug"),
+        "--mapping", str(_mapping(tmp_path, _OBFUSCATED)),
+    ]
+    assert apk.main(args) == 0
+    assert "::warning title=Release APK entitlement-pins::" in capsys.readouterr().out
+    assert apk.main([*args, "--require-entitlement-pins"]) == 1
+    assert "::error title=Release APK entitlement-pins::" in capsys.readouterr().out
+
+
+def test_aapt2_output_is_read_as_utf8_whatever_the_locale(tmp_path):
+    """aapt2 prints UTF-8 (a label or string in any language). Read with the
+    platform codec, Windows' cp1252 raised UnicodeDecodeError on byte 0x81 and
+    the next parser then met None (readiness baseline 2026-10-24). PYTHONUTF8=0
+    and the C locale give the child a non-UTF-8 codec on any OS."""
+    fake = tmp_path / "fake_aapt2.py"
+    fake.write_text("import sys\nsys.stdout.buffer.write(b'label=\\xd1\\x81\\xe2\\x9c\\x93')\n", encoding="utf-8")
+    probe = tmp_path / "probe.py"
+    probe.write_text(
+        "import sys\n"
+        f"sys.path.insert(0, {str(_SCRIPT.parent)!r})\n"
+        "import check_release_apk as m\n"
+        f"print(ascii(m._run([sys.executable, {str(fake)!r}])))\n",
+        encoding="utf-8",
+    )
+    env = dict(os.environ, PYTHONUTF8="0", PYTHONCOERCECLOCALE="0", LC_ALL="C", LANG="C")
+    env.pop("PYTHONIOENCODING", None)
+    proc = subprocess.run([sys.executable, str(probe)], capture_output=True, text=True, env=env, check=False)  # noqa: S603 - argv is sys.executable and a probe this test wrote, no shell
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip() == ascii("label=с✓")
+
+
 def test_main_refuses_a_missing_apk(apk, tmp_path):
-    assert apk.main([str(tmp_path / "nope.apk"), "--aapt2", "/bin/true"]) == 2
+    assert apk.main([str(tmp_path / "nope.apk"), "--aapt2", "/bin/true",
+                     "--mapping", str(tmp_path / "mapping.txt")]) == 2
 
 
 def test_find_aapt2_prefers_the_newest_build_tools(apk, tmp_path, monkeypatch):

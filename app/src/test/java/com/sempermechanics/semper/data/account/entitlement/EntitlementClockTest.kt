@@ -57,6 +57,40 @@ class EntitlementClockTest {
         assertEquals(ended(GraceEnd.GRACE_OVER), verdict(at(GRACE_DAYS * DAY_MS + 1)))
     }
 
+    /**
+     * The token the backend issues (readiness TE4-002): `graceUntil == exp ==
+     * iat + 14 d` (backend/app/entitlement_token.py), so its end is EXPIRED, never
+     * GRACE_OVER. Within at 13 d 23 h offline, ended at 14 d + 1 min.
+     */
+    @Test
+    fun `a production-shaped token holds at 13 d 23 h and ends at 14 d 1 min`() {
+        val until = TestTokens.IAT + PRODUCTION_GRACE_DAYS * DAY_S
+
+        assertEquals(within, verdict(at(INSIDE_MS), grace = until, expiry = until))
+        assertEquals(ended(GraceEnd.EXPIRED), verdict(at(OUTSIDE_MS), grace = until, expiry = until))
+    }
+
+    @Test
+    fun `a production-shaped token keeps the same boundaries across a reboot mid-offline`() {
+        val until = TestTokens.IAT + PRODUCTION_GRACE_DAYS * DAY_S
+        val bootedAt = 5 * DAY_MS
+        val beforeReboot = EntitlementClock.evaluate(synced, at(bootedAt), until, until).first
+        // Uptime restarts near zero on the new boot; the wall clock carries on.
+        val afterBoot = { since: Long -> at(since, elapsedMs = since - bootedAt, boot = BOOT + 1) }
+        val rebooted = EntitlementClock.evaluate(beforeReboot, afterBoot(bootedAt + MINUTE_MS), until, until).first
+
+        assertEquals(within, verdict(afterBoot(INSIDE_MS), rebooted, grace = until, expiry = until))
+        assertEquals(ended(GraceEnd.EXPIRED), verdict(afterBoot(OUTSIDE_MS), rebooted, grace = until, expiry = until))
+        // The wall clock held back after the reboot: uptime still ends it.
+        val heldBack = at(
+            OUTSIDE_MS,
+            wallMs = SERVER_MS + bootedAt + 2 * MINUTE_MS,
+            elapsedMs = OUTSIDE_MS - bootedAt,
+            boot = BOOT + 1,
+        )
+        assertEquals(ended(GraceEnd.EXPIRED), verdict(heldBack, rebooted, grace = until, expiry = until))
+    }
+
     @Test
     fun `the clock set forward and then back ends grace until the next check-in`() {
         val forward = step(synced, at(MINUTE_MS, wallMs = SERVER_MS + 2 * HOUR_MS))
@@ -185,5 +219,10 @@ class EntitlementClockTest {
         const val DAY_MS = 24 * HOUR_MS
         const val ELAPSED_AT_SYNC = 5 * HOUR_MS
         const val BOOT = 7
+
+        /** The backend's licence grace (`licenseGraceDays`), and so a real token's lifetime. */
+        const val PRODUCTION_GRACE_DAYS = 14L
+        const val INSIDE_MS = 13 * DAY_MS + 23 * HOUR_MS
+        const val OUTSIDE_MS = PRODUCTION_GRACE_DAYS * DAY_MS + MINUTE_MS
     }
 }

@@ -12,7 +12,7 @@ import {
 } from "./harness.mjs";
 
 await loadAuth();
-const { day, isoDay, unfinishedStepUpText } = await import("../public/console/util.js");
+const { day, isoDay, unfinishedStepUpText, when } = await import("../public/console/util.js");
 
 beforeEach(reset);
 afterEach(async () => {
@@ -254,9 +254,9 @@ test("each licence row says what it is and offers only what applies", async () =
   assert.equal($("mfaPill").textContent, "2FA on");
   assert.deepEqual(rows(), [
     ["SEMP-IND1", "individual", "licensed", "—", `until ${day(IND.expiresAt)} +14d`, "50", "redeemed",
-      "pat@lab.org", "Edit More New device To institution Devices Revoke Delete"],
+      "pat@lab.org", "Edit More New phone To institution Phone history Revoke Delete"],
     ["SEMP-UNI1", "institution · shared", "licensed", "1/5 in use · 4 on roster", "perpetual", "default",
-      "redeemed", "uni.edu", "Edit Roster More Verify Devices Revoke Delete"],
+      "redeemed", "uni.edu", "Edit Roster More Verify Phone history Revoke Delete"],
   ]);
   assert.equal($("licencePaging").textContent, "2 licence(s) (revoked and Demo hidden).");
   assert.equal($("loadMore").hidden, true);
@@ -274,8 +274,17 @@ test("Demo keys are fetched only when asked for, show the demo allowance, and ar
     "GET /v1/admin/licenses?limit=50&include_demo=true&include_revoked=false");
   const demo = rows().find((r) => r[0] === "SEMP-DEMO");
   assert.equal(demo[5], "demo (25)");
-  assert.equal(demo[8], "Edit More New device Devices Revoke", "no convert, no delete for a system Demo key");
+  assert.equal(demo[8], "Edit More New phone Phone history Revoke", "no convert, no delete for a system Demo key");
   assert.equal($("licencePaging").textContent, "2 licence(s) (revoked hidden).");
+  // What "demo (25)" means is text under the table, not a hover-only title
+  // (AE2-011): keyboard and touch reach it, and a screen reader reads it.
+  assert.equal($("licenceRows").querySelectorAll("[title]").length, 0);
+  assert.equal($("demoNote").hidden, false);
+  assert.equal($("demoNote").textContent, "Demo keys use the demo allowance of 25; issue a licensed key to raise it.");
+  $("showDemo").checked = false;
+  $("showDemo").dispatch("change");
+  await settle();
+  assert.equal($("demoNote").hidden, true, "no Demo row, no note");
 });
 
 test("a revoked row offers only Delete, and is shown only on request", async () => {
@@ -405,7 +414,7 @@ test("a refused revoke reports the backend's code", async () => {
   prompts.answer("SEMP-IND1");
   rowButton("revoke", IND.id).click();
   await settle();
-  assert.deepEqual(status(), ["Could not revoke: license_revoked", "muted err"]);
+  assert.deepEqual(status(), ["Could not revoke: the server refused it (ref: license_revoked)", "muted err"]);
   assert.deepEqual(labels(), ["SEMP-IND1", "SEMP-UNI1"]);
 });
 
@@ -715,7 +724,7 @@ test("a refused edit is explained in the dialog, which stays open", async () => 
 
 /* ----------------------------------------------------------- new device */
 
-test("New device asks, then clears the lock and says the next device takes it", async () => {
+test("New phone asks, then clears the lock and says the next device takes it", async () => {
   await open({ routes: { [PATCH_IND]: () => json(200, IND) } });
   confirms.answer(false, true);
   rowButton("device", IND.id).click();
@@ -724,7 +733,7 @@ test("New device asks, then clears the lock and says the next device takes it", 
   rowButton("device", IND.id).click();
   await settle();
   assert.deepEqual(JSON.parse(net.requests.find((r) => r.method === "PATCH").body), { clearDeviceLock: true });
-  assert.deepEqual(status(), ["SEMP-IND1 unbound — the next device to sign in takes it.", "muted"]);
+  assert.deepEqual(status(), ["SEMP-IND1 unbound — the next phone to sign in takes it.", "muted"]);
 });
 
 test("Device history is shown in the page, one move a line", async () => {
@@ -743,12 +752,12 @@ test("Device history is shown in the page, one move a line", async () => {
   // The stored app is labelled by name, both of Semper Classroom's names
   // included; one the page does not know is shown as it is.
   assert.deepEqual(alerts, [
-    "Device history for SEMP-IND1\n\n" +
-    "2026-10-07T11:25Z  bind  by u1 (Semper Classroom)  → dev-4\n" +
-    "2026-10-07T11:24Z  bind  by u1 (Semper Classroom)  → dev-3\n" +
-    "2026-10-07T11:23Z  bind  by u1 (Semper)  → dev-2\n" +
-    "2026-10-07T11:22Z  bind  by u1 (other)  → dev-5\n" +
-    "2026-10-07T11:21Z  clear  by staff  left dev-1  left dev-0 (Semper Classroom)",
+    "Phone history for SEMP-IND1\n\n" +
+    `${when("2026-10-07T11:25Z")}  bind  by u1 (Semper Classroom)  → dev-4\n` +
+    `${when("2026-10-07T11:24Z")}  bind  by u1 (Semper Classroom)  → dev-3\n` +
+    `${when("2026-10-07T11:23Z")}  bind  by u1 (Semper)  → dev-2\n` +
+    `${when("2026-10-07T11:22Z")}  bind  by u1 (other)  → dev-5\n` +
+    `${when("2026-10-07T11:21Z")}  clear  by staff  left dev-1  left dev-0 (Semper Classroom)`,
   ]);
   assert.equal(confirms.cards[0].removed, true);
 });
@@ -771,10 +780,10 @@ test("the roster is read and changed through the staff routes, whoever IT lists"
   rowButton("roster", UNI.id).click();
   await settle();
   assert.equal($("rosterCard").hidden, false);
-  // The same actions IT has: the desk used to offer only New device and Remove.
+  // The same actions IT has: the desk used to offer only New phone and Remove.
   assert.deepEqual(
     $("rosterRows").querySelectorAll("button").map((b) => b.textContent.trim()),
-    ["New device", "Hold", "Remove", "Withdraw"],
+    ["New phone", "Pause", "Remove", "Withdraw"],
   );
   confirms.answer(true);
   $("rosterRows").querySelector('button[data-act="remove"]').click();

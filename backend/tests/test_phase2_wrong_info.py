@@ -267,6 +267,20 @@ async def test_the_quota_refusal_says_why_the_cap_dropped(client, monkeypatch, e
     assert says in detail
 
 
+def test_the_quota_sentences_use_the_apps_words():
+    """One term per concept (readiness AE3-001, AE3-006): the app calls the
+    cloud feature a backup ("Back up now", "Cloud backup"), and a person
+    with a seat "has" one; "hold" is the IT action that pauses a seat."""
+    from app.services import sessions as session_service
+
+    sentences = [*session_service._QUOTA_REMEDY.values(),
+                 session_service._device_quota_detail(25)]
+    for sentence in sentences:
+        assert "sync" not in sentence.lower(), sentence
+        assert "hold a seat" not in sentence, sentence
+    assert all("back up" in s or "backed up" in s for s in sentences), sentences
+
+
 # ================================================ TD-121 Extend only extends
 
 def _timed(store, days=30):

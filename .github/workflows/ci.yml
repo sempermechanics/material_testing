@@ -33,6 +33,16 @@ concurrency:
 permissions:
   contents: read
 
+# The engine's Eigen submodule points at gitlab.com, which has refused clones
+# under load (2026-10-26). Every git command in every job, including
+# actions/checkout's submodule clones, fetches it from the GitHub mirror instead.
+# The gitlink pins the commit (Eigen 5.0.1, bc3b3987 at engine f072da0), so
+# the source is identical; a mirror without that commit fails the checkout.
+env:
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: url.https://github.com/eigen-mirror/eigen.git.insteadOf
+  GIT_CONFIG_VALUE_0: https://gitlab.com/libeigen/eigen.git
+
 jobs:
   secret-scan:
     name: Secret scan (full history)
@@ -77,6 +87,42 @@ jobs:
           tar -xzf "${TARBALL}" gitleaks
           ./gitleaks detect --source . --config .gitleaks.toml --verbose --redact \
             --log-opts="${BASE_SHA}..HEAD"
+
+  engine-pin:
+    name: Engine pin is a tagged release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    # TE2-006: the engine's own CI tests its tagged releases, so the gitlink
+    # must point at a v* tag and must not move backwards or off the previous
+    # pin's line (compared with HEAD^1: the base tip in a PR's merge commit,
+    # the previous main on a push). A deliberate downgrade carries the PR label
+    # `engine-downgrade`; labels are read at run time, so re-run the job after
+    # adding one. Treeless clone of the public engine repo; seconds.
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Check the engine gitlink
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ -n "$PR" ]; then
+            labels=$(gh api "repos/$REPO/issues/$PR/labels" --jq '.[].name' || true)
+          else
+            labels=$(gh api "repos/$REPO/commits/$SHA/pulls" --jq '.[].labels[].name' || true)
+          fi
+          allow=
+          if printf '%s\n' "$labels" | grep -qx engine-downgrade; then allow=--allow-downgrade; fi
+          python scripts/check_engine_pin.py $allow
 
   legal-pages:
     name: Legal pages match their source
@@ -171,6 +217,39 @@ jobs:
       - name: Console line coverage (merged by file)
         run: node scripts/console_coverage.mjs "${{ runner.temp }}/console-coverage" --lines=96
 
+  console-a11y:
+    name: Console accessibility
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # The console pages in a real browser (Chromium), against a stub API and
+    # the fake Firebase SDK: axe-core finds no serious or critical WCAG 2.1
+    # A/AA violation on any page at 360, 768 and 1280 px, and no page scrolls
+    # sideways (firebase-hosting/tests/a11y). Nothing here reaches a real
+    # backend or Google; the stub refuses every other host. The versions are
+    # pinned in firebase-hosting/package-lock.json.
+    defaults:
+      run:
+        working-directory: firebase-hosting
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: firebase-hosting/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:a11y
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: console-a11y-report
+          path: |
+            firebase-hosting/playwright-report/
+            firebase-hosting/test-results/
+          retention-days: 7
+
   # ===================================================================
   # Path filters — same rules on PR and push. Prove only what the diff
   # can break. Full matrix: the weekly schedule, the `full-ci` label or
@@ -192,6 +271,7 @@ jobs:
       emulator: ${{ steps.flags.outputs.emulator }}
       release_build: ${{ steps.flags.outputs.release_build }}
       benchmark_ci: ${{ steps.flags.outputs.benchmark_ci }}
+      engine_host: ${{ steps.flags.outputs.engine_host }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -232,8 +312,8 @@ jobs:
               - 'settings.gradle.kts'
             # Engine sources live in sempermechanics/semper-dic-engine, the JNI
             # adapter too (engine/adapters/android/). App CI only sees pin bumps
-            # (gitlink) / .gitmodules — host/sanitizer suites run in the engine
-            # repo's own workflow. Here a bump or a JNI change has to build for
+            # (gitlink) / .gitmodules — the engine repo's own workflow tests its
+            # commits; engine-host-sanitized reruns ASan+UBSan at the pin. Here a bump or a JNI change has to build for
             # both ABIs and run EnginePipelineSmokeTest on the emulator before it
             # merges, not after.
             native_jni:
@@ -424,6 +504,12 @@ jobs:
             fi
           fi
 
+          # The engine's host suite under ASan+UBSan (engine-host-sanitized)
+          # runs whenever Tier 3 does, and on a ci.yml change so the job proves
+          # itself on the PR that edits it.
+          engine_host=$emulator
+          if [ "$FILTER_CI_WORKFLOW" = "true" ]; then engine_host=true; fi
+
           {
             echo "app=$app"
             echo "backend=$backend"
@@ -431,8 +517,65 @@ jobs:
             echo "emulator=$emulator"
             echo "release_build=$release_build"
             echo "benchmark_ci=$benchmark"
+            echo "engine_host=$engine_host"
           } >> "$GITHUB_OUTPUT"
-          echo "Resolved: event=$EVENT_NAME full=$full app=$app backend=$backend rules=$rules emulator=$emulator release_build=$release_build benchmark_ci=$benchmark"
+          echo "Resolved: event=$EVENT_NAME full=$full app=$app backend=$backend rules=$rules emulator=$emulator release_build=$release_build benchmark_ci=$benchmark engine_host=$engine_host"
+
+  # ===================================================================
+  # Engine host suite, sanitized — TE2-004. The engine repo's CI runs it on
+  # its own commits; this runs the same suite at the commit this app pins,
+  # with the engine CI's asan-ubsan configuration (tests/ CMake tree, system
+  # libopencv-dev, Release, ASan+UBSan). No Gradle, no NDK, no Android OpenCV.
+  # TSan and the C SDK smoke stay in the engine repo; the JNI adapter
+  # (engine/adapters/android/jni) is built only by the NDK and is not here.
+  # ===================================================================
+  engine-host-sanitized:
+    name: Engine host tests (ASan+UBSan)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    needs: changes
+    if: needs.changes.outputs.engine_host == 'true'
+    defaults:
+      run:
+        working-directory: engine
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 500M
+      CCACHE_COMPILERCHECK: content
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      # libopencv-dev or the full-field pipeline is silently left out of the
+      # build (the engine CI's note); DIC_REQUIRE_OPENCV makes that a failure.
+      - name: Install OpenCV + ccache
+        id: deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends libopencv-dev ccache
+      - name: Cache ccache objects
+        uses: actions/cache@v6
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-engine-san-${{ hashFiles('engine/**/*.cpp', 'engine/**/*.h', 'engine/**/*.hpp', 'engine/tests/CMakeLists.txt') }}
+          restore-keys: ccache-engine-san-
+      - name: Configure
+        run: >
+          cmake -S tests -B build/tests
+          -DCMAKE_BUILD_TYPE=Release
+          -DDIC_REQUIRE_OPENCV=ON
+          -DDIC_SANITIZER=address,undefined
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+      - name: Build
+        run: cmake --build build/tests -j"$(nproc)"
+      - name: Run dic_tests
+        run: ./build/tests/dic_tests
+      # Only once ccache is installed: a failed checkout (the engine's Eigen
+      # submodule comes from gitlab.com) would otherwise add a second error.
+      - name: ccache statistics
+        if: always() && steps.deps.outcome == 'success'
+        run: ccache --show-stats
 
   # ===================================================================
   # Tier 1 — two jobs, no NDK. Static: spotless and detekt, about two
@@ -1095,8 +1238,10 @@ jobs:
     if: always()
     needs:
       - secret-scan
+      - engine-pin
       - legal-pages
       - console-pages
+      - console-a11y
       - changes
       - tier1-static
       - tier1-app-fast
@@ -1105,13 +1250,16 @@ jobs:
       - firestore-rules
       - tier5-signed-release
       - tier-benchmark
+      - engine-host-sanitized
     steps:
       - name: Check all tiers
         run: |
           for result in \
             "${{ needs.secret-scan.result }}" \
+            "${{ needs.engine-pin.result }}" \
             "${{ needs.legal-pages.result }}" \
             "${{ needs.console-pages.result }}" \
+            "${{ needs.console-a11y.result }}" \
             "${{ needs.changes.result }}" \
             "${{ needs.tier1-static.result }}" \
             "${{ needs.tier1-app-fast.result }}" \
@@ -1119,11 +1267,12 @@ jobs:
             "${{ needs.tier4-backend.result }}" \
             "${{ needs.firestore-rules.result }}" \
             "${{ needs.tier5-signed-release.result }}" \
-            "${{ needs.tier-benchmark.result }}"; do
+            "${{ needs.tier-benchmark.result }}" \
+            "${{ needs.engine-host-sanitized.result }}"; do
             case "$result" in
               success|skipped) ;;
               *) echo "FAILED: $result"; exit 1 ;;
             esac
           done
           echo "All tiers passed or were skipped."
-          echo "Note: engine host/sanitizer/C-SDK CI runs in sempermechanics/semper-dic-engine."
+          echo "Note: engine TSan and C-SDK CI run in sempermechanics/semper-dic-engine."

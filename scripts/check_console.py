@@ -51,8 +51,18 @@ runtime, and a person only discovers in production:
    (`https://www.gstatic.com/firebasejs/<version>/`), never the whole host,
    which serves scripts for every Google product; and every SDK version a
    console module imports is allowed there, or the pages load no Firebase.
+13. Every backend code a route the consoles call names has words on the page
+   that calls it: a key of `messages.js` (COMMON, REASONS) or of a map in one
+   of the page's own modules, or a comparison with it. A code with none still
+   reaches the screen, but only as "(ref: <code>)" after a sentence, and
+   nothing failed when one appeared. Read from the router modules
+   (`backend/app/routers/`): the codes a route function names
+   (`errors.<NAME>`), directly or through a function of the same module it
+   calls, matched to the calls by method and path. Codes raised further down
+   (a repository's `Refusal`) are not followed, and `ROW_CODES` lists the
+   codes a route answers inside a row of a 200, not as a refusal.
 
-Checks 2, 3, 7 and 8 read every module a page runs: its `<script src>` and,
+Checks 2, 3, 7, 8 and 13 read every module a page runs: its `<script src>` and,
 transitively, what those import by relative path, including on demand.
 
 Checks 1-3 also cover the auth continue-URL pages (`finishSignIn`,
@@ -66,6 +76,7 @@ plants each failure in a small tree and runs this against it.
 from __future__ import annotations
 
 import argparse
+import ast
 import glob
 import json
 import os
@@ -78,14 +89,14 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Set by `set_root`: the tree checked is the repository unless `--root` names
 # another (backend/tests/test_check_console.py plants failures in a copy).
-ROOT = HOSTING = PUBLIC = CONSOLE = GATEWAY = ERRORS = RECONCILE = ""
+ROOT = HOSTING = PUBLIC = CONSOLE = GATEWAY = ERRORS = RECONCILE = ROUTERS = ""
 PAGES: list[str] = []
 AUTH_PAGES: list[str] = []
 
 
 def set_root(root: str) -> None:
     """Point every check at the tree under `root`."""
-    global ROOT, HOSTING, PUBLIC, CONSOLE, GATEWAY, ERRORS, RECONCILE, PAGES, AUTH_PAGES
+    global ROOT, HOSTING, PUBLIC, CONSOLE, GATEWAY, ERRORS, RECONCILE, ROUTERS, PAGES, AUTH_PAGES
     ROOT = os.path.abspath(root)
     HOSTING = os.path.join(ROOT, "firebase-hosting")
     PUBLIC = os.path.join(HOSTING, "public")
@@ -93,6 +104,7 @@ def set_root(root: str) -> None:
     GATEWAY = os.path.join(ROOT, "backend", "gateway", "openapi.yaml")
     ERRORS = os.path.join(ROOT, "backend", "app", "errors.py")
     RECONCILE = os.path.join(ROOT, "backend", "app", "repo", "reconcile.py")
+    ROUTERS = os.path.join(ROOT, "backend", "app", "routers")
     # The pages that carry a dashboard: every check below.
     PAGES = [
         os.path.join(CONSOLE, "index.html"),
@@ -582,6 +594,171 @@ def check_codes() -> None:
                          f"declare — a renamed code leaves this sentence unreachable")
 
 
+# ---------------- 13: every code a console route names has words -----------
+
+#: Codes a route answers inside a row of a 200, not as a refusal: the roster
+#: import's `invalid` / `unprocessed` rows, which roster-tools.js `rowResult`
+#: words by their outcome.
+ROW_CODES = {"invalid_email", "roster_row_unprocessed"}
+_METHODS = ("get", "post", "put", "patch", "delete")
+
+
+def _declared_codes() -> dict[str, str]:
+    """errors.py's constants, NAME -> code."""
+    return dict(re.findall(r'^([A-Z_]+) = "([a-z_]+)"', read(ERRORS), re.M))
+
+
+def _route_codes(fn: ast.AST, functions: dict[str, list[ast.AST]],
+                 constants: dict[str, str], seen: set[str]) -> set[str]:
+    """The codes `fn` names, and those of the same module's functions it calls."""
+    codes = set()
+    for node in ast.walk(fn):
+        if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+                and node.value.id == "errors" and node.attr in constants):
+            codes.add(constants[node.attr])
+        elif isinstance(node, ast.Call):
+            callee = node.func
+            name = callee.id if isinstance(callee, ast.Name) else getattr(callee, "attr", None)
+            if name in functions and name not in seen:
+                seen.add(name)
+                for other in functions[name]:
+                    codes |= _route_codes(other, functions, constants, seen)
+    return codes
+
+
+def _route_decorator(node: ast.AST) -> tuple[str, str] | None:
+    """`@router.<method>("<path>", …)` as (METHOD, path)."""
+    if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name) and node.func.value.id == "router"
+            and node.func.attr in _METHODS and node.args
+            and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str)):
+        return node.func.attr.upper(), node.args[0].value
+    return None
+
+
+def backend_routes() -> list[tuple[str, str, set[str], bool]]:
+    """(METHOD, full path, codes, mounted) for every route in backend/app/routers.
+
+    A module's `APIRouter(prefix=…)` is prepended; a route built inside a
+    factory (`roster_router`) is mounted at each `include_router(<factory>(…),
+    prefix=…)` that names it, and is marked `mounted`.
+    """
+    if not os.path.isdir(ROUTERS):
+        return []
+    constants = _declared_codes()
+    found: list[tuple[str, str, set[str], bool]] = []
+    factory_routes: dict[str, list[tuple[str, str, set[str]]]] = {}
+    mounts: dict[str, list[str]] = {}
+    for path in sorted(glob.glob(os.path.join(ROUTERS, "*.py"))):
+        tree = ast.parse(read(path), filename=path)
+        functions: dict[str, list[ast.AST]] = {}
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                functions.setdefault(node.name, []).append(node)
+        prefix = ""
+        for node in tree.body:
+            if (isinstance(node, ast.Assign) and isinstance(node.value, ast.Call)
+                    and getattr(node.value.func, "id", "") == "APIRouter"):
+                for keyword in node.value.keywords:
+                    if keyword.arg == "prefix" and isinstance(keyword.value, ast.Constant):
+                        prefix = keyword.value.value
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call) and getattr(node.func, "attr", "") == "include_router"
+                    and node.args and isinstance(node.args[0], ast.Call)
+                    and isinstance(node.args[0].func, ast.Name)):
+                for keyword in node.keywords:
+                    if keyword.arg == "prefix" and isinstance(keyword.value, ast.Constant):
+                        mounts.setdefault(node.args[0].func.id, []).append(keyword.value.value)
+        factories = [node for node in tree.body
+                     if isinstance(node, ast.FunctionDef)
+                     and any(isinstance(n, ast.Call) and getattr(n.func, "id", "") == "APIRouter"
+                             for n in ast.walk(node))]
+        inside = {id(n): factory.name for factory in factories for n in ast.walk(factory)}
+        for fn in (n for named in functions.values() for n in named):
+            for decorator in fn.decorator_list:
+                route = _route_decorator(decorator)
+                if route is None:
+                    continue
+                codes = _route_codes(fn, functions, constants, {fn.name})
+                if id(fn) in inside:
+                    factory_routes.setdefault(inside[id(fn)], []).append((route[0], route[1], codes))
+                else:
+                    found.append((route[0], prefix + route[1], codes, False))
+    for factory, routes in factory_routes.items():
+        for mount in mounts.get(factory, []):
+            found += [(method, mount + path, codes, True) for method, path, codes in routes]
+    return found
+
+
+def _call_end(code: str, start: int) -> int:
+    """The index just past the `)` that closes the call opened before `start`."""
+    depth, at = 1, start
+    while at < len(code) and depth:
+        depth += {"(": 1, ")": -1}.get(code[at], 0)
+        at += 1
+    return at
+
+
+def console_calls(code: str) -> set[tuple[str | None, str]]:
+    """(METHOD, path) of each api()/apiBlob() call, holes marked as check 7 does.
+
+    The method is the call's `method: "…"`, GET without one, and None (any)
+    when it is not a literal (`method: spec.method`). A path that starts with
+    a hole (`${root}/seats`) is kept: it is relative to the licence the page
+    has open, so it is matched on its tail against the mounted roster routes.
+    """
+    bases = dict(re.findall(r"const\s+(\w+)\s*=\s*`(/v1/[^`]*)`", code))
+    found = set()
+    for match in re.finditer(r"\bapi(?:Blob)?\(", code):
+        call = code[match.end():_call_end(code, match.end())]
+        literal = re.match(r"\s*[`\"']([^`\"']*)[`\"']", call)
+        if not literal:
+            continue
+        raw = literal.group(1)
+        for name, value in bases.items():
+            raw = raw.replace("${" + name + "}", value)
+        path = re.sub(r"\$\{[^}]*\}", _HOLE, raw.split("?", 1)[0])
+        if not (path.startswith("/v1/") or path.startswith(_HOLE + "/")):
+            continue
+        literal_method = re.search(r"\bmethod:\s*[\"'](\w+)[\"']", call)
+        if literal_method:
+            method = literal_method.group(1).upper()
+        else:
+            method = None if re.search(r"\bmethod:", call) else "GET"
+        found.add((method, path))
+    return found
+
+
+def _calls_route(called: str, declared: str, mounted: bool) -> bool:
+    parts, row = called.split("/")[1:], declared.split("/")[1:]
+    if called.startswith(_HOLE + "/"):
+        if not mounted or len(row) <= len(parts):
+            return False
+        row = row[-len(parts):]
+    return len(parts) == len(row) and all(segment_matches(a, b) for a, b in zip(parts, row))
+
+
+def check_code_sentences() -> None:
+    routes = backend_routes()
+    if not routes:
+        return
+    for page in PAGES:
+        modules = page_modules(page)
+        worded = {a or b for module in modules for a, b in _MATCHED_CODE.findall(read(module))}
+        missing: dict[str, set[str]] = {}
+        for module in modules:
+            for method, called in console_calls(read(module)):
+                for verb, declared, codes, mounted in routes:
+                    if method in (None, verb) and _calls_route(called, declared, mounted):
+                        for code in codes - worded - ROW_CODES:
+                            missing.setdefault(code, set()).add(f"{verb} {declared}")
+        for code in sorted(missing):
+            fail(page, f"{code!r} can come back from {', '.join(sorted(missing[code]))}, "
+                       f"which this page calls, and no module of it has words for it "
+                       f"(messages.js COMMON / REASONS, or the page's own map) — it "
+                       f"would show only as \"(ref: {code})\"")
+
+
 def run(root: str = REPO_ROOT) -> list[str]:
     """Every check against the tree under `root`; returns the failures."""
     set_root(root)
@@ -593,6 +770,7 @@ def run(root: str = REPO_ROOT) -> list[str]:
     check_sdk_pin(policies)
     check_gateway()
     check_codes()
+    check_code_sentences()
     check_preloads()
     check_pending()
     check_script_policy()

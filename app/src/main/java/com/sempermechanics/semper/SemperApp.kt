@@ -2,12 +2,14 @@ package com.sempermechanics.semper
 
 import android.app.Application
 import android.content.res.Configuration
+import android.os.StrictMode
 import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import com.sempermechanics.semper.data.AppForeground
 import com.sempermechanics.semper.data.LicenseConfigWorker
 import com.sempermechanics.semper.data.account.DevAuth
 import com.sempermechanics.semper.data.account.SeatHeartbeat
+import com.sempermechanics.semper.data.account.entitlement.EntitlementStore
 import com.sempermechanics.semper.data.policy.ManagedConfigReader
 import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.session.CacheJanitor
@@ -34,6 +36,7 @@ class SemperApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        installStrictMode(BuildConfig.DEBUG)
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         } else {
@@ -61,6 +64,10 @@ class SemperApp : Application() {
             CacheJanitor.sweepOnStartup(this@SemperApp)
             StorageBudget.enforce(this@SemperApp)
         }
+        // The first entitlement read opens the Keystore, checks the record's
+        // MAC and verifies the token; done here, off the main thread, a
+        // screen's licence check finds it in memory (readiness TE1-006).
+        appScope.launch { EntitlementStore.status(this@SemperApp) }
         // Floating-seat renew while this process is up. The slower background
         // config refresh is scheduled after a successful sign-in — WorkManager
         // is not always ready during Application.onCreate in unit tests.
@@ -95,6 +102,19 @@ class SemperApp : Application() {
                 .installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance())
         }.onFailure { Timber.w(it, "App Check provider unavailable") }
     }
+}
+
+/**
+ * Debug builds log disk and network work on the main thread, and leaked
+ * closeables (readiness TE1-006). Log only, never `penaltyDeath`: a library's
+ * stray read must not become a crash. A release build sets nothing.
+ */
+internal fun installStrictMode(debug: Boolean) {
+    if (!debug) return
+    StrictMode.setThreadPolicy(
+        StrictMode.ThreadPolicy.Builder().detectDiskReads().detectDiskWrites().detectNetwork().penaltyLog().build(),
+    )
+    StrictMode.setVmPolicy(StrictMode.VmPolicy.Builder().detectLeakedClosableObjects().penaltyLog().build())
 }
 
 /**

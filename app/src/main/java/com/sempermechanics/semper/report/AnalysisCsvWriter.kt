@@ -75,18 +75,25 @@ object AnalysisCsvWriter {
         val plannedIndex: Int? = null,
     )
 
-    /** Semper's format, which a plain 2D DIC session keeps. */
-    private const val CSV_VERSION = 1
+    /**
+     * Semper's format, which a plain 2D DIC session keeps.
+     *
+     * 2: point strain columns are `exx_strain` / `eyy_strain` / `exy_strain` (raw
+     * strain; the stats rows stay in mε) and the stats header's VSG column is
+     * `vsg_px`, as in the sweep point header. Values are the same as version 1.
+     */
+    private const val CSV_VERSION = 2
 
     /**
-     * 2, a tensile or bending session's ([Metadata.isLabTest]):
+     * A tensile or bending session's ([Metadata.isLabTest]). 2:
      * `load_N,stress_MPa` trail every point row and the preamble adds
-     * `# test_type…`. A bending session adds `# stress_model` and its
+     * `# test_type…`. 3: the same on Semper's version 2 column names
+     * (`exx_strain`…, `vsg_px`); values unchanged. A bending session adds `# stress_model` and its
      * dimensions to the preamble without a version bump: `stress_MPa` is the
      * model's stress either way, and a reader that ignores unknown `#` lines is
      * unaffected. The `# mechanical_results` trailer is added on the same terms.
      */
-    private const val LAB_CSV_VERSION = 2
+    private const val LAB_CSV_VERSION = 3
 
     // One definition, shared with the row formatter's tests (TD-75): a second
     // copy here let the header and the rows drift apart unnoticed.
@@ -145,7 +152,7 @@ object AnalysisCsvWriter {
         val w = out.bufferedWriter(bufferSize = DicResult.CSV_BUFFER_BYTES)
         writeGlobalPreamble(w, metadata)
         w.append("# field_stats\n")
-        w.append("# image,subset_px,step_px,strain_window_px,field,max,min,mean,unit\n")
+        w.append("# image,subset_px,step_px,vsg_px,field,max,min,mean,unit\n")
         return Appender(w, File(out.path + POINTS_STAGING_SUFFIX), sweep, metadata)
     }
 

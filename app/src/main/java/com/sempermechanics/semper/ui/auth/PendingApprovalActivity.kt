@@ -8,6 +8,7 @@ import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.AuthRepository
 import com.sempermechanics.semper.data.account.DeviceKeys
+import com.sempermechanics.semper.data.account.userMessageOr
 import com.sempermechanics.semper.databinding.ActivityPendingApprovalBinding
 import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.auth.AuthRoute
@@ -97,7 +98,7 @@ class PendingApprovalActivity : AppCompatActivity() {
                 },
                 onFailure = { exception ->
                     setLoadingState(false)
-                    val message = exception.message ?: getString(R.string.error_network_retry)
+                    val message = exception.userMessageOr(getString(R.string.error_network_retry))
                     Feedback.toast(this@PendingApprovalActivity, message, long = true)
                 },
             )
