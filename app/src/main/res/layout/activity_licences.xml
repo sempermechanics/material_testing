@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Credits & licences (LicencesActivity, ADR-031): the example sets'
-     credits, then the full licence texts the app redistributes. Filled in code. -->
+     credits, the libraries, then the licence texts and notices the app
+     redistributes: one row per paragraph (LicencePage). Filled in code. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -40,20 +41,12 @@
             android:textStyle="bold" />
     </LinearLayout>
 
-    <androidx.core.widget.NestedScrollView
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvLicences"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
         android:clipToPadding="false"
         android:paddingHorizontal="20dp"
-        android:paddingBottom="24dp">
-
-        <TextView
-            android:id="@+id/tvLicences"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textColor="@color/text_primary"
-            android:textIsSelectable="true"
-            android:textSize="12sp" />
-    </androidx.core.widget.NestedScrollView>
+        android:paddingBottom="24dp" />
 </LinearLayout>

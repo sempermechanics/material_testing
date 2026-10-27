@@ -60,7 +60,10 @@ documentation and/or other materials".
    - the `CREDIT.txt` that travels with every copy Save to phone makes.
 
    `assets/licences/` holds the DICe BSD-3, OpenCV Apache-2.0 and Eigen
-   MPL-2.0 texts, shown in full.
+   MPL-2.0 texts, shown in full. Since 2026-10-27 (TD-349) the same page also
+   lists every library in the APK with its licence (the AboutLibraries plugin,
+   offline), the notices bundled in Play services and Firebase, and the texts
+   of the codecs OpenCV links in.
 3. **The Terms carve the example files out** (§4.6, written in semperdic-app
    first): they keep their own licences, and nothing in the Terms restricts them.
 4. **Two ways in.**

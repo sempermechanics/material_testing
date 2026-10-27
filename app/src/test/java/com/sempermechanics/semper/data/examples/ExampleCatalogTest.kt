@@ -150,7 +150,21 @@ class ExampleCatalogTest {
     @Test
     fun `the licence texts the app shows are bundled`() {
         assertEquals(
-            listOf("DICe-BSD-3-Clause.txt", "Eigen-MPL-2.0.txt", "OpenCV-Apache-2.0.txt"),
+            listOf(
+                "DICe-BSD-3-Clause.txt",
+                "Eigen-MPL-2.0.txt",
+                "OpenCV-Apache-2.0.txt",
+                // The codecs OpenCV links into libsemper, and the MIT / BSD libraries (TD-349).
+                "carotene-BSD-3-Clause.txt",
+                "checker-qual-MIT.txt",
+                "cpufeatures-Apache-2.0.txt",
+                "libjpeg-turbo-IJG-BSD-3-Clause-Zlib.txt",
+                "libpng-PNG-2.txt",
+                "libtiff-libtiff.txt",
+                "libwebp-BSD-3-Clause.txt",
+                "protobuf-BSD-3-Clause.txt",
+                "zlib-Zlib.txt",
+            ),
             assets.list("licences").orEmpty().sorted(),
         )
     }

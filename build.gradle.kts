@@ -8,6 +8,7 @@ plugins {
     // Required by the Crashlytics SDK: injects the build-ID resource the SDK reads
     // at startup. Without it the SDK throws at Firebase init and crashes the app.
     alias(libs.plugins.firebase.crashlytics) apply false
+    alias(libs.plugins.aboutlibraries) apply false
 }
 
 tasks.register("ciReleaseGate") {

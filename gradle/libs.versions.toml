@@ -33,6 +33,8 @@ kover = "0.9.11"
 spotless = "8.10.3"
 googleServices = "4.5.0"
 crashlytics = "3.0.8"
+# Writes the release dependencies' names and licences for Credits & licences (TD-349).
+aboutlibraries = "15.3.0"
 # The ktlint engine Spotless runs, for both the Kotlin and the Gradle-script targets.
 ktlint = "1.5.0"
 
@@ -83,3 +85,4 @@ kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
 firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "crashlytics" }
+aboutlibraries = { id = "com.mikepenz.aboutlibraries.plugin.android", version.ref = "aboutlibraries" }
