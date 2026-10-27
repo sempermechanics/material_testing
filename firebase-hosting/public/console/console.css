@@ -317,6 +317,10 @@ dialog::backdrop { background: rgba(0, 0, 0, .55); }
 }
 .card-head h2 { margin: 0 .25rem 0 0; }
 .card-head > .muted { font-size: .85rem; }
+/* A heading button that shows or hides the card's list (Show list): the
+   same caret as a row's More menu, turned up while the list is shown. */
+button.disclose::after { content: " ▾"; color: var(--muted); }
+button.disclose[aria-expanded="true"]::after { content: " ▴"; }
 /* What narrows a table (search, ticks), on its own line under the heading. */
 .toolbar { margin-bottom: .75rem; gap: .5rem 1rem; }
 .toolbar > input { flex: 0 1 26rem; min-width: 12rem; }

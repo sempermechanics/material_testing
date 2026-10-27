@@ -129,20 +129,25 @@ $("taCopyPassword").addEventListener("click", () => {
 
 /* ---------------------------------------------------------------- list */
 
-// A fold like Create a test account above it, read afresh each time it
-// opens. The page opens and closes it itself (not the browser) so an open is
-// always a read; the button that stood here became Refresh after one click,
-// with no way to put the list away.
-$("loadTestAccounts").addEventListener("click", (ev) => {
-  ev.preventDefault();
-  if ($("testAccountsBox").open) $("testAccountsBox").open = false;
-  else loadTestAccounts();
+// Show list / Hide list at the right of the card's heading, where the desk
+// keeps what a card does to its whole list. Show reads it afresh; Hide only
+// puts it away. Never disabled mid-read, so Hide always works.
+$("loadTestAccounts").addEventListener("click", () => {
+  if ($("testAccountsWrap").hidden) loadTestAccounts();
+  else showList(false);
 });
 
-/** Open the list and read the test accounts (on demand: most visits never look). */
+/** Show or hide the list, the button naming what its next click does. */
+function showList(shown) {
+  $("testAccountsWrap").hidden = !shown;
+  $("loadTestAccounts").textContent = shown ? "Hide list" : "Show list";
+  $("loadTestAccounts").setAttribute("aria-expanded", String(shown));
+}
+
+/** Show the list and read the test accounts (on demand: most visits never look). */
 export async function loadTestAccounts() {
   const ticket = ++loads;
-  $("testAccountsBox").open = true;
+  showList(true);
   $("testAccountRows").innerHTML = placeholderRows(7, 2);
   try {
     const data = await api("/v1/admin/test-accounts");

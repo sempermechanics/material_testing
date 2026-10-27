@@ -146,7 +146,7 @@ async function sendDelete(id, label) {
     renderLicences();
     closeRosterOf(id);
     setStatus(`${label} deleted — restorable under Recently deleted until ${day(out.purgeAt)}.`);
-    if ($("deletedBox").open) loadDeleted();
+    if (!$("deletedWrap").hidden) loadDeleted();
   } catch (e) {
     if (e.message === ERR_CANCELLED) {
       setStatus("Delete cancelled.");
@@ -159,20 +159,26 @@ async function sendDelete(id, label) {
   }
 }
 
-// A fold, read afresh each time it opens. The page opens and closes it
-// itself (not the browser) so an open is always a read; the button that
-// stood here became Refresh after one click, with no way to put the list away.
-$("loadDeleted").addEventListener("click", (ev) => {
-  ev.preventDefault();
-  if ($("deletedBox").open) $("deletedBox").open = false;
-  else loadDeleted();
+// Show list / Hide list at the right of the card's heading, where the desk
+// keeps what a card does to its whole list. Show reads it afresh; Hide only
+// puts it away. Never disabled mid-read, so Hide always works.
+$("loadDeleted").addEventListener("click", () => {
+  if ($("deletedWrap").hidden) loadDeleted();
+  else showDeleted(false);
 });
+
+/** Show or hide the list, the button naming what its next click does. */
+function showDeleted(shown) {
+  $("deletedWrap").hidden = !shown;
+  $("loadDeleted").textContent = shown ? "Hide list" : "Show list";
+  $("loadDeleted").setAttribute("aria-expanded", String(shown));
+}
 
 let deletedLoad = 0; // the latest read; an older answer is not drawn over it
 
 async function loadDeleted() {
   const ticket = ++deletedLoad;
-  $("deletedBox").open = true;
+  showDeleted(true);
   $("deletedRows").innerHTML = placeholderRows(7, 2);
   try {
     const data = await api("/v1/admin/deleted-licenses?limit=50");

@@ -83,7 +83,7 @@ async function showList(accounts = [QC, CI], routes = {}) {
 test("a QC account is created with the form's values and its password is shown once", async () => {
   const answer = deferred();
   await openDesk({ routes: { [CREATE]: () => answer.promise, [LIST]: listed([QC]) } });
-  assert.equal($("testAccountsBox").open, false, "the list is read on demand");
+  assert.equal($("testAccountsWrap").hidden, true, "the list is read on demand");
   fill({ email: " new@test.example ", note: " Pixel 6 " });
   $("taCreate").click();
   await settle();
@@ -104,7 +104,7 @@ test("a QC account is created with the form's values and its password is shown o
   assert.ok(!$("status").textContent.includes(ISSUED));
   assert.deepEqual([$("taEmail").value, $("taNote").value], ["", ""], "ready for the next one");
   assert.deepEqual(sent(/test-accounts/), [CREATE, LIST], "the list is read again");
-  assert.equal($("testAccountsBox").open, true);
+  assert.equal($("testAccountsWrap").hidden, false);
 
   $("taPasswordClose").click();
   assert.equal(dialog().open, false);
@@ -251,7 +251,8 @@ test("a return leg declined, malformed, or without a fresh sign-in sends nothing
 
 test("the list shows purpose, end, phones, status and note, and a row per account", async () => {
   await showList([QC, CI, { ...QC, uid: "uid-old", email: "old@test.example", status: "ended", note: "<b>x</b>" }]);
-  assert.equal($("testAccountsBox").open, true, "the fold opens with the list");
+  assert.equal($("loadTestAccounts").textContent, "Hide list");
+  assert.equal($("loadTestAccounts").getAttribute("aria-expanded"), "true");
   assert.deepEqual(accountRows(), [
     ["qc-1@test.example", "QC", day(ENDS), "1 of 3", "active", "QC rack", "Extend New password End now"],
     ["ci@test.example", "CI", "Never", "0 of 10", "active", "—", "Extend New password End now"],
@@ -297,16 +298,29 @@ test("a late list answer is not drawn over a newer one", async () => {
   assert.deepEqual(accountRows().map((r) => r[0]), ["ci@test.example"]);
 });
 
-test("the list folds open and shut, and every opening reads it afresh", async () => {
+test("Show list and Hide list take turns, and every Show reads the list afresh", async () => {
   await showList([QC]);
   $("loadTestAccounts").click();
-  assert.equal($("testAccountsBox").open, false, "a second click folds it away");
+  assert.equal($("testAccountsWrap").hidden, true, "Hide list puts it away");
+  assert.equal($("loadTestAccounts").textContent, "Show list");
+  assert.equal($("loadTestAccounts").getAttribute("aria-expanded"), "false");
   assert.equal(sent(/test-accounts/).length, 1, "and reads nothing");
   $("loadTestAccounts").click();
   await settle();
-  assert.equal($("testAccountsBox").open, true);
-  assert.equal(sent(/test-accounts/).length, 2, "opening reads it again");
-  assert.equal($("loadTestAccounts").tagName, "SUMMARY", "the fold's own label, as Create a test account");
+  assert.equal($("testAccountsWrap").hidden, false);
+  assert.equal($("loadTestAccounts").textContent, "Hide list");
+  assert.equal(sent(/test-accounts/).length, 2, "Show list reads it again");
+});
+
+test("Show list sits at the right of the card heading, and the list opens above the create form", async () => {
+  await openDesk();
+  const toggle = $("loadTestAccounts");
+  assert.ok(toggle.closest(".card-head"), "in the heading row, with the desk's other list actions");
+  assert.equal(toggle.tagName, "BUTTON");
+  assert.equal(toggle.getAttribute("aria-controls"), "testAccountsWrap");
+  const order = $("testAccountsCard").children.map((c) => c.id).filter(Boolean);
+  assert.ok(order.indexOf("testAccountsWrap") < order.indexOf("taCreateBox"),
+    "the list opens right under the heading that controls it");
 });
 
 /* ------------------------------------------------------------- actions */
