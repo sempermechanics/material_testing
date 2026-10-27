@@ -1507,7 +1507,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="examples_badge_fails">Expected to fail</string>
     <string name="examples_meta_fmt">%1$s · %2$d photos</string>
     <string name="examples_licence_line_fmt">%1$s · %2$s</string>
-    <string name="examples_setup_fmt">%1$s, %2$d deformed frames, %3$d × %4$d px.</string>
+    <plurals name="examples_setup_fmt">
+        <item quantity="one">%1$s, %2$d deformed frame, %3$d × %4$d px.</item>
+        <item quantity="other">%1$s, %2$d deformed frames, %3$d × %4$d px.</item>
+    </plurals>
     <string name="examples_setup_tensile_fmt">Area %1$.1f mm², load along %2$s.</string>
     <string name="examples_setup_bending_fmt">Span L %1$.0f mm, width b %2$.0f mm, depth t %3$.0f mm.</string>
     <string name="examples_setup_span_placeholder">The span is not published; 700 mm is a placeholder, so E is only indicative.</string>
@@ -1525,7 +1528,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="examples_save">Save to phone</string>
     <string name="examples_saving_fmt">Saving %1$s</string>
     <string name="examples_saved_title">Saved to your phone</string>
-    <string name="examples_saved_body_fmt">The photos, the load log, the expected results and the credit are in %1$s. Pick them from there in a new analysis.</string>
+    <string name="examples_saved_body_fmt">The photos and the rest of the set, with its credit and licence, are in %1$s. Pick them from there in a new analysis.</string>
     <string name="examples_save_failed_title">Couldn\'t save the example</string>
     <string name="examples_save_failed_body_fmt">The files could not be written (%1$s). Free some space and try again.</string>
     <string name="examples_too_many_frames_title">Too many frames for this account</string>

@@ -2,6 +2,7 @@ package com.sempermechanics.semper.ui.examples
 
 import android.content.Context
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.examples.ExampleManifest
 import com.sempermechanics.semper.data.mechanical.TestType
@@ -34,6 +35,9 @@ internal object ExampleDetailSheet {
             sheet.dismiss()
             onSave()
         }
+        // Half-open, the sheet put Try it under the navigation bar and hid Save to phone (Galaxy S22).
+        sheet.dialog.behavior.skipCollapsed = true
+        sheet.dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
         sheet.show()
     }
 
@@ -41,8 +45,9 @@ internal object ExampleDetailSheet {
     fun setupText(context: Context, set: ExampleManifest): String {
         val type = set.testType ?: TestType.DIC_2D
         val lines = mutableListOf(
-            context.getString(
-                R.string.examples_setup_fmt,
+            context.resources.getQuantityString(
+                R.plurals.examples_setup_fmt,
+                set.deformed.size,
                 context.getString(TestTypeSheet.labelRes(type)),
                 set.deformed.size,
                 set.imageSize[0],
