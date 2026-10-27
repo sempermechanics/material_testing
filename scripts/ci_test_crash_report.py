@@ -14,10 +14,11 @@ read, so this prints the parts that name a cause where the job log shows them:
 - each ``hs_err_pid*.log``: its first lines (the signal, the problematic frame,
   the Java frames of the crashing thread);
 - each ``*.hprof``: its size, which says the heap ran out;
-- the GC log's last lines: how full the heap was when the worker stopped;
+- each worker's GC log's last lines: how full the heap was when it stopped;
 - the test classes that finished last (``TEST-*.xml`` by time written): the
   worker died in the class after them;
-- the end of the worker's captured output (Gradle's ``binary/output.bin``),
+- the end of the worker's captured output (Gradle's ``binary/output.bin``, or
+  ``binary/output-events.bin`` from Gradle 9.8),
   which holds what a test or a background thread printed last, an uncaught
   exception included.
 
@@ -76,11 +77,11 @@ def report(crash_dir: Path, results_dir: Path) -> list[str]:
             "is in the app-unit-tests-and-coverage artifact"
         )
 
-    gc_logs = sorted(crash_dir.glob("gc.log*"))
-    if gc_logs:
-        newest = max(gc_logs, key=lambda path: path.stat().st_mtime)
-        out.append(f"Last {GC_TAIL_LINES} lines of {newest.name}:")
-        out.extend(_tail(newest, GC_TAIL_LINES))
+    # One GC log per test worker (`gc-<pid>.log`; Tier 1 runs two), or the one
+    # `gc.log` of a single worker. A worker's rotated `.0` / `.1` files are older.
+    for gc_log in sorted(crash_dir.glob("gc*.log")):
+        out.append(f"Last {GC_TAIL_LINES} lines of {gc_log.name}:")
+        out.extend(_tail(gc_log, GC_TAIL_LINES))
 
     if not found_cause:
         out.append(
@@ -94,11 +95,14 @@ def report(crash_dir: Path, results_dir: Path) -> list[str]:
         for xml_report in xml_reports[-LAST_CLASSES:]:
             out.append("  " + xml_report.name.removeprefix("TEST-").removesuffix(".xml"))
 
-    output_bin = results_dir / "binary" / "output.bin"
-    if output_bin.is_file():
-        lines = binary_output_text(output_bin.read_bytes())
-        out.append(f"Last {OUTPUT_TAIL_LINES} lines the test worker printed:")
-        out.extend(lines[-OUTPUT_TAIL_LINES:])
+    # Gradle 9.8 writes `output-events.bin` where earlier versions wrote
+    # `output.bin`; the text runs in it read the same way.
+    for name in ("output.bin", "output-events.bin"):
+        output_bin = results_dir / "binary" / name
+        if output_bin.is_file():
+            lines = binary_output_text(output_bin.read_bytes())
+            out.append(f"Last {OUTPUT_TAIL_LINES} lines the test worker printed ({name}):")
+            out.extend(lines[-OUTPUT_TAIL_LINES:])
 
     return out
 
