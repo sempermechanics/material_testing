@@ -395,7 +395,7 @@ data**.
 | [ ] 4.26 | Expand **Help & support** | Seven actions: **Open Manual**, **Example data**, **Credits & licences**, Report a bug, Request a feature, **Send feedback**, Email support — plus the support address, selectable and copyable |
 | [ ] 4.26a | Tap **Open Manual** | The hosted manual opens in a browser |
 | [ ] 4.26c | Tap **Example data** | §3c |
-| [ ] 4.26d | Tap **Credits & licences** | Each example set's credit (authors, title, DOI or link, licence, what was changed); **Libraries in the app**, one line per library with its version and licence, and the licences they use with their links; **Licence texts**: DICe BSD-3-Clause, Eigen MPL-2.0, OpenCV Apache-2.0, the codecs OpenCV links in (zlib, libpng, libjpeg-turbo, libtiff, libwebp, carotene, cpufeatures), checker-qual and protobuf; then **Notices in Google Play services and Firebase**. Scrolls smoothly to the end |
+| [ ] 4.26d | Tap **Credits & licences** | One list: a line on where the full texts are, **Full licence texts** (opens sempermechanics.com/licences/), then **Example data** (each set and its licence; a tap opens its credit, a DICe set's with the BSD text), **Analysis engine** (OpenCV, Eigen and the codecs; a codec opens its notice), **Libraries in the app** (each with version and licence; checker-qual and protobuf open their notice) and **Google Play services and Firebase** (opens the website's notices). Rows without a page show no arrow |
 | [ ] 4.26b | Tap **Send feedback** | Mail app opens to support@, subject "Semper Classroom feedback (v… / …)", body carrying app version, device model, Android level and build type — no account address needed |
 | [ ] 4.27 | Tap **Email support** | Mail app opens to support@, subject "Semper Classroom support request", body carrying account, device ID, app version and device model |
 | [ ] 4.28 | Same with no mail app installed | "No email app found…" toast naming the address; no crash |
@@ -1305,9 +1305,10 @@ verified, both are live; §1.13a covers the in-app reset form it opens.
   terminal failures still surface in-app either way.
 - **The licences screen is built from the build.** Credits & licences
   (§4.26d) lists the libraries the AboutLibraries plugin finds in the release
-  dependencies and the notices gathered from the Play services AARs, so a new
-  dependency shows up without an edit; one under a licence with no text in
-  `assets/licences/` fails `LicencesActivityTest`. Privacy Policy and Terms of
+  dependencies, so a new dependency shows up without an edit; one under a
+  licence with no notice in `assets/licences/` fails `LicencesActivityTest`.
+  The full texts live on sempermechanics.com/licences/, which semper-website's
+  `tools/build-licences.py` regenerates from this build when dependencies change. Privacy Policy and Terms of
   Service are linked from the About dialog and open the hosted pages in a browser.
 - **Crash reporting is opt-in and off until accepted.** Crashlytics collection
   is disabled in the manifest and enabled only after the first-run prompt or the

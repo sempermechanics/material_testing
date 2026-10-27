@@ -59,11 +59,12 @@ documentation and/or other materials".
    - **Credits & licences** (`LicencesActivity`, reached from Settings → Help);
    - the `CREDIT.txt` that travels with every copy Save to phone makes.
 
-   `assets/licences/` holds the DICe BSD-3, OpenCV Apache-2.0 and Eigen
-   MPL-2.0 texts, shown in full. Since 2026-10-27 (TD-349) the same page also
-   lists every library in the APK with its licence (the AboutLibraries plugin,
-   offline), the notices bundled in Play services and Firebase, and the texts
-   of the codecs OpenCV links in.
+   A DICe set's page there carries its `LICENSE.DICe` in full. Since
+   2026-10-27 (TD-349) the screen is one list of every part of the app with
+   its licence (the example sets, the engine, and every library from the
+   AboutLibraries plugin); the full texts and the Play services notices are on
+   sempermechanics.com/licences/, and the app keeps only the short notices that
+   have to travel with it (`assets/licences/`).
 3. **The Terms carve the example files out** (§4.6, written in semperdic-app
    first): they keep their own licences, and nothing in the Terms restricts them.
 4. **Two ways in.**

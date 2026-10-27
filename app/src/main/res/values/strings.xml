@@ -1581,10 +1581,12 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="examples_too_many_frames_body_fmt">This example has %1$d frames and this account allows %2$d. Raise the frame limit in Settings, or save the example to your phone and pick fewer frames.</string>
     <string name="licences_title">Credits &amp; licences</string>
     <string name="licences_examples">Example data</string>
+    <string name="licences_intro">Each part of Semper Classroom keeps its own licence, named under it below. The full texts, and the notices for the code bundled in Google Play services, are on our website.</string>
+    <string name="licences_full_texts">Full licence texts</string>
+    <string name="licences_full_url" translatable="false">https://sempermechanics.com/licences/</string>
+    <string name="licences_engine">Analysis engine</string>
     <string name="licences_libraries">Libraries in the app</string>
-    <string name="licences_libraries_intro">The app is built with these libraries, each used under the licence named beside it.</string>
-    <string name="licences_used">The licences they use</string>
-    <string name="licences_texts">Licence texts</string>
-    <string name="licences_play_services">Notices in Google Play services and Firebase</string>
-    <string name="licences_play_services_intro">Code that Google bundles inside its Play services and Firebase libraries, with its notices.</string>
+    <string name="licences_play_services">Google Play services and Firebase</string>
+    <string name="licences_play_services_row">Notices for the code they bundle</string>
+    <string name="licences_on_website">On the website</string>
 </resources>

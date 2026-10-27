@@ -620,9 +620,13 @@ abstract class VerifyForegroundServiceTypes : DefaultTask() {
 /**
  * The notices Google ships inside its Play services and Firebase AARs
  * (`third_party_licenses.json` indexes `third_party_licenses.txt` by byte
- * range), gathered into one asset for Credits & licences (TD-349), the way
- * Google's oss-licenses plugin does. AboutLibraries lists those AARs by name
- * only; the code they bundle (Guava, Kotlin, Error Prone, …) has its notices here.
+ * range), gathered into one file the way Google's oss-licenses plugin does
+ * (TD-349). AboutLibraries lists those AARs by name only; the code they bundle
+ * (Guava, Kotlin, Error Prone, …) has its notices here. The file is not in the
+ * APK: semper-website's `tools/build-licences.py` publishes it, with the
+ * library list, at sempermechanics.com/licences/, where Credits & licences links.
+ * `./gradlew :app:collectReleasePlayServicesNotices :app:prepareLibraryDefinitionsRelease`
+ * writes both.
  */
 abstract class CollectPlayServicesNotices : DefaultTask() {
     @get:InputFiles
@@ -651,7 +655,7 @@ abstract class CollectPlayServicesNotices : DefaultTask() {
                 }
             }
         }
-        val out = outputDir.get().file("$PLAY_SERVICES_NOTICES_DIR/play-services-notices.txt").asFile
+        val out = outputDir.get().file("play-services-notices.txt").asFile
         out.parentFile.mkdirs()
         out.writeText(
             notices.values
@@ -661,10 +665,7 @@ abstract class CollectPlayServicesNotices : DefaultTask() {
     }
 
     companion object {
-        /** Where the file goes in the assets; `ui/examples/LicencesActivity` reads it. */
-        const val PLAY_SERVICES_NOTICES_DIR = "notices"
-
-        /** The line that opens each notice in the file, so the app can split it again. */
+        /** The line that opens each notice in the file, so the website's generator can split it again. */
         const val NOTICE_HEADING = "### "
     }
 }
@@ -687,17 +688,16 @@ androidComponents {
                     ),
                 )
             }
-        val notices =
-            tasks.register<CollectPlayServicesNotices>("collect${suffix}PlayServicesNotices") {
-                aars.from(
-                    variant.runtimeConfiguration.incoming
-                        .artifactView {
-                            lenient(true)
-                            attributes { attribute(Attribute.of("artifactType", String::class.java), "aar") }
-                        }.files,
-                )
-            }
-        variant.sources.assets?.addGeneratedSourceDirectory(notices, CollectPlayServicesNotices::outputDir)
+        tasks.register<CollectPlayServicesNotices>("collect${suffix}PlayServicesNotices") {
+            aars.from(
+                variant.runtimeConfiguration.incoming
+                    .artifactView {
+                        lenient(true)
+                        attributes { attribute(Attribute.of("artifactType", String::class.java), "aar") }
+                    }.files,
+            )
+            outputDir.set(layout.buildDirectory.dir("licences/${variant.name}"))
+        }
         // Runs inside CI Tier 1, which is the only tier that always executes.
         tasks.matching { it.name == "test${suffix}UnitTest" }.configureEach {
             dependsOn(verifyTask)

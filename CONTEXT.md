@@ -196,9 +196,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   and synced here (#153); its Hosting deploy is owed, from semperdic-app. The website's Examples
   page merged (semper-website #13). The §3c device pass ran on a Galaxy S22 on 2026-10-27; its
   fixes and TD-351's new numbers merged (#154, `e0e697b2`). Open on `claude/example-followups`:
-  the DICe files named for their set (Try it's analysis was "ref"), and TD-349 closed (every
-  library and bundled notice on Credits & licences); the website zips to match (semper-website
-  #14). Owed: TD-350 (semper-dic-engine#26, then a pin bump).
+  the DICe files named for their set (Try it's analysis was "ref"), and TD-349 closed (Credits &
+  licences lists every part with its licence; the full texts move to sempermechanics.com/licences/);
+  the website zips to match (semper-website #14). Owed: TD-350 (semper-dic-engine#26, then a pin bump).
 - **Rename to Semper Classroom ([ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md)):** merged
   2026-10-26 (#147, `f25ebd01`), not released; still owed: the upstream deploy and the owner's Firebase app registration.
 - **Play submission ([gate](docs/ops/PRODUCTION_READINESS_GATE.md#google-play-submission-semper-classroom)):**

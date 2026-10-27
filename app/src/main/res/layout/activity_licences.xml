@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Credits & licences (LicencesActivity, ADR-031): the example sets'
-     credits, the libraries, then the licence texts and notices the app
-     redistributes: one row per paragraph (LicencePage). Filled in code. -->
+     credits, the engine and the libraries, each with its licence (LicencePage),
+     or one page: a credit or a short notice. Filled in code. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -32,9 +32,13 @@
             app:tint="@color/text_primary" />
 
         <TextView
-            android:layout_width="wrap_content"
+            android:id="@+id/tvLicencesTitle"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
             android:text="@string/licences_title"
             android:textColor="@color/text_primary"
             android:textSize="18sp"

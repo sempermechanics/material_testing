@@ -58,15 +58,16 @@ after it (TD-200) were fixed by its #359.
 **Closed 2026-10-27 on `claude/example-followups`**, and removed from the register.
 
 - **TD-349** (Credits & licences named only the example data and the engine's DICe, OpenCV
-  and Eigen licences). The page now also lists every library in the APK with its licence
-  (`app/build.gradle.kts` applies the AboutLibraries plugin offline, which writes
-  `res/raw/aboutlibraries.json`), shows the notices Google bundles inside its Play services and
-  Firebase AARs (`CollectPlayServicesNotices` in `app/build.gradle.kts`, into
-  `assets/notices/`), and carries the texts of the codecs OpenCV links into `libsemper`
-  (zlib, libpng, libjpeg-turbo with the IJG terms, libtiff, libwebp, carotene, cpufeatures)
-  and of checker-qual (MIT) and protobuf (BSD-3) in `assets/licences/`. The page is a list of
-  paragraphs (`ui/examples/LicencePage.kt`), since the notices run to about 0.9 MB.
-  `LicencesActivityTest` fails when a dependency arrives under a licence the page has no text for.
+  and Eigen licences). The screen is now one list of every part of the app with its licence:
+  the example sets, the engine (OpenCV, Eigen and the codecs OpenCV links into `libsemper`)
+  and every library in the APK, from the AboutLibraries plugin run offline
+  (`res/raw/aboutlibraries.json`, `app/build.gradle.kts`). The full texts, and the notices
+  Google bundles inside Play services and Firebase (`CollectPlayServicesNotices` writes them
+  to `app/build/licences/<variant>/`), are on the website at sempermechanics.com/licences/,
+  built by semper-website's `tools/build-licences.py`. The app keeps what has to travel with
+  it: each set's credit, DICe's `LICENSE.DICe`, and the short BSD, MIT, IJG, zlib, libpng
+  and libtiff notices in `assets/licences/` (`ui/examples/LicencePage.kt`).
+  `LicencesActivityTest` fails when a dependency arrives under a licence with no notice there.
 
 **Closed 2026-10-27 by #154** (`claude/example-s22-fixes`), and removed from the register.
 
