@@ -47,7 +47,10 @@
     <!-- Outside #app: enrolment, step-up and sign-in errors report here while
          the dashboard is still hidden. A live region, so each step of a load
          is read out; it says it is checking the sign-in until auth.js knows. -->
-    <p id="status" class="muted" role="status" aria-live="polite" data-pending>Checking your sign-in…</p>
+    <div class="status-bar">
+      <p id="status" class="muted" role="status" aria-live="polite" data-pending>Checking your sign-in…</p>
+      <button id="statusClose" type="button" class="status-close" aria-label="Dismiss this message" title="Dismiss">×</button>
+    </div>
     <div id="app" hidden>
       <!-- Shown only when the account can open more than one dashboard, or
            when we could not establish which it should be. -->

@@ -467,6 +467,35 @@ test("the list shows each active phone with its own Release", async () => {
   assert.equal(rowButton("extend", QC.uid).className, "secondary");
 });
 
+const phonesFold = (uid) => $("testAccountRows").querySelector(`details[data-ta-phones="${uid}"]`);
+
+test("an account's phones fold under their count, folded at first", async () => {
+  await showList([PHONES, CI]);
+  const fold = phonesFold(QC.uid);
+  assert.ok(fold, "the phones sit in a fold");
+  assert.equal(fold.open, false, "a row is one line until its phones are asked for");
+  assert.equal(fold.querySelector("summary").textContent.trim(), "2 of 3", "the count is the fold's label");
+  assert.equal(fold.querySelectorAll("li").length, 2, "every phone, with its Release, is inside it");
+  assert.equal(phonesFold(CI.uid), null, "no phones, no fold: the count alone");
+});
+
+test("phones unfolded stay unfolded when the list is read again", async () => {
+  await showList([PHONES, CI], { [`POST ${RELEASE}`]: () => json(200, {}) });
+  phonesFold(QC.uid).querySelector("summary").click();
+  // The list is read again (a Release does this): still unfolded.
+  $("loadTestAccounts").click();
+  $("loadTestAccounts").click();
+  await settle();
+  assert.equal(phonesFold(QC.uid).open, true);
+  // Folded again, it stays folded.
+  phonesFold(QC.uid).open = true;
+  phonesFold(QC.uid).querySelector("summary").click();
+  $("loadTestAccounts").click();
+  $("loadTestAccounts").click();
+  await settle();
+  assert.equal(phonesFold(QC.uid).open, false);
+});
+
 test("a phone registered before ADR-030 is labelled Semper Classroom too", async () => {
   // devices/{id}.app is never rewritten, so it may still say materialtesting.
   await showList([{ ...QC, activeDevices: 1, devices: [

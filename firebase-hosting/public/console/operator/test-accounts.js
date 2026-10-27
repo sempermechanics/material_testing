@@ -163,10 +163,23 @@ export async function loadTestAccounts() {
   }
 }
 
+// The accounts whose phones are unfolded, by uid: a reload (after a Release,
+// say) draws them unfolded again rather than closing what was being worked on.
+const phonesOpen = new Set();
+
 function accountRow(a) {
   const uid = esc(a.uid);
   const live = a.status === "active";
   const phones = a.devices || [];
+  const count = `${esc(a.activeDevices ?? 0)} of ${esc(a.maxDevices ?? "—")}`;
+  // The count folds the phones away, as a row's More menu does its actions:
+  // three phones, each with a Release, made one account's row a tall stack.
+  const phonesCell = phones.length
+    ? `<details class="phones-fold" data-ta-phones="${uid}"${phonesOpen.has(a.uid) ? " open" : ""}>
+          <summary>${count}</summary>
+          <ul class="phone-list">${phones.map((d) => phoneLine(uid, d)).join("")}</ul>
+        </details>`
+    : count;
   // End now erases the account: drawn as the destructive one, apart from
   // the two that only change it.
   return `
@@ -174,8 +187,7 @@ function accountRow(a) {
       <td class="account">${esc(a.email || a.uid)}</td>
       <td>${esc(PURPOSES[a.purpose] || a.purpose || "—")}</td>
       <td class="nowrap">${esc(testAccountEnds(a))}</td>
-      <td class="phones">${esc(a.activeDevices ?? 0)} of ${esc(a.maxDevices ?? "—")}${phones.length
-        ? `<ul class="phone-list">${phones.map((d) => phoneLine(uid, d)).join("")}</ul>` : ""}</td>
+      <td class="phones">${phonesCell}</td>
       <td><span class="pill ${live ? "ok" : "off"}">${esc(a.status || "—")}</span></td>
       <td class="muted">${esc(a.note || "—")}</td>
       <td class="actions">
@@ -210,6 +222,14 @@ function phoneLine(uid, d) {
 }
 
 $("testAccountRows").addEventListener("click", (ev) => {
+  // A click on a phone count fires before the fold toggles: it is about to
+  // become the opposite of what it is.
+  const fold = ev.target.closest("summary") && ev.target.closest("details[data-ta-phones]");
+  if (fold) {
+    if (fold.open) phonesOpen.delete(fold.dataset.taPhones);
+    else phonesOpen.add(fold.dataset.taPhones);
+    return;
+  }
   const btn = ev.target.closest("button");
   if (!btn) return;
   if ("retry" in btn.dataset) loadTestAccounts();

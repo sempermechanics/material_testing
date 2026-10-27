@@ -7,6 +7,7 @@
  * `confirm` / `alert`, because some browsers show none of them at all (the
  * Claude desktop app's browser pane answers "prompt() is not supported").
  */
+import { statusAnchor } from "./status.js";
 import { authErrorText } from "./util.js";
 
 /** The person closed a card instead of answering it. */
@@ -77,7 +78,7 @@ function pageCard(kind, {
   else no.textContent = cancel;
 
   const opener = document.activeElement;
-  const at = anchor || document.getElementById("status") || document.querySelector("main");
+  const at = anchor || statusAnchor() || document.querySelector("main");
   at.insertAdjacentElement("afterend", card);
   // The desk's status line sits above a long table; bring the card into view.
   if (card.scrollIntoView) card.scrollIntoView({ block: "center" });
@@ -197,7 +198,7 @@ export function codeCard() {
       <button class="secondary cancel">Cancel</button>
     </div>
     <p class="muted err feedback" role="alert"></p>`;
-  const anchor = document.getElementById("status") || document.querySelector("main");
+  const anchor = statusAnchor() || document.querySelector("main");
   anchor.insertAdjacentElement("afterend", card);
   const input = card.querySelector("input");
   const confirmBtn = card.querySelector(".confirm");
@@ -296,7 +297,7 @@ export function enrolInPage(enrolment, account, qrSvg) {
   card.querySelector(".key").textContent = enrolment.secret;
   card.querySelector(".account").textContent = account;
 
-  const anchor = document.getElementById("status") || document.querySelector("main");
+  const anchor = statusAnchor() || document.querySelector("main");
   anchor.insertAdjacentElement("afterend", card);
   const input = card.querySelector("input");
   const feedback = card.querySelector(".feedback");

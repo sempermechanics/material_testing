@@ -18,6 +18,9 @@ const AFTER_REAUTH = "semper.afterReauth";
 const RESUME = "semper.resume";
 
 beforeEach(reset);
+
+/** The pinned bar round the status line, which cards go after. */
+const statusBar = () => $("status").closest(".status-bar");
 afterEach(settle);
 
 function signIn(user) {
@@ -236,7 +239,7 @@ test("the authenticator code is asked for in a card under the status line, gone 
   await auth.stepUp({ password: "pw" });
   const [card] = codes.cards;
   assert.equal(codes.asked, 1);
-  assert.equal(card.anchor, $("status"));
+  assert.equal(card.anchor, statusBar(), "after the status bar, not pinned inside it");
   assert.equal(card.position, "afterend");
   assert.equal(card.querySelector("h2").textContent, "Enter your authenticator code");
   assert.equal(card.querySelector("input").focused, true, "the box has focus");
@@ -427,7 +430,7 @@ test("an account with no factor must enrol TOTP in the page before anything else
   assert.equal(fake.callsTo("reauthenticateWithRedirect").length, 0, "a fresh sign-in enrols without a step-up");
 
   const card = await enrolCard();
-  assert.equal(card.anchor, $("status"));
+  assert.equal(card.anchor, statusBar(), "after the status bar, not pinned inside it");
   assert.equal(card.position, "afterend");
   assert.match(card.querySelector(".qr").innerHTML, /^<svg/);
   assert.equal(card.querySelector(".key").textContent, "TESTSECRETBASE32");
@@ -617,7 +620,7 @@ test("the ask card sits under the status line, its text never markup, and goes o
   prompts.answer("SEMP-4K2P");
   assert.equal(await auth.confirmByTyping("SEMP-4K2P", "revoke it", { title: "Revoke <b>SEMP-4K2P</b>" }), true);
   const [card] = prompts.cards;
-  assert.equal(card.anchor, $("status"));
+  assert.equal(card.anchor, statusBar(), "after the status bar, not pinned inside it");
   assert.equal(card.querySelector("h2").textContent, "Revoke <b>SEMP-4K2P</b>", "the title went in as text");
   assert.equal(card.querySelector("h2").querySelectorAll("b").length, 0);
   assert.equal(card.querySelector("input").focused, true);
@@ -633,7 +636,7 @@ test("a confirm card answers yes or no, its text never markup, and goes once ans
   assert.equal(await auth.confirmInPage({ title: "Revoke X", message: "Again?", confirm: "Revoke" }), false);
   assert.deepEqual(confirms.asked, ["Sure?\n\nReally?", "Again?"]);
   const [first, second] = confirms.cards;
-  assert.equal(first.anchor, $("status"));
+  assert.equal(first.anchor, statusBar());
   assert.equal(first.querySelector("h2").textContent, "Revoke <b>X</b>", "the title went in as text");
   assert.equal(first.querySelector("h2").querySelectorAll("b").length, 0);
   assert.equal(first.querySelector("input"), null, "a yes / no card has no box");
