@@ -18,6 +18,15 @@ export class FakeUser {
     factors = [],
     secondFactor = false,
     authAgeSeconds = 10,
+    // How far Google's clock is ahead of this computer's (negative: behind).
+    // auth_time and a token's issued-at are on Google's clock.
+    clockSkewSeconds = 0,
+    // What a refresh throws once the remembered session is over, e.g.
+    // "auth/user-token-expired"; null while it can still be renewed.
+    refreshError = null,
+    // The cached ID token is past its hour, so every read refreshes it, as
+    // the first one does in a browser that remembered yesterday's sign-in.
+    tokenStale = false,
   } = {}) {
     this.uid = uid;
     this.email = email;
@@ -25,16 +34,34 @@ export class FakeUser {
     this.password = password;
     this.factors = factors.map((f) => ({ uid: "totp-1", factorId: "totp", ...f }));
     this.secondFactor = secondFactor;
-    this.authTime = Date.now() - authAgeSeconds * 1000;
+    this.clockSkewSeconds = clockSkewSeconds;
+    this.refreshError = refreshError;
+    this.tokenStale = tokenStale;
+    this.authTime = this.googleNow() - authAgeSeconds * 1000;
+    this.issuedAt = this.googleNow();
     // Firebase serves a cached ID token until asked to refresh: only
-    // getIdToken(true) moves to the next version.
+    // getIdToken(true) / getIdTokenResult(true) move to the next version.
     this.tokenVersion = 1;
+  }
+
+  googleNow() {
+    return Date.now() + this.clockSkewSeconds * 1000;
   }
 
   /** A completed re-authentication: new auth_time, and a second factor if one was proved. */
   freshen({ secondFactor = this.secondFactor } = {}) {
-    this.authTime = Date.now();
+    this.authTime = this.googleNow();
+    this.issuedAt = this.authTime;
     this.secondFactor = secondFactor;
+  }
+
+  refresh(forceRefresh) {
+    if (!forceRefresh && !this.tokenStale) return;
+    if (this.refreshError) {
+      throw Object.assign(new Error(this.refreshError), { code: this.refreshError });
+    }
+    this.tokenVersion += 1;
+    this.issuedAt = this.googleNow();
   }
 
   get token() {
@@ -43,14 +70,20 @@ export class FakeUser {
 
   async getIdToken(forceRefresh = false) {
     fake.calls.push(["getIdToken", this.uid, Boolean(forceRefresh)]);
-    if (forceRefresh) this.tokenVersion += 1;
+    this.refresh(forceRefresh);
     return this.token;
   }
 
-  async getIdTokenResult() {
+  async getIdTokenResult(forceRefresh = false) {
+    fake.calls.push(["getIdTokenResult", this.uid, Boolean(forceRefresh)]);
+    this.refresh(forceRefresh);
     const firebase = { sign_in_provider: this.providerData[0]?.providerId };
     if (this.secondFactor) firebase.sign_in_second_factor = "totp";
-    return { authTime: new Date(this.authTime).toUTCString(), claims: { firebase } };
+    return {
+      authTime: new Date(this.authTime).toUTCString(),
+      issuedAtTime: new Date(this.issuedAt).toUTCString(),
+      claims: { firebase },
+    };
   }
 }
 

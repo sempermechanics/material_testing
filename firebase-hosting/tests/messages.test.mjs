@@ -61,3 +61,16 @@ test("Firebase sign-in codes read as words; an unknown one is a reference", () =
     "the sign-in service did not answer — check your connection");
   assert.equal(reauthFailureText("weird"), "re-authentication did not finish (ref: weird)");
 });
+
+test("an expired sign-in says to sign in again, and a step-up's Firebase failure reads as words", () => {
+  assert.equal(explain(refusal(401, "invalid_token"), {}, (t) => `Could not issue: ${t}`),
+    "Your sign-in has expired. Sign in again, then repeat that.");
+  // A step-up failure reaching a page's fallback was "Firebase: Error (auth/…)."
+  const lapsed = Object.assign(new Error("Firebase: Error (auth/invalid-multi-factor-session)."),
+    { code: "auth/invalid-multi-factor-session" });
+  assert.equal(explain(lapsed, {}, (t) => `Could not create it: ${t}`),
+    "Could not create it: the authenticator code came too late");
+  for (const code of ["auth/user-token-expired", "auth/invalid-user-token", "auth/requires-recent-login"]) {
+    assert.match(authErrorText({ code }), /sign in again/, code);
+  }
+});

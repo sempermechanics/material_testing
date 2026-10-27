@@ -300,6 +300,15 @@ const FIREBASE_ERRORS = {
   "auth/user-mismatch": "that was a different account from the one signed in",
   "auth/invalid-verification-code": "the authenticator code was not accepted",
   "auth/totp-challenge-timeout": "the authenticator code came too late",
+  // The challenge a code answers lives a few minutes. SDK 12.4.0 says so
+  // with these codes, not totp-challenge-timeout; each used to reach the
+  // operator as "an unexpected sign-in error".
+  "auth/invalid-multi-factor-session": "the authenticator code came too late",
+  "auth/missing-multi-factor-session": "the authenticator code came too late",
+  "auth/code-expired": "the authenticator code came too late",
+  "auth/requires-recent-login": "your sign-in is too old for that — sign in again",
+  "auth/user-token-expired": "your sign-in has expired — sign in again",
+  "auth/invalid-user-token": "your sign-in has expired — sign in again",
   "auth/unauthorized-domain": "this address is not set up for sign-in",
   "auth/web-storage-unsupported": "this browser blocks the storage sign-in needs",
   "auth/internal-error": "the sign-in service had a problem — try again",
@@ -312,6 +321,24 @@ const FIREBASE_ERRORS = {
 export function authErrorText(e) {
   const code = (e && e.code) || errorDetail(e && e.message).code;
   return FIREBASE_ERRORS[code] || `an unexpected sign-in error (ref: ${code})`;
+}
+
+// What says this browser's sign-in is over, not merely refused: Firebase can
+// no longer refresh the remembered session (its refresh token was revoked,
+// the password changed, the account was deleted), or the backend refused the
+// ID token itself (401 `invalid_token`). Repeating the action cannot help;
+// signing in again does.
+const SESSION_ENDED = new Set([
+  "auth/user-token-expired",
+  "auth/invalid-user-token",
+  "auth/user-not-found",
+  "invalid_token",
+]);
+
+/** Whether `e` means the remembered sign-in is over and only a new one helps. */
+export function sessionEnded(e) {
+  const code = (e && e.code) || errorDetail(e && e.message).code;
+  return SESSION_ENDED.has(code);
 }
 
 /* ------------------------------------------------------- test accounts */
