@@ -109,10 +109,11 @@ class TermsRotationTest {
         val rebuilt = controller.recreate().get()
         idle()
         ShadowToast.reset()
-        answer.complete(Result.failure(IllegalStateException("Could not record your acceptance.")))
+        answer.complete(Result.failure(IllegalStateException("socket closed")))
         idle()
 
-        assertEquals("Could not record your acceptance.", ShadowToast.getTextOfLatestToast())
+        // The screen's own words, not the exception's (readiness AE1-009).
+        assertEquals(rebuilt.getString(R.string.terms_error_generic), ShadowToast.getTextOfLatestToast())
         assertFalse(rebuilt.isFinishing)
         assertTrue("Agree is usable again", rebuilt.findViewById<Button>(R.id.btnAgree).isEnabled)
 

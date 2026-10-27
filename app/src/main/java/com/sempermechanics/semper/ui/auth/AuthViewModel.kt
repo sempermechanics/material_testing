@@ -12,6 +12,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.AuthRepository
+import com.sempermechanics.semper.data.account.userMessageOr
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -167,7 +168,7 @@ class AuthViewModel(app: Application, private val saved: SavedStateHandle) : And
             _busy.value = false
             result.fold(
                 onSuccess = { say(text(R.string.auth_link_sent_fmt, email)) },
-                onFailure = { say(it.message ?: text(R.string.auth_link_send_failed)) },
+                onFailure = { say(it.userMessageOr(text(R.string.auth_link_send_failed))) },
             )
         }
     }
@@ -180,7 +181,7 @@ class AuthViewModel(app: Application, private val saved: SavedStateHandle) : And
             _busy.value = false
             result.fold(
                 onSuccess = { say(text(R.string.auth_reset_sent_fmt, email)) },
-                onFailure = { say(it.message ?: text(R.string.auth_reset_failed)) },
+                onFailure = { say(it.userMessageOr(text(R.string.auth_reset_failed))) },
             )
         }
     }
@@ -196,7 +197,7 @@ class AuthViewModel(app: Application, private val saved: SavedStateHandle) : And
                     screen = AuthScreen.Reset(oobCode)
                     outcomeChannel.send(Outcome.ResetReady(email))
                 },
-                onFailure = { say(it.message ?: text(R.string.auth_reset_link_invalid)) },
+                onFailure = { say(it.userMessageOr(text(R.string.auth_reset_link_invalid))) },
             )
         }
     }
@@ -209,7 +210,8 @@ class AuthViewModel(app: Application, private val saved: SavedStateHandle) : And
             val confirmed = repo.confirmPasswordReset(reset.oobCode, password)
             if (confirmed.isFailure) {
                 _busy.value = false
-                say(confirmed.exceptionOrNull()?.message ?: text(R.string.auth_reset_failed))
+                val fallback = text(R.string.auth_reset_failed)
+                say(confirmed.exceptionOrNull()?.userMessageOr(fallback) ?: fallback)
                 return@launch
             }
             pendingCredential = email to password
@@ -229,7 +231,7 @@ class AuthViewModel(app: Application, private val saved: SavedStateHandle) : And
                 when (error) {
                     is AuthRepository.EmailVerificationRequired -> Outcome.VerificationPending(error, pendingCredential)
                     is AuthRepository.MfaTotpRequired -> openTotp(error)
-                    else -> Outcome.Say(error.message ?: text(R.string.auth_sign_in_failed))
+                    else -> Outcome.Say(error.userMessageOr(text(R.string.auth_sign_in_failed)))
                 }
             },
         )
@@ -244,7 +246,7 @@ class AuthViewModel(app: Application, private val saved: SavedStateHandle) : And
                 if (error is AuthRepository.MfaTotpRequired) {
                     openTotp(error)
                 } else {
-                    Outcome.Say(error.message ?: text(R.string.reauth_failed))
+                    Outcome.Say(error.userMessageOr(text(R.string.reauth_failed)))
                 }
             },
         )

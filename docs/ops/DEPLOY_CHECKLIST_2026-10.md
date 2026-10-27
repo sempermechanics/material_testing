@@ -13,12 +13,13 @@ material_testing: any Hosting deploy replaces the whole site.
 - [x] **Google credentials** for whoever runs steps 1, 4 and 5: Firestore index
       admin and Firebase Hosting admin on `indicvision-dic-app`, plus
       `roles/monitoring.editor` and `roles/logging.configWriter`.
-- [ ] **Revocation (TD-214)**, optional for the first deploy. Grant
+- [x] **Revocation (TD-214)** (acceptance owed), optional for the first deploy. Grant
       `gcloud projects add-iam-policy-binding indicvision-dic-app-auth --member=serviceAccount:indic-api@indicvision-dic-app.iam.gserviceaccount.com --role=roles/firebaseauth.admin`,
       then set the repo variable `CHECK_REVOKED_ON_STEP_UP=true`. Not before the
       grant: without it the check fails closed and refuses every step-up.
       (2026-10-22: the grant is in place and the variable is set, for production
-      from its next deploy; staging has it deployed.)
+      from its next deploy; staging has it deployed. 2026-10-23: live on
+      `semper-api-39900623312-1`. Owed: the acceptance check, TD-214.)
 - [ ] **Offline entitlement (TD-215)**, optional for the first deploy. Follow
       [BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A8 in its order:
       create the P-256 key in Secret Manager; grant the runtime SA
@@ -30,7 +31,7 @@ material_testing: any Hosting deploy replaces the whole site.
 - [ ] **New-device mail (TD-295, TD-309)**, optional, and only once #457 is merged.
       Verify a sender in Resend (for example `Semper security <security@yourdomain.com>`),
       then set the repo variable `NOTIFY_SECURITY_FROM` (the workflow passes it since
-      `a02ef2f`, `deploy-backend.yml:332`) and redeploy. Unset, that mail is off and the
+      `a02ef2f`, `deploy-backend.yml:340`) and redeploy. Unset, that mail is off and the
       access-request mail is unaffected ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md)).
 
 - [x] **Test accounts ([ADR-027](../adr/ADR-027-test-accounts.md))**, optional, and
@@ -140,13 +141,18 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       project has **none** of these today, and **no notification channel** in either
       project, so `--apply` first needs a channel created
       (`gcloud beta monitoring channels create`, email to the on-call address).
-- [ ] The same with `--apply`: log metrics, uptime check, SLO and burn-rate
-      alerts, four dashboards; then the `run.invoker` grant for the Monitoring
-      service agent that the script prints under "By hand, once".
+- [ ] The same with `--apply`: log metrics, the three uptime checks (`/readyz`,
+      and since TE6-003 the gateway's `/healthz` and `/v1/config`), SLO, the alert
+      policies (13 since TE6-002 / TE6-003: App Check refusals, revocation-check
+      failures, device-lock mismatches, licensing refusals and the gateway path
+      were added), four dashboards; then the `run.invoker` grant for the
+      Monitoring service agent that the script prints under "By hand, once".
 - [x] `scripts/check_gcp_posture.sh` against both projects, with
       `--backup-bucket <FIRESTORE_BACKUP_BUCKET>`; record the output in
       [PRODUCTION_READINESS_GATE.md](PRODUCTION_READINESS_GATE.md). Done 2026-10-22
-      (18 FAIL; recorded there). On Windows the script needs `python3` on `PATH`.
+      (18 FAIL; recorded there; 17 once 3.4 went live 2026-10-23, not re-run). On
+      Windows it runs under Git Bash with `python` or `python3`, whichever is a real
+      Python 3.8+ (TE6-017).
 
 ## 6. After the deploy
 
@@ -211,7 +217,7 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
          command, run the script once anyway: it should print no "not present"
          line and write nothing, which closes TD-316. Never with `--force`.
          **Done 2026-10-23** by the script after step 2: no "not present" line, deploy
-         complete, the policy `CREATING` (TD-316 closed). Step 3 is still open.
+         complete, the policy `CREATING` (TD-316 closed).
 - [ ] Move the merged-and-deployed entries from [CONTEXT.md](../../CONTEXT.md)
       "Current state" into [CHANGELOG.md](CHANGELOG.md), in both repos.
 
@@ -226,11 +232,15 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       Refresh licence; a demo account sees locked features; the device-limit
       screen.
 - [ ] Only after those builds are out, raise `MIN_SUPPORTED_VERSION_CODE` if
-      older builds must update; drill it on staging first (TD-220).
+      older builds must update; drill it on staging first (TD-220). It reaches
+      only builds released after `v1.2-beta.4` (versionCode 1036): that build and
+      every earlier one have no version gate and no client kill switch, so for
+      them the levers are the server-side `KILL_SWITCHES` (503 `feature_paused`)
+      and nothing else ([RELEASING.md](RELEASING.md), Rollback levers).
 
 ## Still external (not deploy steps)
 
-Counsel's sign-off on the Terms (TD-277); Play Console: signing SHA, Data safety,
-pre-launch report (TD-229 to TD-232); App Check enforce (TD-226); liens, budgets
-and API-key restrictions (TD-221 to TD-225); the penetration test (TD-240). All
-are rows in [TECH_DEBT.md](TECH_DEBT.md).
+Every Admin action, deploy-related or not, is one table:
+[PRODUCTION_READINESS_GATE.md](PRODUCTION_READINESS_GATE.md#admin-actions-external)
+(A1–A14, each with its TD row, the command or console path, and when it is done).
+§5 and §6 here are its rows A1 and A7.

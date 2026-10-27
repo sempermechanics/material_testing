@@ -81,7 +81,7 @@ class BatchRunController(
             RunEnd.Cancelled -> Unit
             RunEnd.SessionLimit -> AnalysisNavHelper.openSessionLimit(activity)
             RunEnd.NotSaved -> showNotSaved()
-            is RunEnd.Unexpected -> showUnexpected(end.detail)
+            is RunEnd.Unexpected -> showUnexpected()
             is RunEnd.Failed -> showFailure(end)
             is RunEnd.Partial -> showPartial(end)
             is RunEnd.Solved -> showDoneThenOpen(end)
@@ -91,15 +91,14 @@ class BatchRunController(
         }
     }
 
-    /** The run threw: what it said, in the one dialog a batch run and a sweep share. */
-    private fun showUnexpected(detail: String) {
+    /**
+     * The run threw: the one dialog a batch run and a sweep share, in the app's words.
+     * What the exception said is in the log only (ADR-018).
+     */
+    private fun showUnexpected() {
         status.setFaq(null)
         status.show(activity.getString(R.string.analysis_unexpected_title))
-        Dialogs.info(
-            activity,
-            activity.getText(R.string.analysis_unexpected_title),
-            activity.getString(R.string.analysis_unexpected_fmt, detail),
-        )
+        Dialogs.info(activity, R.string.analysis_unexpected_title, R.string.analysis_unexpected_body)
     }
 
     /** The run solved, but the session index could not be read or written, so nothing was saved. */

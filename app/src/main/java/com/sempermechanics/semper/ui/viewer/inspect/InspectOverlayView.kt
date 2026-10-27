@@ -2,11 +2,11 @@ package com.sempermechanics.semper.ui.viewer.inspect
 
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.util.AttributeSet
 import android.view.View
-import androidx.core.graphics.toColorInt
+import androidx.core.content.ContextCompat
+import com.sempermechanics.semper.R
 
 class InspectOverlayView @JvmOverloads constructor(
     context: Context,
@@ -19,13 +19,13 @@ class InspectOverlayView @JvmOverloads constructor(
     private var showCrosshair = false
 
     private val paintProbe = Paint().apply {
-        color = Color.GREEN
+        color = ContextCompat.getColor(context, R.color.viewer_probe_crosshair)
         style = Paint.Style.STROKE
         strokeWidth = PROBE_STROKE
         isAntiAlias = true
     }
     private val paintShadow = Paint().apply {
-        color = "#88000000".toColorInt()
+        color = ContextCompat.getColor(context, R.color.viewer_probe_shadow)
         style = Paint.Style.STROKE
         strokeWidth = SHADOW_STROKE
         isAntiAlias = true

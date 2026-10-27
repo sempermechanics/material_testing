@@ -4,12 +4,14 @@
 
 package com.sempermechanics.semper.ui.analysis
 
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
 import android.widget.EditText
 import androidx.activity.viewModels
 import androidx.annotation.MainThread
+import androidx.annotation.VisibleForTesting
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
@@ -59,6 +61,7 @@ import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.Motion
 import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
 import com.sempermechanics.semper.ui.common.dialog.WarnChip
+import com.sempermechanics.semper.ui.common.letTitleWrap
 import com.sempermechanics.semper.ui.common.showUnlessEditing
 import kotlinx.coroutines.launch
 import java.io.File
@@ -91,6 +94,9 @@ class StaticAnalysisActivity :
     // Prominent progress overlay (compute + video extraction), and whether
     // the wizard is busy with either.
     private lateinit var chrome: RunChrome
+
+    /** The configuration this screen's views were inflated for ([onConfigurationChanged]). */
+    private lateinit var builtWith: Configuration
     private lateinit var status: RunStatusLine
     private lateinit var readyGate: AnalysisReadyGate
     private lateinit var wizardChrome: AnalysisWizardChrome
@@ -115,6 +121,7 @@ class StaticAnalysisActivity :
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        builtWith = Configuration(resources.configuration)
         binding = ActivityStaticAnalysisBinding.inflate(layoutInflater)
         setContentView(binding.root)
         viewModel.attachDraft(WizardDraft(applicationContext))
@@ -225,7 +232,9 @@ class StaticAnalysisActivity :
         binding.toolbar.apply {
             title = getString(R.string.new_analysis_title)
             setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
+            setNavigationContentDescription(R.string.back)
             setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
+            letTitleWrap()
         }
         val maxFrames = AppSettings.maxFrames(this, AppRemoteConfig.maxFrames(this))
         binding.tvDefDropHint.text =
@@ -263,6 +272,24 @@ class StaticAnalysisActivity :
         if (isFinishing) viewModel.discardDraft()
         super.onDestroy()
     }
+
+    /**
+     * The manifest keeps this screen through config changes, since a recreate
+     * cancels a solve (onDestroy). Text size and density would then stay as
+     * the screen was built until it was reopened, so an idle wizard rebuilds
+     * for them, restoring as after a process death; a busy one keeps its run
+     * and picks them up next time (readiness AE1V-015).
+     */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        val built = builtWith
+        super.onConfigurationChanged(newConfig)
+        val textChanged = newConfig.fontScale != built.fontScale || newConfig.densityDpi != built.densityDpi
+        if (textChanged && ::chrome.isInitialized && !chrome.isBusy) recreate()
+    }
+
+    /** The run chrome, so a test can hold the wizard busy. */
+    @VisibleForTesting
+    internal fun chromeForTest(): RunChrome = chrome
 
     override fun onResume() {
         super.onResume()

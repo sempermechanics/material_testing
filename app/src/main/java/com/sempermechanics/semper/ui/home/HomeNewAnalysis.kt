@@ -17,6 +17,7 @@ import com.sempermechanics.semper.ui.analysis.wizard.AnalysisNavHelper
 import com.sempermechanics.semper.ui.common.dialog.Dialogs
 import com.sempermechanics.semper.ui.common.media.MediaPickerSheet
 import com.sempermechanics.semper.ui.common.media.MediaSourceChooser
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -27,13 +28,19 @@ import kotlinx.coroutines.withContext
  * analysis's Re-run. It registers Activity Result launchers, so Home builds
  * it as a property, before the screen starts.
  *
+ * Its gates read the licence, which reaches EntitlementStore (Keystore work on a
+ * first read or a clock re-seal), so they run on [io] and the screen acts after
+ * (readiness TE1-006): a tap never reads the entitlement on the main thread.
+ *
  * @param limitReached opens the limit screen and answers true when the
- *   account is at its analysis limit ([HomeQuotaCard.openLimitScreenIfReached]).
+ *   account is at its analysis limit ([HomeQuotaCard.openLimitScreenIfReached],
+ *   which checks off the main thread).
  */
 @MainThread
 internal class HomeNewAnalysis(
     private val activity: AppCompatActivity,
-    private val limitReached: () -> Boolean,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
+    private val limitReached: suspend () -> Boolean,
 ) {
 
     /** Files tab: Storage Access Framework (Drive, storage, DNG). */
@@ -51,9 +58,20 @@ internal class HomeNewAnalysis(
             mediaPicker?.onPermissionResult()
         }
 
-    /** The + button: the source chooser, when new work may start. */
+    /** True while a tap's gates are being checked, so a second tap does not open a second chooser. */
+    private var checking = false
+
+    /** The + button: the source chooser, when new work may start (checked off the main thread). */
     fun start() {
-        if (mayStart()) showSourceChooser()
+        if (checking) return
+        checking = true
+        activity.lifecycleScope.launch {
+            try {
+                if (mayStart()) showSourceChooser()
+            } finally {
+                checking = false
+            }
+        }
     }
 
     /**
@@ -65,10 +83,10 @@ internal class HomeNewAnalysis(
      * blocked behind the persistent limit screen (email support) instead of
      * failing on upload.
      */
-    private fun mayStart(): Boolean = when {
+    private suspend fun mayStart(): Boolean = when {
         // A build the backend no longer supports: its gate screen is opened.
         !AnalysisNavHelper.ensureUpToDate(activity) -> false
-        LicenseEntitlements.isSeatRequiredToStart(activity) -> {
+        withContext(io) { LicenseEntitlements.isSeatRequiredToStart(activity) } -> {
             AnalysisNavHelper.openSeatRequired(activity)
             false
         }

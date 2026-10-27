@@ -83,6 +83,24 @@ class DicUploadWorkerRestageTest : UploadWorkerHarness() {
     }
 
     @Test
+    fun `a restage while backup is paused keeps the session, builds nothing and says paused`() {
+        seed(cloudSessionId = "cs1")
+        dropArchive("Session.zip")
+        dropArchive("Extras.zip")
+        api.onSessionUploads = { throw apiError(503, "feature_paused") }
+
+        LogCapture().use { log ->
+            assertEquals(ListenableWorker.Result.retry(), run())
+            assertTrue(log.warnings.toString(), log.warnings.any { "feature_paused" in it })
+        }
+
+        assertTrue(api.deleted.isEmpty())
+        assertEquals("cs1", row().cloudSessionId)
+        assertEquals(SessionRecord.SyncState.PENDING, row().syncState)
+        assertFalse(File(staging, "Session.zip").exists())
+    }
+
+    @Test
     fun `a lost staging under a session already complete records the sync and keeps the backup`() {
         seed(cloudSessionId = "cs1")
         dropArchive("Session.zip")

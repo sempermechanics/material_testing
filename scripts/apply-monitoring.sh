@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Apply ops/monitoring/ to a GCP project: log-based metrics, the /readyz uptime
-# check, the 99.5% availability SLO, the alert policies (readiness A7.1-A7.3)
-# and the dashboards.
+# Apply ops/monitoring/ to a GCP project: log-based metrics, the uptime checks
+# (/readyz on the service, /healthz and /v1/config through API Gateway), the
+# 99.5% availability SLO, the alert policies (readiness A7.1-A7.3) and the
+# dashboards.
 #
 # Dry run by default: renders every file and prints the commands it would run,
 # calling nothing. --apply makes the changes; each step looks the object up
@@ -22,8 +23,14 @@
 #   --region REGION               Cloud Run region (default asia-south1)
 #   --run-host HOST               the service's run.app host (default: looked up
 #                                 with `gcloud run services describe` on --apply)
+#   --gateway ID                  API Gateway the app calls (default semper-gw)
+#   --gateway-region REGION       its region (default asia-northeast1)
+#   --gateway-host HOST           its defaultHostname (default: looked up with
+#                                 `gcloud api-gateway gateways describe` on --apply)
 #   --activations-per-licence-per-day N   activation anomaly threshold (default 25)
 #   --auth-denied-per-5min N      AUTH_DENIED spike threshold (default 50)
+#   --devlock-mismatches-per-licence-per-hour N   device-lock mismatch alert (default 5)
+#   --licensing-refusals-per-hour N   activation / checkout refusals per build (default 20)
 #   --out DIR                     keep the rendered files in DIR
 #   --apply                       make the changes (default: dry run)
 set -euo pipefail
@@ -38,14 +45,19 @@ SERVICE=semper-api
 STAGING_SERVICE=semper-api-staging
 REGION=asia-south1
 RUN_HOST=""
+GATEWAY=semper-gw
+GATEWAY_REGION=asia-northeast1
+GATEWAY_HOST=""
 ACTIVATIONS=25
 AUTH_DENIED=50
+DEVLOCK_MISMATCHES=5
+LICENSING_REFUSALS=20
 OUT=""
 DRY_RUN=1
 SLO_ID=availability-995
 
 usage() {
-  sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'
   exit "${1:-0}"
 }
 
@@ -57,8 +69,13 @@ while [ $# -gt 0 ]; do
     --staging-service) STAGING_SERVICE="${2:?--staging-service needs a name}"; shift 2 ;;
     --region) REGION="${2:?--region needs a region}"; shift 2 ;;
     --run-host) RUN_HOST="${2:?--run-host needs a host}"; shift 2 ;;
+    --gateway) GATEWAY="${2:?--gateway needs an id}"; shift 2 ;;
+    --gateway-region) GATEWAY_REGION="${2:?--gateway-region needs a region}"; shift 2 ;;
+    --gateway-host) GATEWAY_HOST="${2:?--gateway-host needs a host}"; shift 2 ;;
     --activations-per-licence-per-day) ACTIVATIONS="${2:?needs a number}"; shift 2 ;;
     --auth-denied-per-5min) AUTH_DENIED="${2:?needs a number}"; shift 2 ;;
+    --devlock-mismatches-per-licence-per-hour) DEVLOCK_MISMATCHES="${2:?needs a number}"; shift 2 ;;
+    --licensing-refusals-per-hour) LICENSING_REFUSALS="${2:?needs a number}"; shift 2 ;;
     --out) OUT="${2:?--out needs a directory}"; shift 2 ;;
     --apply) DRY_RUN=0; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
@@ -75,7 +92,7 @@ if ! [[ "$PROJECT" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]]; then
   echo "not a project id: $PROJECT" >&2
   exit 2
 fi
-for n in "$ACTIVATIONS" "$AUTH_DENIED"; do
+for n in "$ACTIVATIONS" "$AUTH_DENIED" "$DEVLOCK_MISMATCHES" "$LICENSING_REFUSALS"; do
   if ! [[ "$n" =~ ^[0-9]+$ ]]; then
     echo "thresholds must be whole numbers: $n" >&2
     exit 2
@@ -99,6 +116,8 @@ say() { printf '   %s\n' "$*"; }
 # Values only --apply can look up; a dry run shows a marker in their place.
 PROJECT_NUMBER="<project-number>"
 UPTIME_ID="<uptime-check-id>"
+UPTIME_ID_GATEWAY_HEALTHZ="<uptime-check-id>"
+UPTIME_ID_GATEWAY_CONFIG="<uptime-check-id>"
 if [ "$DRY_RUN" = 0 ]; then
   PROJECT_NUMBER=$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')
   if [ -z "$RUN_HOST" ]; then
@@ -106,8 +125,13 @@ if [ "$DRY_RUN" = 0 ]; then
       --format='value(status.url)')
     RUN_HOST=${url#https://}
   fi
+  if [ -z "$GATEWAY_HOST" ]; then
+    GATEWAY_HOST=$(gcloud api-gateway gateways describe "$GATEWAY" --location "$GATEWAY_REGION" \
+      --project "$PROJECT" --format='value(defaultHostname)')
+  fi
 fi
 RUN_HOST=${RUN_HOST:-<run-host>}
+GATEWAY_HOST=${GATEWAY_HOST:-<gateway-host>}
 
 # render SRC DEST: fill the placeholders. A quoted numeric placeholder becomes
 # a bare number so the JSON stays typed.
@@ -118,14 +142,21 @@ render() {
     -e "s|__ACTIVATIONS_PER_LICENCE_PER_DAY__|$ACTIVATIONS|g" \
     -e "s|\"__AUTH_DENIED_PER_5MIN__\"|$AUTH_DENIED|g" \
     -e "s|__AUTH_DENIED_PER_5MIN__|$AUTH_DENIED|g" \
+    -e "s|\"__DEVLOCK_MISMATCHES_PER_LICENCE_PER_HOUR__\"|$DEVLOCK_MISMATCHES|g" \
+    -e "s|__DEVLOCK_MISMATCHES_PER_LICENCE_PER_HOUR__|$DEVLOCK_MISMATCHES|g" \
+    -e "s|\"__LICENSING_REFUSALS_PER_HOUR__\"|$LICENSING_REFUSALS|g" \
+    -e "s|__LICENSING_REFUSALS_PER_HOUR__|$LICENSING_REFUSALS|g" \
     -e "s|__PROJECT_NUMBER__|$PROJECT_NUMBER|g" \
     -e "s|__PROJECT__|$PROJECT|g" \
     -e "s|__STAGING_SERVICE__|$STAGING_SERVICE|g" \
     -e "s|__SERVICE__|$SERVICE|g" \
     -e "s|__REGION__|$REGION|g" \
     -e "s|__RUN_HOST__|$RUN_HOST|g" \
+    -e "s|__GATEWAY_HOST__|$GATEWAY_HOST|g" \
     -e "s|__NOTIFICATION_CHANNEL__|$CHANNEL|g" \
     -e "s|__UPTIME_CHECK_ID__|$UPTIME_ID|g" \
+    -e "s|__UPTIME_CHECK_ID_GATEWAY_HEALTHZ__|$UPTIME_ID_GATEWAY_HEALTHZ|g" \
+    -e "s|__UPTIME_CHECK_ID_GATEWAY_CONFIG__|$UPTIME_ID_GATEWAY_CONFIG|g" \
     -e "s|__SLO_SERVICE_ID__|$SERVICE|g" \
     -e "s|__SLO_ID__|$SLO_ID|g" \
     "$1" > "$2"
@@ -182,13 +213,20 @@ for src in "$SRC"/metrics/*.yaml; do
   fi
 done
 
-step "Uptime check on /readyz"
-render "$SRC/uptime/readyz.json" "$OUT/uptime/readyz.json"
-uptime_name="$SERVICE /readyz"
-if [ "$DRY_RUN" = 1 ]; then
-  say "would run: GET $API/projects/$PROJECT/uptimeCheckConfigs (find \"$uptime_name\")"
-  say "would run: POST (or PATCH the existing one) with $OUT/uptime/readyz.json"
-else
+step "Uptime checks (/readyz on the service; /healthz and /v1/config through the gateway)"
+# Found by displayName, like the dashboards. Each check's id goes into the
+# alert policy that watches it: readyz -> uptime-readyz, gateway-* ->
+# uptime-gateway (TE6-003).
+for src in "$SRC"/uptime/*.json; do
+  name=$(basename "$src" .json)
+  dest="$OUT/uptime/$name.json"
+  render "$src" "$dest"
+  uptime_name=$(json_field "$dest" displayName)
+  if [ "$DRY_RUN" = 1 ]; then
+    say "would run: GET $API/projects/$PROJECT/uptimeCheckConfigs (find \"$uptime_name\")"
+    say "would run: POST (or PATCH the existing one) with $dest"
+    continue
+  fi
   status=$(api GET "$API/projects/$PROJECT/uptimeCheckConfigs?pageSize=100")
   expect_2xx "$status" "list uptime checks"
   existing=$(python3 - "$OUT/response.json" "$uptime_name" <<'PY'
@@ -200,15 +238,21 @@ PY
 )
   if [ -n "$existing" ]; then
     status=$(api PATCH "$API/$existing?updateMask=displayName,httpCheck,period,timeout,selectedRegions,userLabels" \
-      "$OUT/uptime/readyz.json")
-    expect_2xx "$status" "update uptime check"
+      "$dest")
+    expect_2xx "$status" "update uptime check $uptime_name"
   else
-    status=$(api POST "$API/projects/$PROJECT/uptimeCheckConfigs" "$OUT/uptime/readyz.json")
-    expect_2xx "$status" "create uptime check"
+    status=$(api POST "$API/projects/$PROJECT/uptimeCheckConfigs" "$dest")
+    expect_2xx "$status" "create uptime check $uptime_name"
   fi
-  UPTIME_ID=$(basename "$(json_field "$OUT/response.json" name)")
-  say "uptime check id: $UPTIME_ID"
-fi
+  id=$(basename "$(json_field "$OUT/response.json" name)")
+  case "$name" in
+    readyz) UPTIME_ID=$id ;;
+    gateway-healthz) UPTIME_ID_GATEWAY_HEALTHZ=$id ;;
+    gateway-config) UPTIME_ID_GATEWAY_CONFIG=$id ;;
+    *) echo "uptime/$name.json: no alert policy wired to it in apply-monitoring.sh" >&2; exit 1 ;;
+  esac
+  say "uptime check $uptime_name: $id"
+done
 
 step "Service and 99.5% availability SLO"
 render "$SRC/slo/service.json" "$OUT/slo/service.json"
@@ -308,6 +352,8 @@ say "Monitoring service agent, which needs run.invoker on $SERVICE:"
 say "  gcloud run services add-iam-policy-binding $SERVICE --region $REGION --project $PROJECT \\"
 say "    --member=serviceAccount:service-$PROJECT_NUMBER@gcp-sa-monitoring-notification.iam.gserviceaccount.com \\"
 say "    --role=roles/run.invoker"
+say "The gateway checks call $GATEWAY_HOST without a token: /healthz must reach the"
+say "backend (the gateway SA needs run.invoker), /v1/config must answer ESPv2's 401."
 say "The log-based alerts and charts see nothing until a backend that writes their"
 say "events is deployed (activation, checkout, devlock_drop, audit_write_failed,"
 say "AUTH_DENIED, revocation_check_failed, auth_admin_rate_limited, app_check_*;"

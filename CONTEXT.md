@@ -43,8 +43,10 @@ backend/      FastAPI on Cloud Run — routers in backend/app/routers/, Firestor
 firebase-hosting/  Auth continue URLs, asset links, generated legal pages
 ```
 
-Bump the engine by changing the `engine` gitlink. Its host / sanitizer / DICe suites run
-in the engine repo; this CI only proves the pin **links** (emulator x86_64, release arm64).
+Bump the engine by changing the `engine` gitlink, to a `v*` tag and never backwards
+(`engine-pin`). Its host / sanitizer / DICe suites run in the engine repo; this CI proves
+the pin **links** (emulator x86_64, release arm64) and reruns the host suite under
+ASan+UBSan at the pin (`engine-host-sanitized`).
 
 ## Runtime
 
@@ -116,57 +118,44 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 ## Current state (2026-10-26)
 
-- **Deployed.** Backend from `46ac8b5e` (2026-10-26; #484, the Semper Classroom rename, on top of
-  #482): Cloud Run `semper-api` (`semper-api-40300681201-1`, gateway config `v202610230501-112`)
-  and staging `semper-api-staging` (`semper-api-staging-40299991596-1`, `v202610221243-110`)
-  ([CHANGELOG](docs/ops/CHANGELOG.md)). Hosting is from `46ac8b5e` (2026-10-26) with `/privacy` and
-  `/terms` held at `b940cc29`. Live: licensing
-  ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)), device binding per app
-  ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md)), sessions tagged by app
-  ([ADR-014](docs/adr/ADR-014-session-app-tag.md)), consoles on `app.sempermechanics.com`
-  ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md)), test accounts for `qa.sempermechanics.com`
-  ([ADR-027](docs/adr/ADR-027-test-accounts.md)), `CHECK_REVOKED_ON_STEP_UP` (TD-214, acceptance
-  owed). Project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
-- **Legal pages held:** #474's text (the demo-upload sentences in Privacy §2.3 and Terms
-  §6.1, retention values) waits on counsel (TD-277). A Hosting deploy from `main` publishes
-  it, so until counsel signs off, deploy Hosting from a worktree with those two pages taken
-  from `b940cc29` ([checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md) §4). A plain `main` deploy
-  on 2026-10-26 published them until the same day's redeploy; compare the live pages after every
-  Hosting deploy.
-- **[Checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md) still open:** monitoring `--apply` (§5;
-  no notification channel exists yet); staff/IT phones re-registering with TOTP, the 24 h log
-  watch, ending the staging QC test account, and the erasure check (§6; the audit backfill, the
-  `expireAt` TTL and the locked `audit-trail` log bucket went in 2026-10-23). The posture check's 18 FAILs
-  ([gate](docs/ops/PRODUCTION_READINESS_GATE.md)) are console or `gcloud` changes. Optional and
-  unset: TD-215 (entitlement key), TD-309.
+- **Deployed.** Backend and Hosting from `46ac8b5e` (2026-10-26; #484, the Semper Classroom
+  rename, on top of #482): `semper-api-40300681201-1`, staging `semper-api-staging-40299991596-1`,
+  gateway configs unchanged (`v202610230501-112`, `v202610221243-110`); recorded on `main` by
+  #486 ([CHANGELOG](docs/ops/CHANGELOG.md)). Project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
+- **Legal pages held:** #474's text (Privacy §2.3, Terms §6.1, retention values) waits on counsel
+  (TD-277). Deploy Hosting from a worktree with `/privacy` and `/terms` taken from `b940cc29`
+  ([checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md) §4) and compare the live pages after; a
+  plain-`main` deploy on 2026-10-26 published them until the same day's redeploy.
+- **Readiness run 2026-10-24:** `claude/readiness-20261024`, not merged or deployed; verdict
+  **No-go** ([report](docs/ops/readiness/20261024/REPORT.md); open rows TD-318–TD-332 but TD-330, TD-336–TD-344, TD-346, TD-347).
+  Its backend changes need a deploy: lock bump, kill switches on `GET …/uploads` and
+  `PUT …/metadata`, the `/readyz` budget, `--no-access-log`, roster codes, quota wording.
+- **Admin actions** are one table, [gate § Admin actions](docs/ops/PRODUCTION_READINESS_GATE.md#admin-actions-external):
+  monitoring `--apply` (no notification channel yet), the posture FAILs (17 on 2026-10-24),
+  TD-215, the checklist's §6; the readiness report's §4 adds that run's one-off actions.
 - **App** `com.sempermechanics.semper` ([ADR-019](docs/adr/ADR-019-sempermechanics-app-id.md)).
-  Latest release `v1.2-beta.4` (versionCode 1036, `33dce87d`, 2026-10-17, engine 0.4.2).
-  On `main` since: **minSdk 30**, version gate, EMM config, AAB
-  ([ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md)); #453, #457–#462; #464 (Tier 3
-  signs in to staging); #469 (`SessionRecord.extras`, ADR-025's first step, TD-298); #470
-  (engine `f072da0`, v0.6.1); #471 (tamper-evident records, ADR-028; review findings in its
-  comments, the `field_ranges.bin` one first); #475 (AD_ID and the Privacy Sandbox permissions
-  removed, TD-232).
-- **Release blockers:** TD-229 (Play account; TD-226 App Check and TD-230/TD-231 follow it),
-  TD-232 (Data safety answers ready; two owner decisions, then submit), TD-219's device checks,
-  counsel on the Terms (TD-277).
-- **material_testing** merges this `main` (last `9d116f2`, material_testing#142, 2026-10-22;
-  [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); it released `v1.4-beta.2` 2026-10-17 as Material Testing,
-  and is now **Semper Classroom** ([ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md),
-  #484, deployed 2026-10-26; aliases until TD-330). Owed before its release: the Firebase app for
-  `com.sempermechanics.semperclassroom`, the fork's sync and build, the new repo variables; then
-  `rename_classroom_app.py`.
-- **CI.** Tiers follow the diff, coverage floors rise with every test PR
-  ([TESTING.md](docs/app/TESTING.md#coverage-floors)), and `main` requires `CI OK`. Tier 3 signs
-  in to live staging, so a staging backend behind `main` fails it. Open on
+  Latest release `v1.2-beta.4` (versionCode 1036, `33dce87d`, 2026-10-17, engine 0.4.2). On
+  `main` since: **minSdk 30**, version gate, EMM config, AAB ([ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md));
+  #453, #457–#462, #464, #469 (TD-298); engine `f072da0` v0.6.1 (#470); tamper-evident records
+  ([ADR-028](docs/adr/ADR-028-tamper-evident-records.md), #471, review findings in its comments);
+  AD_ID removed (#475, TD-232).
+- **Release blockers:** TD-229 (Play account; TD-226, TD-230, TD-231 follow it), TD-232 (two
+  owner decisions, then submit), TD-219's device checks, counsel on the Terms (TD-277).
+- **Semper Classroom** (`material_testing`; [ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md),
+  old names aliased until TD-330) merges this `main` (last `25334af1`, material_testing#146,
+  2026-10-26; [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); its engine-pin fix is in (#145,
+  readiness MT-TE2-001), the rename is material_testing#147. Owed before its release: the
+  readiness port (report §6), then `rename_classroom_app.py`.
+- **CI.** Tiers follow the diff, floors rise with every test PR ([TESTING.md](docs/app/TESTING.md#coverage-floors)),
+  `main` requires `CI OK`, and Tier 3 signs in to live staging, so a staging backend behind
+  `main` fails it. Always-on: `engine-pin`, `console-a11y`; `engine-host-sanitized` follows
+  Tier 3. The OpenAPI snapshot is rewritten with `UPDATE_OPENAPI_SNAPSHOT=1` ([ADR-029](docs/adr/ADR-029-api-contract-snapshot.md)). Open on
   `claude/ci-speedups-release-checks` (from material_testing#148 and #150): the release check
   fails a targetSdk below 36 or a `.so` off 16 KB pages; the `benchmark` build is R8-minified
   and launch-smoked; Macrobenchmarks dry-run on PRs; heavy tiers wait for `tier1-static` only.
 - **Owed.** A device smoke of the next release ([RELEASING.md](docs/ops/RELEASING.md) step 5);
-  the on-device characterization at the 0.6.1 pin (TD-212); Pixel 6 benchmarks for #435;
-  ADR-015's queued-work upgrade check; transfer notifications and AVI import on a device
-  ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a); Semper Classroom beside Semper on one phone;
-  the legal pages' operator values (TD-36).
+  TD-212 at the 0.6.1 pin; Pixel 6 benchmarks for #435; ADR-015's queued-work upgrade check;
+  [WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a on a device; both apps on one phone; TD-36.
 - **Look it up; this list rots.** `gh pr list --state open`, [CHANGELOG.md](docs/ops/CHANGELOG.md), [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
 ## Traps
@@ -179,7 +168,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - Restore on a new device has an order: sign in, let one authed request bind the lock, then restore — [§20.10](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - Licence terms are mirrored onto users, so editing a licence reaches nobody without `update_license`'s fan-out — [§20.6](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - Demo uploads silently; only retrieval is licence-gated. Gating `POST /v1/sessions` on the licence would loop old builds on 403; a kill switch refuses it with 503 `feature_paused`, which every build retries — [§20.3](docs/backend/CLOUD_ARCHITECTURE_GCP.md), [§20.14](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
-- Share has no backend route: the licence check and the signed token are its only gate, so a modified APK can share (accepted, TD-274). Anything that touches the cloud is checked by the server — [ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md).
+- Share has no backend route: the cached `/v1/config` licence is its only gate. A signed token can narrow it, never widen it, and none is issued until TD-215, so today the TLS-delivered cache alone decides, and a modified APK can share (accepted, TD-274). Anything that touches the cloud is checked by the server — [ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md).
 - Console CSP is `script-src 'self'` with no `'unsafe-inline'`: inline scripts never run — [§20.8](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - `check_console.py` requires `__API_BASE_URL__` / `__API_ORIGIN__` to stay placeholders; deploy through `scripts/deploy-console.sh` — [§20.8](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - `SCHEMA_VERSION` is 2 and every `campus` / `plan` skew fallback is temporary; retire in the stated order — [§20.5](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
@@ -191,5 +180,5 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - Viewer screens read `ViewerArgs.from(intent, …)`, never `intent.get…Extra(IntentKeys…)`; a new viewer field goes in `ViewerArgs`, its default and its `SessionRecord` mapping — [ADR-003](docs/adr/ADR-003-viewerargs-read-side.md).
 - A new wizard input must survive a kill: scalars go in `WizardState`'s Bundle, bytes and lists in `WizardDraft`; and `cacheDir/temp_deformed` is only safe from the janitor while the draft is live — [ADR-005](docs/adr/ADR-005-wizard-process-death.md).
 - After Compute, read the run's `RunSpec` (`BatchAnalysisOutcome.spec`) and the saved row its outcome carries (`.record`, opened through `ViewerArgs.of`), never the wizard's sliders or ROI vars: they stay editable and drift — [ADR-004](docs/adr/ADR-004-runspec.md).
-- Since engine 0.2.3 two runs of one build give bit-identical `.dat` whatever the thread count (TD-65), so a `.dat` hash can prove "engine unchanged" again and any run-to-run difference is a defect — `EnginePipelineSmokeTest.repeatSolveIsBitIdentical`, `engine/tests/integration/test_full_field_determinism.cpp`.
+- Since engine 0.2.3 two runs of one build on one device give bit-identical `.dat` (TD-65), so a `.dat` hash can prove "engine unchanged" on that device and any run-to-run difference there is a defect. Not across thread counts: the engine pins its threads to the core count and says invariance across them is no contract (`engine/tests/integration/test_full_field_contracts.cpp:437-441`); no test varies it — `EnginePipelineSmokeTest.repeatSolveIsBitIdentical`, `engine/tests/integration/test_full_field_determinism.cpp`.
 - `ConvergenceGate` is batch-only; a sweep runs its whole plan, smallest subset first — [ConvergenceGate.kt](app/src/main/java/com/sempermechanics/semper/ui/analysis/run/ConvergenceGate.kt).

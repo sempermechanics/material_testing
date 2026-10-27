@@ -1,6 +1,7 @@
 package com.sempermechanics.semper.ui.home
 
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.work.WorkManager
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.cloud.BackupFailureLedger
@@ -9,6 +10,7 @@ import com.sempermechanics.semper.data.cloud.UploadErrors
 import com.sempermechanics.semper.ui.common.dialog.CrispToast
 import com.sempermechanics.semper.ui.common.transfer.RestoreFailureNotice
 import com.sempermechanics.semper.ui.common.transfer.TransferWorkObserver
+import kotlinx.coroutines.launch
 
 /**
  * Home's view of the backup and restore jobs while it is alive: live
@@ -56,7 +58,8 @@ internal class HomeTransferWatch(
                         // worker's quota kind says so: other failures carry
                         // no reason either (an analysis deleted before its
                         // backup ran), and the limit can be held from before.
-                        job.isQuotaStop() -> quota.openLimitScreenIfReached()
+                        // The check reads the licence, so it runs off the main thread (TE1-006).
+                        job.isQuotaStop() -> activity.lifecycleScope.launch { quota.openLimitScreenIfReached() }
                         state.reason != null -> showUploadFailure(job, state.reason)
                     }
                     else -> Unit

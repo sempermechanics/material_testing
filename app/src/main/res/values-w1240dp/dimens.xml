@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- (1240 - 600) / 2: the column stays near 600 dp on the widest screens. See values/dimens.xml. -->
+    <dimen name="content_side_inset">320dp</dimen>
+</resources>

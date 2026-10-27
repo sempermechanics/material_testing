@@ -174,7 +174,7 @@ test("each refusal of a create is said, and no dialog opens", async () => {
     [() => json(403, { detail: "not_admin" }), "That account is not a Semper operator."],
     [() => json(422, { detail: [{ msg: "Value error, days must be at most 90", loc: ["body"] }] }),
       "Could not create new@test.example: days must be at most 90"],
-    [offline, "Could not create new@test.example: Failed to fetch"],
+    [offline, "Could not create new@test.example: The server could not be reached — check your connection and try again."],
   ]) {
     reset();
     await openDesk({ routes: { [CREATE]: reply } });
@@ -332,7 +332,7 @@ test("Extend without a new end in the answer, refused, out of range or cancelled
   prompts.answer("7");
   rowButton("extend", QC.uid).click();
   await settle();
-  assert.deepEqual(status(), ["Could not extend qc-1@test.example: user_not_found", "muted err"]);
+  assert.deepEqual(status(), ["Could not extend qc-1@test.example: No Semper account has that address.", "muted err"]);
 });
 
 test("New password confirms, then shows the new one once", async () => {

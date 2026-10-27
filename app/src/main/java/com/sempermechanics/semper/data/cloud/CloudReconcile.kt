@@ -1,6 +1,7 @@
 package com.sempermechanics.semper.data.cloud
 
 import android.content.Context
+import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.LicenseConfigWorker
 import com.sempermechanics.semper.data.cloud.CloudSync.Outcome
 import com.sempermechanics.semper.data.net.AppRemoteConfig
@@ -32,18 +33,19 @@ internal object CloudReconcile {
         return when {
             failure.kind == HttpFailure.Kind.NOT_APPROVED -> {
                 Timber.w(failure.cause, "Cloud reconcile refused — account not approved")
-                Outcome.Failed("your account isn't approved for cloud backup")
+                Outcome.Failed(R.string.cloud_check_not_approved)
             }
             // The server responded — so this is a real fault (404 = route not
             // published on the gateway, 5xx = backend broken), not bad signal.
             code != null -> {
                 Timber.e(failure.cause, "Cloud reconcile FAILED with HTTP %d", code)
-                Outcome.Failed("server returned HTTP $code")
+                val busy = failure.kind == HttpFailure.Kind.SERVER || failure.kind == HttpFailure.Kind.RATE_LIMITED
+                Outcome.Failed(if (busy) R.string.cloud_check_server else R.string.cloud_check_failed)
             }
             failure.kind == HttpFailure.Kind.UNEXPECTED -> {
                 // The class name is for the log only: Home shows the reason to the user.
                 Timber.e(failure.cause, "Cloud reconcile failed unexpectedly (%s)", failure.cause.javaClass.simpleName)
-                Outcome.Failed("unexpected error")
+                Outcome.Failed(R.string.cloud_check_failed)
             }
             else -> {
                 Timber.w(failure.cause, "Cloud reconcile skipped — offline")

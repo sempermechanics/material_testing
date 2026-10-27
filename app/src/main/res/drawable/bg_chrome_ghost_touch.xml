@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- bg_chrome_ghost drawn 4dp in from the view's edges: a 40dp puck on a 48dp
+     touch target, so the chrome looks as it did while every tap hits. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/bg_chrome_ghost"
+    android:inset="4dp" />

@@ -22,4 +22,4 @@ USER appuser
 # One worker. Cloud Run scales by instance, and with 1 vCPU a second process
 # only doubled the import on a cold start (~6 s) and split the per-process rate
 # buckets in two. Sync routes still run concurrently on the threadpool.
-CMD exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --workers 1
+CMD exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --workers 1 --no-access-log

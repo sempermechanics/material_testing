@@ -129,7 +129,7 @@ internal object SessionRowText {
                 out.append(text)
                 if (convergence < CONVERGENCE_WARN_BELOW) {
                     out.setSpan(
-                        ForegroundColorSpan(context.getColor(R.color.semantic_warning)),
+                        ForegroundColorSpan(context.getColor(R.color.semantic_warning_ink)),
                         start,
                         start + percent.length + 1,
                         Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,

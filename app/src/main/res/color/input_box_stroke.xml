@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Unfocused uses surface_outline (a light hairline) so force-dark inverts it
-     to a visible rim. sky_primary is too dark unfocused and disappears at night. -->
+<!-- Unfocused uses outline_strong: a mid grey that holds 3:1 on the light surfaces
+     and, being mid-tone, still reads as a rim once force dark inverts it.
+     sky_primary is too dark unfocused and disappears at night. -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:color="@color/sky_primary" android:state_focused="true" />
-    <item android:color="@color/surface_outline" />
+    <item android:color="@color/outline_strong" />
 </selector>

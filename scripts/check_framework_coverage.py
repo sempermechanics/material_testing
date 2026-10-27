@@ -15,7 +15,10 @@ FUTURE_IMPROVEMENTS entry (FI-nn). This check keeps that true:
 * every row that is not PASS or N-A names at least one owner id, and the owner
   cell holds nothing but ids (or "—");
 * every owner id exists: a `| TD-nnn |` row in TECH_DEBT.md, an `FI-nn`
-  heading in FUTURE_IMPROVEMENTS.md.
+  heading in FUTURE_IMPROVEMENTS.md;
+* every status count written in the section's prose ("PASS n, PARTIAL n,
+  GAP n, EXTERNAL n, N-A n") equals the table's (TE6-012: a stale count
+  stood for days after a row moved).
 
 Stdlib only. Usage: python scripts/check_framework_coverage.py [--root DIR]
 """
@@ -74,6 +77,7 @@ _TD_ROW = re.compile(r"^\|\s*(TD-\d+)\s*\|", re.MULTILINE)
 _FI_HEADING = re.compile(r"^#{2,4}\s+(FI-\d+)\b", re.MULTILINE)
 _OWNER_ID = re.compile(r"\b(?:TD|FI)-\d+\b")
 _OWNER_REST = re.compile(r"^[\s,;—-]*$")
+_COUNT = re.compile(r"PASS (\d+),\s+PARTIAL (\d+),\s+GAP (\d+),\s+EXTERNAL (\d+),\s+N-A (\d+)")
 
 
 def cells(line: str) -> list[str]:
@@ -110,6 +114,20 @@ def crosscheck_rows(gate_text: str) -> list[tuple[int, list[str]]]:
         if _ITEM.match(key) or key in PART_KEYS:
             rows.append((i + 1, [key, *row[1:]]))
     return rows
+
+
+def section_text(gate_text: str) -> tuple[int, str]:
+    """(first line number, text) of the cross-check section, up to the next `## `."""
+    lines = gate_text.splitlines()
+    start = next((i for i, line in enumerate(lines) if line.startswith(SECTION)), None)
+    if start is None:
+        return 0, ""
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
+    return start + 1, "\n".join(lines[start:end])
+
+
+def summary(statuses: Counter) -> str:
+    return ", ".join(f"{s} {statuses.get(s, 0)}" for s in STATUSES)
 
 
 def check(root: Path) -> tuple[list[str], Counter]:
@@ -165,6 +183,14 @@ def check(root: Path) -> tuple[list[str], Counter]:
             if oid not in known:
                 where_known = TECH_DEBT if oid.startswith("TD-") else FUTURE
                 errors.append(f"{where}: owner {oid} is not in {where_known}")
+
+    first, text = section_text(gate)
+    want = tuple(statuses.get(s, 0) for s in STATUSES)
+    for m in _COUNT.finditer(text):
+        if tuple(int(n) for n in m.groups()) != want:
+            lineno = first + text.count("\n", 0, m.start())
+            written = " ".join(m.group(0).split())
+            errors.append(f"{GATE}:{lineno}: count {written!r} is stale; the table has {summary(statuses)}")
     return errors, statuses
 
 
@@ -178,14 +204,14 @@ def main(argv: list[str] | None = None) -> int:
     except OSError as e:
         print(f"cannot read: {e}", file=sys.stderr)
         return 2
-    summary = ", ".join(f"{s} {statuses.get(s, 0)}" for s in STATUSES)
+    counts = summary(statuses)
     if errors:
         print("framework cross-check incomplete:\n", file=sys.stderr)
         for e in errors:
             print(f"  {e}", file=sys.stderr)
-        print(f"\n({summary})", file=sys.stderr)
+        print(f"\n({counts})", file=sys.stderr)
         return 1
-    print(f"framework cross-check complete: {summary}")
+    print(f"framework cross-check complete: {counts}")
     return 0
 
 

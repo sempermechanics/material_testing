@@ -35,7 +35,10 @@ class PdfReportGeneratorTest {
 
     private fun statuses(flow: Flow<Progress>): List<Progress.Status> {
         val events = mutableListOf<Progress>()
-        runCatching { runBlocking { flow.collect { events += it } } }
+        val failure = runCatching { runBlocking { flow.collect { events += it } } }.exceptionOrNull()
+        // Only the final write may fail here; a flow that failed before its
+        // first status is a defect, so show its cause rather than an empty list.
+        if (events.isEmpty() && failure != null) throw AssertionError("the PDF flow emitted nothing", failure)
         return events.filterIsInstance<Progress.Status>()
     }
 

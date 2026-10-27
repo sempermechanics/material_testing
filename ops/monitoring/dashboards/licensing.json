@@ -329,6 +329,114 @@
             }
           }
         }
+      },
+      {
+        "xPos": 0,
+        "yPos": 69,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Activation refused share by app and build (daily; halt criterion)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilterRatio": {
+                    "numerator": {
+                      "filter": "metric.type=\"logging.googleapis.com/user/semper_activation\" AND resource.type=\"cloud_run_revision\" AND metric.label.outcome=\"refused\"",
+                      "aggregation": {
+                        "alignmentPeriod": "86400s",
+                        "perSeriesAligner": "ALIGN_DELTA",
+                        "crossSeriesReducer": "REDUCE_SUM",
+                        "groupByFields": [
+                          "metric.label.appId",
+                          "metric.label.appVersion"
+                        ]
+                      }
+                    },
+                    "denominator": {
+                      "filter": "metric.type=\"logging.googleapis.com/user/semper_activation\" AND resource.type=\"cloud_run_revision\"",
+                      "aggregation": {
+                        "alignmentPeriod": "86400s",
+                        "perSeriesAligner": "ALIGN_DELTA",
+                        "crossSeriesReducer": "REDUCE_SUM",
+                        "groupByFields": [
+                          "metric.label.appId",
+                          "metric.label.appVersion"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "plotType": "LINE",
+                "minAlignmentPeriod": "86400s",
+                "targetAxis": "Y1",
+                "legendTemplate": "${metric.labels.appId} v${metric.labels.appVersion}"
+              }
+            ],
+            "yAxis": {
+              "label": "refused / all, per day",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 24,
+        "yPos": 69,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Seat checkout refused share by app and build, full pool left out (daily; halt criterion)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilterRatio": {
+                    "numerator": {
+                      "filter": "metric.type=\"logging.googleapis.com/user/semper_checkout\" AND resource.type=\"cloud_run_revision\" AND metric.label.errorCode!=\"no_floating_seat\" AND metric.label.outcome=\"refused\"",
+                      "aggregation": {
+                        "alignmentPeriod": "86400s",
+                        "perSeriesAligner": "ALIGN_DELTA",
+                        "crossSeriesReducer": "REDUCE_SUM",
+                        "groupByFields": [
+                          "metric.label.appId",
+                          "metric.label.appVersion"
+                        ]
+                      }
+                    },
+                    "denominator": {
+                      "filter": "metric.type=\"logging.googleapis.com/user/semper_checkout\" AND resource.type=\"cloud_run_revision\" AND metric.label.errorCode!=\"no_floating_seat\"",
+                      "aggregation": {
+                        "alignmentPeriod": "86400s",
+                        "perSeriesAligner": "ALIGN_DELTA",
+                        "crossSeriesReducer": "REDUCE_SUM",
+                        "groupByFields": [
+                          "metric.label.appId",
+                          "metric.label.appVersion"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "plotType": "LINE",
+                "minAlignmentPeriod": "86400s",
+                "targetAxis": "Y1",
+                "legendTemplate": "${metric.labels.appId} v${metric.labels.appVersion}"
+              }
+            ],
+            "yAxis": {
+              "label": "refused / all, per day",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            }
+          }
+        }
       }
     ]
   },

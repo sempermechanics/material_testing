@@ -102,9 +102,12 @@ class HomeControllersTest {
     private val licenseView by lazy { TextView(activity) }
     private val card by lazy { HomeQuotaCard(activity, quotaView, licenseView) { settingsOpened++ } }
 
+    /** The licence half of the lines, read as Home's list read does (off the main thread there). */
+    private fun lines() = HomeQuotaCard.Lines.read(context)
+
     @Test
     fun `with no known ceiling the quota line stays hidden`() {
-        card.render(localSessionCount = 3)
+        card.render(localSessionCount = 3, lines = lines())
         assertEquals(View.GONE, quotaView.visibility)
         assertEquals("no license expiry to warn of", View.GONE, licenseView.visibility)
     }
@@ -114,12 +117,12 @@ class HomeControllersTest {
         AppRemoteConfig.apply(context, AppConfigDto(maxSessions = 5))
         AccountCache.setQuota(context, used = 2)
 
-        card.render(localSessionCount = 4)
+        card.render(localSessionCount = 4, lines = lines())
         assertEquals(View.VISIBLE, quotaView.visibility)
         assertEquals(activity.resources.getQuantityString(R.plurals.home_quota_fmt, 4, 4, 5), quotaView.text)
         assertEquals(activity.getColor(R.color.text_secondary), quotaView.currentTextColor)
 
-        card.render(localSessionCount = 5)
+        card.render(localSessionCount = 5, lines = lines())
         assertEquals(activity.getColor(R.color.semantic_danger), quotaView.currentTextColor)
     }
 
@@ -127,13 +130,13 @@ class HomeControllersTest {
     fun `the quota line shows only from eighty percent of the ceiling`() {
         AppRemoteConfig.apply(context, AppConfigDto(maxSessions = 100))
 
-        card.render(localSessionCount = 79)
+        card.render(localSessionCount = 79, lines = lines())
         assertEquals("79%", View.GONE, quotaView.visibility)
 
-        card.render(localSessionCount = 80)
+        card.render(localSessionCount = 80, lines = lines())
         assertEquals("80%", View.VISIBLE, quotaView.visibility)
 
-        card.render(localSessionCount = 3)
+        card.render(localSessionCount = 3, lines = lines())
         assertEquals("hidden again under it", View.GONE, quotaView.visibility)
     }
 
@@ -167,7 +170,7 @@ class HomeControllersTest {
         val graceEnd = now + 10 * dayMs
         timedLicence(expiresAtMs = now - 3 * dayMs, inGrace = true, graceEndsAtMs = graceEnd)
 
-        card.render(localSessionCount = 0)
+        card.render(localSessionCount = 0, lines = lines())
 
         assertEquals(View.VISIBLE, licenseView.visibility)
         val expected = activity.getString(R.string.license_grace_until_fmt, HomeLicenseNotice.formatDay(graceEnd))
@@ -180,12 +183,12 @@ class HomeControllersTest {
         val now = System.currentTimeMillis()
         val endOfTodayUtc = Math.floorDiv(now, dayMs) * dayMs + dayMs - 1000
         timedLicence(expiresAtMs = endOfTodayUtc)
-        card.render(localSessionCount = 0)
+        card.render(localSessionCount = 0, lines = lines())
         assertEquals(activity.getString(R.string.license_expiring_today), licenseView.text.toString())
         assertNoCallToAction(licenseView.text.toString())
 
         timedLicence(expiresAtMs = now - 2 * dayMs)
-        card.render(localSessionCount = 0)
+        card.render(localSessionCount = 0, lines = lines())
         assertEquals(activity.getString(R.string.license_expired), licenseView.text.toString())
         assertNoCallToAction(licenseView.text.toString())
     }
@@ -202,14 +205,16 @@ class HomeControllersTest {
     @Test
     fun `a tap on the quota line opens Settings under the limit and the limit screen at it`() {
         AppRemoteConfig.apply(context, AppConfigDto(maxSessions = 5))
-        card.render(localSessionCount = 4)
+        card.render(localSessionCount = 4, lines = lines())
 
+        // The tap checks the limit off the main thread, then acts.
         quotaView.performClick()
-        assertEquals(1, settingsOpened)
+        idleUntil("Settings") { settingsOpened == 1 }
         assertNull(startedScreen())
 
         AccountCache.setSessionLimitReached(context, true)
         quotaView.performClick()
+        idleUntil("the limit screen") { shadowOf(activity).peekNextStartedActivity() != null }
         assertEquals(1, settingsOpened)
         assertEquals(SessionLimitActivity::class.java.name, startedScreen())
     }

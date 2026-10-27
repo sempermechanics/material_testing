@@ -11,7 +11,8 @@ import com.sempermechanics.semper.navigation.IntentKeys
  * Runs [SessionMetadataSync.send] for one session. It waits out an upload
  * still in flight and a failed call with WorkManager's backoff, then stops
  * after [MAX_ATTEMPTS] and leaves the row marked: [CloudSync.reconcile] queues
- * it again later.
+ * it again later. A backend pause (`feature_paused`) is waited out however long
+ * it lasts, at WorkManager's capped backoff.
  */
 class SessionMetadataWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
@@ -21,6 +22,8 @@ class SessionMetadataWorker(context: Context, params: WorkerParameters) : Corout
             SessionMetadataSync.Outcome.DONE, SessionMetadataSync.Outcome.LATER -> Result.success()
             SessionMetadataSync.Outcome.WAIT, SessionMetadataSync.Outcome.RETRY ->
                 if (runAttemptCount < MAX_ATTEMPTS) Result.retry() else Result.success()
+            // A kill switch can outlast the attempts; the row stays marked either way.
+            SessionMetadataSync.Outcome.PAUSED -> Result.retry()
         }
     }
 

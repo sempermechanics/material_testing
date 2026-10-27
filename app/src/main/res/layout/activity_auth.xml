@@ -12,6 +12,7 @@
         android:id="@+id/authColumn"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginHorizontal="@dimen/content_side_inset"
         android:orientation="vertical"
         android:padding="24dp"
         android:gravity="center_vertical">
@@ -45,8 +46,9 @@
             android:id="@+id/btnGoogleSignIn"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton.Icon"
             android:layout_width="match_parent"
-            android:layout_height="52dp"
+            android:layout_height="wrap_content"
             android:layout_marginBottom="4dp"
+            android:minHeight="52dp"
             android:text="@string/continue_with_google"
             android:textAllCaps="false"
             android:textStyle="bold"
@@ -55,7 +57,7 @@
             app:iconGravity="textStart"
             app:iconTint="@null"
             app:strokeColor="@color/surface_outline"
-            app:rippleColor="#22000000" />
+            app:rippleColor="@color/ripple_neutral" />
 
         <!-- Divider with "or" (hidden with Google when Google is unconfigured) -->
         <LinearLayout
@@ -105,7 +107,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="14dp"
                     android:hint="@string/email_address"
-                    app:boxStrokeColor="@color/sky_primary"
+                    app:boxStrokeColor="@color/input_box_stroke"
                     app:hintTextColor="@color/sky_primary">
 
                     <com.google.android.material.textfield.TextInputEditText
@@ -124,7 +126,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="6dp"
                     android:hint="@string/password_min_6_characters"
-                    app:boxStrokeColor="@color/sky_primary"
+                    app:boxStrokeColor="@color/input_box_stroke"
                     app:hintTextColor="@color/sky_primary"
                     app:endIconMode="password_toggle"
                     app:endIconTint="@color/text_secondary">
@@ -146,7 +148,7 @@
                     android:layout_marginBottom="6dp"
                     android:visibility="gone"
                     android:hint="@string/confirm_password"
-                    app:boxStrokeColor="@color/sky_primary"
+                    app:boxStrokeColor="@color/input_box_stroke"
                     app:hintTextColor="@color/sky_primary"
                     app:endIconMode="password_toggle"
                     app:endIconTint="@color/text_secondary">
@@ -247,7 +249,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:hint="@string/auth_totp_hint"
-                    app:boxStrokeColor="@color/sky_primary"
+                    app:boxStrokeColor="@color/input_box_stroke"
                     app:hintTextColor="@color/sky_primary">
 
                     <com.google.android.material.textfield.TextInputEditText

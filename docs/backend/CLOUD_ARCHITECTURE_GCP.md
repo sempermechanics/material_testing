@@ -848,7 +848,7 @@ also refuses when the device's stored analyses, every account's, reach the cap
 `409 device_quota_exceeded` that names neither the count nor the owners (its
 own code since TD-279, so the app does not lift it on the account's count). A
 session with no `deviceId` counts toward no device. `GET /v1/sessions`
-`quota.used` stays the account's count (`sessions.py:131`). A demo create costs
+`quota.used` stays the account's count (`backend/app/routers/sessions.py:98`). A demo create costs
 11 reads, not 9 ([request-volume.md](../perf/request-volume.md) Pass 4). After
 a staff device release, or a staff or IT licence lock clear, the phone no longer
 counts its previous holder's analyses: `forget_device_sessions` drops their
@@ -1588,7 +1588,7 @@ post-deploy request stamped. The invite is still written for the case where no
 such account exists yet.
 
 **One licence per person.** A person is an address; the device is a lock on
-the licence they hold, changed in place (staff "New device", IT unlock, or
+the licence they hold, changed in place (staff "New phone", IT unlock, or
 self-service with its cooldown), never by issuing a second licence. Every
 grant path asks `repo/holders.licence_held_by` first and refuses before
 writing anything:
@@ -2406,7 +2406,7 @@ that is revoked or on hold, and an account that has moved to another licence
 all keep their binding. Each of those leaves the
 holder on Demo, and a Demo account changes phone only through staff (below).
 Until the guard was shared the release checked only the
-last of the three, so **New device** on a held seat let its member change phone
+last of the three, so **New phone** on a held seat let its member change phone
 on Demo.
 
 **The released phone is held off.** Every signed call from the old phone now
@@ -2432,7 +2432,7 @@ release a clear does (`repo.users.release_account_device`, sharing
 `_release_patch` and `_retire_device`): the old device retired, its id held off,
 audited as `ADMIN_DEVICE_RELEASE` with `releasedDeviceId`. An account on a live
 licence is refused with `409 license_device_clear_required`, since its lock
-would still name the old phone; **New device** moves both.
+would still name the old phone; **New phone** moves both.
 
 #### The half that is easy to miss
 
@@ -2743,18 +2743,26 @@ re-resolves the account (`get_or_create_user` → `ensure_entitlement`) and, wit
 |---|---|
 | `POST /v1/sessions` | kill switch `upload` / `backup`; account cap; demo device cap (§7) |
 | `POST /v1/files/{id}/complete` | kill switch `upload` / `backup` |
+| `GET /v1/sessions/{sid}/uploads`, `PUT /v1/sessions/{sid}/metadata` | kill switch `upload` / `backup` (`backend/app/routers/sessions.py:139-141`, `:222-224`) |
 | `GET /v1/files/{id}/content`, `GET /v1/sessions/{sid}/bundle` | kill switch `restore`; `403 feature_not_licensed` for demo (§20.3) |
 | `POST /v1/me/claim` | step-up, verified address, activation rate bucket, `activate_license` |
 | Share | no route: the app's licence check and the signed token |
 
 **Kill switches are enforced.** `KILL_SWITCHES` is published on `/v1/config`
 *and* refused server-side by `deps.unless_paused`
-(`backend/app/deps.py:295-330`): after the token check, before the route's own
+(`backend/app/deps.py:301-336`): after the token check, before the route's own
 parameters, so a paused request reads nothing and leaves a signed request's
 nonce unspent. The answer is `503 feature_paused` with `Retry-After: 300`, logged
 `event="feature_paused"` with `switch` and `routeTemplate`. An upload keeps
 its work and retries (`UploadErrors.Kind.PAUSED`); a restore or download ends
-saying restoring is paused, counted as no failure (`DownloadFailure.Paused`); an
+saying restoring is paused, counted as no failure (`DownloadFailure.Paused`). The
+two upload-side calls on an existing session pause too: a paused upload-state
+query keeps the session, its pointer and the staging and retries saying
+`feature_paused` (`Resume.Unreachable(paused = true)`,
+`app/src/main/java/com/sempermechanics/semper/data/UploadSessionPlanner.kt:80`, `:369-372`),
+and a paused metadata replace is `SessionMetadataSync.Outcome.PAUSED`
+(`data/cloud/SessionMetadataSync.kt:54`, `:101-103`), which `SessionMetadataWorker`
+retries however long the pause lasts, the row kept marked (`SessionMetadataWorker.kt:26`). An
 older build treats the 503 as transient and retries. `share` has no route
 and is published only. Tests `backend/tests/test_kill_switches.py`.
 

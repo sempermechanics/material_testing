@@ -1,0 +1,67 @@
+{
+  "displayName": "semper: __SERVICE__ API Gateway path failing",
+  "documentation": {
+    "content": "The API Gateway probe failed from two or more regions. gateway /healthz (no token, security: []) reaches the backend through ESPv2 with the gateway service account: a failure is the gateway, its backend address or its SA's run.invoker. gateway /v1/config must answer ESPv2's 401 without a token: 404 means the live config no longer declares the route. Runbook: ops/monitoring/README.md#uptime-gateway",
+    "mimeType": "text/markdown"
+  },
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "gateway /healthz failing from 2+ regions",
+      "conditionThreshold": {
+        "filter": "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" AND metric.label.check_id=\"__UPTIME_CHECK_ID_GATEWAY_HEALTHZ__\" AND resource.type=\"uptime_url\"",
+        "aggregations": [
+          {
+            "alignmentPeriod": "1200s",
+            "perSeriesAligner": "ALIGN_NEXT_OLDER",
+            "crossSeriesReducer": "REDUCE_COUNT_FALSE",
+            "groupByFields": [
+              "resource.label.project_id",
+              "resource.label.host"
+            ]
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 1,
+        "duration": "600s",
+        "trigger": {
+          "count": 1
+        }
+      }
+    },
+    {
+      "displayName": "gateway /v1/config not 401 from 2+ regions",
+      "conditionThreshold": {
+        "filter": "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" AND metric.label.check_id=\"__UPTIME_CHECK_ID_GATEWAY_CONFIG__\" AND resource.type=\"uptime_url\"",
+        "aggregations": [
+          {
+            "alignmentPeriod": "1200s",
+            "perSeriesAligner": "ALIGN_NEXT_OLDER",
+            "crossSeriesReducer": "REDUCE_COUNT_FALSE",
+            "groupByFields": [
+              "resource.label.project_id",
+              "resource.label.host"
+            ]
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 1,
+        "duration": "600s",
+        "trigger": {
+          "count": 1
+        }
+      }
+    }
+  ],
+  "alertStrategy": {
+    "autoClose": "86400s"
+  },
+  "severity": "CRITICAL",
+  "notificationChannels": [
+    "__NOTIFICATION_CHANNEL__"
+  ],
+  "userLabels": {
+    "app": "semper",
+    "managed_by": "ops-monitoring"
+  }
+}

@@ -11,6 +11,7 @@ import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.cloud.restore.RestoreStart
 import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.prefs.AppSettings
+import com.sempermechanics.semper.fixtures.idleUntil
 import com.sempermechanics.semper.ui.common.transfer.RestoreRequest
 import kotlinx.coroutines.CompletableDeferred
 import org.junit.After
@@ -121,7 +122,8 @@ class HomeRestoreRotationTest {
 
         // The real request: this test account has no licence, so restore is off.
         vm.restore { listOf(target) }
-        idle()
+        // The licence is asked on IO (readiness TE1-006), so the answer lands after a hop.
+        idleUntil("the paused toast") { ShadowToast.shownToastCount() > 0 }
 
         assertEquals(controller.get().getString(R.string.restore_paused), ShadowToast.getTextOfLatestToast())
     }

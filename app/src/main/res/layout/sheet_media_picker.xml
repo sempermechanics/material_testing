@@ -71,7 +71,7 @@
             android:id="@+id/mediaPickScrim"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="#80000000"
+            android:background="@color/scrim_dim"
             android:clickable="true"
             android:focusable="true"
             android:visibility="gone" />

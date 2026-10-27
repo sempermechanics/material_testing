@@ -1,0 +1,43 @@
+{
+  "displayName": "semper: __SERVICE__ step-up revocation check failing",
+  "documentation": {
+    "content": "The step-up revocation check (CHECK_REVOKED_ON_STEP_UP) could not answer, so console step-ups are refused 401 invalid_token (fail closed). Usually the runtime service account lost roles/firebaseauth.admin on the Auth project, or the Auth API is down; the errorCode label names the exception class. Runbook: ops/monitoring/README.md#revocation-check-failed",
+    "mimeType": "text/markdown"
+  },
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "revocation_check_failed > 0 / 5 min",
+      "conditionThreshold": {
+        "filter": "metric.type=\"logging.googleapis.com/user/semper_revocation_check_failed\" AND resource.type=\"cloud_run_revision\"",
+        "aggregations": [
+          {
+            "alignmentPeriod": "300s",
+            "perSeriesAligner": "ALIGN_DELTA",
+            "crossSeriesReducer": "REDUCE_SUM",
+            "groupByFields": [
+              "resource.label.service_name"
+            ]
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 0,
+        "duration": "0s",
+        "trigger": {
+          "count": 1
+        }
+      }
+    }
+  ],
+  "alertStrategy": {
+    "autoClose": "86400s"
+  },
+  "severity": "ERROR",
+  "notificationChannels": [
+    "__NOTIFICATION_CHANNEL__"
+  ],
+  "userLabels": {
+    "app": "semper",
+    "managed_by": "ops-monitoring"
+  }
+}

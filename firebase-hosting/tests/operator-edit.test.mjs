@@ -131,7 +131,7 @@ test("the remaining edit refusals are explained in the dialog", async () => {
       "Seats, seating and IT contacts are for institution licences."],
     [IND, () => { $("editNote").value = "x"; }, () => json(429, { detail: "rate_limited" }),
       "Too many requests just now — wait a moment and try again."],
-    [IND, () => { $("editNote").value = "x"; }, offline, "Not saved: Failed to fetch"],
+    [IND, () => { $("editNote").value = "x"; }, offline, "Not saved: The server could not be reached — check your connection and try again."],
   ]) {
     reset();
     await openEdit(lic, { [`PATCH /v1/admin/licenses/${lic.id}`]: reply });
@@ -220,7 +220,7 @@ test("a convert sends the cleaned fields, shows the new key once, and both rows 
   assert.equal($("convertedKey").textContent, "SEMP-LAB1-KEY-ONCE");
   assert.deepEqual([$("convertFields").hidden, $("convertedBox").hidden, $("convertSave").hidden], [true, false, true]);
   assert.equal($("convertCancel").textContent, "Done");
-  assert.deepEqual(hint("convertHint"), ["The holder is on the new roster, on the same device.", "muted"]);
+  assert.deepEqual(hint("convertHint"), ["The holder is on the new roster, on the same phone.", "muted"]);
   assert.deepEqual(status(), ["SEMP-IND1 is now institution licence SEMP-LAB1.", "muted"]);
   assert.deepEqual(sent(new RegExp(IND.id)), [CONVERT, `GET /v1/admin/licenses/${IND.id}`],
     "the old licence is read back: the convert revoked it");
@@ -252,7 +252,7 @@ test("a refused convert is explained in the dialog, which stays as it was", asyn
     [() => json(409, { detail: "license_not_convertible" }), "Only an individual licensed key converts."],
     [() => json(403, { detail: "license_revoked" }), "This licence is revoked."],
     [() => json(409, { detail: "odd" }), "Not converted: odd"],
-    [offline, "Not converted: Failed to fetch"],
+    [offline, "Not converted: The server could not be reached — check your connection and try again."],
   ]) {
     reset();
     await openConvert({ [CONVERT]: reply });
