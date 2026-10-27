@@ -287,14 +287,19 @@ python scripts/ci_test_report.py --gates benchmark/gates.json \
 
 It prints `GATE ok …` per reference, an `::error` per breach, and exits 1 if any gate
 is over. Gates are keyed by the device the JSON records (`context.build.device`,
-`oriole` for a Pixel 6); a device the file does not list, CI's emulator included, is
-reported and never gated, and CI does not pass `--gates`. Without `--gates` the script
-only reports and always exits 0. **The Pixel 6 (`oriole`)** has references from
-2026-10-05 for the tests that stayed in the reference state: Settings cold start and
-scroll, and the two viewer scrubs without frame photos (`scrub150FramesWithPhotos` has
-none). Startup cold and warm start and the wizard cold start
-reached thermal status 1 and have none yet (TD-155). material_testing's were taken on
-its own app and are not copied. Microbenchmark times have no reference here: debuggable
+`g0q` for the Galaxy S22+, `oriole` for a Pixel 6); a device the file does not list, CI's
+emulator included, is reported and never gated, and CI does not pass `--gates`. Without
+`--gates` the script only reports and always exits 0.
+
+**The benchmark phone is the Galaxy S22+ (`g0q`, SM-S906U1, API 36)** since 2026-10-27.
+Its references are from a fresh install of `7cf205af` (signed out), on AC, and every
+test held thermal status 0: cold and warm start, Settings and wizard cold start,
+Settings scroll, and the two viewer scrubs without frame photos
+(`scrub150FramesWithPhotos` stays report-only). The run, how it was driven, and the
+micro numbers are in [../perf/samsung-g0q-baseline.md](../perf/samsung-g0q-baseline.md).
+**The Pixel 6 (`oriole`)** keeps its 2026-10-05 references for the five tests that
+stayed at status 0 there; its startup cold and warm start and wizard cold start never
+got one. material_testing's were taken on its own app and are not copied. Microbenchmark times have no reference here: debuggable
 and not AOT-compiled, they are relative numbers, gated only against the PR's base in
 CI (below).
 
@@ -313,7 +318,10 @@ one run's starts spread 404–478 ms, so a 5-start median moved with one or two 
 
 To add a phone, run both suites on the charger, at thermal status 0, with known app
 data, and add its codename under `devices` with those medians and the state in its
-`label`.
+`label`. Run one macro class per `am instrument` call and pull its
+`*benchmarkData.json` and `*deviceState.json` before the next, since each call
+overwrites both ([../perf/samsung-g0q-baseline.md](../perf/samsung-g0q-baseline.md)
+has the loop).
 
 **When a startup gate trips**, compare with the reference build on the same phone
 before calling it a regression:
