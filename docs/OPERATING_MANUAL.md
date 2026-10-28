@@ -1240,7 +1240,7 @@ attached it also says what a phone does offline: Licensed features keep working
 until the offline grace period ends, then the app falls back to the Demo limits
 until it reconnects, and analyses already on the phone stay available either
 way. Below that, how many analyses are stored. From the page the person can give
-a floating seat back, move their licence to a different device, and download any
+a floating seat back, move their licence to another phone, and download any
 stored analysis as one zip. The last two need a second factor; the page offers to
 enrol an authenticator app if there is none. A **Delete your account** card says
 where deletion happens: in the app on the phone (Settings → Your data → Delete
@@ -1348,7 +1348,7 @@ empty the device lock:
 
 | Who | How |
 |---|---|
-| The holder | **Use semper on a different device** on their own `/account` page — `POST /v1/licenses/unbind`. Needs a second factor and a sign-in from the last 15 minutes, and is allowed once every `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` (default 30). |
+| The holder | **Move semper to another phone** on their own `/account` page — `POST /v1/licenses/unbind`. Needs a second factor and a sign-in from the last 15 minutes, and is allowed once every `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` (default 30). |
 | Institution IT | `PATCH /v1/institutions/licenses/{id}/seats/{uid}` `{"clearDeviceLock": true}`, or **New phone** on the seat in `/console/institution`. |
 | semper staff | **New phone** on the licence row (individual) or on the seat in the roster (institution) in `/console/operator`. |
 
@@ -1359,8 +1359,8 @@ registered phone can take the lock, so a phone refused at sign-in cannot.
 **semper and semper Classroom each hold their own phone** (ADR-010). One
 person can use both apps on one phone, or each on a different phone, on one
 licence. Staff and IT **New phone**, and the staff phone release below,
-move both apps at once. The holder moves one app at a time: **Use semper on
-a different device** or **Use semper Classroom on a different device** on
+move both apps at once. The holder moves one app at a time: **Move semper to
+another phone** or **Move semper Classroom to another phone** on
 `/account`, or the same from inside that app, each with its own 30-day
 cooldown. Seats and the operator's user list show a semper Classroom device
 as "semper Classroom …" beside semper's. semper Classroom was Material Testing

@@ -248,7 +248,7 @@ the same scene; improve [speckle contrast](#speckle-contrast).
 **When you see it:** Engine failure — decode or engine start failed.
 
 **What to do:** Re-import images; confirm files are readable PNG/TIFF; free memory on
-low-RAM devices.
+low-RAM phones.
 
 ---
 
