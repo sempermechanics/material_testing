@@ -1,0 +1,23 @@
+# Advisories the android-deps-osv job may pass, each with its reason and an
+# expiry: after ignoreUntil the job fails again. Remove an entry when the fix
+# lands; add one only with a reason a reviewer can check. TECH_DEBT row TD-350.
+#
+# Guava 31.1-android reaches the release APK only through
+# play-services-measurement-api / -impl 24.0.0 (Firebase Analytics); the app
+# calls no Guava API (no com.google.common import in app/src/main). The fix is
+# a constraint to 33.7.2-android in app/build.gradle.kts (app stream).
+
+[[IgnoredVulns]]
+id = "GHSA-xxph-c9ww-hj94"
+ignoreUntil = 2026-11-30T00:00:00Z
+reason = "CVE-2026-102554, Guava collection readObject memory blow-up: needs Java native deserialization of attacker bytes; the app uses no ObjectInputStream (2026-10-28). Transitive via play-services-measurement 24.0.0; constraint to 33.7.2-android pending."
+
+[[IgnoredVulns]]
+id = "GHSA-7g45-4rm6-3mm3"
+ignoreUntil = 2026-11-30T00:00:00Z
+reason = "CVE-2023-2976, FileBackedOutputStream in the shared temp dir: on Android java.io.tmpdir is the app's private cache dir, and the app calls no Guava API. Constraint to 33.7.2-android pending."
+
+[[IgnoredVulns]]
+id = "GHSA-5mg8-w23w-74h3"
+ignoreUntil = 2026-11-30T00:00:00Z
+reason = "CVE-2020-8908, Files.createTempDir permissions: not called by the app; java.io.tmpdir is app-private on Android. Constraint to 33.7.2-android pending."

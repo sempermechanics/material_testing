@@ -26,6 +26,7 @@ engine-pin ───────────────────────
 legal-pages ───────────────────────────────────────────────────┤
 console-pages ─────────────────────────────────────────────────┤
 console-a11y ──────────────────────────────────────────────────┤
+console-lighthouse ────────────────────────────────────────────┤
 changes ──┬──> tier1-static ──┬────────────────────────────────┤
           │                   ├──> tier3-emulator-e2e (*) ─────┤
           │                   ├──> tier5-signed-release (*) ───┤
@@ -33,6 +34,8 @@ changes ──┬──> tier1-static ──┬───────────
           ├──> tier1-app-fast ─────────────────────────────────┤
           ├──> tier4-backend ──────────────────────────────────┤
           ├──> firestore-rules ────────────────────────────────┤
+          ├──> android-deps-osv ───────────────────────────────┤
+          ├──> semgrep ────────────────────────────────────────┤
           └──> engine-host-sanitized (†) ──────────────────────┤
                                                                └──> ci-ok
 
@@ -47,10 +50,11 @@ changes ──┬──> tier1-static ──┬───────────
 | Job | Proves | Path-filtered? | Typical (warm / cold) |
 |-----|--------|---|-----------------------|
 | `secret-scan` | gitleaks (see below) | No — always runs | ~1–2 min |
-| `engine-pin` | `scripts/check_engine_pin.py`: the `engine` gitlink points at a `v*` tag of the engine repository and, when it changed, descends from the previous pin (`HEAD^1`); the PR label `engine-downgrade` allows a backwards or sideways move (read at run time: re-run the job after adding it) (TE2-006) | No — always runs | seconds |
+| `engine-pin` | `scripts/check_engine_pin.py`: the `engine` gitlink points at a `v*` tag of the engine repository and, when it changed, descends from the previous pin (`HEAD^1`); the PR label `engine-downgrade` allows a backwards or sideways move (read at run time: re-run the job after adding it) (TE2-006); and the engine repo's latest completed `ci.yml` run on the pinned commit has a green `Host tests` job, the unsanitized Release run where the numeric goldens compare (`gh api`, read-only; TE2-102) | No — always runs | seconds |
 | `legal-pages` | `scripts/render_legal_pages.py --check`: the published pages still match `docs/legal/`; `scripts/check_doc_paths.py`: every path a doc names exists; `scripts/check_framework_coverage.py`: every readiness-framework item (`docs/ops/READINESS_FRAMEWORK_2026-10.md`) has a row in the gate's cross-check, every open row an owner that exists in TECH_DEBT or FUTURE_IMPROVEMENTS, and every status count written in that section matches its table (TE6-012); `scripts/check_kotlin_file_size.py`: no main Kotlin file over ADR-015's 500-line budget, fused hot loops not counted, the exceptions and their ceilings in `scripts/kotlin_file_size_allowlist.txt` (TD-292); `scripts/check_activity_scope_work.py`: no network call or WorkManager enqueue launched on a screen's `lifecycleScope` (ADR-016 rule 1), the triaged exceptions in `scripts/activity_scope_allowlist.txt` (TD-291); `scripts/check_swallowed_cancellation.py`: no broad catch or `runCatching` around a suspend call in `app/src/main` that swallows `CancellationException` (ADR-018), the triaged exceptions in `scripts/swallowed_cancellation_allowlist.txt` (TD-171); then the stdlib `unittest` suites in `scripts/tests` that test these source checks | No — always runs | seconds |
 | `console-pages` | `scripts/check_console.py`: the consoles' wiring, CSP, deploy placeholders and gateway paths — their only gate, since they have no compiler — plus `node --test`: the DOM-free `console/util.js`, `auth.js` (sign-in, second factor, step-up, `api`, revoke gate), `router.js`, and the operator, account and institution pages, against a fake Firebase SDK loaded through a `module.register` hook and a DOM parsed from the real pages (`firebase-hosting/tests/harness.mjs`), with line coverage of the console's JS gated at 96 % by `scripts/console_coverage.mjs` (merged by file from the raw V8 coverage; every `.js` under `public/` but `vendor/`). Its check 13 fails when a code a console route names in `backend/app/routers/` has no words on the page that calls it (readiness AE2-006). | No — always runs | seconds |
-| `console-a11y` | The console pages in Chromium (`firebase-hosting/tests/a11y`, `npm run test:a11y`: `@playwright/test` and `@axe-core/playwright`, pinned in `firebase-hosting/package-lock.json`) against a stub API and the fake Firebase SDK, no network: zero serious or critical axe violations (WCAG 2.1 A/AA) on six page states at 360, 768 and 1280 px, no sideways page scroll, a confirmation card named, Escape closing it and focus returned (readiness AE2-001). The Playwright report uploads as `console-a11y-report` on a failure | No — always runs | not timed yet (its first CI run is the readiness PR) |
+| `console-a11y` | The console pages in Chromium (`firebase-hosting/tests/a11y`, `npm run test:a11y`: `@playwright/test` and `@axe-core/playwright`, pinned in `firebase-hosting/package-lock.json`) against a stub API and the fake Firebase SDK, no network: zero serious or critical axe violations (WCAG 2.1 A/AA) and no sideways page scroll at 360, 768 and 1280 px on the console pages, the hosted pages (landing pages, 404, privacy and terms) and the console's dialog, list and error states, a confirmation card named, Escape closing it and focus returned: 54 checks, 2 of them `test.fixme` for AE2-103 (the privacy page at 360 px, held for counsel) (readiness AE2-001, AE2-111). The Playwright report uploads as `console-a11y-report` on a failure | No — always runs | not timed yet (its first CI run is the readiness PR) |
+| `console-lighthouse` | Lighthouse 13.5.0 (pinned in `firebase-hosting/package-lock.json`, `npm run lighthouse`: `firebase-hosting/tests/lighthouse/run.mjs`) on each console page and the hosted pages around them, served and stubbed as `console-a11y` serves them (no network), in Playwright's Chromium at phone and desktop size: the Accessibility and Best Practices scores are each at least 95 (readiness AE2-110). Node 22.19 or later. The JSON reports upload as `console-lighthouse-report` on every run | No — always runs | ~4 min |
 | `changes` | Resolves path filters + PR/main/Dependabot mode into tier flags | — | seconds |
 | `tier1-static` | spotless and detekt, in about two minutes; the heavy tiers wait for this and not for `tier1-app-fast`'s ~8 min of compile, unit tests and lint, which run beside them (and still fail `ci-ok`) | `app` (PR); always on `main` push | ~2 min |
 | `tier1-app-fast` | lint, JVM unit tests (one worker: two made the TD-312 exit happen every time on the material_testing fork; `-PunitTestForks` sets it, and each worker writes its own `gc-<pid>.log`), `compileReleaseKotlin`, the androidTest and `:benchmark` sources compile, Kover coverage log + `koverVerify` floor. Failing tests are printed by `scripts/ci_test_report.py`, and a test JVM that exits with no failing test by `scripts/ci_test_crash_report.py` (its crash file, heap dump, GC log, last classes and output, TD-312); JUnit XML, the Kover XML/HTML and `app/build/test-crash/` upload as `app-unit-tests-and-coverage` | `app` (PR); always on `main` push | ~5–8 / ~10 min |
@@ -60,6 +64,8 @@ changes ──┬──> tier1-static ──┬───────────
 | `tier5-signed-release` | R8 + signed `assembleRelease` arm64, `.so` presence, signature verify, `scripts/check_release_apk.py` (the APK is not debuggable or testOnly, carries no debug source-set component and no `DebugAppCheckProviderFactory` (by name in the dex or renamed in R8's mapping), permits no cleartext, has `app/build.gradle.kts`'s `minSdk` and `targetSdk` (at least 36, Play's floor), ships 16 KB-aligned `lib/<abi>/*.so` files (every LOAD segment, and a stored `.so`'s zip offset), keeps the consent defaults (Crashlytics, Analytics and ad-ID collection off in `<application>` meta-data, no `AD_ID` or `ACCESS_ADSERVICES_*` permission), and R8's mapping renames app classes (obfuscation, not an identity map); it warns when no certificate pin is compiled in, which is always the case here, and when no entitlement key is, which is the case until TD-215; the Release workflow makes the latter a failure once `SEMPER_ENTITLEMENT_PUBKEYS` is set), R8 mapping artifact | `release_build`: engine / JNI / native-CI actions / packaging, labels, weekly | ~15–40 / up to ~90 min |
 | `engine-host-sanitized` | The engine's host suite (`engine/tests`, `dic_tests`: math, DICe comparisons, full-field contracts) built with system `libopencv-dev`, Release, `-DDIC_SANITIZER=address,undefined`, at the commit this app pins: the engine CI's asan-ubsan configuration, rerun here (TE2-004). No Gradle, no NDK. TSan and the C SDK smoke stay in the engine repo; the JNI adapter is not built here | `engine_host`: whenever `emulator` is set, and on a `ci_workflow` change | ~10–30 min |
 | `tier-benchmark` | Builds the R8-minified `benchmark` app and the Macrobenchmark APK (x86_64, ccache) before the emulator boots. One API 34 emulator: first `scripts/launch_smoke.py` cold-starts the minified app and fails on a crash, a process gone within 15 s, or an R8 symptom in an error line of its logcat (`launch-smoke` artifact), the only place CI launches an R8 build; then Macrobenchmark cold/warm startup, a dry run on a PR (one pass each, `dryRunMode`) and the full iterations with the `benchmark` label or a dispatch (`:benchmark`, `suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED`), after uninstalling the smoke's install (Gradle packages and signs the app again, and its install over the smoke's failed while the task still passed, TD-349); the step fails unless `scripts/ci_test_report.py --require-tests` finds a test case and no failing one in `benchmark/build/outputs/androidTest-results`; then, without a PR (a dispatch), `:app`'s `HotPathMicroBenchmark` on the debug build, installed by Gradle and run with `adb shell am instrument` (`suppressErrors` adds `DEBUGGABLE`, `ACTIVITY-MISSING`, `NOT-AOT-COMPILED`; through Gradle the list arrives cut at its first comma, TD-86; the step fails unless `am instrument` prints `OK (`, and the results are pulled from the device). Emulator **smoke**: no numeric thresholds; both upload their `*-benchmarkData.json` (`macrobenchmark-results`, `microbenchmark-results`). On a PR the micro suite runs only as the gate: the step before the emulator builds the PR's base and the PR (debug app + androidTest APKs, base first in the one checkout), and `scripts/micro_ab.py` runs each on the emulator in A B B A order and fails if a benchmark's pooled median `timeNs` is more than `microAbMargin` (`benchmark/gates.json`) over the base's (TD-199); the `perf-accepted` label makes it warn instead, and the rounds upload as `microbenchmark-ab`. `scripts/ci_test_report.py` prints failing tests and each metric's min / median / max (`BENCH …` lines) into the log, as Tier 3 does for its failures. CI does not pass `--gates`: the real-device gates (`benchmark/gates.json`, checked only in the phone state `DeviceStateRule` records, [ADR-008](../adr/ADR-008-startup-gates-phone-state.md), [TESTING.md](../app/TESTING.md)) apply to a phone run only. The job reads the app id from `app/build.gradle.kts` (`APP_ID`) for the micro run's `am instrument` and pulls, so it runs unchanged in the Semper Classroom fork (material_testing). The A/B writes each build's own id beside its APKs (`app-id.txt`), so a PR that changes the app id (ADR-030) runs its base under the old one; until 2026-10-26 round A failed on such a PR. | `benchmark` label / `run_benchmark` dispatch / a PR matching `hot_path` (the micro suite's sources, the benchmark, `scripts/micro_ab.py`, `benchmark/gates.json`, `scripts/launch_smoke.py`) or `packaging` | ~25–35 min on a PR; ~45–75 with the full Macrobenchmarks |
+| `android-deps-osv` | Known vulnerabilities in the release APK's dependency graph (readiness TE5-105). Gradle writes `app/gradle.lockfile` for `:app`'s `releaseRuntimeClasspath` through the init script in `.github/actions/android-deps-osv/` (the build locks nothing itself, so no lockfile is committed), and OSV-Scanner 2.7.0, its download checked against a pinned SHA-256, scans it. An advisory is passed only through `.github/actions/android-deps-osv/osv-scanner.toml`, with a reason and an `ignoreUntil` after which the job fails again (TD-350) | `app` (PR); always on `main` push and weekly, which catches an advisory against an unchanged graph | not timed yet (first run is the readiness PR) |
+| `semgrep` | SAST (readiness TE5-105): semgrep 1.180.0 in its image pinned by digest, the registry packs `p/python`, `p/javascript` and `p/kotlin` over `backend/app`, `firebase-hosting/public` and `app/src/main/java`, `--error`, metrics off. No rule is excluded: a false positive carries a `nosemgrep: <rule id>` comment with its reason on the line it flags. The packs are fetched at run time and are not versioned, so a new rule can fail a PR that did not touch what it flags | `sast` (PR); always on `main` push and weekly | ~1 min locally |
 | `ci-ok` | Single required status check — every job above passed or was skipped | — | seconds |
 
 **There is no tier 2 here any more.** Host C++ builds, the DICe comparisons and
@@ -108,7 +114,8 @@ gitleaks detect --config .gitleaks.toml --log-opts="<base-sha>..HEAD"
 | `native_ci` | `.github/actions/{setup-native-ci,enable-kvm,check-arm64-so,checkout-submodules}/**` | `emulator` + `release_build` |
 | `backend` | `backend/**`, `firestore.rules`, `firebase-hosting/firebase.json`, `scripts/deploy-firestore.sh`, `.github/workflows/deploy-backend.yml`, `docs/legal/**`, `scripts/*.py`, `scripts/tests/**` (the scripts' test fixtures), `scripts/check_gcp_posture.sh`, `scripts/apply-monitoring.sh`, `ops/monitoring/**`, `contracts/**`, and the client's three wire-contract files | `backend` (tier 4) |
 | `rules` | `firestore.rules`, `firestore-rules-tests/**`, `backend/app/**` | `rules` (Firestore rules tests) |
-| `ci_workflow` | `.github/workflows/ci.yml`, `.github/actions/**`, `scripts/ci_test_report.py` | `app` + `backend` + `rules`, so a workflow-only PR is not gates-only |
+| `sast` | `backend/app/**`, `firebase-hosting/public/**`, `app/src/main/java/**` | `sast` (semgrep) |
+| `ci_workflow` | `.github/workflows/ci.yml`, `.github/actions/**`, `scripts/ci_test_report.py` | `app` + `backend` + `rules` + `sast`, so a workflow-only PR is not gates-only |
 
 The `backend` filter lists every file outside `backend/` that a backend test
 reads (`test_security_controls`, `test_terms_and_consent`), plus the ops
@@ -151,7 +158,7 @@ was deleted; the setting stays so the next one holds. Under the default
 A push to `main` filters against `github.event.before` (the previous `main`
 head), so a merge commit is judged by its whole PR. One with no base (a zero
 `before`) runs the full matrix. Empty path outputs otherwise fail **closed** to
-gates-only (`secret-scan` + `engine-pin` + `legal-pages` + `console-pages` + `console-a11y` + `ci-ok`), not a
+gates-only (`secret-scan` + `engine-pin` + `legal-pages` + `console-pages` + `console-a11y` + `console-lighthouse` + `ci-ok`), not a
 full matrix.
 
 ### Dependabot cheap path
@@ -186,7 +193,7 @@ That push uses `GITHUB_TOKEN`, which starts no CI run, so re-run the PR's checks
 afterwards (the status stays on the old commit until you do). See
 [RELEASING.md](RELEASING.md) § Bumping backend dependencies.
 
-`secret-scan`, `engine-pin`, `legal-pages`, `console-pages` and `console-a11y` are absent from
+`secret-scan`, `engine-pin`, `legal-pages`, `console-pages`, `console-a11y` and `console-lighthouse` are absent from
 the tables on purpose: they carry no path filter and run on every event.
 
 Skipped jobs count as success for `ci-ok`.
@@ -233,7 +240,15 @@ python -m unittest discover -s scripts/tests -p "test_*.py"               # lega
 python scripts/check_console.py                                             # console-pages
 node --test "firebase-hosting/tests/*.test.mjs"                             # console-pages
 cd firebase-hosting && npm ci && npx playwright install chromium && npm run test:a11y  # console-a11y
+cd firebase-hosting && npm ci && npx playwright install chromium && npm run lighthouse  # console-lighthouse
 gitleaks detect --config .gitleaks.toml                                     # secret-scan (human)
+semgrep scan --error --metrics=off --config p/python --config p/javascript --config p/kotlin \
+  backend/app firebase-hosting/public app/src/main/java                     # semgrep
+./gradlew --no-configuration-cache \
+  --init-script .github/actions/android-deps-osv/lock-all-configurations.init.gradle \
+  :app:dependencies --configuration releaseRuntimeClasspath --write-locks
+osv-scanner scan source --config .github/actions/android-deps-osv/osv-scanner.toml \
+  -L app/gradle.lockfile                                                    # android-deps-osv
 ```
 
 The engine's own suites are not reproducible from this repo — run them in
@@ -433,8 +448,8 @@ merges cancelled each other: on 2026-09-26 the `main` runs of #268, #270 and
 #271 were all cancelled mid-matrix, so #271's app-and-console change never had a
 full run of its own (TD-97, as in material_testing#67).
 
-**Three jobs run on every single event.** `secret-scan`, `legal-pages` and
-`console-pages` carry no path filter, so a documentation-only PR still runs
+**Six jobs run on every single event.** `secret-scan`, `engine-pin`,
+`legal-pages`, `console-pages`, `console-a11y` and `console-lighthouse` carry no path filter, so a documentation-only PR still runs
 them — and can still be blocked by them, which is the point.
 
 **Runners are pinned to `ubuntu-24.04`, not `ubuntu-latest`.** GitHub moves

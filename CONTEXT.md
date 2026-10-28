@@ -116,22 +116,24 @@ emulator (`scripts/micro_ab.py`, [TESTING.md](docs/app/TESTING.md)); the phone-r
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-26)
+## Current state (2026-10-28)
 
 - **Deployed.** Backend and Hosting from `46ac8b5e` (2026-10-26; #484, the Semper Classroom
   rename, on top of #482): `semper-api-40300681201-1`, staging `semper-api-staging-40299991596-1`,
   gateway configs unchanged (`v202610230501-112`, `v202610221243-110`); recorded on `main` by
   #486 ([CHANGELOG](docs/ops/CHANGELOG.md)). Project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
+  `main` is ahead of live: #489's backend (13 files incl. the lock) and console changes, and
+  the console PRs #493, #497, #500–#502, are not deployed.
 - **Legal pages held:** #474's text (Privacy §2.3, Terms §6.1, retention values) waits on counsel
   (TD-277). Deploy Hosting from a worktree with `/privacy` and `/terms` taken from `b940cc29`
   ([checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md) §4) and compare the live pages after; a
   plain-`main` deploy on 2026-10-26 published them until the same day's redeploy.
-- **Readiness run 2026-10-24:** `claude/readiness-20261024`, not merged or deployed; verdict
-  **No-go** ([report](docs/ops/readiness/20261024/REPORT.md); open rows TD-318–TD-332 but TD-330, TD-336–TD-344, TD-346, TD-347).
+- **Readiness run 2026-10-24:** merged as #489 (`6d2bde6c`, 2026-10-26), not deployed; verdict
+  **No-go** ([report](docs/ops/readiness/20261024/REPORT.md); open rows TD-318–TD-332 but TD-323 and TD-330, TD-336–TD-344, TD-346, TD-347).
   Its backend changes need a deploy: lock bump, kill switches on `GET …/uploads` and
   `PUT …/metadata`, the `/readyz` budget, `--no-access-log`, roster codes, quota wording.
 - **Admin actions** are one table, [gate § Admin actions](docs/ops/PRODUCTION_READINESS_GATE.md#admin-actions-external):
-  monitoring `--apply` (no notification channel yet), the posture FAILs (17 on 2026-10-24),
+  monitoring `--apply` (no notification channel yet), the posture FAILs (17 on 2026-10-24, the same 17 on 2026-10-28),
   TD-215, the checklist's §6; the readiness report's §4 adds that run's one-off actions.
 - **App** `com.sempermechanics.semper` ([ADR-019](docs/adr/ADR-019-sempermechanics-app-id.md)).
   Latest release `v1.2-beta.4` (versionCode 1036, `33dce87d`, 2026-10-17, engine 0.4.2). On
@@ -153,7 +155,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   2026-10-27 (#488, from material_testing#148 and #150): the release check
   fails a targetSdk below 36 or a `.so` off 16 KB pages; the `benchmark` build is R8-minified
   and launch-smoked; Macrobenchmarks dry-run on PRs; heavy tiers wait for `tier1-static` only.
-  Open on `claude/checkout-submodules-retry` (material_testing#152): submodules come through
+  Merged 2026-10-27 (#492, from material_testing#152): submodules come through
   `checkout-submodules` (Eigen cached by its pin, every fetch retried).
 - **Owed.** A device smoke of the next release ([RELEASING.md](docs/ops/RELEASING.md) step 5);
   TD-212 at the 0.6.1 pin (on the Galaxy S22+); ADR-015's queued-work upgrade check;

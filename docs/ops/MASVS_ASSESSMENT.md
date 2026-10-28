@@ -12,8 +12,8 @@ Status: **Met** (the control is in the code, with evidence), **Partial**,
 **Gap** (owned by the TD id named), **N-A** (with the reason). App paths are
 from `app/src/main/java/com/sempermechanics/semper/` unless they start at the
 repository root. Written 2026-10-18 on `claude/new-session-jhfhj9`; every line
-citation was re-checked on 2026-10-24 against `main` @ `875e2334` (readiness TE5-009),
-and each names its symbol so a later shift can be followed. The Android half was not
+citation was re-checked on 2026-10-24 against `main` @ `875e2334` (readiness TE5-009;
+RESILIENCE-1's re-cited on 2026-10-28, readiness TE5-104), and each names its symbol so a later shift can be followed. The Android half was not
 compiled where it was written (TD-219).
 
 ## MASVS-STORAGE
@@ -59,14 +59,14 @@ compiled where it was written (TD-219).
 |---|---|---|
 | CODE-1: up-to-date platform version | Met | minSdk 30, targetSdk 36 (`app/build.gradle.kts:151-152`); the targetSdk bump is a deliberate PR (CLAUDE.md) |
 | CODE-2: mechanism to enforce updates | Met | `minSupportedVersionCode` / `recommendedVersionCode` on `/v1/config`, each app its own pair (`backend/app/routers/account.py:172-176`; `settings.release_gate`, `backend/app/config.py:328-335`); the app blocks new runs and cloud calls below the minimum and keeps the viewer and exports (`data/policy/FeatureGates.kt:34-40`, `ui/limit/UpdateRequiredActivity.kt:23`). Play in-app updates are TD-233 |
-| CODE-3: no components with known vulnerabilities | Partial | `pip-audit -r requirements.lock --require-hashes --disable-pip --strict` in every backend gate since 2026-10-24, so the hashed lock the image installs is what is audited (the `pip-audit` step of `.github/actions/backend-gate/action.yml`; until readiness TE5-001 it audited `requirements.txt`, and the lock then held 19 known vulnerabilities in pyjwt, urllib3 and certifi); backend SAST is ruff's bandit rules (`S` in `backend/ruff.toml`, line noqa with a reason, no baseline; the repository-root `scripts/` not yet, TD-321); Dependabot for pip, Gradle, Actions, Docker and npm (`.github/dependabot.yml`). No dependency-vulnerability scan of the Android dependency graph runs in CI |
+| CODE-3: no components with known vulnerabilities | Partial | `pip-audit -r requirements.lock --require-hashes --disable-pip --strict` in every backend gate since 2026-10-24, so the hashed lock the image installs is what is audited (the `pip-audit` step of `.github/actions/backend-gate/action.yml`; until readiness TE5-001 it audited `requirements.txt`, and the lock then held 19 known vulnerabilities in pyjwt, urllib3 and certifi); backend SAST is ruff's bandit rules (`S` in `backend/ruff.toml`, line noqa with a reason, no baseline; the repository-root `scripts/` not yet, TD-321); Dependabot for pip, Gradle, Actions, Docker and npm (`.github/dependabot.yml`). Since readiness TE5-105 (2026-10-28) CI scans the Android release graph (`:app` `releaseRuntimeClasspath`) with OSV-Scanner (`android-deps-osv`, `.github/actions/android-deps-osv/`; three Guava advisories passed until 2026-11-30, TD-350) and runs semgrep's `p/python`, `p/javascript` and `p/kotlin` packs over `backend/app`, the console JS and the app's Kotlin (`semgrep` in `.github/workflows/ci.yml`) |
 | CODE-4: untrusted input validated | Met | Request bodies are Pydantic models with `extra="forbid"` and bounded identifiers (`backend/app/models.py`, `backend/app/validation.py`); CSV import refuses whole files before touching a row (`backend/app/roster_io.py`). The token parser rejects padded base64url (`Base64Url.decode`, `data/account/entitlement/Jws.kt:25-29`), any other `alg`, a `crit` header and an unknown `kid` (`headerProblem`, `EntitlementVerifier.kt:72-82`) |
 
 ## MASVS-RESILIENCE
 
 | Control | Status | Evidence |
 |---|---|---|
-| RESILIENCE-1: platform integrity | Partial | App Check with the Play Integrity provider (`firebase.appcheck.playintegrity`, `app/build.gradle.kts:416`), enforced for device callers only when `APP_CHECK_MODE=enforce`, which is off (TD-226). No root detection and no server-side Integrity verdict (TD-234) |
+| RESILIENCE-1: platform integrity | Partial | App Check with the Play Integrity provider (`implementation(libs.firebase.appcheck.playintegrity)`, `app/build.gradle.kts:434`), enforced for device callers only when `APP_CHECK_MODE=enforce`, which is off (TD-226). No root detection and no server-side Integrity verdict (TD-234) |
 | RESILIENCE-2: anti-tampering | Partial | Release APK inspected for debuggable, test-only, debug classes and the debug App Check provider (`scripts/check_release_apk.py`); the token is bound to the device key (`dkt`) and its stored state is HMAC-sealed. No signature or installer check at runtime (TD-235). Deleting both sealed state and HMAC key on a rooted phone falls back to the cached config (TD-261, accepted). A repackaged build that skips the licence check can use share, which has no server route (TD-274, accepted); it gains no cloud access |
 | RESILIENCE-3: anti-static analysis | Partial | R8 minification and obfuscation on release (`isMinifyEnabled`, `app/build.gradle.kts:258`; the release check fails when R8's mapping renames no app class); the mapping is not published ([RELEASING.md](RELEASING.md)). Native engine built `-O3` with LTO. No string encryption |
 | RESILIENCE-4: anti-dynamic analysis | Gap | No debugger, hook or Frida detection (TD-235) |

@@ -58,8 +58,9 @@ Check the R8 mapping reached Crashlytics (the release build uploads it); the wor
    run, if it is the head). The Release workflow enforces it: its `verify-ci`
    job (`scripts/check_release_ci.py`) fails unless the latest check run of every
    CI job on the commit passed, not skipped (secret scan, legal and console
-   pages, console accessibility, engine pin, tiers 1, 3, 4 and 5, Firestore
-   rules, the sanitized engine host tests, `CI OK`).
+   pages, console accessibility, console Lighthouse, engine pin, tiers 1, 3, 4
+   and 5, Firestore rules, the sanitized engine host tests, the Android dependency scan,
+   semgrep, `CI OK`).
 3. **Tag and push** the commit you intend to release:
 
    ```bash
@@ -192,6 +193,49 @@ neither environment set any lever, and `APP_CHECK_MODE` was a repository variabl
 which an environment value overrides. [INCIDENT_RESPONSE.md](INCIDENT_RESPONSE.md)
 uses the same words.
 
+**A lever deploy is a full deploy.** `deploy-backend.yml` has no lever-only
+path: its `deploy` job needs `test` (`.github/workflows/deploy-backend.yml:77-89`),
+which runs the backend gate, whose `pip-audit --strict` has no override
+(`.github/actions/backend-gate/action.yml:37-38`); and it builds the commit it is
+dispatched on and promotes it `--to-latest` (`deploy-backend.yml:465`). So a new advisory in
+`backend/requirements.lock` blocks every lever flip until the lock is regenerated
+and merged (on 2026-10-28 msgpack 1.2.1 did, readiness TE6-101), and a flip also
+ships every backend commit on `main` that is not yet live. When either is true,
+or the flip cannot wait, use the emergency lever below.
+
+**Emergency lever (no code change).** The same three steps as an env change
+after a revision rollback (below, step 2): put the lever on the **serving**
+revision's image with no traffic, then move traffic to the new revision by name.
+
+```bash
+GC="--region asia-south1 --project indicvision-dic-app"
+SERVING=$(gcloud run services describe semper-api $GC --format='value(status.traffic[0].revisionName)')
+IMAGE=$(gcloud run revisions describe "$SERVING" $GC --format='value(spec.containers[0].image)')
+gcloud run services update semper-api $GC --image "$IMAGE" \
+  --update-env-vars 'KILL_SWITCHES=backup restore upload' --no-traffic
+gcloud run services update-traffic semper-api $GC --to-revisions=<new>=100
+```
+
+Check first that `status.traffic` has one entry at 100 % (a split names more than
+one revision). Quote the value whole (it is space-separated; gcloud splits
+pairs on commas only); the version gate is `MIN_SUPPORTED_VERSION_CODE=<code>`.
+Then **set the lever variable** (scope above), or the next deploy
+undoes it. The service stays pinned by name until the next `deploy-backend.yml`
+run, which returns it to `--to-latest`. Who: someone with `run.services.update`
+on the project, under the incident's owner; the production approval of the
+workflow path is skipped, so record the command and the reason in the incident.
+
+**How long a flip takes, and how to see it hold.** Through `deploy-backend.yml`:
+about 4.5–5 min of pipeline (the staging drill runs 39752109438 and 39755073181:
+`test` 1.5 min, `deploy` 2.4 min, `gateway` 0.4 min), plus the product owner's
+approval on `production` ([ENVIRONMENTS.md](ENVIRONMENTS.md)). The emergency
+lever: about a minute for the new revision. Either way, installs that read
+`/v1/config` see it on their next read, up to 5 min later
+(`RECONCILE_MIN_INTERVAL_MS`, below); the backend refuses the `KILL_SWITCHES`
+routes from the first request the new revision serves. Verify with
+`curl -s <api>/v1/config` (its `killSwitches` list, `backend/app/routers/account.py:178`)
+and `event="feature_paused"` in the logs.
+
 **After a revision rollback.** `update-traffic --to-revisions=<previous>=100`
 pins traffic to that revision by name, and every lever above then has a trap:
 
@@ -276,8 +320,9 @@ JVM unit tests, and backend pytest overlap instead of stacking:
   runs (`gh api …/commits/<sha>/check-runs`, `checks: read`) and
   [`scripts/check_release_ci.py`](../../scripts/check_release_ci.py) requires the
   latest run of each CI job to have **passed**: the secret scan, legal pages,
-  console pages, console accessibility, the engine pin, tiers 1, 3, 4 and 5, Firestore rules, the
-  sanitized engine host tests and `CI OK`. A path-filtered push run skips tiers 3
+  console pages, console accessibility, console Lighthouse, the engine pin, tiers 1, 3, 4 and 5, Firestore rules, the
+  sanitized engine host tests, the Android dependency scan (OSV-Scanner),
+  semgrep and `CI OK`. A path-filtered push run skips tiers 3
   and 5 (and the engine host tests with them), so it is not enough: run CI with `full_ci` first
   (checklist step 2).
 

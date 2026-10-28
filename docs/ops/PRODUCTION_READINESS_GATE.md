@@ -518,8 +518,8 @@ The production-readiness run of 2026-10-24…26 on branch `claude/readiness-2026
 [report](readiness/20261024/REPORT.md) has its scorecard, the ledger of all 139 findings,
 the gate results and the Phase 8 fork plan. Findings are in
 [FINDINGS.yaml](readiness/20261024/FINDINGS.yaml) and decisions in
-[ADMIN_DECISIONS.md](readiness/ADMIN_DECISIONS.md). On 2026-10-26 the branch was neither
-merged nor deployed.
+[ADMIN_DECISIONS.md](readiness/ADMIN_DECISIONS.md). The branch was merged on 2026-10-26 as
+#489 (`6d2bde6c`); on 2026-10-28 it was still not deployed.
 
 - **Verdict: No-go** until all of the following hold:
   - the five P1s left unfixed (TE1-001, TE5-003, TE5-004, TE6-001, TE6-011) are fixed, or
@@ -529,7 +529,8 @@ merged nor deployed.
   - the backend is deployed from that `main`.
 - **Re-verify.** Every P1 re-verified this run is VERIFIED, AE1-009 included (round 2, at
   `6324ea7f`). AE3-002 (P2) was VERIFIED at `b0f614ca` after rework round 4.
-- **Posture.** Re-run 2026-10-24: 17 FAIL, 0 UNKNOWN (see Launch blockers above).
+- **Posture.** Re-run 2026-10-24: 17 FAIL, 0 UNKNOWN (see Launch blockers above); the
+  2026-10-28 run failed the same 17 items (readiness TE6-011).
 - **Cross-check.** Rows 1.5, 2.1, 3.4, 3.7, 4.1, 4.3, 6.4, 6.5, 7.2, 7.3 and D3 now cite
   the branch. No status moved.
 - **Admin actions.** The run's one-off actions are the report's §4 (A1–A18: push and PRs,
@@ -721,7 +722,7 @@ date, and compensating control written below:
 | TE5-003: the Grievance Officer and the operator's identity are bracketed placeholders on the published Privacy Policy (TD-36) | Admin to sign | Admin to sign | Admin to sign |
 | TE5-004: the Privacy Policy omits Firebase Analytics, App Check / Play Integrity and IP data (TD-317) | Admin to sign | Admin to sign | Admin to sign |
 | TE6-001: no alert reaches anyone; monitoring is not applied and no notification channel exists (TD-217) | Admin to sign | Admin to sign | Admin to sign |
-| TE6-011: GCP posture, 17 FAIL on 2026-10-24 (TD-221–TD-225) | Admin to sign | Admin to sign | Admin to sign |
+| TE6-011: GCP posture, 17 FAIL on 2026-10-24 and again on 2026-10-28 (TD-221–TD-225) | Admin to sign | Admin to sign | Admin to sign |
 
 ## Sign-off
 
