@@ -136,6 +136,8 @@ const RULES = [
   // AE3-106: freeing a licence or seat for another phone is New phone; it
   // had a second name, Unbind, in the same dialog.
   [/\bun(?:bind|bound)\b/i, "New phone, not unbind", () => true, phrases],
+  // AE3-108: a kill switch is "paused right now", as the app says it.
+  [/\btemporarily unavailable\b|\bswitched off for maintenance\b/i, "paused right now", () => true],
   // AE3-005: two clocks, two names.
   [/\bgrace period\b/i, "after-expiry grace / offline allowance, not grace period", () => true],
   // AE3-006: have a seat; Pause / Resume; Remove; one release label.

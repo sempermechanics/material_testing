@@ -39,7 +39,7 @@ export const REASONS = {
   // Platform refusals any route can give (backend/app/main.py, deps.py).
   internal_error: "Something went wrong on the server. Try again; if it keeps happening, tell semper support.",
   firestore_unreachable: "The server could not reach its database just now. Try again in a moment.",
-  feature_paused: "That is switched off for maintenance just now. Try again later.",
+  feature_paused: "That is paused right now. Try again later.",
   request_too_large: "That is too large to send in one go.",
   // Route refusals no page has words of its own for.
   empty_patch: "Nothing changed.",
