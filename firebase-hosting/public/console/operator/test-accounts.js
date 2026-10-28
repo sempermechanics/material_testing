@@ -26,7 +26,7 @@ import { $ } from "./state.js";
 const SENTENCES = {
   test_accounts_disabled: "Test accounts are switched off on this server, or that address is " +
     "not on one of its test domains (TEST_ACCOUNT_DOMAINS).",
-  email_in_use: "That address already has a Semper account or sign-in. A test account " +
+  email_in_use: "That address already has a semper account or sign-in. A test account " +
     "needs an address nobody has used.",
   device_not_found: "That phone is no longer one of this account's active phones. " +
     "Refresh the list.",

@@ -174,7 +174,7 @@ test("each member row offers only what applies to that seat", async () => {
   assert.equal($("rows").querySelectorAll('[data-uid="u3"]').length, 0, "nothing to act on for a removed member");
 });
 
-test("a seat bound only on Semper Classroom offers New phone, read from the old field", async () => {
+test("a seat bound only on semper Classroom offers New phone, read from the old field", async () => {
   // Every backend writes the old field (ADR-030, TD-330): a seat this one
   // bound holds both, one not yet migrated only the old. A new field alone was
   // left behind by a backend from before the rename that cleared the old: stale.
@@ -185,8 +185,8 @@ test("a seat bound only on Semper Classroom offers New phone, read from the old 
     { uid: "u3", email: "cy@uni.edu", status: "active", deviceIdLockSemperClassroom: "stale-device-7" },
   ] } });
   assert.deepEqual(rows(), [
-    ["ana@uni.edu", "active", "—", "Semper Classroom sc-device-…", "New phone Pause Remove"],
-    ["ben@uni.edu", "active", "—", "Semper Classroom mt-device-…", "New phone Pause Remove"],
+    ["ana@uni.edu", "active", "—", "semper Classroom sc-device-…", "New phone Pause Remove"],
+    ["ben@uni.edu", "active", "—", "semper Classroom mt-device-…", "New phone Pause Remove"],
     ["cy@uni.edu", "active", "—", "not yet", "Pause Remove"],
   ]);
 });
@@ -444,7 +444,7 @@ test("a blank address adds nobody", async () => {
 test("a refused add is explained, and an unknown refusal keeps its code", async () => {
   const cases = [
     ["claim_contended", "Busy just now — try again."],
-    ["member_already_licensed", "x@uni.edu already has a Semper licence of their own. Ask Semper support to move them onto this one."],
+    ["member_already_licensed", "x@uni.edu already has a semper licence of their own. Ask semper support to move them onto this one."],
     ["invite_exists", "x@uni.edu is already promised a place on a different licence."],
     ["license_seats_exhausted", "This licence has no seats left."],
     ["odd", "Could not add x@uni.edu: odd"],

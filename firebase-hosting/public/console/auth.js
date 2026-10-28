@@ -356,7 +356,7 @@ export async function ensureDashboardMfa() {
   if (await sessionHasSecondFactor(user)) return;
   await user.reload();
   if (!hasSecondFactor(user)) {
-    setStatus("Enrol an authenticator app to open any Semper dashboard.");
+    setStatus("Enrol an authenticator app to open any semper dashboard.");
     // The QR library is needed once per account, here, so it is fetched
     // here rather than on every page load. If it cannot be fetched the card
     // shows the key to type instead.
@@ -399,7 +399,7 @@ export async function beginTotpEnrolment(accountLabel) {
   const secret = await TotpMultiFactorGenerator.generateSecret(session);
   return {
     secret: secret.secretKey,
-    qrUrl: secret.generateQrCodeUrl(accountLabel || user.email, "Semper DIC"),
+    qrUrl: secret.generateQrCodeUrl(accountLabel || user.email, "semper"),
     finish: (code) =>
       multiFactor(user).enroll(
         TotpMultiFactorGenerator.assertionForEnrollment(secret, code),

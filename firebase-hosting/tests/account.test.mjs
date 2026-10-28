@@ -255,7 +255,7 @@ test("the delete card says it is done in the app and removes the sign-in for bot
   await open({ license: { mode: "demo", held: false } });
   const said = $("deleteAccount").textContent;
   assert.match(said, /Settings → Your data → Delete account/);
-  assert.match(said, /removes the sign-in itself for both apps, Semper and Semper Classroom/);
+  assert.match(said, /removes the sign-in itself for both apps, semper and semper Classroom/);
   assert.match(said, /cannot be undone/);
 });
 
@@ -312,11 +312,11 @@ test("each analysis row says what is stored, not what was declared", async () =>
     { sessionId: "s5", specimen: "<img src=x>", status: "WEIRD" },
   ] } });
   assert.deepEqual(rowTexts(), [
-    ["Steel A s1", "Semper", "saved", "4", "1.5 MB", "Download"],
-    ["Steel B s2", "Semper", "uploading", "3 of 10", "2.0 MB when done", "Download"],
-    ["local-3 s3", "Semper", "failed", "0 of 2", "—", "Download"],
-    ["Nothing yet s4", "Semper", "uploading", "0 of 0", "—", "Download"],
-    ["<img src=x> s5", "Semper", "WEIRD", "0 of 0", "—", "Download"],
+    ["Steel A s1", "semper", "saved", "4", "1.5 MB", "Download"],
+    ["Steel B s2", "semper", "uploading", "3 of 10", "2.0 MB when done", "Download"],
+    ["local-3 s3", "semper", "failed", "0 of 2", "—", "Download"],
+    ["Nothing yet s4", "semper", "uploading", "0 of 0", "—", "Download"],
+    ["<img src=x> s5", "semper", "WEIRD", "0 of 0", "—", "Download"],
   ]);
   assert.equal($("rows").querySelectorAll("img").length, 0, "a specimen name is text, never markup");
   const buttons = $("rows").querySelectorAll("button");
@@ -336,7 +336,7 @@ test("every app's analyses are listed, each with the app that backed it up", asy
     { sessionId: "s4", specimen: "Next D", app: "<b>future</b>", status: "COMPLETED", completedCount: 1 },
   ] } });
   assert.deepEqual(sent(/sessions/), ["GET /v1/sessions?app=all"]);
-  assert.deepEqual(rowTexts().map((r) => r[1]), ["Semper", "Semper Classroom", "Semper Classroom", "Semper", "<b>future</b>"]);
+  assert.deepEqual(rowTexts().map((r) => r[1]), ["semper", "semper Classroom", "semper Classroom", "semper", "<b>future</b>"]);
   assert.equal($("rows").querySelectorAll("b").length, 0, "an unknown app name is text, never markup");
 });
 
@@ -467,11 +467,11 @@ test("moving the licence asks first and says when it can be moved again", async 
   await unbind(json(200, { nextChangeAllowedAt: next }));
   assert.deepEqual(sent(/unbind/), ["POST /v1/licenses/unbind"]);
   assert.equal($("status").textContent,
-    "Done. Sign in on the new phone, open Semper once so the licence attaches, and then " +
+    "Done. Sign in on the new phone, open semper once so the licence attaches, and then " +
     `restore your analyses. You can do this again after ${when(next)}.`);
 });
 
-test("Semper Classroom moves on its own, named in the query", async () => {
+test("semper Classroom moves on its own, named in the query", async () => {
   // Each app holds its own device (ADR-010). A browser cannot send X-App-Id,
   // so the page names the app; Semper's button still names none. Semper
   // Classroom is named by its old short name: a backend from before ADR-030
@@ -486,7 +486,7 @@ test("Semper Classroom moves on its own, named in the query", async () => {
   await settle();
   assert.deepEqual(sent(/unbind/), ["POST /v1/licenses/unbind?app=materialtesting"]);
   assert.equal($("status").textContent,
-    "Done. Sign in on the new phone, open Semper Classroom once so the licence attaches, " +
+    "Done. Sign in on the new phone, open semper Classroom once so the licence attaches, " +
     "and then restore your analyses.");
 });
 
@@ -495,7 +495,7 @@ test("a move inside the cooldown names the instant it ends", async () => {
   await unbind(json(409, { detail: `device_change_too_soon: ${until}` }));
   assert.deepEqual(status(), [
     `You have moved this licence recently, so you can move it yourself again after ${when(until)}. ` +
-    "Ask your IT contact or Semper support if you need to move it now.",
+    "Ask your IT contact or semper support if you need to move it now.",
     "muted err",
   ]);
 });
@@ -503,7 +503,7 @@ test("a move inside the cooldown names the instant it ends", async () => {
 test("the other move refusals read as sentences, and an unknown one keeps its code", async () => {
   await unbind(json(409, { detail: "device_change_too_soon" }));
   assert.equal($("status").textContent,
-    "You have moved this licence recently. Ask your IT contact or Semper support if you need to move it now.");
+    "You have moved this licence recently. Ask your IT contact or semper support if you need to move it now.");
   reset();
   await unbind(json(403, { detail: "mfa_required" }));
   assert.equal($("status").textContent, "Set up two-factor authentication first — moving a licence needs it.");

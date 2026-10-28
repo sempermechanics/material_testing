@@ -121,7 +121,7 @@ test("Export roster CSV saves the staff route's file under the key prefix", asyn
 test("a refused export is said in the card", async () => {
   await openCard({ [`GET ${STAFF}/seats/export`]: () => json(403, { detail: "not_admin" }) });
   await click($("rosterExport"));
-  assert.deepEqual(hint(), ["That account is not a Semper operator.", "muted err"]);
+  assert.deepEqual(hint(), ["That account is not a semper operator.", "muted err"]);
 });
 
 test("with the card closed the tools send nothing", async () => {

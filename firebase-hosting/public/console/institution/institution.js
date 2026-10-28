@@ -198,7 +198,7 @@ function render(data) {
     </p>`;
 
   $("rosterHelp").textContent = floating
-    ? "Everyone here may use Semper, but only the number of seats above at " +
+    ? "Everyone here may use semper, but only the number of seats above at " +
       "the same time. Someone without a seat keeps their saved work and " +
       "gets one as soon as a colleague finishes."
     : "Everyone here is licensed. Removing someone frees their seat for " +

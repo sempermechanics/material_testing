@@ -1,7 +1,7 @@
 // Run: node --test "firebase-hosting/tests/*.test.mjs"
 // One word per concept in what the consoles say (AE3): backup, not sync;
 // phone, not device, to an account holder; Demo as the plan's name, always
-// with its capital (ADDENDUM-3); the two
+// with its capital (ADDENDUM-3); the product as "semper" (ADDENDUM-4); the two
 // grace clocks named apart; a seat you have, paused and resumed, removed (not
 // revoked); one label for giving a seat back; "your institution's IT".
 import { test } from "node:test";
@@ -125,6 +125,11 @@ const RULES = [
   // AE3-104: the Demo analysis cap is the Demo limit; "allowance" is only the
   // offline window.
   [/\bdemo allowance\b/i, "the Demo limit (allowance is the offline window)", () => true],
+  // AE3-110, ADDENDUM-4: the product is "semper", lower-case even at the
+  // start of a sentence or a title, and so is the authenticator issuer.
+  // Identifiers (`deviceIdLockSemperClassroom`) and the company, Semper
+  // Mechanics, are not the product name.
+  [/\bSemper\b(?! Mechanics)/, "semper, lower-case (ADDENDUM-4)", () => true, copyText],
   // AE3-005: two clocks, two names.
   [/\bgrace period\b/i, "after-expiry grace / offline allowance, not grace period", () => true],
   // AE3-006: have a seat; Pause / Resume; Remove; one release label.

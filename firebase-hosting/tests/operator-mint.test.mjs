@@ -198,7 +198,7 @@ test("each other refused mint is explained, and the button comes back", async ()
   for (const [reply, text] of [
     [() => json(403, { detail: "mfa_required" }), "Enrol a second factor before issuing licences."],
     [() => json(429, { detail: "rate_limited" }), "Too many admin calls just now — wait a moment."],
-    [() => json(403, { detail: "not_admin" }), "That account is not a Semper operator."],
+    [() => json(403, { detail: "not_admin" }), "That account is not a semper operator."],
     [() => json(422, { detail: [{ msg: "Value error, maxAnalyses must be at least 25", loc: ["body"] }] }),
       "Could not issue: maxAnalyses must be at least 25"],
     [() => json(409, { detail: "email_already_licensed" }), "Could not issue: the server refused it (ref: email_already_licensed)"],

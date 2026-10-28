@@ -70,7 +70,7 @@ export function wireExport({ button, base, name, report }) {
 /** What a refused import row says, by the single add's code. */
 const ROW_ERRORS = {
   license_seats_exhausted: "no seats left on this licence",
-  member_already_licensed: "already has a Semper licence of their own — Semper support can move them",
+  member_already_licensed: "already has a semper licence of their own — semper support can move them",
   invite_exists: "already promised a place on a different licence",
   license_seat_disabled: "their seat is paused — resume it instead",
   license_revoked: "this licence has been revoked",

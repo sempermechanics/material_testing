@@ -77,5 +77,5 @@ test("an expired sign-in says to sign in again, and a step-up's Firebase failure
 
 test("an account at Firebase's authenticator limit is told who can clear it", () => {
   assert.match(authErrorText({ code: "auth/maximum-second-factor-count-exceeded" }),
-    /as many authenticators as it can — ask Semper support/);
+    /as many authenticators as it can — ask semper support/);
 });

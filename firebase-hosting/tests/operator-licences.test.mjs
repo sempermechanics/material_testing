@@ -65,7 +65,7 @@ test("a list answer with nothing in it, and no demo allowance, still renders", a
 test("a licence list that cannot be read says why", async () => {
   for (const [reply, text] of [
     [() => json(503, { detail: "unavailable" }), "Could not load licences: unavailable"],
-    [() => json(403, { detail: "not_admin" }), "That account is not a Semper operator."],
+    [() => json(403, { detail: "not_admin" }), "That account is not a semper operator."],
   ]) {
     reset();
     await openDesk({ routes: { [LIST]: reply } });

@@ -169,9 +169,9 @@ test("each refusal of a create is said, and no dialog opens", async () => {
       "Test accounts are switched off on this server, or that address is not on one of its " +
       "test domains (TEST_ACCOUNT_DOMAINS)."],
     [() => json(409, { detail: "email_in_use" }),
-      "That address already has a Semper account or sign-in. A test account needs an address nobody has used."],
+      "That address already has a semper account or sign-in. A test account needs an address nobody has used."],
     [() => json(403, { detail: "mfa_required" }), "Set up two-factor authentication first."],
-    [() => json(403, { detail: "not_admin" }), "That account is not a Semper operator."],
+    [() => json(403, { detail: "not_admin" }), "That account is not a semper operator."],
     [() => json(422, { detail: [{ msg: "Value error, days must be at most 90", loc: ["body"] }] }),
       "Could not create new@test.example: days must be at most 90"],
     [offline, "Could not create new@test.example: The server could not be reached — check your connection and try again."],
@@ -359,7 +359,7 @@ test("Extend without a new end in the answer, refused, out of range or cancelled
   prompts.answer("7");
   rowButton("extend", QC.uid).click();
   await settle();
-  assert.deepEqual(status(), ["Could not extend qc-1@test.example: No Semper account has that address.", "muted err"]);
+  assert.deepEqual(status(), ["Could not extend qc-1@test.example: No semper account has that address.", "muted err"]);
 });
 
 test("New password confirms, then shows the new one once", async () => {
@@ -454,7 +454,7 @@ test("the list shows each active phone with its own Release", async () => {
   await showList([PHONES, CI]);
   // Model and app, the id under them (or the id alone, without a model), Release.
   assert.deepEqual(accountRows()[0].slice(3, 4), [
-    "2 of 3 Pixel 6 Semper and-phone-1 Release and-phone-<2> Semper Classroom Release"]);
+    "2 of 3 Pixel 6 semper and-phone-1 Release and-phone-<2> semper Classroom Release"]);
   assert.deepEqual(accountRows()[1].slice(3, 4), ["0 of 10"], "no phones, no buttons");
   const phones = $("testAccountRows").querySelectorAll("li");
   assert.equal(phones.length, 2, "one line per phone");
@@ -506,12 +506,12 @@ test("phones unfolded stay unfolded when the list is read again", async () => {
   assert.equal(phonesFold(QC.uid).open, false);
 });
 
-test("a phone registered before ADR-030 is labelled Semper Classroom too", async () => {
+test("a phone registered before ADR-030 is labelled semper Classroom too", async () => {
   // devices/{id}.app is never rewritten, so it may still say materialtesting.
   await showList([{ ...QC, activeDevices: 1, devices: [
     { deviceId: "old-phone", app: "materialtesting", model: "Pixel 5", registeredAt: null },
   ] }]);
-  assert.deepEqual(accountRows()[0].slice(3, 4), ["1 of 3 Pixel 5 Semper Classroom old-phone Release"]);
+  assert.deepEqual(accountRows()[0].slice(3, 4), ["1 of 3 Pixel 5 semper Classroom old-phone Release"]);
 });
 
 test("Release confirms, sends, says so and reads the list again", async () => {

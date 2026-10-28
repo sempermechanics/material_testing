@@ -753,11 +753,11 @@ test("Device history is shown in the page, one move a line", async () => {
   // included; one the page does not know is shown as it is.
   assert.deepEqual(alerts, [
     "Phone history for SEMP-IND1\n\n" +
-    `${when("2026-10-07T11:25Z")}  bind  by u1 (Semper Classroom)  → dev-4\n` +
-    `${when("2026-10-07T11:24Z")}  bind  by u1 (Semper Classroom)  → dev-3\n` +
-    `${when("2026-10-07T11:23Z")}  bind  by u1 (Semper)  → dev-2\n` +
+    `${when("2026-10-07T11:25Z")}  bind  by u1 (semper Classroom)  → dev-4\n` +
+    `${when("2026-10-07T11:24Z")}  bind  by u1 (semper Classroom)  → dev-3\n` +
+    `${when("2026-10-07T11:23Z")}  bind  by u1 (semper)  → dev-2\n` +
     `${when("2026-10-07T11:22Z")}  bind  by u1 (other)  → dev-5\n` +
-    `${when("2026-10-07T11:21Z")}  clear  by staff  left dev-1  left dev-0 (Semper Classroom)`,
+    `${when("2026-10-07T11:21Z")}  clear  by staff  left dev-1  left dev-0 (semper Classroom)`,
   ]);
   assert.equal(confirms.cards[0].removed, true);
 });

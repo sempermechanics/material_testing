@@ -54,7 +54,7 @@ export async function showDeviceHistory(id) {
         (app ? ` (${APP_NAMES[app] || app})` : "") +
         (prev ? `  left ${prev}` : "") +
         (released && released !== prev ? `  signed out ${released}` : "") +
-        (prevMt ? `  left ${prevMt} (Semper Classroom)` : "") +
+        (prevMt ? `  left ${prevMt} (semper Classroom)` : "") +
         (next ? `  → ${next}` : "");
     });
     // One move a line: the card keeps single line breaks.
@@ -151,7 +151,7 @@ $("releasePhone").addEventListener("click", async () => {
     const classroom = classroomField(out, "releasedDeviceId");
     const released = [
       out.releasedDeviceId,
-      classroom && `${classroom} (Semper Classroom)`,
+      classroom && `${classroom} (semper Classroom)`,
     ].filter(Boolean);
     setStatus(released.length
       ? `Released ${released.join(" and ")} for ${out.email || email}; the new phone can sign in.`

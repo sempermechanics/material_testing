@@ -224,7 +224,7 @@ export function codeCard() {
   card.className = "card code";
   card.innerHTML = `
     <h2>Enter your authenticator code</h2>
-    <p class="muted">The 6-digit code your authenticator app shows for Semper DIC.</p>
+    <p class="muted">The 6-digit code your authenticator app shows for semper.</p>
     <div class="row">
       <input inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" aria-label="Authenticator code"
              placeholder="6-digit code" size="12" />
@@ -278,7 +278,7 @@ export function codeCard() {
     },
     rejected() {
       feedback.textContent = "That code was not accepted. Codes change every 30 " +
-        "seconds: wait for a fresh one, from the Semper DIC entry for this account.";
+        "seconds: wait for a fresh one, from the semper entry for this account.";
       confirmBtn.hidden = true;
       retryBtn.hidden = false;
       retryBtn.focus();
@@ -316,7 +316,7 @@ export function enrolInPage(enrolment, account, qrSvg) {
       <summary>Can't scan? Enter the key by hand</summary>
       <p class="mono key"></p>
       <p class="muted">Account: <span class="mono account"></span> · Issuer:
-        Semper DIC · Time-based, 6 digits, 30 seconds</p>
+        semper · Time-based, 6 digits, 30 seconds</p>
     </details>
     <div class="row">
       <input inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" aria-label="Authenticator code"

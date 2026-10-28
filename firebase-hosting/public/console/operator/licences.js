@@ -96,7 +96,7 @@ export async function loadLicences(started) {
   } catch (e) {
     if (ticket !== licenceLoad) return;
     const message = e.code === "not_admin"
-      ? "That account is not a Semper operator."
+      ? "That account is not a semper operator."
       : `Could not load licences: ${explain(e)}`;
     setStatus(message, true);
     $("licenceRows").innerHTML = retryRow(COLUMNS, message);
