@@ -2,6 +2,7 @@ package com.sempermechanics.semper.ui.analysis.sweep
 
 import android.text.TextUtils
 import android.text.method.SingleLineTransformationMethod
+import android.view.View
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.ui.analysis.WizardTestBed
 import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
@@ -12,6 +13,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.GraphicsMode
 
 /**
  * The sweep's frame picker labels each frame by the name it was picked as,
@@ -57,5 +59,39 @@ class SweepFramePickerTest {
         assertEquals(1, name.maxLines)
         assertEquals(TextUtils.TruncateAt.MIDDLE, name.ellipsize)
         assertTrue("wraps", name.transformationMethod is SingleLineTransformationMethod)
+    }
+
+    /**
+     * On a phone the field's text is editable, so it is laid out by a
+     * DynamicLayout, which only ever cuts at the end: android:ellipsize="middle"
+     * left 'speck' clipped under the "2 / 2" suffix at font scale 2.0
+     * (readiness AE1-108). The picker cuts the name itself to the room the
+     * field leaves for text, keeping the frame number and extension.
+     */
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE) // the legacy TextUtils.ellipsize shadow truncates with no ellipsis
+    fun `a name wider than the field is cut in the middle to fit`() {
+        val long = "speckle_pattern_specimen_02.png"
+        val frames = listOf("/c/0000_a.png", "/c/0001_b.png").map { DeformedFrame(path = it, name = long) }
+        bed.viewModel.edit { it.copy(deformedFrames = frames) }
+        picker.bind()
+        picker.show(1)
+        val name = bed.activity.findViewById<android.widget.EditText>(R.id.ddSweepFrame)
+        val room = (name.paint.measureText(long) / 2).toInt()
+        val width = name.totalPaddingLeft + name.totalPaddingRight + room
+        name.measure(
+            View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+        )
+        name.layout(0, 0, width, name.measuredHeight)
+
+        name.viewTreeObserver.dispatchOnPreDraw()
+
+        val shown = name.text.toString()
+        assertTrue("not cut: '$shown'", shown.contains('…'))
+        assertTrue("'$shown'", shown.startsWith("spe") && shown.endsWith("02.png"))
+        assertTrue("'$shown' overflows", name.paint.measureText(shown) <= room)
+        assertEquals("the frame's full name stays the label", long, picker.frameLabel(1))
+        assertEquals("TalkBack reads the full name", long, name.createAccessibilityNodeInfo().text.toString())
     }
 }
