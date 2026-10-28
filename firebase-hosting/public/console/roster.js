@@ -83,12 +83,12 @@ const ACTIONS = {
 const ASK = {
   clear: (who) => ({
     title: `New phone for ${who}`,
-    message: `Unbind ${who} from the phone it is on?
+    message: `Free ${who} for a new phone?
 
 ` +
       "The next phone they sign in on takes the seat. Their seat and their " +
       "saved analyses are untouched.",
-    confirm: "Unbind",
+    confirm: "New phone",
   }),
   remove: (who) => ({
     title: `Remove ${who}`,

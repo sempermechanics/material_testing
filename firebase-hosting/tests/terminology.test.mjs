@@ -133,6 +133,9 @@ const RULES = [
   // Identifiers (`deviceIdLockSemperClassroom`) and the company, Semper
   // Mechanics, are not the product name.
   [/\bSemper\b(?! Mechanics)/, "semper, lower-case (ADDENDUM-4)", () => true, copyText],
+  // AE3-106: freeing a licence or seat for another phone is New phone; it
+  // had a second name, Unbind, in the same dialog.
+  [/\bun(?:bind|bound)\b/i, "New phone, not unbind", () => true, phrases],
   // AE3-005: two clocks, two names.
   [/\bgrace period\b/i, "after-expiry grace / offline allowance, not grace period", () => true],
   // AE3-006: have a seat; Pause / Resume; Remove; one release label.

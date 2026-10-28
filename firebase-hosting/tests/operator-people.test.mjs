@@ -29,8 +29,8 @@ test("a refused New phone says so", async () => {
   await openDesk({ routes: { [`PATCH /v1/admin/licenses/${IND.id}`]: () => json(409, { detail: "license_revoked" }) } });
   confirms.answer(true);
   await click(rowButton("device", IND.id));
-  assert.match(confirms.asked[0], /^Unbind SEMP-IND1 from the phone it is on\?\n\nThe next phone they sign in on takes it\./);
-  assert.deepEqual(status(), ["Could not unbind: the server refused it (ref: license_revoked)", "muted err"]);
+  assert.match(confirms.asked[0], /^Free SEMP-IND1 for a new phone\?\n\nThe next phone they sign in on takes it\./);
+  assert.deepEqual(status(), ["Could not free it for a new phone: the server refused it (ref: license_revoked)", "muted err"]);
 });
 
 test("after a licence's row is redrawn, focus is back on that row", async () => {

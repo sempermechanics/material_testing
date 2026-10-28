@@ -733,7 +733,7 @@ test("New phone asks, then clears the lock and says the next device takes it", a
   rowButton("device", IND.id).click();
   await settle();
   assert.deepEqual(JSON.parse(net.requests.find((r) => r.method === "PATCH").body), { clearDeviceLock: true });
-  assert.deepEqual(status(), ["SEMP-IND1 unbound — the next phone to sign in takes it.", "muted"]);
+  assert.deepEqual(status(), ["SEMP-IND1 is free for a new phone — the next phone to sign in takes it.", "muted"]);
 });
 
 test("Device history is shown in the page, one move a line", async () => {

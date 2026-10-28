@@ -17,21 +17,21 @@ export async function clearLicenceDevice(id) {
   // change: the licence binds to whichever device signs in next, so
   // nothing is re-issued and nothing is typed at the customer's end.
   if (!(await confirmInPage({
-    title: `Unbind ${labelOf(id)}`,
-    message: `Unbind ${labelOf(id)} from the phone it is on?\n\n` +
+    title: `New phone for ${labelOf(id)}`,
+    message: `Free ${labelOf(id)} for a new phone?\n\n` +
       "The next phone they sign in on takes it. Their entitlement and " +
       "their analyses are untouched — this is not a revoke.",
-    confirm: "Unbind",
+    confirm: "New phone",
   }))) return;
   try {
     const out = await api(`/v1/admin/licenses/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify({ clearDeviceLock: true }),
     });
-    setStatus(`${labelOf(id)} unbound — the next phone to sign in takes it.`);
+    setStatus(`${labelOf(id)} is free for a new phone — the next phone to sign in takes it.`);
     showLicence(out);
   } catch (e) {
-    setStatus(explain(e, {}, (text) => `Could not unbind: ${text}`), true);
+    setStatus(explain(e, {}, (text) => `Could not free it for a new phone: ${text}`), true);
   }
 }
 

@@ -347,7 +347,10 @@ test("Remove asks first, naming the member; declining sends nothing", async () =
 test("New phone asks first, naming the member; declining sends nothing", async () => {
   await act("clear", "u1", undefined, false);
   assert.deepEqual(sent(/PATCH/), []);
-  assert.match(confirms.asked[0], /^Unbind ana@uni\.edu from the phone it is on\?/);
+  assert.match(confirms.asked[0], /^Free ana@uni\.edu for a new phone\?/);
+  // One name for the action (AE3-106): the button, the card and its confirm.
+  assert.equal(confirms.cards[0].querySelector("h2").textContent, "New phone for ana@uni.edu");
+  assert.equal(confirms.cards[0].querySelector(".confirm").textContent, "New phone");
 });
 
 test("each row's buttons name the member they act on", async () => {
