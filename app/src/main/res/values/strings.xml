@@ -845,6 +845,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="viewer_stats_fmt">max (raw) %1$s %8$s at (%2$d, %3$d) px\nmin (raw) %4$s %8$s at (%5$d, %6$d) px\nmean %7$s %8$s</string>
     <string name="viewer_stats_plain_fmt">max (raw) %1$s %4$s · min (raw) %2$s %4$s · mean %3$s %4$s</string>
     <!-- The Details histogram's y axis: how many points fall in each bin. -->
+    <!-- A collapsible section header's state for TalkBack (readiness AE1-107). -->
+    <string name="a11y_expanded">Expanded</string>
+    <string name="a11y_collapsed">Collapsed</string>
     <string name="viewer_histogram_y_axis">points</string>
     <!-- Summary colour bar is a whole-sequence scale; the ⓘ sheet must quote
          those same ends, not the hidden first frame's extrema. They are the
