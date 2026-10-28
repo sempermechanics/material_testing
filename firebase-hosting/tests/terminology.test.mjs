@@ -144,6 +144,10 @@ const RULES = [
   [/\bRevoke the seat\b|\bRevoked, /, "Remove, for a seat", () => true],
   // AE3-008: the institution's IT; British spelling.
   [/\bIT department\b|\borganization\b|\bInitializ/, "your institution's IT; British spelling", () => true],
+  // AE3-107: an account holder's two helpers are "your institution's IT"
+  // and "semper support" (the operator desk's form still has IT contacts).
+  [/\bIT contacts?\b/, "your institution's IT, to an account holder", (name) => name.startsWith("account/")],
+  [/\bsemper\s+contact\b|\ban\s+admin\b/i, "semper support / your institution's IT", () => true],
 ];
 
 test("the consoles use one word per concept", () => {

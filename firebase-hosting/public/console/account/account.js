@@ -173,7 +173,7 @@ function explain(licensed, floating, holdsSeat, held, lapsed) {
   if (!licensed && held && lapsed) {
     return `Your licence ended on ${day(licence.expiresAt)} and its after-expiry ` +
            "grace is over, so this account is on Demo. Your saved work is " +
-           "untouched. Ask your semper contact or your institution's IT to renew it.";
+           "untouched. Ask your institution's IT or semper support to renew it.";
   }
   // Only a seat you still hold on a live licence is waiting on a colleague.
   // A seat on hold or removed reads as demo too, and was told to wait for a
@@ -185,7 +185,7 @@ function explain(licensed, floating, holdsSeat, held, lapsed) {
   }
   if (!licensed) {
     return "You are on Demo. Analyses are capped and cloud backup is off. " +
-           "Ask your semper contact or your institution's IT for a licence. Most " +
+           "Ask your institution's IT or semper support for a licence. Most " +
            "attach to this address by themselves; if you were given a claim " +
            "code, redeem it below.";
   }
@@ -273,12 +273,12 @@ function unbindError(e) {
       // Local date and time, as the success message gives it: the cooldown
       // ends at the instant of the last move, not at a day boundary.
       (rest ? `, so you can move it yourself again after ${when(rest)}` : "") +
-      ". Ask your IT contact or semper support if you need to move it now.",
+      ". Ask your institution's IT or semper support if you need to move it now.",
     mfa_required:
       "Set up two-factor authentication first — moving a licence needs it.",
     no_license: "There is no licence on this account to move.",
-    seat_not_found: "Your seat is no longer on that licence — ask your IT contact.",
-    license_not_found: "That licence no longer exists — ask your semper contact.",
+    seat_not_found: "Your seat is no longer on that licence — ask your institution's IT.",
+    license_not_found: "That licence no longer exists — ask semper support.",
   }, (text) => `Could not move your licence: ${text}`);
 }
 

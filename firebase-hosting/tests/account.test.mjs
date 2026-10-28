@@ -495,7 +495,7 @@ test("a move inside the cooldown names the instant it ends", async () => {
   await unbind(json(409, { detail: `device_change_too_soon: ${until}` }));
   assert.deepEqual(status(), [
     `You have moved this licence recently, so you can move it yourself again after ${when(until)}. ` +
-    "Ask your IT contact or semper support if you need to move it now.",
+    "Ask your institution's IT or semper support if you need to move it now.",
     "muted err",
   ]);
 });
@@ -503,7 +503,7 @@ test("a move inside the cooldown names the instant it ends", async () => {
 test("the other move refusals read as sentences, and an unknown one keeps its code", async () => {
   await unbind(json(409, { detail: "device_change_too_soon" }));
   assert.equal($("status").textContent,
-    "You have moved this licence recently. Ask your IT contact or semper support if you need to move it now.");
+    "You have moved this licence recently. Ask your institution's IT or semper support if you need to move it now.");
   reset();
   await unbind(json(403, { detail: "mfa_required" }));
   assert.equal($("status").textContent, "Set up two-factor authentication first — moving a licence needs it.");
