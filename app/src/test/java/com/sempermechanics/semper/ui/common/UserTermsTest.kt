@@ -13,7 +13,8 @@ import java.io.File
  * (readiness ADDENDUM-3), the product is lower-case "semper" (ADDENDUM-4), the
  * account verb is "sign in", and an account holder's helpers are "your
  * institution's IT" and "semper support" (AE3-107). The PDF report's literals
- * follow the same product name and "analysis" word (AE3-102, AE3-112).
+ * follow the same product name and "analysis" word (AE3-102, AE3-112), and so
+ * does the FAQ the app links to (AE3-112).
  */
 class UserTermsTest {
 
@@ -148,6 +149,32 @@ class UserTermsTest {
         assertTrue("within 30 days" in strings.getValue("settings_improve_summary"))
         assertTrue(notice, "images, results and reports you back up" in notice)
         assertTrue("images, results and reports you back up" in strings.getValue("terms_checkbox_improve_hint"))
+    }
+
+    /**
+     * The FAQ the app opens (the engine-start "Why?" link, `docs/app/FAQ.md`)
+     * is user-facing text too, so it keeps the same words (readiness AE3-112):
+     * phone, analysis, lower-case semper, Demo and Licensed, sign in. Each
+     * offending line is reported as "FAQ.md:<line>: <text>".
+     */
+    @Test
+    fun `the FAQ the app links to uses the same words`() {
+        val faq = File("../docs/app/FAQ.md").readLines()
+        assertTrue("FAQ.md not found or empty", faq.isNotEmpty())
+        val ignoreCase = setOf(RegexOption.IGNORE_CASE)
+        val rules = listOf(
+            // Identifiers keep "device", as in the app's strings: a Device ID, a device key.
+            Regex("""\bdevice\b(?!\s+(key|ID)\b)|\bdevices\b""", ignoreCase),
+            Regex("""\bsessions?\b""", ignoreCase),
+            Regex("""\bSemper\b(?! Mechanics\b)"""),
+            Regex("""\bdemo\b|\blicensed\b"""),
+            Regex("""\b(on|to) the demo\b|\bdemo mode\b""", ignoreCase),
+            Regex("""\blog[ -]?(in|out)\b""", ignoreCase),
+        )
+        val offending = faq.withIndex()
+            .filter { (_, line) -> rules.any { it.containsMatchIn(line) } }
+            .map { (i, line) -> "FAQ.md:${i + 1}: ${line.trim()}" }
+        assertEquals(emptyList<String>(), offending)
     }
 
     @Test
