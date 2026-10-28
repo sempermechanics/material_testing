@@ -28,6 +28,7 @@ REQUIRED = (
     "Legal pages match their source",
     "Console pages",
     "Console accessibility",
+    "Console Lighthouse",
     "Engine pin is a tagged release",
     "Engine host tests (ASan+UBSan)",
     "Tier 1 — Static checks",

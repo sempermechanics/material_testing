@@ -256,6 +256,36 @@ jobs:
             firebase-hosting/test-results/
           retention-days: 7
 
+  console-lighthouse:
+    name: Console Lighthouse
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Lighthouse over the console and hosted pages in Playwright's Chromium,
+    # against the same stub API and fake Firebase SDK as console-a11y (readiness
+    # AE2-110); `npm run lighthouse` holds the pages and the score floors.
+    # Lighthouse needs Node 22.19 or later, which '22' resolves to. About 4 min.
+    # The report uploads on every run, pass or fail.
+    defaults:
+      run:
+        working-directory: firebase-hosting
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: firebase-hosting/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npm run lighthouse
+      - name: Upload the Lighthouse report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: console-lighthouse-report
+          path: firebase-hosting/lighthouse-report/
+          retention-days: 7
+
   # ===================================================================
   # Path filters — same rules on PR and push. Prove only what the diff
   # can break. Full matrix: the weekly schedule, the `full-ci` label or
@@ -1316,6 +1346,7 @@ jobs:
       - legal-pages
       - console-pages
       - console-a11y
+      - console-lighthouse
       - changes
       - tier1-static
       - tier1-app-fast
@@ -1336,6 +1367,7 @@ jobs:
             "${{ needs.legal-pages.result }}" \
             "${{ needs.console-pages.result }}" \
             "${{ needs.console-a11y.result }}" \
+            "${{ needs.console-lighthouse.result }}" \
             "${{ needs.changes.result }}" \
             "${{ needs.tier1-static.result }}" \
             "${{ needs.tier1-app-fast.result }}" \
