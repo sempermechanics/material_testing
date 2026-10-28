@@ -236,6 +236,16 @@
         <item name="cornerSize">22dp</item>
     </style>
 
+    <!-- The app's bottom sheets (media picker, Share, Send to): sheet_surface, so a
+         sheet at the top of the screen at night gets light status-bar icons. -->
+    <style name="Widget.Semper.BottomSheet" parent="Widget.MaterialComponents.BottomSheet.Modal">
+        <item name="backgroundTint">@color/sheet_surface</item>
+    </style>
+
+    <style name="ThemeOverlay.Semper.BottomSheetDialog" parent="ThemeOverlay.MaterialComponents.BottomSheetDialog">
+        <item name="bottomSheetStyle">@style/Widget.Semper.BottomSheet</item>
+    </style>
+
     <style name="Widget.Semper.ViewerPeekSheet" parent="Widget.MaterialComponents.BottomSheet.Modal">
         <item name="backgroundTint">@android:color/transparent</item>
         <item name="shapeAppearance">@style/ShapeAppearance.Semper.ViewerPeek</item>

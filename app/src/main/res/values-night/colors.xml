@@ -11,6 +11,9 @@
          invert here; cyan stays the light-theme value. -->
     <color name="wordmark_ink">#E9E9E7</color>
     <color name="viewer_canvas">#101518</color>
+    <!-- What force dark made of the white sheet, set outright so Material's
+         edge-to-edge sheet draws light status-bar icons over it (AE1-113). -->
+    <color name="sheet_surface">#1B1B1B</color>
     <color name="viewer_chrome_text">#FFFFFFFF</color>
     <!-- 5:1 on the glass puck over the canvas (#B0B8C0 was 3.2:1). -->
     <color name="viewer_chrome_muted">#E0E4E8</color>

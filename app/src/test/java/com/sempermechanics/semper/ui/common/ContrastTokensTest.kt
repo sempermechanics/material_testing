@@ -14,6 +14,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.slider.Slider
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.report.VisualizationEngine
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -169,6 +170,31 @@ class ContrastTokensTest {
             assertText("puck label over $name", ink, image, pill)
         }
         assertText("puck label over the canvas", ink, c(R.color.viewer_canvas), pill)
+    }
+
+    /** The fill [themed]'s default bottom sheets draw (bottomSheetDialogTheme, then bottomSheetStyle). */
+    private fun sheetFill(): Int {
+        val overlay = themeRes(themed, com.google.android.material.R.attr.bottomSheetDialogTheme)
+        val sheetTheme = ContextThemeWrapper(themed, overlay)
+        val style = themeRes(sheetTheme, com.google.android.material.R.attr.bottomSheetStyle)
+        val ta = sheetTheme.obtainStyledAttributes(style, intArrayOf(com.google.android.material.R.attr.backgroundTint))
+        val fill = requireNotNull(ta.getColorStateList(0)) { "the sheet style sets no backgroundTint" }.defaultColor
+        ta.recycle()
+        return fill
+    }
+
+    @Test
+    @Config(qualifiers = "night")
+    fun `night sheets are dark, so their status bar draws light icons`() {
+        // Readiness AE1-113: Material picks the sheet's status-bar icons from its fill's
+        // luminance; a white fill (force dark inverts it only on screen) gave black
+        // icons on the dark bar, 1.22:1.
+        assertTrue("night sheet fill is light", ColorUtils.calculateLuminance(sheetFill()) < 0.5)
+    }
+
+    @Test
+    fun `day sheets stay white`() {
+        assertEquals(c(R.color.surface), sheetFill())
     }
 
     @Test
