@@ -2,7 +2,7 @@
  * see the desk, and routes each licence row's buttons to the card or dialog
  * that handles them; the rest is in the modules imported below.
  */
-import { requireSignIn } from "../auth.js";
+import { requireSignIn, sessionOver } from "../auth.js";
 import { api } from "../api.js";
 import { setStatus, whileWaiting } from "../status.js";
 import { unfinishedStepUpText } from "../util.js";
@@ -73,6 +73,9 @@ async function operatorMe(user, role) {
     setStatus(`Could not check whether ${user.email} is an operator: ${explain(e)}`, true);
     return null;
   }
+  // A desk read sent alongside may have ended the session before the role
+  // answered: its line stays, and nothing is shown behind Sign in (AE2-105).
+  if (sessionOver()) return null;
   if (me.role === "admin") return me;
   $("app").hidden = true;
   $("notOperatorWho").textContent = user.email;

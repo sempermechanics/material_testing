@@ -1,4 +1,4 @@
-import { requireSignIn } from "../auth.js";
+import { requireSignIn, sessionOver } from "../auth.js";
 import { api } from "../api.js";
 import { setStatus, markFirstData, whileWaiting } from "../status.js";
 import { esc, day, licenceStatePill, placeholderRows, retryRow, sessionEnded } from "../util.js";
@@ -67,6 +67,9 @@ async function administersSomething(user) {
   try {
     licenses = (await whileWaiting(api("/v1/institutions/licenses"), "Checking your access…"))
       .licenses || [];
+    // The roster's read, sent alongside, may have ended the session first:
+    // its line stays, and nothing shows the dashboard again (AE2-105).
+    if (sessionOver()) return false;
     setStatus("");
   } catch (e) {
     // Signed out (api.js ended the session and said so): nothing more to show.

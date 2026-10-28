@@ -5,7 +5,7 @@
 // licence open or off any button.
 import { beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { test, reset, settle, openPage, json, net, sent, readyUser, $, loadAuth } from "./harness.mjs";
+import { test, reset, settle, openPage, json, net, sent, readyUser, $, loadAuth, deferred } from "./harness.mjs";
 
 await loadAuth();
 
@@ -92,4 +92,26 @@ test("an expired sign-in on the licence list says so and draws nothing behind Si
   assert.equal($("signIn").hidden, false);
   assert.equal($("rows").querySelectorAll("button").length, 0, "no roster, no Remove or Pause");
   assert.deepEqual(sent(/summary/), [], "no seat counts read for a signed-out page");
+});
+
+// AE2-105, rework: the roster read answered 401 first and signed the page
+// out; the licence list answered 200 after, and the page went on to show
+// the dashboard (Add member, Export, sort, Retry) behind Sign in.
+test("a licence list answered after the session ended does not bring the dashboard back", async () => {
+  const list = deferred();
+  await openPage("institution", {
+    search: "?license=L1",
+    routes: {
+      [`GET ${SEATS}`]: () => json(401, { detail: "invalid_token" }),
+      "GET /v1/institutions/licenses": () => list.promise,
+    },
+  });
+  await settle();
+  assert.deepEqual(status(), ["Your sign-in has expired. Sign in again.", "muted err"]);
+  list.resolve(json(200, { licenses: [{ id: "L1", keyPrefix: "SEMP-UNI1" }] }));
+  await settle();
+  assert.equal($("app").hidden, true, "the dashboard stays hidden");
+  assert.equal($("signIn").hidden, false);
+  assert.deepEqual(status(), ["Your sign-in has expired. Sign in again.", "muted err"]);
+  assert.deepEqual(sent(/summary/), [], "nothing more is read for a signed-out page");
 });
