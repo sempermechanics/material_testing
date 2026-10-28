@@ -1102,7 +1102,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="action_check_status">CHECK STATUS</string>
     <string name="status_access_granted">Access Granted!</string>
     <string name="status_still_pending">Account is still pending approval.</string>
-    <string name="status_changed_relogin">Your access status has changed. Please log in again.</string>
+    <string name="status_changed_relogin">Your access has changed. Please sign in again.</string>
     <string name="error_network_retry">Network error. Try again.</string>
 
     <!-- Failure text by kind (ADR-018, readiness AE1-009): what a screen says
