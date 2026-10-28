@@ -137,13 +137,13 @@ with subset**. Always compare at the **same subset** to isolate lighting.
 
 1. **Prefer bright or medium light** on the speckle — dim costs accuracy even when
    the floor dialog passes.
-2. **Hold the rig steady** — session drift (e.g. 0.6 px vertical over ten frames)
+2. **Hold the rig steady** — drift within one analysis (e.g. 0.6 px vertical over ten frames)
    can spike max strain to hundreds of mε while mean/median stay near zero.
-3. **Draw the same contrast ROI** when comparing lighting sessions (lab scripts use
-   the intersection of per-session ROIs).
+3. **Draw the same contrast ROI** when comparing analyses under different lighting (lab
+   scripts use the intersection of the analyses' ROIs).
 4. **Do not trust heatmap max alone** — see [strain-field-stats](#strain-field-stats).
 
-Device-to-device differences were **secondary** to lighting and burst stability in
+Phone-to-phone differences were **secondary** to lighting and burst stability in
 this study.
 
 Full protocol, fixed-subset tables, and setup checklist:
@@ -294,16 +294,16 @@ check storage permission.
 ## video-read {#video-read}
 
 **When you see it:** Video metadata could not be read, or the message names a
-four-letter codec the device cannot decode.
+four-letter codec this phone cannot decode.
 
 **What to do:** Re-copy the file; try a shorter clip; confirm the container is
-supported on this device.
+supported on this phone.
 
 **AVI:** MP4, 3GP, MKV/WebM and MPEG-TS are the containers Android itself opens;
 AVI is not one of them, so Semper demuxes AVI on its own. Uncompressed AVI (8-bit
 gray, 4:2:2, 4:2:0, DIB) and motion-JPEG are read losslessly, and Xvid/DivX/H.264
-inside AVI go to the device's own decoders. If the message names a codec — for
-example `XVID` — this device has no decoder for it: re-save the clip as MP4
+inside AVI go to the phone's own decoders. If the message names a codec — for
+example `XVID` — this phone has no decoder for it: re-save the clip as MP4
 (H.264), or export the frames as PNG and import them as images.
 
 ---
@@ -319,10 +319,10 @@ Settings.
 
 ## no-batch-data {#no-batch-data}
 
-**When you see it:** Result viewer opened without a `.dat` batch for this session.
+**When you see it:** Result viewer opened without a `.dat` batch for this analysis.
 
 **What to do:** Re-run it from Home (long-press the row, then **Re-run**), or open
-a session that completed successfully.
+an analysis that completed successfully.
 
 ---
 
