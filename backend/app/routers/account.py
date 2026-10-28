@@ -1,5 +1,6 @@
 import logging
 
+import requests
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -276,5 +277,11 @@ def delete_account(ctx=Depends(verified_device)):
     any further authenticated call would create a fresh, empty profile.
     """
     uid = ctx.user["uid"]
-    detail = account_service.erase_account(ctx.user, ctx.device_id)
+    try:
+        detail = account_service.erase_account(ctx.user, ctx.device_id)
+    except requests.RequestException as e:
+        # Drive refused or was unreachable: the erase stopped before any
+        # record went, so this is a 502 to retry, not an unhandled 500
+        # (readiness TE3-007).
+        raise HTTPException(502, errors.DRIVE_WRITE_FAILED) from e
     return {"deleted": uid, **detail}
