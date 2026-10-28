@@ -4,7 +4,7 @@
 // (`?case=N`); they all share one auth.js and the fake SDK (harness.mjs).
 import { beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { test, fake, readyUser, reset, settle, net, json, location, $, loadAuth } from "./harness.mjs";
+import { test, fake, readyUser, reset, settle, net, json, location, $, loadAuth, deferred } from "./harness.mjs";
 
 // Loaded first so the fake Auth instance exists before a case signs anyone in.
 await loadAuth();
@@ -96,3 +96,34 @@ test("no answer from /v1/me offers all three dashboards", async () => {
   assert.deepEqual(offered(), ["operator/", "institution/", "account/"]);
   assert.equal($("status").textContent, "Could not tell where to send you: unavailable");
 });
+
+// AE2-105, rework 2: one lookup answered 401 and signed the page out; the
+// other answered after. The front door then wrote over the line that says to
+// sign in again, offered the dashboards, or forwarded to one.
+for (const [how, ending, late, answer] of [
+  ["/v1/me answering 200 after the licence list's 401", "/v1/institutions/licenses", "/v1/me",
+    (held) => held.resolve(json(200, { email: "it@uni.edu", role: "admin" }))],
+  ["/v1/me answering 503 after the licence list's 401", "/v1/institutions/licenses", "/v1/me",
+    (held) => held.resolve(json(503, { detail: "service_unavailable" }))],
+  ["the licence list answering 200 after /v1/me's 401", "/v1/me", "/v1/institutions/licenses",
+    (held) => held.resolve(json(200, { licenses: [{ id: "L1" }] }))],
+]) {
+  test(`${how} keeps the session-ended state`, async () => {
+    const held = deferred();
+    fake.auth.currentUser = readyUser({ email: "it@uni.edu" });
+    net.routes = {
+      [ending]: () => json(401, { detail: "invalid_token" }),
+      [late]: () => held.promise,
+    };
+    cases += 1;
+    await import(`../public/console/router.js?case=${cases}`);
+    await settle();
+    answer(held);
+    await settle();
+    assert.equal($("status").textContent.startsWith("Your sign-in has expired."), true, $("status").textContent);
+    assert.equal($("app").hidden, true);
+    assert.equal($("signIn").hidden, false);
+    assert.equal($("choices").hidden, true, "no dashboards offered behind Sign in");
+    assert.deepEqual(location.replaced, [], "not forwarded");
+  });
+}

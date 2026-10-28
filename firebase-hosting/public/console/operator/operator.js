@@ -70,6 +70,9 @@ async function operatorMe(user, role) {
     me = await role;
   } catch (e) {
     $("app").hidden = true;
+    // Signed out meanwhile, by this read or a desk read sent alongside: the
+    // line that says to sign in again stays (AE2-105).
+    if (sessionOver()) return null;
     setStatus(`Could not check whether ${user.email} is an operator: ${explain(e)}`, true);
     return null;
   }

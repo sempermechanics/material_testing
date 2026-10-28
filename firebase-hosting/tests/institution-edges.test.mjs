@@ -115,3 +115,75 @@ test("a licence list answered after the session ended does not bring the dashboa
   assert.deepEqual(status(), ["Your sign-in has expired. Sign in again.", "muted err"]);
   assert.deepEqual(sent(/summary/), [], "nothing more is read for a signed-out page");
 });
+
+/** A request the test fails when it chooses, as `fetch` does with no network. */
+function failing() {
+  let fail;
+  const promise = new Promise((_, reject) => { fail = reject; });
+  return { promise, fail: () => fail(new TypeError("Failed to fetch")) };
+}
+
+const ENDED = ["Your sign-in has expired. Sign in again.", "muted err"];
+
+// AE2-105, rework 2: the roster read answered 401 and signed the page out;
+// the licence list then failed (503, or no network). Its catch wrote "Could
+// not list…" over the session line and returned true, so the dashboard came
+// back behind Sign in and the roster load went on.
+for (const [how, answer] of [
+  ["a 503", (list) => list.resolve(json(503, { detail: "service_unavailable" }))],
+  ["a network error", (list) => list.fail()],
+]) {
+  test(`a licence list failing with ${how} after the session ended keeps the session-ended state`, async () => {
+    const list = how === "a 503" ? deferred() : failing();
+    await openPage("institution", {
+      search: "?license=L1",
+      routes: {
+        [`GET ${SEATS}`]: () => json(401, { detail: "invalid_token" }),
+        "GET /v1/institutions/licenses": () => list.promise,
+      },
+    });
+    await settle();
+    assert.deepEqual(status(), ENDED);
+    answer(list);
+    await settle();
+    assert.equal($("app").hidden, true, "the dashboard stays hidden");
+    assert.equal($("signIn").hidden, false);
+    assert.deepEqual(status(), ENDED);
+    assert.equal($("rows").querySelectorAll("button").length, 0, "no roster, no Retry");
+    assert.deepEqual(sent(/summary/), [], "nothing more is read for a signed-out page");
+  });
+}
+
+// The same gap in the roster load: an export sent while the roster read was
+// out answered 401 and ended the session. The roster's answer, whatever it
+// was, cleared or wrote over the session line, and a 200 went on to read the
+// seat counts with no one signed in ("Could not count seats … not_signed_in").
+for (const [how, answer] of [
+  ["a 200", (roster) => roster.resolve(json(200, { license: { maxSeats: 3 }, seats: [], invites: [] }))],
+  ["a 503", (roster) => roster.resolve(json(503, { detail: "service_unavailable" }))],
+  ["a network error", (roster) => roster.fail()],
+]) {
+  test(`a roster read answering ${how} after the session ended keeps the session-ended state`, async () => {
+    const roster = how === "a network error" ? failing() : deferred();
+    await openPage("institution", {
+      routes: {
+        "GET /v1/institutions/licenses": () => json(200, { licenses: [{ id: "L1", keyPrefix: "SEMP-UNI1" }] }),
+        [`GET ${SEATS}`]: () => roster.promise,
+        [`GET ${SEATS}/export`]: () => json(401, { detail: "invalid_token" }),
+        "GET /v1/me": () => json(200, { role: "user" }), // the dashboard switch's
+      },
+    });
+    $("licenseId").value = "L1";
+    $("load").click();
+    $("exportRoster").click();
+    await settle();
+    const ended = status(); // the export's own line: sign in again, then repeat that
+    assert.match(ended[0], /^Your sign-in has expired\. Sign in again/);
+    answer(roster);
+    await settle();
+    assert.equal($("app").hidden, true);
+    assert.equal($("signIn").hidden, false);
+    assert.deepEqual(status(), ended);
+    assert.deepEqual(sent(/summary/), [], "no seat counts read for a signed-out page");
+  });
+}

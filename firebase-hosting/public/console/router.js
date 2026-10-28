@@ -9,7 +9,7 @@
  * or remembered in the browser, so an account that changes hands routes
  * correctly the first time.
  */
-import { requireSignIn } from "./auth.js";
+import { requireSignIn, sessionOver } from "./auth.js";
 import { api } from "./api.js";
 import { setStatus, whileWaiting } from "./status.js";
 import { esc } from "./util.js";
@@ -47,8 +47,12 @@ requireSignIn(async () => {
       Promise.all([api("/v1/me"), licencesAdministered()]),
       "Finding your dashboard…",
     );
+    // Either lookup may have answered 401 and signed the page out: its line
+    // says to sign in again, and nothing is offered or forwarded to (AE2-105).
+    if (sessionOver()) return;
     route(me, administered);
   } catch (e) {
+    if (sessionOver()) return;
     // /v1/me failing is the one thing this page cannot work around: with
     // no answer about the caller there is nothing to route on. Offer all
     // three rather than guessing at one.

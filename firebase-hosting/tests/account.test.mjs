@@ -412,6 +412,34 @@ test("a failed analyses list is reported", async () => {
   assert.deepEqual(status(), ["Could not list your analyses: unavailable", "muted err"]);
 });
 
+// AE2-105, rework 2: one of the page's two reads answered 401 and signed the
+// page out; the other answered after (200, 503, or no network) and wrote its
+// own line over the one that says to sign in again.
+for (const [how, ending, late, answer] of [
+  ["the analyses answering 200 after /v1/me's 401", "GET /v1/me", "GET /v1/sessions",
+    (held) => held.resolve(json(200, { sessions: [], quota: { used: 0, max: 25 } }))],
+  ["the analyses answering 503 after /v1/me's 401", "GET /v1/me", "GET /v1/sessions",
+    (held) => held.resolve(json(503, { detail: "unavailable" }))],
+  ["/v1/me answering 503 after the analyses' 401", "GET /v1/sessions", "GET /v1/me",
+    (held) => held.resolve(json(503, { detail: "unavailable" }))],
+  ["/v1/me failing with no network after the analyses' 401", "GET /v1/sessions", "GET /v1/me",
+    (held) => held.fail(new TypeError("Failed to fetch"))],
+]) {
+  test(`${how} keeps the session-ended line`, async () => {
+    let fail;
+    const held = deferred();
+    const promise = new Promise((resolve, reject) => { held.promise.then(resolve); fail = reject; });
+    held.fail = fail;
+    await open({ routes: { [ending]: () => json(401, { detail: "invalid_token" }), [late]: () => promise } });
+    await settle();
+    answer(held);
+    await settle();
+    assert.deepEqual(status(), ["Your sign-in has expired. Sign in again.", "muted err"]);
+    assert.equal($("app").hidden, true);
+    assert.equal($("signIn").hidden, false);
+  });
+}
+
 /* ------------------------------------------------------------- release */
 
 async function openHoldingSeat(extraRoutes = {}) {

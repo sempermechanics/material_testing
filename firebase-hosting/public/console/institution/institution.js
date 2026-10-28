@@ -72,8 +72,10 @@ async function administersSomething(user) {
     if (sessionOver()) return false;
     setStatus("");
   } catch (e) {
-    // Signed out (api.js ended the session and said so): nothing more to show.
-    if (sessionEnded(e)) return false;
+    // Signed out (api.js ended the session and said so), by this read or by
+    // the roster's sent alongside: whatever this one failed with, the line
+    // that says to sign in again stays and nothing more is shown (AE2-105).
+    if (sessionEnded(e) || sessionOver()) return false;
     if (e.code !== "email_not_verified") {
       setStatus(`Could not list your institution licences: ${explain(e)}`, true);
       return true;
@@ -140,14 +142,16 @@ async function load(started) {
   $("load").disabled = true;
   try {
     const data = await whileWaiting(started || fetchRoster(base()), "Loading the roster…");
-    if (ticket !== rosterLoad) return;
+    // Another read (an export, a Remove) may have ended the session while
+    // this one was out: its line stays, and no counts are read (AE2-105).
+    if (ticket !== rosterLoad || sessionOver()) return;
     render(data);
     markFirstData();
     setStatus("");
     // The counts come after the roster, and again after every change to it.
     loadTiles($("tiles"), base(), () => ticket === rosterLoad);
   } catch (e) {
-    if (ticket !== rosterLoad) return;
+    if (ticket !== rosterLoad || sessionOver()) return;
     $("summary").innerHTML = "";
     if (e.code !== "license_not_found") {
       $("rows").innerHTML = retryRow(5, `Could not load: ${explain(e)}`);

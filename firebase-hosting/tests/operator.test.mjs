@@ -128,6 +128,30 @@ test("a role check answered after the session ended does not bring the desk back
   assert.equal(status()[0].startsWith("Your sign-in has expired."), true, status()[0]);
 });
 
+// AE2-105, rework 2: the same, but the role check failed (503, or no
+// network) after the session ended. Its catch wrote "Could not check whether
+// … is an operator" over the line that says to sign in again.
+for (const [how, answer] of [
+  ["a 503", (role) => role.resolve(json(503, { detail: "service_unavailable" }))],
+  ["a network error", (role) => role.reject(new TypeError("Failed to fetch"))],
+]) {
+  test(`a role check failing with ${how} after the session ended keeps the session-ended line`, async () => {
+    let reject;
+    const role = deferred();
+    const held = new Promise((resolve, no) => { role.promise.then(resolve); reject = no; });
+    role.reject = reject;
+    await open({ routes: { "GET /v1/me": () => held, [LIST]: () => json(401, { detail: "invalid_token" }) } });
+    await settle();
+    const ended = status();
+    assert.equal(ended[0], "Your sign-in has expired. Sign in again.");
+    answer(role);
+    await settle();
+    assert.equal($("app").hidden, true, "the desk stays hidden");
+    assert.equal($("signIn").hidden, false);
+    assert.deepEqual(status(), ended);
+  });
+}
+
 test("a toggle changed while the role check is pending gets the list it asks for", async () => {
   const role = deferred();
   const revoked = { ...IND, id: "lic-rev", keyPrefix: "SEMP-REV1", status: "revoked" };
