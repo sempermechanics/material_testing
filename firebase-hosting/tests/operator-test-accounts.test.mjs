@@ -469,6 +469,16 @@ test("the list shows each active phone with its own Release", async () => {
 
 const phonesFold = (uid) => $("testAccountRows").querySelector(`details[data-ta-phones="${uid}"]`);
 
+test("each row's buttons and its phone count name the account they act on", async () => {
+  await showList([PHONES, CI]);
+  const label = (kind, uid) => rowButton(kind, uid).getAttribute("aria-label");
+  assert.deepEqual([label("extend", QC.uid), label("password", QC.uid), label("end", QC.uid)],
+    ["Extend qc-1@test.example", "New password for qc-1@test.example", "End now: qc-1@test.example"]);
+  assert.equal(label("end", CI.uid), "End now: ci@test.example", "every row its own (the visible words first: WCAG 2.5.3)");
+  assert.equal(phonesFold(QC.uid).querySelector("summary").getAttribute("aria-label"),
+    "2 of 3 phones for qc-1@test.example");
+});
+
 test("an account's phones fold under their count, folded at first", async () => {
   await showList([PHONES, CI]);
   const fold = phonesFold(QC.uid);
