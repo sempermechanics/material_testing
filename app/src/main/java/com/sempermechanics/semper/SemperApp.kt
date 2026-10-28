@@ -45,8 +45,10 @@ class SemperApp : Application() {
         }
         installAppCheck()
         // The first screens' preference files load on IO, not at their first
-        // read on the main thread (readiness TE1-104).
+        // read on the main thread (readiness TE1-104), and so does the managed
+        // configuration the viewer's share check reads first (TE1-105).
         appScope.launch { PrefFiles.warm(this@SemperApp) }
+        appScope.launch { ManagedConfigReader.warm(this@SemperApp) }
         // One count of started screens: an upload may open the limit screen
         // only while one is up; the managed configuration is re-read whenever
         // the app comes to the front, and an entitlement token past its

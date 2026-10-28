@@ -7,6 +7,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.RestrictionsManager
 import android.os.Bundle
+import androidx.annotation.VisibleForTesting
+import androidx.annotation.WorkerThread
 import androidx.core.content.ContextCompat
 import com.sempermechanics.semper.data.AppForeground
 import kotlinx.coroutines.CoroutineScope
@@ -35,6 +37,23 @@ object ManagedConfigReader {
 
     /** The managed configuration, read once and kept until it changes. */
     fun current(context: Context): ManagedConfig = cached ?: refresh(context)
+
+    /**
+     * Reads the configuration once, if nothing has, from [Application.onCreate]
+     * on IO: otherwise the process's first [current] made the read on the main
+     * thread when the viewer was the first screen to ask (its share check;
+     * readiness TE1-105 re-verify, 18 ms on API 30).
+     */
+    @WorkerThread
+    fun warm(context: Context) {
+        if (cached == null) refresh(context)
+    }
+
+    /** Drops the cached configuration, so a test starts with none read. */
+    @VisibleForTesting
+    internal fun forgetForTest() {
+        cached = null
+    }
 
     /** Read the restrictions again. Never throws: an unreadable policy is no policy. */
     fun refresh(context: Context): ManagedConfig {
