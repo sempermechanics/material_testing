@@ -34,10 +34,11 @@ class LicenseErrorsTest {
     }
 
     @Test
-    fun `demo feature refusal maps to the demo-mode restore message`() {
+    fun `demo feature refusal maps to the Demo restore message`() {
         val msg = LicenseErrors.restoreMessage(ctx, ApiErrors.FEATURE_NOT_LICENSED)
         assertEquals(ctx.getString(com.sempermechanics.semper.R.string.restore_not_licensed), msg)
-        assertTrue(msg.contains("demo"))
+        // The tier is "Demo", capital D (readiness ADDENDUM-3).
+        assertTrue(msg.contains("on Demo"))
     }
 
     @Test

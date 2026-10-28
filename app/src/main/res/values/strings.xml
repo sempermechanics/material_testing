@@ -434,10 +434,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="restore_failed_generic">This backup couldn\'t be restored.</string>
     <string name="restore_backup_gone">This backup\'s files are no longer in cloud storage. Back the analysis up again from a phone that still has it.</string>
     <string name="restore_device_mismatch">This phone is not the one bound to the licence yet. Sign in, wait a moment for the phone to bind, then try restore again — or move the licence from the Semper account page first.</string>
-    <!-- The demo's refusals end with license_lock_note's sentence: how to unlock (readiness AE1-015). -->
-    <string name="restore_not_licensed">Restore isn\'t available on the demo. Included with an institution seat or a Semper licence. Ask your institution\'s IT, or contact Semper support.</string>
+    <!-- Demo's refusals end with license_lock_note's sentence: how to unlock (readiness AE1-015). -->
+    <string name="restore_not_licensed">Restore isn\'t available on Demo. Included with an institution seat or a Semper licence. Ask your institution\'s IT, or contact Semper support.</string>
     <string name="restore_paused">Restoring from the cloud is paused right now. Your analyses on this phone aren\'t affected.</string>
-    <string name="download_not_licensed">Downloading from the cloud isn\'t available on the demo. Included with an institution seat or a Semper licence. Ask your institution\'s IT, or contact Semper support.</string>
+    <string name="download_not_licensed">Downloading from the cloud isn\'t available on Demo. Included with an institution seat or a Semper licence. Ask your institution\'s IT, or contact Semper support.</string>
     <!-- Share in the viewer while the share kill switch is on: not a licence lock. -->
     <string name="share_paused">Sharing is temporarily unavailable. Your analyses on this phone aren\'t affected.</string>
     <!-- Locked, not hidden (FeatureLocks): the one note beside, and on a tap of, anything
@@ -1004,10 +1004,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="limit_recheck">Re-check limit</string>
     <string name="limit_back">Back to my analyses</string>
     <string name="limit_subject">Semper support</string>
-    <!-- The device half of the demo cap (TD-279): this phone's stored analyses,
-         every account's, are at the demo's. Says nothing of the other accounts. -->
-    <string name="limit_body_device">This phone holds the most saved analyses the demo allows, counting every account used on it, so new analyses can\'t be saved.\n\nDelete an analysis you no longer need from this phone, including its cloud copy, then try again. If your institution has given you a seat or your licence was just added, tap Refresh licence.</string>
-    <string name="limit_still_full_device">This phone is still at the demo limit. Delete an analysis, including its cloud copy, then try again.</string>
+    <!-- The device half of the Demo cap (TD-279): this phone's stored analyses,
+         every account's, are at Demo's. Says nothing of the other accounts. -->
+    <string name="limit_body_device">This phone holds the most saved analyses Demo allows, counting every account used on it, so new analyses can\'t be saved.\n\nDelete an analysis you no longer need from this phone, including its cloud copy, then try again. If your institution has given you a seat or your licence was just added, tap Refresh licence.</string>
+    <string name="limit_still_full_device">This phone is still at the Demo limit. Delete an analysis, including its cloud copy, then try again.</string>
     <string name="limit_still_full">Still at the limit. Delete an analysis, then re-check.</string>
     <string name="limit_cleared">You\'re under the limit again.</string>
 
@@ -1299,6 +1299,6 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="license_refresh_action">Refresh licence</string>
     <string name="license_refresh_institution">Licensed (institution seat)</string>
     <string name="license_refresh_individual">Licensed (Semper licence)</string>
-    <string name="license_refresh_demo">Still on the demo</string>
+    <string name="license_refresh_demo">Still on Demo</string>
     <string name="license_refresh_unreachable">Couldn\'t reach Semper — will retry</string>
 </resources>
