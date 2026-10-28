@@ -504,6 +504,14 @@ file: when the committed lock is stale it fails and attaches the regenerated fil
 as the `requirements-lock` artifact, so the fix is a download rather than a
 toolchain install.
 
+**A transitive pin with an advisory.** pip-audit (the backend gate) fails on a
+package `requirements.txt` does not name, and re-running the lock keeps its pin.
+Dispatch `Backend lock` on a PR branch with the optional `upgrade_packages` input,
+space-separated package names (e.g. `msgpack`): each becomes `pip-compile
+--upgrade-package <name>`, and a value that is not a package name is refused
+(`.github/workflows/backend-lock.yml`, "Compile the lock"). Re-run the PR's checks
+afterwards, as above. It was added for msgpack 1.2.1 → 1.2.4 (readiness TE5-101).
+
 ### Local gate before triggering release
 
 ```bash
