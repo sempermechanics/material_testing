@@ -49,7 +49,7 @@ class SemperApp : Application() {
         // refreshAfter asks /v1/config for a fresh one then (TD-264).
         AppForeground.install(
             this,
-            ManagedConfigReader.foregroundListener(this),
+            ManagedConfigReader.foregroundListener(this, appScope),
             LicenseConfigWorker.foregroundCheck(this, appScope),
             LauncherIcon.foregroundListener(this),
         )
