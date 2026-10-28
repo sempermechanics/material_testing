@@ -52,11 +52,22 @@ object EntitlementStore {
     private const val MS_PER_SECOND = 1000L
     private const val PERSIST_EVERY_MS = 60_000L
 
-    private val pins: EntitlementPins by lazy {
+    private val builtPins: EntitlementPins by lazy {
         EntitlementPins.parse(BuildConfig.SEMPER_ENTITLEMENT_PUBKEYS).also {
             if (it.invalid.isNotEmpty()) Timber.w("Ignoring unusable entitlement pins: %s", it.invalid)
         }
     }
+
+    /**
+     * Test-only pins in place of the build's, so a device test can run the
+     * pinned path (Keystore seal, real device key, clock) that every CI build,
+     * which pins none, skips (readiness TE4-101). Null in the app.
+     */
+    @VisibleForTesting
+    @Volatile
+    internal var testPins: EntitlementPins? = null
+
+    private val pins: EntitlementPins get() = testPins ?: builtPins
 
     /** A boot count cannot change while this process lives. */
     @Volatile
@@ -84,6 +95,13 @@ object EntitlementStore {
     @VisibleForTesting
     @Volatile
     internal var onCall: (() -> Unit)? = null
+
+    /** Drops what this process holds in memory, so the next read loads the record from disk (tests). */
+    @VisibleForTesting
+    internal fun forgetForTest() = synchronized(lock) {
+        memory = null
+        verified = null
+    }
 
     /** The token's status, and the device's best estimate of the server's clock, at one reading. */
     private class Reading(val status: TokenStatus, val effectiveNowMs: Long)
