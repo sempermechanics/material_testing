@@ -23,7 +23,7 @@ record that replaced it.
 | [016](ADR-016-work-that-outlives-the-activity.md) | Work that must outlive the Activity: ViewModel, an app-lifetime run, `NonCancellable` cleanup, or WorkManager | Accepted, built; amended 2026-10-19 (a lint or detekt check for rule 1 proposed) | — |
 | [017](ADR-017-viewbinding-and-ui-kit.md) | ViewBinding for every screen, and one `ui/common` helper per UI job | Accepted, built | — |
 | [018](ADR-018-error-convention.md) | One typed outcome per failure domain; cancellation is never a failure | Accepted, built | TD-41, TD-171 |
-| [019](ADR-019-sempermechanics-app-id.md) | The app is `com.sempermechanics.semper`; "indic" leaves the code, and the engine submodule is `engine/` | Accepted, released 2026-10-17 | TD-176 |
+| [019](ADR-019-sempermechanics-app-id.md) | The app is `com.sempermechanics.semper`; "indic" leaves the code, and the engine submodule is `engine/`; amended 2026-10-28: the user-facing name is lower-case "semper" | Accepted, released 2026-10-17; amended 2026-10-28 (Admin) | TD-176 |
 | [020](ADR-020-backend-refusal-model.md) | Backend refusals are one exception (`errors.Refusal`) with one status table (`errors.STATUS`) | Accepted, built | TD-185, TD-186 |
 | [021](ADR-021-retire-firestore-repo-facade.md) | Retire the `firestore_repo` facade; `app.repo` is a plain package and tests patch through `repo_view.patch` | Accepted, built | TD-190 |
 | [022](ADR-022-rerun-as-copy.md) | A finished analysis is never overwritten; Home's Re-run copies its inputs into a new analysis | Accepted, built | TD-211 |
