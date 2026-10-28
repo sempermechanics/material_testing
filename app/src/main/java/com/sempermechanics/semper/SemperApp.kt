@@ -51,6 +51,7 @@ class SemperApp : Application() {
             this,
             ManagedConfigReader.foregroundListener(this),
             LicenseConfigWorker.foregroundCheck(this, appScope),
+            LauncherIcon.foregroundListener(this),
         )
         AppSettings.migrate(this)
         // Manifest disables Crashlytics/Analytics collection, so a fresh install
@@ -77,7 +78,7 @@ class SemperApp : Application() {
         LauncherIcon.sync(this)
     }
 
-    /** A dark-theme change while this process lives swaps the launcher icon now. */
+    /** A dark-theme change while this process lives swaps the launcher icon now, unless a task still names the old one. */
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         LauncherIcon.sync(this, LauncherIcon.isNight(newConfig))
