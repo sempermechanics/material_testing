@@ -280,7 +280,7 @@ test("Demo keys are fetched only when asked for, show the Demo limit, and are ne
   // (AE2-011): keyboard and touch reach it, and a screen reader reads it.
   assert.equal($("licenceRows").querySelectorAll("[title]").length, 0);
   assert.equal($("demoNote").hidden, false);
-  assert.equal($("demoNote").textContent, "Demo keys use the Demo limit (25); issue a licensed key to raise it.");
+  assert.equal($("demoNote").textContent, "Demo keys use the Demo limit (25); issue a Licensed key to raise it.");
   $("showDemo").checked = false;
   $("showDemo").dispatch("change");
   await settle();
@@ -646,7 +646,7 @@ test("clearing the cap sends clearMaxAnalyses; a Demo key's cap cannot be edited
   await settle();
   rowButton("edit", DEMO.id).click();
   assert.equal($("editCap").disabled, true);
-  assert.equal($("editCap").title, "Demo keys use the Demo limit (25); issue a licensed key to raise it.");
+  assert.equal($("editCap").title, "Demo keys use the Demo limit (25); issue a Licensed key to raise it.");
 });
 
 /** The desk with Demo keys shown, and Edit open on `demo`. */

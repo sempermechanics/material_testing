@@ -60,7 +60,7 @@ test("Verify says what IT intends, what is entitled, and which revokes have not 
     "1 seat is on the roster without entitling anyone — see below for why.");
   assert.deepEqual(verifyRows(), [
     ["a@uni.edu", "active", "On the roster and holding the licence.", "never"],
-    ["u2", "revoked", "The removal did not land — this account is still licensed. Remove the seat again to repair it.",
+    ["u2", "revoked", "The removal did not land — this account is still Licensed. Remove the seat again to repair it.",
       when(SEEN)],
     ["c@uni.edu", "revoked", "Removed, and the account is on a different licence now.", "never"],
     ["d@uni.edu", "active", "The account is on a different licence now. Occupies a seat here; entitles nobody.", "never"],

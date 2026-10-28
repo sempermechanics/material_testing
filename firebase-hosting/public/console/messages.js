@@ -116,7 +116,7 @@ export const ACCOUNT = {
   // Shown whenever a licence is attached: a phone checks its licence with
   // the server, but does not need to on every launch.
   offline:
-    "On a phone, licensed features keep working offline until the offline " +
+    "On a phone, Licensed features keep working offline until the offline " +
     "allowance runs out; then the app falls back to Demo limits until it " +
     "reconnects. Analyses you already have stay available either way.",
   // Deleting needs the phone's device signature, so it is done in the app.

@@ -130,7 +130,7 @@ function mintOutcome(out, body) {
       "The key below redeems it.", true];
   }
   if (out.claimedByUid) {
-    return [`Issued and attached to ${who} — licensed from their next request.`];
+    return [`Issued and attached to ${who} — Licensed from their next request.`];
   }
   return [`Issued. It attaches when ${who} first signs in.`];
 }

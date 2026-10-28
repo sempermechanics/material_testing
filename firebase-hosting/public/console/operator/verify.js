@@ -21,7 +21,7 @@ const SEAT_PROSE = {
   moved_on: "The account is on a different licence now. Occupies a seat here; entitles nobody.",
   demoted: "The account points here but is on Demo. Occupies a seat; entitles nobody.",
   still_licensed:
-    "The removal did not land — this account is still licensed. " +
+    "The removal did not land — this account is still Licensed. " +
     "Remove the seat again to repair it.",
   no_checkin_since_revoke:
     "Removed, but this account has not been back since. The phone may " +

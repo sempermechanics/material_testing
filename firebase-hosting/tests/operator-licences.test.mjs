@@ -59,7 +59,7 @@ test("a list answer with nothing in it, and no demo allowance, still renders", a
   await settle();
   assert.equal(rows()[0][5], "Demo limit", "no number when the backend does not send the allowance");
   await click(rowButton("edit", DEMO.id));
-  assert.equal($("editCap").title, "Demo keys use the Demo limit; issue a licensed key to raise it.");
+  assert.equal($("editCap").title, "Demo keys use the Demo limit; issue a Licensed key to raise it.");
 });
 
 test("a licence list that cannot be read says why", async () => {

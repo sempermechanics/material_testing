@@ -138,7 +138,7 @@ test("an assigned licence counts seats taken and the invites apart", async () =>
   assert.equal(summary(),
     "SEMP-UNI1 one seat each redeemed 3 of 10 seats taken. 2 more are invited and take a seat " +
     "when they first sign in, if one is free.");
-  assert.match($("rosterHelp").textContent, /^Everyone here is licensed\./);
+  assert.match($("rosterHelp").textContent, /^Everyone here is Licensed./);
 });
 
 test("a floating licence counts seats in use against the roster", async () => {

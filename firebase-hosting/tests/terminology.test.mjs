@@ -122,6 +122,9 @@ const RULES = [
   // wherever a sentence names it ("on Demo", "drops to Demo"). A one-word
   // literal is a value compared in code (`mode === "demo"`), not copy.
   [/\bdemo\b/, "Demo, capital D (ADDENDUM-3)", () => true, phrases],
+  // ADDENDUM-3: the paid tier is Licensed, with its capital, wherever a
+  // sentence puts someone on it ("still Licensed", "a Licensed key").
+  [/\blicensed\b/, "Licensed, capital L (ADDENDUM-3)", () => true, phrases],
   // AE3-104: the Demo analysis cap is the Demo limit; "allowance" is only the
   // offline window.
   [/\bdemo allowance\b/i, "the Demo limit (allowance is the offline window)", () => true],

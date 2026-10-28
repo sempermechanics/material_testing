@@ -99,7 +99,7 @@ test("a QC account is created with the form's values and its password is shown o
   assert.equal($("taPassword").textContent, ISSUED);
   assert.equal($("taPasswordEmail").textContent, "new@test.example");
   assert.deepEqual(status(), [
-    `Test account new@test.example created (QC): approved and licensed, ends ${day(ENDS)}, ` +
+    `Test account new@test.example created (QC): approved and Licensed, ends ${day(ENDS)}, ` +
     "on up to 3 phones at once. Copy its password now.", "muted"]);
   assert.ok(!$("status").textContent.includes(ISSUED));
   assert.deepEqual([$("taEmail").value, $("taNote").value], ["", ""], "ready for the next one");
@@ -132,7 +132,7 @@ test("a CI account may run without an end; QC always has one", async () => {
   await create();
   assert.deepEqual(createBody(), { email: "new@test.example", purpose: "ci", days: null, maxDevices: 1 },
     "blank days is sent as null: no expiry");
-  assert.match(status()[0], /created \(CI\): approved and licensed, never ends, on up to 1 phone at once/);
+  assert.match(status()[0], /created \(CI\): approved and Licensed, never ends, on up to 1 phone at once/);
 
   $("taPurpose").value = "qc";
   $("taPurpose").dispatch("change");

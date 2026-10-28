@@ -90,7 +90,7 @@ async function sendCreate(body) {
     $("taEmail").value = "";
     $("taNote").value = "";
     setStatus(`Test account ${email} created (${PURPOSES[out.purpose || body.purpose]}): ` +
-      `approved and licensed, ${ends}, on up to ${phones} phone${phones === 1 ? "" : "s"} at once. ` +
+      `approved and Licensed, ${ends}, on up to ${phones} phone${phones === 1 ? "" : "s"} at once. ` +
       "Copy its password now.");
     showPassword(email, out.password);
     loadTestAccounts();

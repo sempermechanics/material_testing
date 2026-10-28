@@ -38,5 +38,5 @@ export const labelOf = (id) => {
 export function demoCapNote() {
   const limit = desk.demoAllowance == null
     ? "the Demo limit" : `the Demo limit (${desk.demoAllowance})`;
-  return `Demo keys use ${limit}; issue a licensed key to raise it.`;
+  return `Demo keys use ${limit}; issue a Licensed key to raise it.`;
 }

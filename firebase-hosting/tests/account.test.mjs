@@ -189,7 +189,7 @@ const facts = () => {
   const values = $("facts").querySelectorAll("dd").map((el) => el.textContent);
   return terms.map((term, i) => [term, values[i]]);
 };
-const OFFLINE = "On a phone, licensed features keep working offline until the offline allowance " +
+const OFFLINE = "On a phone, Licensed features keep working offline until the offline allowance " +
   "runs out; then the app falls back to Demo limits until it reconnects. Analyses you already have " +
   "stay available either way.";
 

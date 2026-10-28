@@ -180,7 +180,7 @@ function explain(licensed, floating, holdsSeat, held, lapsed) {
   // seat that was never coming.
   if (!licensed && held && floating) {
     return "Every seat on your institution's licence is in use just now. " +
-           "Your saved work is untouched, and semper becomes licensed again " +
+           "Your saved work is untouched, and semper becomes Licensed again " +
            "on this account as soon as a colleague finishes.";
   }
   if (!licensed) {
@@ -241,7 +241,7 @@ async function unbind(app, name) {
     title: `Move ${name}`,
     message: `Move ${name} to another phone?\n\n` +
       `Nothing is deleted and nothing is cancelled. ${name} stops being ` +
-      "licensed on your current phone, and attaches to the next phone you " +
+      "Licensed on your current phone, and attaches to the next phone you " +
       "sign in on. Your analyses come with you once it has.",
     confirm: "Move",
   }))) return;

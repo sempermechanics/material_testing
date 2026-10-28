@@ -201,7 +201,7 @@ function render(data) {
     ? "Everyone here may use semper, but only the number of seats above at " +
       "the same time. Someone without a seat keeps their saved work and " +
       "gets one as soon as a colleague finishes."
-    : "Everyone here is licensed. Removing someone frees their seat for " +
+    : "Everyone here is Licensed. Removing someone frees their seat for " +
       "another member.";
 
   // Invites belong in the same list: to whoever manages the roster this

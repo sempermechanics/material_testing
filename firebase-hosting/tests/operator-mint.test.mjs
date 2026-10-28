@@ -93,7 +93,7 @@ test("an individual mint sends only what was filled, shows the key once, and rea
   assert.equal($("mint").disabled, false);
   assert.equal($("mintedBox").hidden, false);
   assert.equal($("mintedKey").textContent, "SEMP-NEW1-ABCD-EFGH");
-  assert.deepEqual(status(), ["Issued and attached to new@lab.org — licensed from their next request.", "muted"]);
+  assert.deepEqual(status(), ["Issued and attached to new@lab.org — Licensed from their next request.", "muted"]);
   assert.deepEqual(sent(/lic-new-1/), [`GET /v1/admin/licenses/${NEW.id}`], "read back, not taken from the mint's answer");
   assert.deepEqual(labels(), ["SEMP-NEW1", "SEMP-IND1", "SEMP-UNI1"], "the new licence heads the table");
 });
