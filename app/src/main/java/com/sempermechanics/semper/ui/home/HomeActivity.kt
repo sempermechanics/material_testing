@@ -130,6 +130,7 @@ class HomeActivity : AppCompatActivity() {
         HomeTransferWatch(this, adapter, quotaCard, ::showsCloudState) { refresh() }.observe()
         deleteFeedback.observe()
         observeViewModel()
+        newAnalysis.reopenAfterRecreate()
     }
 
     /** Each list read, and each restore's and erase's outcome once, on whichever Home is current. */

@@ -54,7 +54,7 @@ and must never be able to import over production. See
 |------|------|-------|
 | `KEYSTORE_BASE64`, `KEY_ALIAS`, `KEY_PASSWORD`, `STORE_PASSWORD` | secrets | Required to ship a signed APK |
 | `SEMPER_API_BASE_URL` | var | HTTPS API Gateway (preferred) or Cloud Run URL; required with `-PrequireCloudApi=true` |
-| `SEMPER_API_CERT_PINS` | secret | Optional comma-separated `sha256/…=` pins for the API host; empty = system trust only (`check_release_apk.py` warns) |
+| `SEMPER_API_CERT_PINS` | var | Required for a release: the four GTS root pins, comma-separated ([RELEASING.md § Certificate pins](RELEASING.md#certificate-pins-semper_api_cert_pins)); a secret of the same name also works. Empty fails the release (`check_release_apk.py --require-pins`); CI tier 5 only warns |
 | `SEMPER_ENTITLEMENT_PUBKEYS` | var | Entitlement-signature public key(s) baked into the release build; once set, `check_release_apk.py --require-entitlement-pins` fails a release that compiled none |
 | `SEMPER_REQUIRE_ENTITLEMENT_PINS` | var | Optional; `true` once TD-215 is live keeps that requirement on even if the pubkeys variable is cleared ([RELEASING.md](RELEASING.md) step 5) |
 | `SEMPER_RELEASE_CERT_SHA256` | var | Optional upstream (defaults to the certificate of every Semper release, `FF:72:…:5C:9A`); the release must be signed with it. Set it only for a deliberate key rotation; the Semper Classroom fork (material_testing) sets its own |

@@ -374,8 +374,9 @@ fails.
    `mapping.txt` is missing, empty, or renames no `com.sempermechanics.semper`
    class (an identity mapping, as `-dontobfuscate` writes; `--mapping` is
    required). It
-   **warns** when no `sha256/…` pin is compiled in, i.e. the
-   `SEMPER_API_CERT_PINS` secret was empty. It also **warns** when no
+   **fails** (`--require-pins`, TE1-001) when no `sha256/…` pin is compiled in,
+   i.e. `SEMPER_API_CERT_PINS` was empty ([Certificate pins](#certificate-pins-semper_api_cert_pins)
+   below); CI tier 5 only warns. It **warns** when no
    entitlement key (`kid:<P-256 SPKI>`) is compiled in, i.e.
    `SEMPER_ENTITLEMENT_PUBKEYS` was empty: the build then ignores signed tokens
    and trusts its cached licence with no offline bound (ADR-023, TD-215). The
@@ -441,16 +442,61 @@ Creates the **GitHub Release** with the APK and the AAB attached, gated on the
 | `KEY_ALIAS` | Signing key alias |
 | `KEY_PASSWORD` | Key password |
 | `STORE_PASSWORD` | Keystore password |
-| `SEMPER_API_CERT_PINS` | Optional. Comma-separated `sha256/…=` CertificatePinner pins for the API host, passed to Gradle as env. Empty ships system trust only, and the APK inspection warns |
 
 ### Required variables (repo or `release` environment)
 
 | Variable | Description |
 |----------|-------------|
 | `SEMPER_API_BASE_URL` | HTTPS base URL of the API Gateway (preferred) or Cloud Run service |
+| `SEMPER_API_CERT_PINS` | Required: the four GTS root pins, comma-separated ([Certificate pins](#certificate-pins-semper_api_cert_pins)), passed to Gradle as env. Public, so a variable; a secret of the same name also works. Empty fails the release (`--require-pins`) |
 | `SEMPER_ENTITLEMENT_PUBKEYS` | Public key(s) the app verifies signed entitlements with, passed to Gradle as env. Public material, so a variable, not a secret. Set, it also makes the APK inspection require an entitlement key in the build (step 5) |
 | `SEMPER_REQUIRE_ENTITLEMENT_PINS` | Optional, `true` once TD-215 is live: the APK inspection fails a release with no entitlement key compiled in, whatever `SEMPER_ENTITLEMENT_PUBKEYS` holds |
 | `SEMPER_RELEASE_CERT_SHA256` | Optional here (the workflow defaults to the release certificate of every release so far, step 5); set only to rotate the signing key deliberately. A fork must set it to its own release certificate |
+
+### Certificate pins (`SEMPER_API_CERT_PINS`)
+
+The release gate (`check_release_apk.py --require-pins`) fails a release APK
+that compiles no pin (TE1-001); CI tier 5 only warns. By the Admin decision of
+2026-10-28 the pins are the SPKI hashes of the four Google Trust Services
+roots: one serves the API today, the other three are backups.
+
+| Root | Pin | Cert SHA-256 | Valid to |
+|---|---|---|---|
+| GTS Root R1 | `sha256/hxqRlPTu1bMS/0DITB1SSu0vd4u/8l8TjPgfaAp63Gc=` | d947432a…57a7f4cf | 2036-06-22 |
+| GTS Root R2 | `sha256/Vfd95BwDeSQo+NUYxVEEIlvkOlWY2SalKK1lPhzOx78=` | 8d25cd97…841c7ea8 | 2036-06-22 |
+| GTS Root R3 | `sha256/QXnt2YHvdHR3tJYmQIr0Paosp6t/nggsEGD4QJZ3Q0g=` | 34d8a73e…010a6f48 | 2036-06-22 |
+| GTS Root R4 | `sha256/mEflZT5enoR1FuXLgYYGqnVEoZvmf9c2bVBpiOjYQ0c=` | 349dfa40…031b3c7d | 2036-06-22 |
+
+Provenance: the DER files `https://i.pki.goog/r1.crt` … `r4.crt` (listed at
+pki.goog/repository). Each pin is
+`openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64`,
+cross-checked with Python `cryptography`, on 2026-10-28. That day the gateway
+(`semper-gw-86wx7pp1.an.gateway.dev`) served `*.gateway.dev` → WE2 → GTS Root
+R4, the last cross-signed by GlobalSign Root CA until 2028-01-28. The
+cross-sign has the same key, so the R4 pin matches either way: OkHttp checks
+the pins against the chain Android verified, trust anchor included.
+
+The value to set:
+
+```text
+sha256/hxqRlPTu1bMS/0DITB1SSu0vd4u/8l8TjPgfaAp63Gc=,sha256/Vfd95BwDeSQo+NUYxVEEIlvkOlWY2SalKK1lPhzOx78=,sha256/QXnt2YHvdHR3tJYmQIr0Paosp6t/nggsEGD4QJZ3Q0g=,sha256/mEflZT5enoR1FuXLgYYGqnVEoZvmf9c2bVBpiOjYQ0c=
+```
+
+Set it as an environment variable (the `SEMPER_API_CERT_PINS` repository or
+`release`-environment variable, which `release.yml` reads; a secret of that
+name also works) or in `local.properties` for a local build, not `-P`: the
+build reads only the environment and `local.properties`, so a `-P` value is
+ignored and the gate fails. Check a build with `check_release_apk.py
+--require-pins` (`cert-pins PASS 4 sha256/ pin(s) compiled in`).
+
+Rotation: the pins outlive leaf and intermediate rotation (WE2 and its
+successors), not a change of root. The GTS roots expire in 2036. Adding or
+removing a root, or moving the API off Google Trust Services (a custom domain
+with another CA), needs a release carrying the new pin set that users have
+installed **before** the server chain changes: an installed app keeps its
+compiled pins, and a chain they do not match fails every API call with
+`SSLPeerUnverifiedException`. Re-check the live chain with
+`openssl s_client -showcerts` before any change.
 
 ### Backend staging / production
 
