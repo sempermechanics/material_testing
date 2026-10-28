@@ -1182,7 +1182,7 @@ A floating member without a seat is in Demo, not blocked or removed. Their app
 takes a seat when they start work and gives it back when they finish; a seat
 also frees itself if their device goes quiet for 8 hours. If someone reports
 being in Demo unexpectedly on a floating key, the pool being full is the first
-thing to check — `GET .../seats` shows the roster, and the license summary
+thing to check — `GET .../seats` shows the roster, and the licence summary
 shows how many seats are in use.
 
 **Adding people to an institution key.** IT adds members by email:
@@ -1308,12 +1308,12 @@ the import included, needs the staff step-up
 ([ADMIN_API.md](backend/ADMIN_API.md), "Institution rosters at the staff tier").
 
 Institution IT authenticates with a normal signed-in account (their Firebase
-ID token) whose **verified** email is in that license's `adminEmails` — they
+ID token) whose **verified** email is in that licence's `adminEmails` — they
 do not need a registered/attested device for this, since they are managing
 seats from a browser or script, not from the licensed device itself. A
-license id they do not administer, or one that does not exist, both come back
+licence id they do not administer, or one that does not exist, both come back
 as the identical "not found" — so nothing about a foreign institution's
-licenses leaks by probing ids.
+licences leaks by probing ids.
 
 **Did the revoke actually land?** Removing someone frees the slot at once, so
 the seats console shows the new number immediately — but that number is what
