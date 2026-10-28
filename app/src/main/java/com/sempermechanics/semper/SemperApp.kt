@@ -82,7 +82,10 @@ class SemperApp : Application() {
         LauncherIcon.sync(this)
     }
 
-    /** A dark-theme change while this process lives swaps the launcher icon now, unless a task still names the old one. */
+    /**
+     * A dark-theme change while this process lives swaps the launcher icon
+     * now, unless a task still names the old one.
+     */
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         LauncherIcon.sync(this, LauncherIcon.isNight(newConfig))

@@ -74,7 +74,8 @@ class LauncherIconTest {
     fun `the deferred swap happens once no task is rooted on the old entry`() {
         LauncherIcon.sync(context, night = true, liveRoots = { setOf(LauncherIcon.LIGHT) })
         // The splash screen has finished and handed the task's identity to Home.
-        LauncherIcon.sync(context, night = true, liveRoots = { setOf("com.sempermechanics.semper.ui.home.HomeActivity") })
+        val home = "com.sempermechanics.semper.ui.home.HomeActivity"
+        LauncherIcon.sync(context, night = true, liveRoots = { setOf(home) })
 
         assertEquals(PackageManager.COMPONENT_ENABLED_STATE_ENABLED, state(LauncherIcon.DARK))
         assertEquals(PackageManager.COMPONENT_ENABLED_STATE_DISABLED, state(LauncherIcon.LIGHT))
