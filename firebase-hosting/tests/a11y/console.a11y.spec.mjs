@@ -33,6 +33,8 @@ const PAGES = [
 const STATIC = [
   { name: "password-reset landing page", path: "/finishReset/", persona: "out", ready: "#continueLink" },
   { name: "email-link sign-in landing page", path: "/finishSignIn/", persona: "out", ready: "h1" },
+  // Hosting's answer for any address with no file (AE2-102: no timed redirect).
+  { name: "the 404 page", path: "/404.html", persona: "out", ready: "h1" },
 ];
 
 /** Open `path` as `persona` at `width`, and wait until `ready` is on the page. */
