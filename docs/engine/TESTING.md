@@ -49,6 +49,40 @@ is in it) — or changing `SemperNativeLib.kt` — triggers both, on the PR and 
 `main`. Tier 1 is the JVM suite only; it builds no native code. See
 [../ops/CI.md](../ops/CI.md).
 
+## Compiler flags and FMA contraction, per ABI
+
+No build file sets `-ffp-contract` or `-march`; the effective contraction comes
+from `-ffast-math` and the target (readiness TE2-101, checked 2026-10-28 at
+engine v0.6.1). Every engine target compiles `-O3 -ffast-math`
+(`engine/CMakeLists.txt`: `semper_math` and `semper_pipeline`, plus `-flto
+-fopenmp` on Android; `engine/adapters/android/CMakeLists.txt`: the JNI
+library), the same for the debug x86_64 and release arm64 builds; Gradle passes
+only `-DSEMPER_ANDROID=ON` and the ccache switch. The host suite builds with GCC
+`-O2 -ffast-math` (`engine/tests/CMakeLists.txt`; MSVC `/O2 /fp:fast`). Under
+clang (NDK) and GCC, `-ffast-math` means `-ffp-contract=fast`: a multiply and an
+add may become one fused multiply-add wherever the target has one.
+
+| Build | Where it runs | Engine SIMD reductions (`cv::v_fma` in `engine/include/semper/simd.hpp`) | Scalar `a*b+c` |
+|---|---|---|---|
+| Android arm64-v8a (release, shipped) | phones; benchmarks on the Galaxy S22+ | **fused**: `vfmaq_f32` (OpenCV `intrin_neon.hpp`, under `CV_SIMD128_64F`) | **fused** (`fmadd`, contraction fast) |
+| Android x86_64 (Tier 3 emulator) | CI's emulator | unfused: `_mm_mul_ps` + `_mm_add_ps`, since the OpenCV baseline is SSE–SSE3 and `CV_FMA3` is off | unfused: baseline x86_64 has no FMA instruction |
+| Host x86_64, GCC (engine repo `Host tests`, this repo's `engine-host-sanitized`) | CI runners | unfused (no `-mfma`, so no `CV_FMA3`) | unfused, for the same reason |
+
+OpenCV's own functions may still pick AVX2/FMA kernels at run time on an x86_64
+CPU that has them (its dispatched code); the table is about the engine's code.
+
+**Consequence.** Fused and unfused results differ in the last bits, so the
+arm64 build that ships is the one build CI never computes: the golden corpora
+compare on host x86_64, the determinism fixture and `EnginePipelineSmokeTest`
+run on the x86_64 emulator, and Tier 5 only builds and inspects the arm64 APK.
+arm64 numbers are not compared bit-for-bit anywhere in CI; they are held to the
+tolerance contract in `engine/docs/TESTING.md` (`-ffast-math` stays by
+ADDENDUM-1 of [the readiness rubric](../ops/readiness/RUBRIC_ADDENDA.md)). The check that covers arm64 is a device
+run: `EnginePipelineSmokeTest` on one arm64 phone or arm64 AVD before each
+release (step 6 below, [RELEASING.md](../ops/RELEASING.md) step 5), whose field
+must sit inside that contract. Until the readiness run records one at v0.6.1,
+TD-351 stays open.
+
 ## Bumping the engine pin
 
 The bump PR does all of this:
