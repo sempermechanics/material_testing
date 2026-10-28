@@ -154,3 +154,10 @@ hosted `/privacy` and `/terms` stay at `b940cc29`.
 | The brand is lowercase "semper". Where should that apply? | "Everywhere user-facing" |
 | TE1-001 / TD-318: release builds ship no certificate pin. Which pin set should release builds require? | "Google Trust Services roots (Recommended)" |
 | TE2-002 and TE2-004 need changes in the engine repository, a new engine tag and a pin bump. Include them? | "Yes, separate engine PRs" |
+
+### During Phase 4 (2026-10-28)
+
+| Question | Answer (verbatim) |
+|---|---|
+| The fork's app is named "Semper Classroom" in some console and app text. Under the lower-case brand rule, how should it read? | "semper Classroom (Recommended)" |
+| On the operator desk, the Demo analysis cap now reads "Demo limit (25)". Keep that or shorten it? | "Demo limit (25) (Recommended)" |
