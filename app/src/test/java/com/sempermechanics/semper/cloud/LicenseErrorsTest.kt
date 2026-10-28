@@ -62,7 +62,7 @@ class LicenseErrorsTest {
     fun `demo feature refusal with the backend's readable suffix still maps by code`() {
         // The backend sends "feature_not_licensed: <sentence>" so pre-licensing
         // builds, which print the raw detail, show something readable.
-        val body = """{"detail":"${ApiErrors.FEATURE_NOT_LICENSED}: Restore isn't available in demo mode."}"""
+        val body = """{"detail":"${ApiErrors.FEATURE_NOT_LICENSED}: Restore isn't available on Demo."}"""
         val msg = LicenseErrors.restoreMessage(ctx, body)
         assertEquals(ctx.getString(com.sempermechanics.semper.R.string.restore_not_licensed), msg)
     }
@@ -71,7 +71,7 @@ class LicenseErrorsTest {
     fun `refused bundle download says demo mode, anything else keeps the connection hint`() {
         val refused = LicenseErrors.downloadMessage(
             ctx,
-            """{"detail":"${ApiErrors.FEATURE_NOT_LICENSED}: Restore isn't available in demo mode."}""",
+            """{"detail":"${ApiErrors.FEATURE_NOT_LICENSED}: Restore isn't available on Demo."}""",
         )
         assertEquals(ctx.getString(com.sempermechanics.semper.R.string.download_not_licensed), refused)
         assertEquals(
