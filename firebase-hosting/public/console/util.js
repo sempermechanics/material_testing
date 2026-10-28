@@ -100,9 +100,9 @@ const SEAT_STATUS = {
  * `materialtesting`, so both name it.
  */
 export const APP_NAMES = {
-  semper: "Semper",
-  semperclassroom: "Semper Classroom",
-  materialtesting: "Semper Classroom",
+  semper: "semper",
+  semperclassroom: "semper Classroom",
+  materialtesting: "semper Classroom",
 };
 
 /**
@@ -128,7 +128,7 @@ export function seatDevices(seat) {
   const parts = [];
   if (seat.deviceIdLock) parts.push(short(seat.deviceIdLock));
   const classroom = classroomField(seat, "deviceIdLock");
-  if (classroom) parts.push(`Semper Classroom ${short(classroom)}`);
+  if (classroom) parts.push(`semper Classroom ${short(classroom)}`);
   return parts.join("; ");
 }
 
@@ -310,7 +310,7 @@ const FIREBASE_ERRORS = {
   "auth/user-token-expired": "your sign-in has expired — sign in again",
   "auth/invalid-user-token": "your sign-in has expired — sign in again",
   "auth/maximum-second-factor-count-exceeded":
-    "this account already holds as many authenticators as it can — ask Semper support to remove the unused ones",
+    "this account already holds as many authenticators as it can — ask semper support to remove the unused ones",
   "auth/unauthorized-domain": "this address is not set up for sign-in",
   "auth/web-storage-unsupported": "this browser blocks the storage sign-in needs",
   "auth/internal-error": "the sign-in service had a problem — try again",

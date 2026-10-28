@@ -93,7 +93,7 @@ test("an individual mint sends only what was filled, shows the key once, and rea
   assert.equal($("mint").disabled, false);
   assert.equal($("mintedBox").hidden, false);
   assert.equal($("mintedKey").textContent, "SEMP-NEW1-ABCD-EFGH");
-  assert.deepEqual(status(), ["Issued and attached to new@lab.org — licensed from their next request.", "muted"]);
+  assert.deepEqual(status(), ["Issued and attached to new@lab.org — Licensed from their next request.", "muted"]);
   assert.deepEqual(sent(/lic-new-1/), [`GET /v1/admin/licenses/${NEW.id}`], "read back, not taken from the mint's answer");
   assert.deepEqual(labels(), ["SEMP-NEW1", "SEMP-IND1", "SEMP-UNI1"], "the new licence heads the table");
 });
@@ -120,12 +120,12 @@ test("every way an individual mint did not reach the person is said, as an error
       "Revoke whichever of the two is not wanted.", true],
     [{ inviteError: "write_failed" },
       "Issued, but the invite for pat@new.org failed (write_failed) — it will not attach at sign-in. " +
-      "The key below still redeems it.", true],
+      "The claim code below still redeems it.", true],
     [{ claimError: "holder_already_licensed" },
       "Issued, but pat@new.org already holds a live licence, so this one was not attached. " +
       "Revoke or extend the other one.", true],
     [{ claimError: "claim_contended" },
-      "Issued, but it could not be attached to pat@new.org (claim_contended). The key below redeems it.", true],
+      "Issued, but it could not be attached to pat@new.org (claim_contended). The claim code below redeems it.", true],
   ]) {
     reset();
     await openDesk({ routes: { [MINT]: () => json(200, { key: "K", ...out }) } });
@@ -155,7 +155,7 @@ test("an institution mint sends the domain, IT contacts, seats and seating", asy
     adminEmails: ["it@uni.edu", "ops@uni.edu"], maxSeats: 20, seating: "floating",
   }, "no email lock on an institution licence");
   assert.deepEqual(status(), [
-    "Institution licence issued. People with a verified uni.edu address can redeem the key below, " +
+    "Institution licence issued. People with a verified uni.edu address can redeem the claim code below on their account page, " +
     "or IT adds them from the roster.", "muted",
   ]);
   assert.equal($("mintedKey").textContent, "SEMP-UNI9-KEY");
@@ -198,7 +198,7 @@ test("each other refused mint is explained, and the button comes back", async ()
   for (const [reply, text] of [
     [() => json(403, { detail: "mfa_required" }), "Enrol a second factor before issuing licences."],
     [() => json(429, { detail: "rate_limited" }), "Too many admin calls just now — wait a moment."],
-    [() => json(403, { detail: "not_admin" }), "That account is not a Semper operator."],
+    [() => json(403, { detail: "not_admin" }), "That account is not a semper operator."],
     [() => json(422, { detail: [{ msg: "Value error, maxAnalyses must be at least 25", loc: ["body"] }] }),
       "Could not issue: maxAnalyses must be at least 25"],
     [() => json(409, { detail: "email_already_licensed" }), "Could not issue: the server refused it (ref: email_already_licensed)"],

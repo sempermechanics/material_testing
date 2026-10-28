@@ -11,6 +11,7 @@
  * goes to the one asked on.
  */
 import { api, apiBlob, saveBlob } from "./api.js";
+import { holdFocus } from "./dialogs.js";
 import { explain } from "./messages.js";
 import { esc, MAX_IMPORT_ROWS, importRowCount } from "./util.js";
 
@@ -69,7 +70,7 @@ export function wireExport({ button, base, name, report }) {
 /** What a refused import row says, by the single add's code. */
 const ROW_ERRORS = {
   license_seats_exhausted: "no seats left on this licence",
-  member_already_licensed: "already has a Semper licence of their own — Semper support can move them",
+  member_already_licensed: "already has a semper licence of their own — semper support can move them",
   invite_exists: "already promised a place on a different licence",
   license_seat_disabled: "their seat is paused — resume it instead",
   license_revoked: "this licence has been revoked",
@@ -154,6 +155,7 @@ export function wireImport({ text, file, preview, submit, summary, results, rows
   submit.addEventListener("click", async () => {
     const root = base();
     if (!root || submit.disabled) return;
+    const refocus = holdFocus(submit);
     submit.disabled = true;
     report("Importing…");
     try {
@@ -180,6 +182,7 @@ export function wireImport({ text, file, preview, submit, summary, results, rows
         : explain(e, IMPORT_ERRORS, (msg) => `Could not import: ${msg}`), true);
     } finally {
       update();
+      refocus();
     }
   });
 

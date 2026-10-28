@@ -77,5 +77,11 @@ test("an expired sign-in says to sign in again, and a step-up's Firebase failure
 
 test("an account at Firebase's authenticator limit is told who can clear it", () => {
   assert.match(authErrorText({ code: "auth/maximum-second-factor-count-exceeded" }),
-    /as many authenticators as it can — ask Semper support/);
+    /as many authenticators as it can — ask semper support/);
+});
+
+// AE3-108: a kill switch reads one way everywhere: paused right now.
+test("a paused feature says it is paused right now", () => {
+  assert.equal(explain(refusal(503, "feature_paused"), {}, (t) => `Could not export: ${t}`),
+    "Could not export: That is paused right now. Try again later.");
 });

@@ -215,9 +215,13 @@ Google.
 A remembered sign-in that is over — Firebase cannot refresh it
 (`auth/user-token-expired`, `auth/invalid-user-token`), or the backend refuses
 the token (401 `invalid_token`) — signs the page out (`endSession`), so Sign in
-is on screen, and the status line says "Your sign-in has expired. Sign in
-again." (COMMON's `invalid_token` on a page's action). It used to read "an
-unexpected sign-in error (ref: …)" beside a Sign out button.
+is on screen, the dashboard is hidden, and the status line says "Your sign-in
+has expired. Sign in again." (COMMON's `invalid_token` on a page's action).
+`endSession` writes that line itself, so a read whose own message lands
+somewhere now hidden (the Test accounts list) still says it, and the
+institution page stops rather than drawing the roster behind Sign in
+(AE2-105). It used to read "an unexpected sign-in error (ref: …)" beside a
+Sign out button.
 
 Nothing else uses `window.prompt` either. The operator desk's typed-key
 confirmations (revoke, delete, shortening a licence's term) and the password
@@ -252,7 +256,7 @@ if anything calls them.
 
 ## Confirming destructive actions
 
-Revoking a licence drops a whole institution to demo, so the page asks more
+Revoking a licence drops a whole institution to Demo, so the page asks more
 than once: password (or Google) re-auth plus authenticator code, a plain
 confirmation naming who is affected, then typing the **key prefix**. The API
 also refuses a revoke on a session older than
@@ -529,9 +533,9 @@ media query in `console.css`.
 
 On the desk (`<body class="desk">`, up to 1400px wide), a pinned row of
 anchors (`.desk-nav`) jumps to each card, with the number waiting for approval
-beside Approvals (`#pendingCount`, filled by `people.js`). The licence table
+beside Access requests (`#pendingCount`, filled by `people.js`). The licence table
 comes first and **Issue a licence** opens its card from the table's heading;
-Roster and Verified seats open straight under the table. Approvals and the
+Roster and Verified seats open straight under the table. Access requests and the
 Demo phone release share a row on desktop; then Test accounts, whose create
 form is a `<details>` folded under it; Recently deleted is last. Each licence
 row keeps Edit (and Roster) in view; the rest is under **More**, a `<details>`

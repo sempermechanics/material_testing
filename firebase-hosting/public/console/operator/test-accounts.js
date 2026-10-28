@@ -26,7 +26,7 @@ import { $ } from "./state.js";
 const SENTENCES = {
   test_accounts_disabled: "Test accounts are switched off on this server, or that address is " +
     "not on one of its test domains (TEST_ACCOUNT_DOMAINS).",
-  email_in_use: "That address already has a Semper account or sign-in. A test account " +
+  email_in_use: "That address already has a semper account or sign-in. A test account " +
     "needs an address nobody has used.",
   device_not_found: "That phone is no longer one of this account's active phones. " +
     "Refresh the list.",
@@ -90,7 +90,7 @@ async function sendCreate(body) {
     $("taEmail").value = "";
     $("taNote").value = "";
     setStatus(`Test account ${email} created (${PURPOSES[out.purpose || body.purpose]}): ` +
-      `approved and licensed, ${ends}, on up to ${phones} phone${phones === 1 ? "" : "s"} at once. ` +
+      `approved and Licensed, ${ends}, on up to ${phones} phone${phones === 1 ? "" : "s"} at once. ` +
       "Copy its password now.");
     showPassword(email, out.password);
     loadTestAccounts();
@@ -172,11 +172,14 @@ function accountRow(a) {
   const live = a.status === "active";
   const phones = a.devices || [];
   const count = `${esc(a.activeDevices ?? 0)} of ${esc(a.maxDevices ?? "—")}`;
+  // Each control names the account it acts on, as the roster's do: every
+  // row's End now read the same to a screen reader (AE2-106).
+  const who = esc(a.email || a.uid);
   // The count folds the phones away, as a row's More menu does its actions:
   // three phones, each with a Release, made one account's row a tall stack.
   const phonesCell = phones.length
     ? `<details class="phones-fold" data-ta-phones="${uid}"${phonesOpen.has(a.uid) ? " open" : ""}>
-          <summary>${count}</summary>
+          <summary aria-label="${count} phones for ${who}">${count}</summary>
           <ul class="phone-list">${phones.map((d) => phoneLine(uid, d)).join("")}</ul>
         </details>`
     : count;
@@ -184,16 +187,16 @@ function accountRow(a) {
   // the two that only change it.
   return `
     <tr>
-      <td class="account">${esc(a.email || a.uid)}</td>
+      <td class="account">${who}</td>
       <td>${esc(PURPOSES[a.purpose] || a.purpose || "—")}</td>
       <td class="nowrap">${esc(testAccountEnds(a))}</td>
       <td class="phones">${phonesCell}</td>
       <td><span class="pill ${live ? "ok" : "off"}">${esc(a.status || "—")}</span></td>
       <td class="muted">${esc(a.note || "—")}</td>
       <td class="actions">
-        <button class="secondary" data-ta-extend="${uid}">Extend</button>
-        <button class="secondary" data-ta-password="${uid}">New password</button>
-        <button class="danger" data-ta-end="${uid}">End now</button>
+        <button class="secondary" data-ta-extend="${uid}" aria-label="Extend ${who}">Extend</button>
+        <button class="secondary" data-ta-password="${uid}" aria-label="New password for ${who}">New password</button>
+        <button class="danger" data-ta-end="${uid}" aria-label="End now: ${who}">End now</button>
       </td>
     </tr>`;
 }

@@ -99,26 +99,26 @@ test("a seat shows each app's device, escaped (ADR-010)", () => {
   const bound = (id) => ({ deviceIdLockMaterialTesting: id, deviceIdLockSemperClassroom: id });
   assert.equal(
     seatDevices({ deviceIdLock: "abcdefghijklmnop", ...bound("<sc>defghijklmn") }),
-    "abcdefghij…; Semper Classroom &lt;sc&gt;defghi…",
+    "abcdefghij…; semper Classroom &lt;sc&gt;defghi…",
   );
-  assert.equal(seatDevices(bound("zyxwvutsrqpo")), "Semper Classroom zyxwvutsrq…");
+  assert.equal(seatDevices(bound("zyxwvutsrqpo")), "semper Classroom zyxwvutsrq…");
   assert.match(seatCells({ uid: "u", status: "active", ...bound("zyxwvutsrqpo") }, NOW),
-    /Semper Classroom zyxwvutsrq…/);
+    /semper Classroom zyxwvutsrq…/);
   // A seat not yet migrated (ADR-030) holds only the old field.
-  assert.equal(seatDevices({ deviceIdLockMaterialTesting: "mnopqrstuvwx" }), "Semper Classroom mnopqrstuv…");
+  assert.equal(seatDevices({ deviceIdLockMaterialTesting: "mnopqrstuvwx" }), "semper Classroom mnopqrstuv…");
   assert.equal(
     seatDevices({ deviceIdLockSemperClassroom: "newnewnewnew", deviceIdLockMaterialTesting: "oldoldoldold" }),
-    "Semper Classroom oldoldoldo…",
+    "semper Classroom oldoldoldo…",
     "the old field, the one every backend writes, wins until TD-330",
   );
   // The new field alone is one a backend from before the rename left
   // behind when it cleared the old one: stale, so not shown (H1).
   assert.equal(seatDevices({ deviceIdLockSemperClassroom: "zyxwvutsrqpo" }), "");
   assert.doesNotMatch(seatCells({ uid: "u", status: "active", deviceIdLockSemperClassroom: "zyxwvutsrqpo" }, NOW),
-    /Semper Classroom/);
+    /semper Classroom/);
 });
 
-test("Semper Classroom's fields are read from the name before ADR-030 only", () => {
+test("semper Classroom's fields are read from the name before ADR-030 only", () => {
   assert.equal(classroomField({ releasedDeviceIdSemperClassroom: "a", releasedDeviceIdMaterialTesting: "b" },
     "releasedDeviceId"), "b");
   assert.equal(classroomField({ releasedDeviceIdMaterialTesting: "b" }, "releasedDeviceId"), "b");
@@ -131,10 +131,10 @@ test("Semper Classroom's fields are read from the name before ADR-030 only", () 
   assert.equal(classroomField(null, "previousDeviceId"), undefined);
 });
 
-test("both of Semper Classroom's short names are labelled Semper Classroom", () => {
-  assert.equal(APP_NAMES.semper, "Semper");
-  assert.equal(APP_NAMES.semperclassroom, "Semper Classroom");
-  assert.equal(APP_NAMES.materialtesting, "Semper Classroom");
+test("both of semper Classroom's short names are labelled semper Classroom", () => {
+  assert.equal(APP_NAMES.semper, "semper");
+  assert.equal(APP_NAMES.semperclassroom, "semper Classroom");
+  assert.equal(APP_NAMES.materialtesting, "semper Classroom");
 });
 
 test("invite cells line up with seat cells", () => {

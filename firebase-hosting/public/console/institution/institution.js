@@ -1,7 +1,7 @@
 import { requireSignIn } from "../auth.js";
 import { api } from "../api.js";
 import { setStatus, markFirstData, whileWaiting } from "../status.js";
-import { esc, day, licenceStatePill, placeholderRows, retryRow } from "../util.js";
+import { esc, day, licenceStatePill, placeholderRows, retryRow, sessionEnded } from "../util.js";
 import { explain } from "../messages.js";
 import { fetchRoster, wireRoster } from "../roster.js";
 import { mountSwitcher } from "../switcher.js";
@@ -68,6 +68,8 @@ async function administersSomething(user) {
       .licenses || [];
     setStatus("");
   } catch (e) {
+    // Signed out (api.js ended the session and said so): nothing more to show.
+    if (sessionEnded(e)) return false;
     if (e.code !== "email_not_verified") {
       setStatus(`Could not list your institution licences: ${explain(e)}`, true);
       return true;
@@ -196,10 +198,10 @@ function render(data) {
     </p>`;
 
   $("rosterHelp").textContent = floating
-    ? "Everyone here may use Semper, but only the number of seats above at " +
+    ? "Everyone here may use semper, but only the number of seats above at " +
       "the same time. Someone without a seat keeps their saved work and " +
       "gets one as soon as a colleague finishes."
-    : "Everyone here is licensed. Removing someone frees their seat for " +
+    : "Everyone here is Licensed. Removing someone frees their seat for " +
       "another member.";
 
   // Invites belong in the same list: to whoever manages the roster this

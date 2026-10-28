@@ -83,12 +83,12 @@ const ACTIONS = {
 const ASK = {
   clear: (who) => ({
     title: `New phone for ${who}`,
-    message: `Unbind ${who} from the phone it is on?
+    message: `Free ${who} for a new phone?
 
 ` +
       "The next phone they sign in on takes the seat. Their seat and their " +
       "saved analyses are untouched.",
-    confirm: "Unbind",
+    confirm: "New phone",
   }),
   remove: (who) => ({
     title: `Remove ${who}`,
@@ -220,8 +220,8 @@ Nobody has claimed it yet.`,
         invite_exists: `${address} is already promised a place on a different licence.`,
         // One licence per person. Which licence is not the roster's to say;
         // Semper support can move them.
-        member_already_licensed: `${address} already has a Semper licence of their own. ` +
-          "Ask Semper support to move them onto this one.",
+        member_already_licensed: `${address} already has a semper licence of their own. ` +
+          "Ask semper support to move them onto this one.",
         license_seats_exhausted: "This licence has no seats left.",
         license_seat_disabled: "That seat is paused — resume it instead.",
       }, (text) => `Could not add ${address}: ${text}`), true);

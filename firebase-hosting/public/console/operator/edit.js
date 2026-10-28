@@ -213,7 +213,7 @@ $("convertForm").addEventListener("submit", async (ev) => {
   } catch (e) {
     hint(explain(e, {
       convert_domain_mismatch: "The holder's address is not on that domain.",
-      license_not_convertible: "Only an individual licensed key converts.",
+      license_not_convertible: "Only an individual Licensed key converts.",
       license_revoked: "This licence is revoked.",
     }, (text) => `Not converted: ${text}`));
   } finally {

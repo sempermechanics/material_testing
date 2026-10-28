@@ -291,7 +291,7 @@ test("every import outcome reads as a sentence", () => {
   assert.equal(said("duplicate"), "repeats an earlier row");
   assert.equal(said("refused", "license_seats_exhausted"), "no seats left on this licence");
   assert.equal(said("refused", "member_already_licensed"),
-    "already has a Semper licence of their own — Semper support can move them");
+    "already has a semper licence of their own — semper support can move them");
   assert.equal(said("refused", "strange"), "not added — the server refused it (ref: strange)");
   assert.equal(said("unprocessed", "roster_row_unprocessed"), "not reached — import the file again to finish");
   assert.equal(said("novel"), "novel");
