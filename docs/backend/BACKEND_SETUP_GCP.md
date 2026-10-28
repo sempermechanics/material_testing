@@ -342,7 +342,7 @@ before: with the setting on and no grant, every console step-up call fails close
 with 401 `invalid_token` (`backend/app/step_up.py:180-229`). The posture check passes 3.4-iam only on
 `roles/firebaseauth.admin`, `roles/firebase.admin`, or a custom role holding
 `firebaseauth.users.update` and `firebaseauth.users.delete`
-(`scripts/check_gcp_posture.sh:345-383`).
+(`scripts/check_gcp_posture.sh:370-407`).
 
 **Check:** `scripts/check_gcp_posture.sh --app-project $PROJECT --auth-project $AUTH_PROJECT --api-sa $API_SA --backup-bucket <FIRESTORE_BACKUP_BUCKET>` item `3.4-iam` is PASS;
 suspending a test account from the staff console writes an `ADMIN_REVOKE` audit row
