@@ -219,6 +219,7 @@ class ConvergenceBinsView @JvmOverloads constructor(
         private const val GAP_FRACTION = 0.2f
         private const val SLOT_ALPHA = 110
         private const val LABEL_GAP_DP = 3f
+
         // The axis carries the unit; the bars' own numbers stay bare (readiness AE1-112).
         private val AXIS_TOP_LABEL = "${FULL.toInt()}%"
         private val AXIS_GATE_LABEL = "${MIN_PERCENT.toInt()}%"

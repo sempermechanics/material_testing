@@ -70,7 +70,10 @@ class DeadRunReclaimTest {
     @Test
     fun `only a dead run's folder goes`() {
         val manifest = deadRun("manifest")
-        File(manifest, SessionLayout.MANIFEST).apply { writeText("{}"); setLastModified(OLD) }
+        File(manifest, SessionLayout.MANIFEST).apply {
+            writeText("{}")
+            setLastModified(OLD)
+        }
         val noStaging = deadRun("nostaging").also { SessionPaths.runStaging(it).deleteRecursively() }
         val fresh = deadRun("fresh", at = NOW + 1_000)
 
