@@ -161,3 +161,4 @@ hosted `/privacy` and `/terms` stay at `b940cc29`.
 |---|---|
 | The fork's app is named "Semper Classroom" in some console and app text. Under the lower-case brand rule, how should it read? | "semper Classroom (Recommended)" |
 | On the operator desk, the Demo analysis cap now reads "Demo limit (25)". Keep that or shorten it? | "Demo limit (25) (Recommended)" |
+| Engine PRs #27/#28 add tests only. But a new tag from engine main also brings 4 commits that change solver output in edge cases. How should the app's engine pin move? | "Keep v0.6.1 for now (Recommended)" — TE2-002 and TE2-004 are fixed in the engine repository (semper-dic-engine#27, #28, to merge into engine `main`); the app stays pinned at v0.6.1 for this release. Adopting the next engine tag is its own ORACLE-CHANGE with DICe / steel_24 re-validation (TD row) |
