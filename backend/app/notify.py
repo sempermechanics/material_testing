@@ -217,8 +217,9 @@ def access_request(uid: str, email, display_name, provider) -> None:
 
 
 #: How the new-phone mail names the app the phone registered for. The
-#: product name is lower-case "semper" wherever a person reads it (ADDENDUM-4).
-_APP_NAMES = {apps.SEMPER: "semper", apps.SEMPER_CLASSROOM: "Semper Classroom"}
+#: product name is lower-case "semper" wherever a person reads it, the
+#: Classroom app "semper Classroom" (ADDENDUM-4).
+_APP_NAMES = {apps.SEMPER: "semper", apps.SEMPER_CLASSROOM: "semper Classroom"}
 
 
 def device_registered(uid: str, address: str, device_id: str, app: str, *,
