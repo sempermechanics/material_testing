@@ -679,7 +679,7 @@ reinstall, or a re-signed forgery; this phone cannot tell which, so it is not a 
 the key has to be checked against the account's registered devices), **Changed since analysis** (a file was
 edited, removed or added; an amber note names them), **Not signed** (the record has no
 signature, so it cannot rule out an edit) or **Not recorded** (an analysis from before
-records existed). The report's cover prints the same as **Record Fingerprint**.
+records existed). The report's cover prints the same as **Record fingerprint**.
 
 **Changing settings later never changes an old result.** This sheet is your
 provenance record.

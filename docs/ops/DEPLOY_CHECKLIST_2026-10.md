@@ -252,7 +252,9 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       (material_testing#139). Both now require **Android 11 (minSdk 30)**.
       Steps: [RELEASING.md](RELEASING.md).
 - [ ] Set `SEMPER_ENTITLEMENT_PUBKEYS` before the release build if offline tokens
-      should be enforced; `SEMPER_API_CERT_PINS` is optional (TD-218).
+      should be enforced. Set `SEMPER_API_CERT_PINS` (the four GTS root pins,
+      [RELEASING.md § Certificate pins](RELEASING.md#certificate-pins-semper_api_cert_pins)):
+      the release fails without it (TD-318).
 - [ ] Device smoke (TD-219): installs on Android 11 and is refused on Android 10;
       Refresh licence; a demo account sees locked features; the device-limit
       screen.
