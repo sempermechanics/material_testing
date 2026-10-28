@@ -40,7 +40,7 @@ object ReportBuilder {
 
     // The report's blocks: the five fields (FieldKind's table), then ZNSSD,
     // which follows Exy in a `.dat` point.
-    private val FIELD_NAMES = FieldKind.entries.map { it.title } + "ZNSSD (Correlation Quality)"
+    private val FIELD_NAMES = FieldKind.entries.map { it.title } + "ZNSSD (correlation quality)"
     private val FIELD_KEYS = FieldKind.entries.map { it.label } + "ZNSSD"
 
     data class FieldExtrema(val maxIdx: Int, val minIdx: Int) {

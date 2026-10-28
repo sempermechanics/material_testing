@@ -36,7 +36,7 @@ data class ReportData(
     val appBuild: String? = null,
 
     /**
-     * The cover's "Record Fingerprint" ([recordFingerprintText], ADR-028): the
+     * The cover's "Record fingerprint" ([recordFingerprintText], ADR-028): the
      * record manifest's fingerprint and what its check said. Set by each
      * caller after [ReportBuilder.buildReport]; null prints no line.
      */
