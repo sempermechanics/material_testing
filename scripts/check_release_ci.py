@@ -36,6 +36,8 @@ REQUIRED = (
     "Tier 4 — Backend",
     "Firestore rules",
     "Tier 5 — Signed release",
+    "Android dependencies (OSV-Scanner)",
+    "SAST (semgrep)",
     "CI OK",
 )
 

@@ -59,7 +59,8 @@ Check the R8 mapping reached Crashlytics (the release build uploads it); the wor
    job (`scripts/check_release_ci.py`) fails unless the latest check run of every
    CI job on the commit passed, not skipped (secret scan, legal and console
    pages, console accessibility, engine pin, tiers 1, 3, 4 and 5, Firestore
-   rules, the sanitized engine host tests, `CI OK`).
+   rules, the sanitized engine host tests, the Android dependency scan,
+   semgrep, `CI OK`).
 3. **Tag and push** the commit you intend to release:
 
    ```bash
@@ -277,7 +278,8 @@ JVM unit tests, and backend pytest overlap instead of stacking:
   [`scripts/check_release_ci.py`](../../scripts/check_release_ci.py) requires the
   latest run of each CI job to have **passed**: the secret scan, legal pages,
   console pages, console accessibility, the engine pin, tiers 1, 3, 4 and 5, Firestore rules, the
-  sanitized engine host tests and `CI OK`. A path-filtered push run skips tiers 3
+  sanitized engine host tests, the Android dependency scan (OSV-Scanner),
+  semgrep and `CI OK`. A path-filtered push run skips tiers 3
   and 5 (and the engine host tests with them), so it is not enough: run CI with `full_ci` first
   (checklist step 2).
 

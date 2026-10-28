@@ -274,6 +274,7 @@ jobs:
       release_build: ${{ steps.flags.outputs.release_build }}
       benchmark_ci: ${{ steps.flags.outputs.benchmark_ci }}
       engine_host: ${{ steps.flags.outputs.engine_host }}
+      sast: ${{ steps.flags.outputs.sast }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -391,6 +392,12 @@ jobs:
               - 'benchmark/gates.json'
               # The launch smoke of the minified build runs in the same job.
               - 'scripts/launch_smoke.py'
+            # The code semgrep reads (TE5-105): the backend app, the console
+            # pages' JS and the app's main Kotlin.
+            sast:
+              - 'backend/app/**'
+              - 'firebase-hosting/public/**'
+              - 'app/src/main/java/**'
 
       - name: Resolve tier flags
         id: flags
@@ -404,6 +411,7 @@ jobs:
           FILTER_ANDROID_TEST: ${{ steps.filter.outputs.android_test }}
           FILTER_PACKAGING: ${{ steps.filter.outputs.packaging }}
           FILTER_HOT_PATH: ${{ steps.filter.outputs.hot_path }}
+          FILTER_SAST: ${{ steps.filter.outputs.sast }}
           EVENT_NAME: ${{ github.event_name }}
           REF: ${{ github.ref }}
           HEAD_REF: ${{ github.head_ref }}
@@ -422,6 +430,7 @@ jobs:
           emulator=false        # Tier 3
           release_build=false   # Tier 5
           benchmark=false
+          sast=false            # semgrep
 
           # The weekly schedule, the full-ci label or dispatch full_ci → full
           # matrix. So is a push whose base is unknown (no diff to filter).
@@ -442,6 +451,7 @@ jobs:
 
           if [ "$full" = "true" ]; then
             app=true; backend=true; rules=true; emulator=true; release_build=true
+            sast=true
           elif [ "$EVENT_NAME" = "pull_request" ] && [[ "${HEAD_REF:-}" == dependabot/* ]]; then
             # Dependabot cheap path: never Tier 3/5; ecosystem picks one light tier.
             case "$HEAD_REF" in
@@ -465,6 +475,7 @@ jobs:
             fi
             if [ "$FILTER_BACKEND" = "true" ]; then backend=true; fi
             if [ "$FILTER_RULES" = "true" ]; then rules=true; fi
+            if [ "$FILTER_SAST" = "true" ]; then sast=true; fi
             # Editing ci.yml used to be gates-only because this filter was
             # collected and never read. Run the light app + backend tiers so a
             # workflow change cannot skip every real job.
@@ -472,6 +483,7 @@ jobs:
               app=true
               backend=true
               rules=true
+              sast=true
             fi
             # An engine bump or a JNI change is proven on the emulator and in
             # the arm64 release build before it merges. These flags were
@@ -503,6 +515,7 @@ jobs:
               app=true
               backend=true
               rules=true
+              sast=true
             fi
           fi
 
@@ -520,8 +533,9 @@ jobs:
             echo "release_build=$release_build"
             echo "benchmark_ci=$benchmark"
             echo "engine_host=$engine_host"
+            echo "sast=$sast"
           } >> "$GITHUB_OUTPUT"
-          echo "Resolved: event=$EVENT_NAME full=$full app=$app backend=$backend rules=$rules emulator=$emulator release_build=$release_build benchmark_ci=$benchmark engine_host=$engine_host"
+          echo "Resolved: event=$EVENT_NAME full=$full app=$app backend=$backend rules=$rules emulator=$emulator release_build=$release_build benchmark_ci=$benchmark engine_host=$engine_host sast=$sast"
 
   # ===================================================================
   # Engine host suite, sanitized — TE2-004. The engine repo's CI runs it on
@@ -1234,6 +1248,57 @@ jobs:
           if-no-files-found: warn
 
   # ===================================================================
+  # Dependency and code scans — TE5-105 (Admin approved OSV-Scanner and
+  # semgrep, 2026-10-28). The backend's lock is pip-audited in Tier 4 and
+  # the console's npm graph has no runtime dependencies; these cover the
+  # Android graph and first-party source.
+  # ===================================================================
+  android-deps-osv:
+    name: Android dependencies (OSV-Scanner)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: changes
+    # Every app change (a Gradle bump is one), every main push and the
+    # weekly run, which is what catches an advisory published against an
+    # unchanged graph.
+    if: needs.changes.outputs.app == 'true'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-android-build
+
+      - uses: ./.github/actions/android-deps-osv
+
+  semgrep:
+    name: SAST (semgrep)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: changes
+    if: needs.changes.outputs.sast == 'true'
+    # The image is pinned by digest (semgrep 1.180.0). The p/ rule packs come
+    # from the semgrep registry at run time and are not versioned, so a rule
+    # added there can fail a PR that did not change the code it flags: triage
+    # it like any finding. --error fails the job on a finding; metrics off.
+    container:
+      image: semgrep/semgrep:1.180.0@sha256:529ee8a277ec8adc5b534d7c74eea0a47e9de21d62852b6ba7ac6ba9566845c3
+    steps:
+      - uses: actions/checkout@v7
+
+      # Two rules are off, each all false positives on 2026-10-28:
+      # use-of-md5: Digests.md5 is Drive's md5Checksum format for the upload
+      #   integrity check (DriveUploader); the attestation is SHA-256.
+      # python-logger-credential-disclosure: a keyword match on "token" in
+      #   four log formats (deps.py, google_auth.py, tasks.py) that log a
+      #   bool, a uid, an exception or a hash, never a credential.
+      - name: Scan the backend, the console JS and the app's Kotlin
+        run: >
+          semgrep scan --error --metrics=off --disable-version-check
+          --config p/python --config p/javascript --config p/kotlin
+          --exclude-rule kotlin.lang.security.use-of-md5.use-of-md5
+          --exclude-rule python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure
+          backend/app firebase-hosting/public app/src/main/java
+
+  # ===================================================================
   # ci-ok — single required status check
   # ===================================================================
   ci-ok:
@@ -1256,6 +1321,8 @@ jobs:
       - tier5-signed-release
       - tier-benchmark
       - engine-host-sanitized
+      - android-deps-osv
+      - semgrep
     steps:
       - name: Check all tiers
         run: |
@@ -1273,7 +1340,7 @@ jobs:
             "${{ needs.firestore-rules.result }}" \
             "${{ needs.tier5-signed-release.result }}" \
             "${{ needs.tier-benchmark.result }}" \
-            "${{ needs.engine-host-sanitized.result }}"; do
+            "${{ needs.engine-host-sanitized.result }}"             "${{ needs.android-deps-osv.result }}"             "${{ needs.semgrep.result }}"; do
             case "$result" in
               success|skipped) ;;
               *) echo "FAILED: $result"; exit 1 ;;
