@@ -153,6 +153,21 @@
         <item name="android:minWidth">@dimen/min_touch_target</item>
     </style>
 
+    <!-- An off switch keeps a 3:1 track (readiness AE1-106). -->
+    <style name="Widget.Semper.Switch" parent="Widget.MaterialComponents.CompoundButton.Switch">
+        <item name="trackTint">@color/switch_track</item>
+    </style>
+
+    <!-- Alert dialogs: the body in text_secondary (5.5:1 on white) instead of
+         Material's medium-emphasis on-surface, 4.25:1 (readiness AE1-105). -->
+    <style name="ThemeOverlay.Semper.AlertDialog" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog">
+        <item name="materialAlertDialogBodyTextStyle">@style/MaterialAlertDialog.Semper.Body.Text</item>
+    </style>
+
+    <style name="MaterialAlertDialog.Semper.Body.Text" parent="MaterialAlertDialog.MaterialComponents.Body.Text">
+        <item name="android:textColor">@color/text_secondary</item>
+    </style>
+
     <style name="Widget.Semper.SegmentedButton" parent="Widget.MaterialComponents.Button.OutlinedButton">
         <item name="android:textAllCaps">false</item>
         <item name="strokeColor">@color/outline_strong</item>

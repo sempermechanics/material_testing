@@ -36,6 +36,8 @@
         <item name="materialButtonStyle">@style/Widget.Semper.Button</item>
         <item name="materialCardViewStyle">@style/Widget.Semper.Card</item>
         <item name="sliderStyle">@style/Widget.Semper.Slider</item>
+        <item name="switchStyle">@style/Widget.Semper.Switch</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.Semper.AlertDialog</item>
 
         <!-- Subtle, professional screen transitions (enabled per-activity) -->
         <item name="android:windowAnimationStyle">@style/Animation.Semper.Activity</item>
