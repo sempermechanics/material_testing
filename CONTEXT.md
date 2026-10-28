@@ -129,7 +129,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   ([checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md) §4) and compare the live pages after; a
   plain-`main` deploy on 2026-10-26 published them until the same day's redeploy.
 - **Readiness run 2026-10-24:** merged as #489 (`6d2bde6c`, 2026-10-26), not deployed; verdict
-  **No-go** ([report](docs/ops/readiness/20261024/REPORT.md); open rows TD-318–TD-332 but TD-330, TD-336–TD-344, TD-346, TD-347).
+  **No-go** ([report](docs/ops/readiness/20261024/REPORT.md); open rows TD-318–TD-332 but TD-323 and TD-330, TD-336–TD-344, TD-346, TD-347).
   Its backend changes need a deploy: lock bump, kill switches on `GET …/uploads` and
   `PUT …/metadata`, the `/readyz` budget, `--no-access-log`, roster codes, quota wording.
 - **Admin actions** are one table, [gate § Admin actions](docs/ops/PRODUCTION_READINESS_GATE.md#admin-actions-external):
