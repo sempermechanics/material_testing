@@ -1,5 +1,6 @@
 package com.sempermechanics.semper.ui.home
 
+import android.view.LayoutInflater
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -7,6 +8,7 @@ import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.prefs.CoachPrefs
+import com.sempermechanics.semper.databinding.DialogDiagnosticsConsentBinding
 import com.sempermechanics.semper.diagnostics.Diagnostics
 import com.sempermechanics.semper.ui.common.CoachMarkController
 
@@ -69,21 +71,26 @@ internal class FirstRunPrompts(private val activity: AppCompatActivity) {
             next()
             return
         }
-        MaterialAlertDialogBuilder(activity)
+        val builder = MaterialAlertDialogBuilder(activity)
+        // The body and both choices are one view: the body scrolls in what
+        // height is left, and the choices sit side by side at equal weight
+        // under it, both whole at any font scale. The stock stacked bar cut
+        // whichever came second to 26 dp at font scale 2.0 (readiness AE1-103).
+        val content = DialogDiagnosticsConsentBinding.inflate(LayoutInflater.from(builder.context))
+        val dialog = builder
             .setTitle(R.string.diagnostics_prompt_title)
-            .setMessage(R.string.diagnostics_prompt_body)
-            // The decline takes the first slot: stacked at a large font scale, only
-            // the first button is sure of its full height, and 'Not now' was cut
-            // to 26 dp under 'Send reports' (readiness AE1-103). Side by side the
-            // two read with equal weight either way.
-            .setPositiveButton(R.string.diagnostics_prompt_decline) { _, _ ->
-                Diagnostics.setEnabled(activity, false)
-            }
-            .setNegativeButton(R.string.diagnostics_prompt_accept) { _, _ ->
-                Diagnostics.setEnabled(activity, true)
-            }
+            .setView(content.root)
             .setCancelable(false)
             .setOnDismissListener { next() }
-            .show()
+            .create()
+        content.btnDiagnosticsDecline.setOnClickListener {
+            Diagnostics.setEnabled(activity, false)
+            dialog.dismiss()
+        }
+        content.btnDiagnosticsAccept.setOnClickListener {
+            Diagnostics.setEnabled(activity, true)
+            dialog.dismiss()
+        }
+        dialog.show()
     }
 }

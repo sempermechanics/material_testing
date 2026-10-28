@@ -3,6 +3,7 @@ package com.sempermechanics.semper.ui.home
 import android.annotation.SuppressLint
 import android.app.Dialog
 import android.content.Context
+import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.test.core.app.ApplicationProvider
@@ -59,7 +60,10 @@ class HomeFirstRunPromptsTest {
 
     private fun showing(): List<Dialog> = ShadowDialog.getShownDialogs().filter { it.isShowing }
 
-    private fun Dialog.message(): String = findViewById<TextView>(android.R.id.message).text.toString()
+    /** The dialog's body: the stock message, or the diagnostics question's own (AE1-103). */
+    private fun Dialog.message(): String =
+        (findViewById<TextView>(R.id.tvDiagnosticsBody) ?: findViewById<TextView>(android.R.id.message))
+            .text.toString()
 
     @Test
     fun `the diagnostics prompt waits for the beta notice`() {
@@ -90,25 +94,32 @@ class HomeFirstRunPromptsTest {
     }
 
     /**
-     * At font scale 2.0 the stacked button bar guarantees only its first button
-     * a full height; 'Send reports' had it and 'Not now' was cut to 26 dp
-     * (readiness AE1-103). The decline is now the first stacked button, and
-     * each button still does what it says.
+     * Each choice does what it says; both sit side by side under the body
+     * (their layout at font scale 2.0 is DiagnosticsConsentLayoutTest's,
+     * readiness AE1-103).
      */
     @Test
-    fun `the diagnostics decline is the first stacked button and turns reporting off`() {
+    fun `send reports turns reporting on and records the choice`() {
         AccountCache.setBetaNoticeAcked(context)
         val activity = home()
-        val dialog = showing().single() as AlertDialog
+        val dialog = showing().single()
 
-        // Stacked, the positive slot is on top: it holds the decline.
-        val first = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
-        val second = dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
-        assertEquals(activity.getString(R.string.diagnostics_prompt_decline), first.text.toString())
-        assertEquals(activity.getString(R.string.diagnostics_prompt_accept), second.text.toString())
-
-        first.performClick()
+        dialog.findViewById<Button>(R.id.btnDiagnosticsAccept).performClick()
         shadowOf(activity.mainLooper).idle()
+        assertFalse(dialog.isShowing)
+        assertTrue(AppSettings.wasDiagnosticsAsked(activity))
+        assertTrue(AppSettings.diagnosticsEnabled(activity))
+    }
+
+    @Test
+    fun `not now turns reporting off and records the choice`() {
+        AccountCache.setBetaNoticeAcked(context)
+        val activity = home()
+        val dialog = showing().single()
+
+        dialog.findViewById<Button>(R.id.btnDiagnosticsDecline).performClick()
+        shadowOf(activity.mainLooper).idle()
+        assertFalse(dialog.isShowing)
         assertTrue(AppSettings.wasDiagnosticsAsked(activity))
         assertFalse(AppSettings.diagnosticsEnabled(activity))
     }
