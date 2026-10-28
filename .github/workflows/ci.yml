@@ -100,6 +100,10 @@ jobs:
     # the previous main on a push). A deliberate downgrade carries the PR label
     # `engine-downgrade`; labels are read at run time, so re-run the job after
     # adding one. Treeless clone of the public engine repo; seconds.
+    # TE2-102: it also reads the engine repo's CI (gh api, read-only) and
+    # fails unless the latest completed ci.yml run on the pinned commit has a
+    # green `Host tests` job, the unsanitized run where the numeric goldens
+    # compare (engine-host-sanitized below skips them).
     permissions:
       contents: read
       pull-requests: read

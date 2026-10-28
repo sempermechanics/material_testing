@@ -27,6 +27,20 @@ reruns the host suite under ASan+UBSan at the pinned commit
 OpenCV) whenever Tier 3 runs. TSan, the C SDK smoke and the JNI adapter under a
 sanitizer run nowhere here.
 
+**Where the numeric goldens are compared.** `GoldenCorpus` (the 4×4 and 6×6
+corpora) and `FullFieldGolden.CaptureOrCompare` compare against their stored
+values only in an unsanitized Release host build: under a sanitizer
+`engine/tests/CMakeLists.txt` defines `SEMPER_SANITIZER_BUILD` and the three
+skip (`engine/tests/integration/test_golden_corpus.cpp`,
+`test_full_field_golden.cpp`; the log says "skipped under sanitizer/coverage").
+So `engine-host-sanitized` passes without comparing them. They compare in the
+engine repo's CI, job **`Host tests`** of its `.github/workflows/ci.yml` (for
+v0.6.1, `f072da0`: run 39769086078, job 119791794771, 0 value mismatches), and
+`engine-pin` requires that job green on the pinned commit (TE2-102): the latest
+completed run of that workflow on the pin, read with `gh api`. The DICe
+tolerance tests (`DiceFieldAgreement`, `DiceIncremental`, `DiceStrain*`,
+`DiceTranslation*`) do run in `engine-host-sanitized`.
+
 This repo's CI verifies that the pinned submodule still *links and behaves*:
 the arm64-v8a release build (R8, signed) in tier 5, and the x86_64 emulator run
 in tier 3, where `EnginePipelineSmokeTest` drives the solver through the JNI.
@@ -44,6 +58,7 @@ The bump PR does all of this:
    `engine-downgrade`.
 2. Find the engine CI run on the tag's commit (`gh run list -R
    sempermechanics/semper-dic-engine --commit <sha>`); it must be green.
+   `engine-pin` fails unless its `Host tests` job (the numeric goldens) passed.
 3. Add the pin's rows to [VALIDATION.md](VALIDATION.md): the DICe rows from that
    run, and the DIC Challenge and real-data rows, run by hand or marked
    **Not recorded**.

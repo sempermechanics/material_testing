@@ -13,23 +13,37 @@ branch tip):
 - the new pin must carry a `v*` tag in the engine repository;
 - if it changed, it must be a descendant of the base pin. A deliberate
   downgrade passes with --allow-downgrade (CI: the PR label
-  `engine-downgrade`).
+  `engine-downgrade`);
+- the engine repository's own CI must have passed its numeric goldens at the
+  pin (TE2-102): the latest completed run of the engine's
+  `.github/workflows/ci.yml` on the pinned commit has a `Host tests` job that
+  succeeded. That job builds `dic_tests` unsanitized in Release and is where
+  `GoldenCorpus` and `FullFieldGolden.CaptureOrCompare` compare; this repo's
+  `engine-host-sanitized` skips them under ASan+UBSan. Read-only, through
+  `gh api` (public repository), or from --engine-ci-json FILE (the runs, each
+  with its `jobs`, as `fetch_engine_ci` returns them); --no-engine-ci skips it.
 
 Commits are looked up in --engine-git DIR, or else in a treeless bare clone of
-the `.gitmodules` URL in a temporary directory. Stdlib only (and git).
+the `.gitmodules` URL in a temporary directory. Stdlib only (and git, gh).
 
 Exit codes: 0 pass, 1 fail, 2 cannot check.
 Usage: python3 scripts/check_engine_pin.py [--repo DIR] [--rev REV]
        [--base REV] [--engine-git DIR] [--allow-downgrade]
+       [--engine-ci-json FILE | --no-engine-ci]
 """
 from __future__ import annotations
 
 import argparse
+import json
+import re
 import subprocess
 import sys
 import tempfile
 
 SUBMODULE = "engine"
+#: The engine repository's workflow and the job in it that compares the goldens.
+ENGINE_CI_WORKFLOW = ".github/workflows/ci.yml"
+ENGINE_GOLDEN_JOB = "Host tests"
 
 
 class CheckError(Exception):
@@ -102,6 +116,48 @@ def evaluate(engine: str, new: str, base: str | None, *, allow_downgrade: bool) 
     return ok, lines
 
 
+def github_slug(url: str) -> str:
+    """`owner/repo` of a GitHub clone URL (https or ssh)."""
+    match = re.match(r"^(?:https://github\.com/|git@github\.com:)([^/]+/[^/]+?)(?:\.git)?/?$", url)
+    if not match:
+        raise CheckError(f"engine URL {url} is not a GitHub repository; cannot read its CI")
+    return match.group(1)
+
+
+def _gh_json(path: str) -> dict:
+    proc = subprocess.run(["gh", "api", path], capture_output=True, text=True, check=False)
+    if proc.returncode != 0:
+        raise CheckError(f"gh api {path}: {proc.stderr.strip()}")
+    return json.loads(proc.stdout)
+
+
+def fetch_engine_ci(slug: str, sha: str) -> list[dict]:
+    """The engine CI workflow's runs on [sha], each with its latest attempt's `jobs`."""
+    runs = _gh_json(f"repos/{slug}/actions/runs?head_sha={sha}&per_page=100").get("workflow_runs", [])
+    runs = [run for run in runs if run.get("path") == ENGINE_CI_WORKFLOW]
+    for run in runs:
+        run["jobs"] = _gh_json(f"repos/{slug}/actions/runs/{run['id']}/jobs?per_page=100").get("jobs", [])
+    return runs
+
+
+def evaluate_engine_ci(runs: list[dict], sha: str) -> tuple[bool, list[str]]:
+    """Pass when the latest completed engine CI run on [sha] has a successful golden job."""
+    done = [run for run in runs if run.get("path", ENGINE_CI_WORKFLOW) == ENGINE_CI_WORKFLOW
+            and run.get("status") == "completed"]
+    if not done:
+        return False, [f"FAIL no completed engine CI run ({ENGINE_CI_WORKFLOW}) on {sha[:12]}; "
+                       "its numeric goldens were never compared at the pin"]
+    run = max(done, key=lambda r: r["id"])
+    jobs = [job for job in run.get("jobs", []) if job.get("name") == ENGINE_GOLDEN_JOB]
+    where = f"engine CI run {run['id']} on {sha[:12]}"
+    if not jobs:
+        return False, [f"FAIL {where} has no '{ENGINE_GOLDEN_JOB}' job, where the numeric goldens compare"]
+    conclusion = jobs[0].get("conclusion")
+    if conclusion != "success":
+        return False, [f"FAIL {where}: '{ENGINE_GOLDEN_JOB}' (numeric goldens) concluded {conclusion}"]
+    return True, [f"PASS {where}: '{ENGINE_GOLDEN_JOB}' passed (GoldenCorpus, FullFieldGolden compared)"]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     parser.add_argument("--repo", default=".", help="superproject checkout (default: .)")
@@ -109,6 +165,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--base", help="revision to compare with (default: first parent of --rev)")
     parser.add_argument("--engine-git", help="engine repository holding the commits and tags")
     parser.add_argument("--allow-downgrade", action="store_true", help="a backwards or sideways pin passes")
+    ci_source = parser.add_mutually_exclusive_group()
+    ci_source.add_argument("--engine-ci-json", help="engine CI runs with their jobs, instead of gh api")
+    ci_source.add_argument("--no-engine-ci", action="store_true", help="skip the engine CI golden check")
     args = parser.parse_args(argv)
     try:
         new = gitlink(args.repo, args.rev)
@@ -121,6 +180,17 @@ def main(argv: list[str] | None = None) -> int:
                 engine = f"{tmp}/engine.git"
                 _git("clone", "-q", "--bare", "--filter=tree:0", submodule_url(args.repo, args.rev), engine)
             ok, lines = evaluate(engine, new, base, allow_downgrade=args.allow_downgrade)
+        if args.no_engine_ci:
+            lines.append("SKIP engine CI golden check (--no-engine-ci)")
+        else:
+            if args.engine_ci_json:
+                with open(args.engine_ci_json, encoding="utf-8") as handle:
+                    runs = json.load(handle)
+            else:
+                runs = fetch_engine_ci(github_slug(submodule_url(args.repo, args.rev)), new)
+            ci_ok, ci_lines = evaluate_engine_ci(runs, new)
+            ok = ok and ci_ok
+            lines.extend(ci_lines)
     except CheckError as exc:
         print(f"ERROR {exc}", file=sys.stderr)
         return 2
