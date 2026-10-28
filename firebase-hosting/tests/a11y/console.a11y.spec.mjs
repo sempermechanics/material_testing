@@ -170,3 +170,28 @@ test("a test account's phone count stays beside its label when unfolded, at 360 
   expect(outside, "every phone's Release is inside the row's card").toBe(0);
   await context.close();
 });
+
+// AE2-109: Import, the audit log's Show and its exports disable their button
+// while they work, and a disabled button drops focus to <body>; focus comes
+// back to the button once it is usable again.
+test("focus stays on Import, Show and Export JSON after they finish", async ({ browser }) => {
+  const { context, page } = await open(browser, PAGES[4], WIDTHS.desktop);
+  await page.locator("#importText").fill("email\nmember000@uni.edu\n");
+  await page.locator("#importSubmit").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#importSummary")).toHaveText("1 already on the roster.");
+  await expect(page.locator("#importSubmit")).toBeFocused();
+
+  await page.locator("#auditLoad").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#auditRows tr")).toHaveCount(1);
+  await expect(page.locator("#auditLoad")).toBeFocused();
+
+  const download = page.waitForEvent("download");
+  await page.locator("#auditJson").focus();
+  await page.keyboard.press("Enter");
+  await download;
+  await expect(page.locator("#status")).toHaveText("Audit log exported.");
+  await expect(page.locator("#auditJson")).toBeFocused();
+  await context.close();
+});

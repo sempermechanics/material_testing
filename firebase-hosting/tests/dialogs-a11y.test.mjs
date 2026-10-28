@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { test, reset, settle, page, prompts, confirms, codes, alerts, loadAuth, FakeElement } from "./harness.mjs";
 
 const { askInPage, confirmInPage, tellInPage, codeCard, enrolInPage } = await loadAuth();
+const { holdFocus } = await import("../public/console/dialogs.js");
 
 /** A button in the page that opens a card, focused as a click would leave it. */
 function trigger() {
@@ -161,4 +162,28 @@ test("the enrolment card is an alertdialog named by its heading, and Escape canc
   el.dispatch("keydown", { key: "Escape" });
   await assert.rejects(enrol, { message: "console_cancelled" });
   assert.equal(el.removed, true);
+});
+
+// AE2-109: a button that disables itself while it works gets focus back after.
+test("holdFocus gives focus back to a button the browser dropped it from, and only then", async () => {
+  reset();
+  const button = trigger();
+  let refocus = holdFocus(button);
+  button.disabled = true;
+  page.body.focus(); // what a browser does when the focused button is disabled
+  refocus();
+  assert.equal(document.activeElement, page.body, "not while it is still disabled");
+  button.disabled = false;
+  refocus();
+  assert.equal(document.activeElement, button);
+
+  refocus = holdFocus(button);
+  const other = trigger(); // the person moved on meanwhile
+  refocus();
+  assert.equal(document.activeElement, other, "focus someone moved is left where it is");
+
+  refocus = holdFocus(button); // it did not have focus to begin with
+  page.body.focus();
+  refocus();
+  assert.equal(document.activeElement, page.body);
 });

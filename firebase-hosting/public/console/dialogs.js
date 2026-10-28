@@ -121,6 +121,21 @@ export function restoreFocus(opener) {
 }
 
 /**
+ * For a button that disables itself while its work runs: a disabled button
+ * drops focus to <body>, and a screen reader's place with it (AE2-109).
+ * Call before disabling; the function returned, called once the button is
+ * usable again, gives focus back if the button had it and nothing has
+ * taken it since.
+ */
+export function holdFocus(button) {
+  const had = document.activeElement === button;
+  return () => {
+    const now = document.activeElement;
+    if (had && !button.disabled && (!now || now === document.body)) button.focus();
+  };
+}
+
+/**
  * Ask for one line of text in the page. Resolves the trimmed answer ("" if
  * left blank), or null on Cancel. `label` names the box (default: `title`).
  */

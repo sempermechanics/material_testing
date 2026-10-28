@@ -136,6 +136,13 @@ function answer(persona, method, path) {
     "GET /v1/institutions/licenses": () => ({ licenses: persona.administered }),
     "GET /v1/institutions/licenses/L1/seats": () => ROSTER,
     "GET /v1/institutions/licenses/L1/summary": () => SUMMARY,
+    "GET /v1/institutions/licenses/L1/audit": () => ({
+      events: [{ at: day(-1), action: "seat.add", actorEmail: "it@uni.edu", targetEmail: "new@uni.edu" }],
+      page: {}, licenseId: "L1",
+    }),
+    "POST /v1/institutions/licenses/L1/seats/import": () => ({
+      rows: 1, counts: { exists: 1 }, results: [{ row: 1, email: "member000@uni.edu", outcome: "exists", error: "" }],
+    }),
     "GET /v1/admin/licenses": () => ({ licenses: [IND, UNI, DEMO], page: {}, demoMaxAnalyses: 25 }),
     "GET /v1/admin/licenses/L1/seats": () => ROSTER,
     "GET /v1/admin/licenses/L1/summary": () => SUMMARY,

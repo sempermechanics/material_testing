@@ -11,6 +11,7 @@
  * goes to the one asked on.
  */
 import { api, apiBlob, saveBlob } from "./api.js";
+import { holdFocus } from "./dialogs.js";
 import { explain } from "./messages.js";
 import { esc, MAX_IMPORT_ROWS, importRowCount } from "./util.js";
 
@@ -154,6 +155,7 @@ export function wireImport({ text, file, preview, submit, summary, results, rows
   submit.addEventListener("click", async () => {
     const root = base();
     if (!root || submit.disabled) return;
+    const refocus = holdFocus(submit);
     submit.disabled = true;
     report("Importing…");
     try {
@@ -180,6 +182,7 @@ export function wireImport({ text, file, preview, submit, summary, results, rows
         : explain(e, IMPORT_ERRORS, (msg) => `Could not import: ${msg}`), true);
     } finally {
       update();
+      refocus();
     }
   });
 
