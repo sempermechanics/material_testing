@@ -220,10 +220,11 @@ has expired. Sign in again." (COMMON's `invalid_token` on a page's action).
 `endSession` writes that line itself, so a read whose own message lands
 somewhere now hidden (the Test accounts list) still says it, and the
 institution page stops rather than drawing the roster behind Sign in
-(AE2-105). Until the next sign-in `sessionOver()` stays true, and the
-institution page and the operator desk check it before they show the
-dashboard, so an answer that arrives after another read ended the session
-cannot bring it back. It used to read "an unexpected sign-in error (ref: …)" beside a
+(AE2-105). Until the next sign-in `sessionOver()` stays true, and every
+page (front door, account, institution, operator desk) checks it after each
+read it sends alongside another, on the answer and on the failure alike: an
+answer that arrives after another read ended the session, a 200, a 503 or no
+network, neither brings the dashboard back nor writes over that line. It used to read "an unexpected sign-in error (ref: …)" beside a
 Sign out button.
 
 Nothing else uses `window.prompt` either. The operator desk's typed-key

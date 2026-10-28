@@ -5,7 +5,7 @@
  * fetch limits to find out whether a seat is held. The analyses come from
  * `/v1/sessions`, which carries the quota alongside the page.
  */
-import { requireSignIn } from "../auth.js";
+import { requireSignIn, sessionOver } from "../auth.js";
 import { api, apiBlob, saveBlob } from "../api.js";
 import { confirmInPage } from "../dialogs.js";
 import { setStatus, markFirstData, whileWaiting } from "../status.js";
@@ -73,6 +73,9 @@ async function loadAccount() {
     markFirstData();
     mountSwitcher("account", { me, licenses: administered });
   } catch (e) {
+    // Signed out, by this read or the analyses' sent alongside: the line that
+    // says to sign in again stays (AE2-105).
+    if (sessionOver()) return accountError;
     accountError = `Could not read your account: ${refusalText(e)}`;
     setStatus(accountError, true);
     // The placeholders would otherwise read as still loading.
@@ -303,7 +306,8 @@ async function loadSessions({ reset }) {
     // `app=all` the backend would list only Semper's (ADR-014).
     const page = nextToken ? `&page_token=${encodeURIComponent(nextToken)}` : "";
     const data = await whileWaiting(api(`/v1/sessions?app=all${page}`), "Loading your analyses…");
-    if (ticket !== sessionsLoad) return;
+    // The account read may have ended the session meanwhile: its line stays.
+    if (ticket !== sessionsLoad || sessionOver()) return;
     sessions = sessions.concat(data.sessions || []);
     nextToken = (data.page || {}).nextPageToken || "";
     $("more").hidden = !nextToken;
@@ -312,7 +316,7 @@ async function loadSessions({ reset }) {
     renderSessions();
     setStatus(accountError, Boolean(accountError));
   } catch (e) {
-    if (ticket !== sessionsLoad) return;
+    if (ticket !== sessionsLoad || sessionOver()) return;
     const message = `Could not list your analyses: ${refusalText(e)}`;
     setStatus(message, true);
     if (!sessions.length) $("rows").innerHTML = retryRow(6, message);
