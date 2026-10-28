@@ -226,13 +226,16 @@ object PrefFiles {
 
     /**
      * The files the first screens read: Home's beta-notice and delete-feedback
-     * flags, the wizard's coach marks and parameter clipboard, Settings' device
-     * id. Opened by [warm] at app start, on IO, so their first read on the main
-     * thread finds them loaded (readiness TE1-104). [Settings] is not here:
-     * [AppSettings.migrate] must be its first reader.
+     * flags (the beta flag's key is per account, so the account file
+     * [Session] is read first), the wizard's coach marks and parameter
+     * clipboard, Settings' device id. Opened by [warm] at app start, on IO, so
+     * their first read on the main thread finds them loaded (readiness
+     * TE1-104). [Settings] is not here: [AppSettings.migrate] must be its
+     * first reader.
      */
     private val FIRST_SCREENS: List<String> = listOf(
         Onboarding.NAME,
+        Session.NAME,
         SessionDeletesPrefs.NAME,
         Coach.NAME,
         Clipboard.NAME,

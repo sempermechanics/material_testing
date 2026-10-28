@@ -15,7 +15,8 @@ import org.robolectric.annotation.Config
  * The first screens' preference files were first opened, and so loaded from
  * disk, on the main thread: the beta-notice and delete-feedback flags on Home,
  * the coach marks and the parameter clipboard in the wizard, the device id in
- * Settings (readiness TE1-104). SemperApp now opens them at start on IO
+ * Settings, and the account file the beta-notice check keys on (readiness
+ * TE1-104; the account file was still read on main at re-verify, 32 ms). SemperApp now opens them at start on IO
  * ([PrefFiles.warm]), so a screen finds them loaded.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -44,6 +45,8 @@ class PrefWarmupTest {
                 PrefFiles.Coach.NAME,
                 PrefFiles.Clipboard.NAME,
                 PrefFiles.Device.NAME,
+                // Home's beta-notice check reads the account file first (AccountCache.betaAckKey).
+                PrefFiles.Session.NAME,
             ),
             opened.toSet(),
         )
