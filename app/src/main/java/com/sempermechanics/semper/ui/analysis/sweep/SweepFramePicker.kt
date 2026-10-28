@@ -4,6 +4,7 @@ import android.app.Dialog
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.text.TextUtils
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -79,6 +80,12 @@ internal class SweepFramePicker(
         field = activity.findViewById(R.id.tilSweepFrame)
         name = activity.findViewById(R.id.ddSweepFrame)
         thumb = activity.findViewById(R.id.imgSweepFrame)
+        // Display only (a tap opens the dialog): with no key listener a field can
+        // ellipsize, so a long name reads 'speck…_02.png' on one line instead of
+        // being cut or wrapping into a clipped second line (readiness AE1-108).
+        name.isSingleLine = true
+        name.keyListener = null
+        name.ellipsize = TextUtils.TruncateAt.MIDDLE
         name.setOnClickListener { openDialog(picked) }
         field.setEndIconOnClickListener { openDialog(picked) }
         thumb.setOnClickListener { showOverlay() }

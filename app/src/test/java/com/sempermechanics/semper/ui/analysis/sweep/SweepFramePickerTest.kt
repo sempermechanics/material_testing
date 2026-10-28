@@ -1,9 +1,14 @@
 package com.sempermechanics.semper.ui.analysis.sweep
 
+import android.text.TextUtils
+import android.text.method.SingleLineTransformationMethod
+import com.sempermechanics.semper.R
 import com.sempermechanics.semper.ui.analysis.WizardTestBed
 import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -35,5 +40,22 @@ class SweepFramePickerTest {
         assertEquals("Frame 2", picker.frameLabel(1))
         assertEquals("IMG_3.png", picker.frameLabel(2))
         assertEquals("Frame 4", picker.frameLabel(3))
+    }
+
+    /**
+     * The field cut 'speckle_02.png' to 'speckle_02.pn' and, at font scale 2.0,
+     * wrapped it to a clipped second line (readiness AE1-108): an editable field
+     * never ellipsizes. It is display-only (a tap opens the frame dialog), so it
+     * drops its key listener and reads as one line cut in the middle.
+     */
+    @Test
+    fun `the frame name is one line cut in the middle`() {
+        picker.bind()
+        val name = bed.activity.findViewById<android.widget.EditText>(R.id.ddSweepFrame)
+
+        assertNull("typed into", name.keyListener)
+        assertEquals(1, name.maxLines)
+        assertEquals(TextUtils.TruncateAt.MIDDLE, name.ellipsize)
+        assertTrue("wraps", name.transformationMethod is SingleLineTransformationMethod)
     }
 }
