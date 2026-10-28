@@ -560,7 +560,7 @@ from the readiness review.
 | A11 | [ ] Support targets | TD-258 | B2B contracts | Set response targets and maintenance windows in [SUPPORT_POLICY.md](SUPPORT_POLICY.md) | TD-258 closed |
 | A12 | [ ] Penetration test | TD-240 | production launch | A third-party test on [PENTEST_SCOPE.md](PENTEST_SCOPE.md) | Report filed, findings owned |
 | A13 | [ ] Device smoke of the next release | TD-219 | that release | [RELEASING.md](RELEASING.md) step 5 (the smoke, and `EnginePipelineSmokeTest` on one arm64 device or arm64 AVD) and TD-219's device checks (installs on Android 11, refused on Android 10), recorded in [CHANGELOG.md](CHANGELOG.md) | Recorded for the release |
-| A14 | [ ] Owner decisions | TD-319 | — | Whether the backend refuses device-signed upload and restore below `MIN_SUPPORTED_VERSION_CODE` by `X-App-Version` ([RELEASING.md](RELEASING.md), Rollback levers); whether Schemathesis or Hypothesis may be added (TD-319) | Each decided and recorded |
+| A14 | [ ] Owner decisions | — | — | Whether the backend refuses device-signed upload and restore below `MIN_SUPPORTED_VERSION_CODE` by `X-App-Version` ([RELEASING.md](RELEASING.md), Rollback levers). Schemathesis was approved and built on 2026-10-28 (TD-319 closed, readiness TE3-007) | Each decided and recorded |
 
 ## External UNKNOWN register (do not invent PASS)
 

@@ -132,8 +132,9 @@ used, so Room migration tests do not apply.
 
 Added later in this run's fix round (2026-10-28, on the readiness branch): Lighthouse
 (`console-lighthouse`, AE2-110), semgrep (`semgrep`) and OSV-Scanner over the Android
-release graph (`android-deps-osv`), both TE5-105. The list above is the state at
-inventory time.
+release graph (`android-deps-osv`), both TE5-105; Schemathesis (`test_schemathesis.py`, TE3-007)
+and a semantic OpenAPI breaking-change diff (`test_openapi_breaking.py`, TE3-105) in
+Tier 4. The list above is the state at inventory time.
 
 ## External actions owed by the Admin (open on 2026-10-28)
 
