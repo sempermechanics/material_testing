@@ -26,6 +26,9 @@
          raise it so a tablet shows a column near 600 dp instead of a stretched
          phone layout (readiness AE1-019). The viewer stays full-bleed. -->
     <dimen name="content_side_inset">0dp</dimen>
+    <!-- A bottom action bar's side padding: its own 12dp plus content_side_inset,
+         so its buttons line up with the column on a tablet (readiness AE1-115). -->
+    <dimen name="bar_side_padding">12dp</dimen>
 
     <!-- Home row thumbnail edge; its result render is cached at twice this in px (SessionThumbs). -->
     <dimen name="session_thumb_size">44dp</dimen>

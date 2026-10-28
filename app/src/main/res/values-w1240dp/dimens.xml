@@ -2,4 +2,5 @@
 <resources>
     <!-- (1240 - 600) / 2: the column stays near 600 dp on the widest screens. See values/dimens.xml. -->
     <dimen name="content_side_inset">320dp</dimen>
+    <dimen name="bar_side_padding">332dp</dimen>
 </resources>

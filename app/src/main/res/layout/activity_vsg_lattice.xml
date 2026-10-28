@@ -281,8 +281,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:paddingStart="12dp"
-        android:paddingEnd="12dp"
+        android:paddingStart="@dimen/bar_side_padding"
+        android:paddingEnd="@dimen/bar_side_padding"
         android:paddingBottom="12dp"
         android:paddingTop="4dp">
 
