@@ -6,6 +6,7 @@ import android.app.Dialog
 import android.content.Context
 import android.content.ContextWrapper
 import android.view.View
+import android.widget.EditText
 import android.widget.TextView
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.RecyclerView
@@ -33,9 +34,9 @@ import org.robolectric.shadows.ShadowDialog
 
 /**
  * A configuration change (rotation, font scale, dark theme, a resize) rebuilt
- * Home and closed the + sheet, the delete question and selection mode with
- * it, so a half-made choice was lost (readiness AE1-111). They come back on
- * the rebuilt screen.
+ * Home and closed the + sheet, the delete question, the rename dialog and
+ * selection mode with it, so a half-made choice was lost (readiness AE1-111).
+ * They come back on the rebuilt screen, the rename with what was typed.
  */
 @RunWith(RobolectricTestRunner::class)
 class HomeConfigChangeTest {
@@ -124,5 +125,46 @@ class HomeConfigChangeTest {
             .findViewById<TextView>(android.R.id.message).text.toString()
         assertEquals(rebuilt.getString(R.string.delete_body_cant_undo), message)
         assertTrue("the old screen's question is closed", showingOn(old, android.R.id.message).isEmpty())
+    }
+
+    /** The rename dialogs showing over [activity]: the ones whose content is an [EditText]. */
+    private fun renameFieldsOn(activity: Activity): List<EditText> = ShadowDialog.getShownDialogs()
+        .filter { it.isShowing && it.activity() === activity }
+        .mapNotNull { dialog -> dialog.findViewById<View>(android.R.id.content)?.findEditText() }
+
+    private fun View.findEditText(): EditText? = when (this) {
+        is EditText -> this
+        is android.view.ViewGroup -> (0 until childCount).firstNotNullOfOrNull { getChildAt(it).findEditText() }
+        else -> null
+    }
+
+    @Test
+    fun `the rename dialog survives a rotation with the name typed so far`() {
+        SessionStore.save(context, sessionRecord(id = "s1", name = "Beam test"), allowOverLimit = true)
+        val first = home()
+        val old = first.get()
+        val list = old.findViewById<RecyclerView>(R.id.sessionList)
+        val row = { (0 until list.childCount).map { list.getChildAt(it) }.firstOrNull { it.isLongClickable } }
+        idleUntil("an analysis row") { row() != null }
+        assertTrue(row()!!.performLongClick())
+        old.findViewById<View>(R.id.btnSelectionRename).performClick()
+        idleUntil("the rename dialog") { renameFieldsOn(old).isNotEmpty() }
+        renameFieldsOn(old).single().apply {
+            setText("Beam test, second pull")
+            setSelection(5, 9)
+        }
+
+        val rebuilt = first.recreate().get()
+
+        idleUntil("the rename dialog on the rebuilt Home") { renameFieldsOn(rebuilt).isNotEmpty() }
+        val field = renameFieldsOn(rebuilt).single()
+        assertEquals("Beam test, second pull", field.text.toString())
+        assertEquals(5, field.selectionStart)
+        assertEquals(9, field.selectionEnd)
+        assertTrue("the old screen's dialog is closed", renameFieldsOn(old).isEmpty())
+        assertEquals(
+            rebuilt.resources.getQuantityString(R.plurals.selection_count_fmt, 1, 1),
+            rebuilt.findViewById<TextView>(R.id.tvSelectionCount).text.toString(),
+        )
     }
 }

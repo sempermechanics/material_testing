@@ -75,10 +75,16 @@ class SessionSelectionController(
     /** The delete question on screen, if any. */
     private var deleteDialog: Dialog? = null
 
+    /** The rename dialog on screen, if any: its row and the field being typed in. */
+    private var renameDialog: Dialog? = null
+    private var renameId: String? = null
+    private var renameInput: EditText? = null
+
     /**
-     * The selection, and whether the delete question was open, as the screen
-     * this one replaces left them (a rotation or theme switch, readiness
-     * AE1-111): applied once the list has rows, then null.
+     * The selection, and whether the delete question or the rename dialog
+     * (with what was typed) was open, as the screen this one replaces left
+     * them (a rotation or theme switch, readiness AE1-111): applied once the
+     * list has rows, then null.
      */
     private var restored: Bundle? = null
 
@@ -90,6 +96,13 @@ class SessionSelectionController(
             Bundle().apply {
                 putStringArrayList(SELECTED, ArrayList(selectedIds))
                 putBoolean(DELETE_OPEN, deleteDialog?.isShowing == true)
+                val input = renameInput
+                if (renameDialog?.isShowing == true && input != null) {
+                    putString(RENAME_ID, renameId)
+                    putString(RENAME_TEXT, input.text.toString())
+                    putInt(RENAME_SEL_START, input.selectionStart)
+                    putInt(RENAME_SEL_END, input.selectionEnd)
+                }
             }
         }
         activity.lifecycle.addObserver(
@@ -97,6 +110,7 @@ class SessionSelectionController(
                 // Saved by now; the rebuilt screen asks again.
                 override fun onDestroy(owner: LifecycleOwner) {
                     deleteDialog?.dismiss()
+                    renameDialog?.dismiss()
                 }
             },
         )
@@ -166,7 +180,7 @@ class SessionSelectionController(
      * a single selection.
      */
     fun updateSelectionBar() {
-        val reopenDelete = applyRestored()
+        val reopen = applyRestored()
         // Rows can disappear under a selection (a refresh, a delete elsewhere);
         // drop ids that no longer exist so the count never lies.
         selectedIds.retainAll(adapter.allIds().toSet())
@@ -188,22 +202,31 @@ class SessionSelectionController(
         // the real state rather than just what was last tapped.
         val allIds = adapter.allIds()
         selectAllBox.isChecked = allIds.isNotEmpty() && selectedIds.size == allIds.size
-        if (reopenDelete && inSelectionMode) confirmDeleteSelected()
+        if (reopen != null && inSelectionMode) reopenDialogs(reopen)
     }
 
     /**
      * Puts back the selection the replaced screen saved, once the list has
-     * rows to select; true when its delete question was open too.
+     * rows to select; returns that saved state, for the dialogs it had open.
      */
-    private fun applyRestored(): Boolean {
+    private fun applyRestored(): Bundle? {
         val state = restored
         val ids = adapter.allIds()
-        if (state == null || ids.isEmpty()) return false
+        if (state == null || ids.isEmpty()) return null
         restored = null
         val kept = state.getStringArrayList(SELECTED).orEmpty().filter { it in ids }
         selectedIds.addAll(kept)
         kept.forEach { adapter.rebindRow(it) }
-        return state.getBoolean(DELETE_OPEN)
+        return state
+    }
+
+    /** Asks again what the replaced screen was asking: delete, or rename with the name typed so far. */
+    private fun reopenDialogs(state: Bundle) {
+        if (state.getBoolean(DELETE_OPEN)) confirmDeleteSelected()
+        val id = state.getString(RENAME_ID) ?: return
+        val record = selectedRecords().singleOrNull()?.takeIf { it.id == id } ?: return
+        val typed = state.getString(RENAME_TEXT).orEmpty()
+        promptRename(record, typed, state.getInt(RENAME_SEL_START)..state.getInt(RENAME_SEL_END))
     }
 
     /**
@@ -296,9 +319,21 @@ class SessionSelectionController(
         )
     }
 
-    fun promptRename(record: SessionRecord) {
-        val input = EditText(activity).apply { setText(record.name) }
-        MaterialAlertDialogBuilder(activity)
+    /**
+     * Asks for [record]'s new name, starting from [typed] (the row's name, or
+     * what was typed before a rotation) with [selection] as the cursor.
+     */
+    fun promptRename(record: SessionRecord, typed: String = record.name, selection: IntRange? = null) {
+        val input = EditText(activity).apply {
+            setText(typed)
+            if (selection != null) {
+                val end = text.length
+                setSelection(selection.first.coerceIn(0, end), selection.last.coerceIn(0, end))
+            }
+        }
+        renameId = record.id
+        renameInput = input
+        renameDialog = MaterialAlertDialogBuilder(activity)
             .setTitle(R.string.action_rename)
             .setView(input)
             .setPositiveButton(android.R.string.ok) { _, _ ->
@@ -411,5 +446,9 @@ class SessionSelectionController(
         const val STATE_KEY = "home.selection"
         const val SELECTED = "selected"
         const val DELETE_OPEN = "deleteOpen"
+        const val RENAME_ID = "renameId"
+        const val RENAME_TEXT = "renameText"
+        const val RENAME_SEL_START = "renameSelStart"
+        const val RENAME_SEL_END = "renameSelEnd"
     }
 }
