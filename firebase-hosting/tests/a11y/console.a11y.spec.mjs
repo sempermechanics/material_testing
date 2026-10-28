@@ -1,7 +1,9 @@
 // The consoles in a real browser (Chromium), against a stub API and the
 // fake Firebase SDK (stub-site.mjs): axe-core finds no serious or critical
 // WCAG 2.1 A/AA violation on any page, at phone, tablet and desktop widths,
-// and no page scrolls sideways. AE2-001 (readiness 2026-10-24).
+// and no page scrolls sideways. AE2-001 (readiness 2026-10-24); the hosted
+// pages outside the consoles and the dialog, list and error states, AE2-111
+// (readiness 2026-10-28).
 //
 // Run from firebase-hosting/: npm ci && npx playwright install chromium &&
 // npm run test:a11y
@@ -35,6 +37,11 @@ const STATIC = [
   { name: "email-link sign-in landing page", path: "/finishSignIn/", persona: "out", ready: "h1" },
   // Hosting's answer for any address with no file (AE2-102: no timed redirect).
   { name: "the 404 page", path: "/404.html", persona: "out", ready: "h1" },
+  // The legal pages (generated from docs/legal/, held for counsel). The
+  // privacy policy's wide table cannot be scrolled by keyboard at 360 px
+  // until AE2-103's generator fix is cleared with the text (TD-277).
+  { name: "terms of service", path: "/terms/", persona: "out", ready: "h1" },
+  { name: "privacy policy", path: "/privacy/", persona: "out", ready: "h1", fixme: { 360: "AE2-103" } },
 ];
 
 /** Open `path` as `persona` at `width`, and wait until `ready` is on the page. */
@@ -78,6 +85,7 @@ for (const target of STATIC) {
   for (const scheme of ["light", "dark"]) {
     for (const [label, width] of Object.entries(WIDTHS)) {
       test(`${target.name}, ${scheme}, at ${width} px (${label}): no serious or critical axe violation, no sideways scroll`, async ({ browser }) => {
+        test.fixme(Boolean(target.fixme?.[width]), `open finding ${target.fixme?.[width]}`);
         const { context, page, errors } = await open(browser, target, width, scheme);
         expect(await violations(page)).toEqual([]);
         const scroll = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
@@ -193,5 +201,46 @@ test("focus stays on Import, Show and Export JSON after they finish", async ({ b
   await download;
   await expect(page.locator("#status")).toHaveText("Audit log exported.");
   await expect(page.locator("#auditJson")).toBeFocused();
+  await context.close();
+});
+
+// AE2-111: the states the page-by-page runs do not reach. Each passes axe.
+
+test("the operator desk's Test accounts list, phones unfolded, passes axe at 360 and 1280 px", async ({ browser }) => {
+  for (const width of [WIDTHS.phone, WIDTHS.desktop]) {
+    const { context, page } = await openTestAccounts(browser, width);
+    await page.locator("#testAccountRows details[data-ta-phones] summary").first().click();
+    await expect(page.locator("#testAccountRows button[data-ta-release]").first()).toBeVisible();
+    expect(await violations(page)).toEqual([]);
+    await context.close();
+  }
+});
+
+test("an error on the status line passes axe (institution, the licence list refused)", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: WIDTHS.phone, height: 900 } });
+  await stubContext(context, PERSONAS.it);
+  // Registered last, so answered first: the list fails, the rest is the stub's.
+  await context.route("**/__API_BASE_URL__/v1/institutions/licenses", (route) =>
+    route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ detail: "firestore_unreachable" }) }));
+  const page = await context.newPage();
+  await page.goto(`${site.origin}/console/institution/`);
+  await expect(page.locator("#status.err")).toContainText("could not reach its database");
+  expect(await violations(page)).toEqual([]);
+  await context.close();
+});
+
+test("the authenticator-code and enrolment cards are named alertdialogs and pass axe", async ({ browser }) => {
+  const { context, page } = await open(browser, PAGES[0], WIDTHS.phone);
+  // auth.js shows these during a step-up and a first sign-in; drawn here
+  // directly, as the stub's personas have their second factor done.
+  await page.evaluate(async () => {
+    const dialogs = await import("/console/dialogs.js");
+    dialogs.codeCard().next();
+    dialogs.enrolInPage({ qrUrl: "otpauth://totp/x", secret: "JBSWY3DPEHPK3PXP", finish: async () => {} },
+      "pat@lab.org", null).catch(() => {});
+  });
+  await expect(page.getByRole("alertdialog", { name: "Enter your authenticator code" })).toBeVisible();
+  await expect(page.getByRole("alertdialog", { name: "Set up two-factor authentication" })).toBeVisible();
+  expect(await violations(page)).toEqual([]);
   await context.close();
 });
