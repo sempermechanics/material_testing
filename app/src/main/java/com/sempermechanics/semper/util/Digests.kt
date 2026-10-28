@@ -13,7 +13,8 @@ object Digests {
 
     fun sha256(bytes: ByteArray): ByteArray = sha256().digest(bytes)
 
-    fun md5(): MessageDigest = MessageDigest.getInstance(MD5)
+    // Drive's files API reports md5Checksum, so an upload is checked with MD5; not used for security.
+    fun md5(): MessageDigest = MessageDigest.getInstance(MD5) // nosemgrep: kotlin.lang.security.use-of-md5.use-of-md5
 
     /** Lowercase hex MD5 of [file] contents (Drive `md5Checksum` format). */
     fun md5Hex(file: File): String = hexOf(file.inputStream(), md5())
