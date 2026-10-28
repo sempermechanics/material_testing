@@ -89,8 +89,14 @@ tolerance contract in `engine/docs/TESTING.md` (`-ffast-math` stays by
 ADDENDUM-1 of [the readiness rubric](../ops/readiness/RUBRIC_ADDENDA.md)). The check that covers arm64 is a device
 run: `EnginePipelineSmokeTest` on one arm64 phone or arm64 AVD before each
 release (step 6 below, [RELEASING.md](../ops/RELEASING.md) step 5), whose field
-must sit inside that contract. Until the readiness run records one at v0.6.1,
-TD-351 stays open.
+must sit inside that contract.
+
+Recorded arm64 device runs (`EnginePipelineSmokeTest`, debug build,
+`-PabiFilters=arm64-v8a`, live-services classes excluded with `notTestFile`):
+
+| Date | Device | ABI / Android | Engine pin, app commit | Result |
+|---|---|---|---|---|
+| 2026-10-28 | Galaxy S22+ (SM-S906U1, `g0q`) | `arm64-v8a` (`ro.product.cpu.abi`), Android 16 / API 36 | v0.6.1, `1b7541cf` (readiness TE2-003 / TE2-101) | 12 / 12 passed, twice; `repeatSolveIsBitIdentical` passed in both runs, as did the known-warp cases (translation, rotation, skew), the contrast-change and blurred-frame cases, the error codes, cancel and the batch loop |
 
 ## Bumping the engine pin
 
