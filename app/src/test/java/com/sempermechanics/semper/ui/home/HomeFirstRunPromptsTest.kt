@@ -89,6 +89,30 @@ class HomeFirstRunPromptsTest {
         assertEquals(activity.getString(R.string.diagnostics_prompt_body), shown.single().message())
     }
 
+    /**
+     * At font scale 2.0 the stacked button bar guarantees only its first button
+     * a full height; 'Send reports' had it and 'Not now' was cut to 26 dp
+     * (readiness AE1-103). The decline is now the first stacked button, and
+     * each button still does what it says.
+     */
+    @Test
+    fun `the diagnostics decline is the first stacked button and turns reporting off`() {
+        AccountCache.setBetaNoticeAcked(context)
+        val activity = home()
+        val dialog = showing().single() as AlertDialog
+
+        // Stacked, the positive slot is on top: it holds the decline.
+        val first = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+        val second = dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
+        assertEquals(activity.getString(R.string.diagnostics_prompt_decline), first.text.toString())
+        assertEquals(activity.getString(R.string.diagnostics_prompt_accept), second.text.toString())
+
+        first.performClick()
+        shadowOf(activity.mainLooper).idle()
+        assertTrue(AppSettings.wasDiagnosticsAsked(activity))
+        assertFalse(AppSettings.diagnosticsEnabled(activity))
+    }
+
     @Test
     fun `nothing is asked once both are answered`() {
         AccountCache.setBetaNoticeAcked(context)
