@@ -224,6 +224,27 @@ object PrefFiles {
         val UID = PrefKey.string("uid", "")
     }
 
+    /**
+     * The files the first screens read: Home's beta-notice and delete-feedback
+     * flags, the wizard's coach marks and parameter clipboard, Settings' device
+     * id. Opened by [warm] at app start, on IO, so their first read on the main
+     * thread finds them loaded (readiness TE1-104). [Settings] is not here:
+     * [AppSettings.migrate] must be its first reader.
+     */
+    private val FIRST_SCREENS: List<String> = listOf(
+        Onboarding.NAME,
+        SessionDeletesPrefs.NAME,
+        Coach.NAME,
+        Clipboard.NAME,
+        Device.NAME,
+    )
+
+    /** Opens [FIRST_SCREENS], which loads each from disk. Blocking: call it off the main thread. */
+    @androidx.annotation.WorkerThread
+    fun warm(context: android.content.Context) {
+        FIRST_SCREENS.forEach { privatePrefs(context, it) }
+    }
+
     /** Every file name above, for a test or a wipe that must not miss one. */
     val ALL_NAMES: List<String> = listOf(
         Settings.NAME,

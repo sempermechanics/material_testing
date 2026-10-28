@@ -12,6 +12,7 @@ import com.sempermechanics.semper.data.account.SeatHeartbeat
 import com.sempermechanics.semper.data.account.entitlement.EntitlementStore
 import com.sempermechanics.semper.data.policy.ManagedConfigReader
 import com.sempermechanics.semper.data.prefs.AppSettings
+import com.sempermechanics.semper.data.prefs.PrefFiles
 import com.sempermechanics.semper.data.session.CacheJanitor
 import com.sempermechanics.semper.data.session.StorageBudget
 import com.sempermechanics.semper.diagnostics.CrashReportingTree
@@ -43,6 +44,9 @@ class SemperApp : Application() {
             Timber.plant(CrashReportingTree(this))
         }
         installAppCheck()
+        // The first screens' preference files load on IO, not at their first
+        // read on the main thread (readiness TE1-104).
+        appScope.launch { PrefFiles.warm(this@SemperApp) }
         // One count of started screens: an upload may open the limit screen
         // only while one is up; the managed configuration is re-read whenever
         // the app comes to the front, and an entitlement token past its
