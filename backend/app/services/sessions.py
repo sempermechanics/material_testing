@@ -70,10 +70,10 @@ def verify_listed(uid: str, sessions: list[dict]) -> tuple[list[dict], int, int]
 _QUOTA_REMEDY = {
     "": "Delete an older analysis to back up a new one.",
     repo.INACTIVE_LICENCE_ENDED:
-        "Your licence has ended, so the demo limit applies. Renew it to back up "
+        "Your licence has ended, so the Demo limit applies. Renew it to back up "
         "new analyses; nothing stored has been removed.",
     repo.INACTIVE_NO_SEAT:
-        "No shared seat is free right now, so the demo limit applies. New "
+        "No shared seat is free right now, so the Demo limit applies. New "
         "analyses are backed up once you have a seat; nothing stored has been removed.",
 }
 
@@ -104,8 +104,8 @@ def _device_quota_detail(cap: int) -> str:
     and would lift a stop the next upload refuses again. A build that
     predates the code fails that one backup as refused (`Kind.REJECTED`).
     """
-    return (f"{errors.DEVICE_QUOTA_EXCEEDED}: the demo allows {cap} analyses stored "
-            "from one device. Delete an older analysis from this device, or use a "
+    return (f"{errors.DEVICE_QUOTA_EXCEEDED}: Demo allows {cap} analyses stored "
+            "from one phone. Delete an older analysis from this phone, or use a "
             "licence, to back up a new one.")
 
 
