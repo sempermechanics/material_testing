@@ -15,22 +15,16 @@ import androidx.appcompat.widget.TooltipCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.lifecycleScope
 import com.google.android.material.checkbox.MaterialCheckBox
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.cloud.SessionDeletes
-import com.sempermechanics.semper.data.cloud.SessionMetadataSync
 import com.sempermechanics.semper.data.session.SessionRecord
-import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.isKnownInCloud
 import com.sempermechanics.semper.data.session.isRestorable
 import com.sempermechanics.semper.ui.common.dialog.DeleteChoiceDialog
 import com.sempermechanics.semper.ui.common.dialog.Dialogs
 import com.sempermechanics.semper.ui.common.dialog.Feedback
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.util.UUID
 
 /**
@@ -57,6 +51,12 @@ class SessionSelectionController(
      * host runs it in [HomeViewModel] and hands the outcome to [showEraseOutcome].
      */
     private val onEraseLocally: (records: List<SessionRecord>, deviceOnly: Boolean) -> Unit,
+    /**
+     * Rename this row; the host runs it in [HomeViewModel.rename], off this
+     * screen's scope (ADR-016 rule 1, readiness AE1-111), and hands the outcome
+     * to [showRenameOutcome].
+     */
+    private val onRename: (record: SessionRecord, newName: String) -> Unit,
     private val onDeviceOnlyDeleted: () -> Unit = {},
     /** False for an account that has no restore (demo), which hides the action. */
     private val restoreEnabled: () -> Boolean = { true },
@@ -303,27 +303,23 @@ class SessionSelectionController(
             .setView(input)
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val newName = input.text.toString().trim()
-                if (newName.isNotEmpty()) {
-                    activity.lifecycleScope.launch(Dispatchers.IO) {
-                        // A name another analysis has comes back with a " (2)".
-                        val applied = SessionStore.rename(activity, record.id, newName)
-                        // A backed-up analysis restores under the name in its
-                        // cloud metadata.json, so send the new one (ADR-013).
-                        if (SessionStore.get(activity, record.id)?.metadataStale == true) {
-                            SessionMetadataSync.enqueue(activity, record.id)
-                        }
-                        withContext(Dispatchers.Main) {
-                            if (applied != null && applied != newName) {
-                                Feedback.toast(activity, activity.getString(R.string.rename_saved_as_fmt, applied))
-                            }
-                            clearSelection()
-                            onRefresh()
-                        }
-                    }
-                }
+                if (newName.isNotEmpty()) onRename(record, newName)
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
+    }
+
+    /**
+     * What a rename came to, once, on whichever Home is current: a toast when
+     * the name written is not the one asked for, then the list re-reads.
+     */
+    fun showRenameOutcome(outcome: HomeViewModel.Rename) {
+        val applied = outcome.applied
+        if (applied != null && applied != outcome.requested) {
+            Feedback.toast(activity, activity.getString(R.string.rename_saved_as_fmt, applied))
+        }
+        clearSelection()
+        onRefresh()
     }
 
     /**

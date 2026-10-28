@@ -13,6 +13,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.shadows.ShadowToast
 import java.io.File
 
 /** Home's multi-select, continued: Restore for cloud-only rows, and Rename. */
@@ -129,6 +130,27 @@ class SessionSelectionRestoreTest : SessionSelectionFixture() {
 
         assertEquals(0, refreshes)
         assertTrue("still selected", controller.isSelected("a"))
+        assertTrue("nothing handed to the host", renames.isEmpty())
+    }
+
+    @Test
+    fun `an OK rename goes to the host, and its outcome ends selection and re-reads the list`() {
+        homeViewModel.applyRename = { _, name -> "$name (2)" }
+        list(a)
+        controller.startSelection(a)
+        rename.performClick()
+        val dialog = latestDialog() as androidx.appcompat.app.AlertDialog
+        findEditText(dialog.window!!.decorView).setText("  Beam  ")
+        dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(listOf("a" to "Beam"), renames)
+        assertEquals(
+            activity.getString(R.string.rename_saved_as_fmt, "Beam (2)"),
+            ShadowToast.getTextOfLatestToast(),
+        )
+        assertEquals(1, refreshes)
+        assertFalse("selection ended", controller.inSelectionMode)
     }
 
     private fun findEditText(root: View): EditText {
