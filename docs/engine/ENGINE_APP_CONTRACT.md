@@ -250,9 +250,12 @@ its order; change the meaning of a metrics slot; change a return-code value or m
    behind the same public signatures (or additively). Update `SEMPER_VERSION` per the semver rules
    in [A.1](#a1-stability-tiers).
 2. **Tag** a release. This app bumps its **pinned `engine/` submodule tag**, a maintainer reviews
-   the engine diff, and app CI runs the **golden contract test**: a checked-in synthetic
-   reference/deformed pair is solved through the real entry point, and the resulting `(N, 8)`
-   field plus key metric slots are asserted against a stored golden within tolerance.
+   the engine diff, and the **golden contract test** must have passed at the tag: a checked-in
+   synthetic reference/deformed pair is solved through the real entry point, and the resulting
+   `(N, 8)` field plus key metric slots are asserted against a stored golden within tolerance.
+   It compares in the engine repo's CI (`Host tests`, an unsanitized x86_64 Release build); app
+   CI's `engine-pin` requires that job green on the pinned commit, and its own sanitized rerun
+   skips the comparison ([TESTING.md](TESTING.md#where-engine-tests-run-in-ci)).
    - A signature change fails to **compile**.
    - A behavior change fails the **golden test**.
 3. **Ship.** The app links the engine statically, so *source compatibility* of `include/semper/*`
