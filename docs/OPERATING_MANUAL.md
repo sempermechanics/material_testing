@@ -1129,7 +1129,7 @@ allowance (`DEMO_MAX_ANALYSES`, 25) whatever the key stores
 (`resolve_user_config` reads a licence cap only for a Licensed account). A
 `maxAnalyses` on a Demo key is refused with `422 cap_on_demo_key` and nothing
 changes. On the desk a Demo row's **Edit** dialog has the field disabled and its
-"Analyses / person" column reads "Demo (25)". To give that person more
+"Analyses / person" column reads "Demo limit (25)". To give that person more
 analyses, issue them a Licensed key. `clearMaxAnalyses` is still accepted on a
 Demo key; use it to remove a cap stored before this refusal existed, which
 never applied (SEMP-8AKN, set to 100 on 2026-09-25, is one).
@@ -1246,7 +1246,7 @@ enrol an authenticator app if there is none. A **Delete your account** card says
 where deletion happens: in the app on the phone (Settings → Your data → Delete
 account), because it needs the phone's device signature. It erases every analysis
 and cloud backup and removes the sign-in itself for both apps, semper and
-Semper Classroom, which share one account; signing in again with the same address
+semper Classroom, which share one account; signing in again with the same address
 starts a new, empty account. Point a customer here before answering "am I
 Licensed?" by hand.
 
@@ -1356,14 +1356,14 @@ Clearing the lock **is** the change: it releases the account's old phone, and
 the licence binds to the phone that registers next. Only the account's
 registered phone can take the lock, so a phone refused at sign-in cannot.
 
-**semper and Semper Classroom each hold their own phone** (ADR-010). One
+**semper and semper Classroom each hold their own phone** (ADR-010). One
 person can use both apps on one phone, or each on a different phone, on one
 licence. Staff and IT **New phone**, and the staff phone release below,
 move both apps at once. The holder moves one app at a time: **Use semper on
-a different device** or **Use Semper Classroom on a different device** on
+a different device** or **Use semper Classroom on a different device** on
 `/account`, or the same from inside that app, each with its own 30-day
-cooldown. Seats and the operator's user list show a Semper Classroom device
-as "Semper Classroom …" beside semper's. Semper Classroom was Material Testing
+cooldown. Seats and the operator's user list show a semper Classroom device
+as "semper Classroom …" beside semper's. semper Classroom was Material Testing
 until 2026-10 (ADR-030): a Material Testing build still installed is the same
 app to the account, and shares its phone and cooldown.
 
@@ -1471,7 +1471,7 @@ with `{"email", "purpose": "qc" or "ci", "days", "maxDevices", "note"}`
 - `days` is 1 to 90 (30 when left out for QC). A CI account may leave it out
   and then never ends; give it a date anyway if it will not be needed for long.
 - `maxDevices` is how many phones per app may be signed in at once, 1 to 10
-  (default 3). semper and Semper Classroom each count their own.
+  (default 3). semper and semper Classroom each count their own.
 - `note` says what it is for (who has it, which bench). Never put the password
   in it.
 

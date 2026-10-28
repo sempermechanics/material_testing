@@ -91,5 +91,5 @@ excluded while counsel holds them. Nothing above changes: ids, packages, code
 identifiers (`SemperApi*`, `SEMPER_*`, `SemperNativeLib`), the GitHub org and the
 domain keep their spelling, and this record's own text and the earlier ADRs
 keep the name as they were written. The same run fixed the tier names "Demo"
-and "Licensed" (ADDENDUM-3). Semper Classroom's name is ADR-030's, not decided
-here.
+and "Licensed" (ADDENDUM-3). The fork's product is written "semper Classroom":
+only the brand word is lower-case (Admin, 2026-10-28).
