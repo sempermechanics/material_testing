@@ -31,10 +31,11 @@ class EntitlementStoreDeviceTest {
 
     private val context: Context = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext
     private val signer: KeyPair = p256()
+    private val pins = EntitlementPins.parse("$KID:" + b64(signer.public.encoded))
 
     @Before
     fun pinTestKey() {
-        EntitlementStore.testPins = EntitlementPins.parse("$KID:" + b64(signer.public.encoded))
+        EntitlementStore.testPins = pins
         EntitlementStore.clear(context)
     }
 
@@ -42,7 +43,11 @@ class EntitlementStoreDeviceTest {
     fun unpin() {
         EntitlementStore.clear(context)
         EntitlementStore.testPins = null
-        EntitlementStore.forgetForTest()
+    }
+
+    /** Forget the in-memory record, as a new process would. */
+    private fun reload() {
+        EntitlementStore.testPins = pins
     }
 
     @Test
@@ -53,7 +58,7 @@ class EntitlementStoreDeviceTest {
         assertTrue("status $status", status is TokenStatus.Valid)
         assertEquals("licensed", (status as TokenStatus.Valid).claims.mode)
         // Read back from disk through the Keystore seal, not from memory.
-        EntitlementStore.forgetForTest()
+        reload()
         assertTrue(EntitlementStore.status(context) is TokenStatus.Valid)
     }
 
@@ -66,7 +71,7 @@ class EntitlementStoreDeviceTest {
         val edited = sealed.substring(0, i) + (if (sealed[i] == 'A') 'B' else 'A') + sealed.substring(i + 1)
         assertTrue(prefs.edit().putString(PrefFiles.Entitlement.SEALED.name, edited).commit())
 
-        EntitlementStore.forgetForTest()
+        reload()
 
         assertEquals(TokenStatus.Lapsed(GraceEnd.TAMPERED.name), EntitlementStore.status(context))
     }

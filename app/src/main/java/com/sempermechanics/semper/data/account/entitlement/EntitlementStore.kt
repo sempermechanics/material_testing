@@ -61,11 +61,18 @@ object EntitlementStore {
     /**
      * Test-only pins in place of the build's, so a device test can run the
      * pinned path (Keystore seal, real device key, clock) that every CI build,
-     * which pins none, skips (readiness TE4-101). Null in the app.
+     * which pins none, skips (readiness TE4-101). Null in the app. Setting it
+     * also drops what this process holds in memory, so the next read loads
+     * the record from disk and verifies it again.
      */
     @VisibleForTesting
     @Volatile
     internal var testPins: EntitlementPins? = null
+        set(value) = synchronized(lock) {
+            field = value
+            memory = null
+            verified = null
+        }
 
     private val pins: EntitlementPins get() = testPins ?: builtPins
 
@@ -95,13 +102,6 @@ object EntitlementStore {
     @VisibleForTesting
     @Volatile
     internal var onCall: (() -> Unit)? = null
-
-    /** Drops what this process holds in memory, so the next read loads the record from disk (tests). */
-    @VisibleForTesting
-    internal fun forgetForTest() = synchronized(lock) {
-        memory = null
-        verified = null
-    }
 
     /** The token's status, and the device's best estimate of the server's clock, at one reading. */
     private class Reading(val status: TokenStatus, val effectiveNowMs: Long)
