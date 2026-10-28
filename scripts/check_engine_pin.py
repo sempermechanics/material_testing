@@ -51,7 +51,8 @@ class CheckError(Exception):
 
 
 def _git(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    proc = subprocess.run(["git", *args], capture_output=True, text=True, check=False)
+    # git from PATH with arguments this script builds (revs from the checkout), no shell.
+    proc = subprocess.run(["git", *args], capture_output=True, text=True, check=False)  # noqa: S603, S607
     if check and proc.returncode != 0:
         raise CheckError(f"git {' '.join(args)}: {proc.stderr.strip()}")
     return proc
@@ -125,7 +126,8 @@ def github_slug(url: str) -> str:
 
 
 def _gh_json(path: str) -> dict:
-    proc = subprocess.run(["gh", "api", path], capture_output=True, text=True, check=False)
+    # gh from PATH, a read-only API path built from the pinned sha, no shell.
+    proc = subprocess.run(["gh", "api", path], capture_output=True, text=True, check=False)  # noqa: S603, S607
     if proc.returncode != 0:
         raise CheckError(f"gh api {path}: {proc.stderr.strip()}")
     return json.loads(proc.stdout)

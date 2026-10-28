@@ -28,7 +28,10 @@ _spec.loader.exec_module(pin)
 
 
 def _git(repo: Path, *args: str) -> str:
-    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True).stdout.strip()
+    # git from PATH on a temporary repository the test made; fixed arguments.
+    proc = subprocess.run(["git", "-C", str(repo), *args],  # noqa: S603, S607
+                          capture_output=True, text=True, check=True)
+    return proc.stdout.strip()
 
 
 def _init(repo: Path) -> None:
@@ -81,7 +84,7 @@ class _Repos(unittest.TestCase):
             path = Path(self._tmp.name) / "engine-ci.json"
             path.write_text(json.dumps(runs), encoding="utf-8")
             ci = ["--engine-ci-json", str(path)]
-        proc = subprocess.run([sys.executable, str(_SCRIPT), "--repo", str(self.app),
+        proc = subprocess.run([sys.executable, str(_SCRIPT), "--repo", str(self.app),  # noqa: S603 - this interpreter, the script under test
                                "--engine-git", str(self.engine), *ci, *extra],
                               capture_output=True, text=True, check=False)
         return proc.returncode, proc.stdout + proc.stderr
