@@ -781,7 +781,7 @@ from being local again, so freeing space is a reversible decision.
 **Cloud backup**: turn **Save to cloud** on and it offers to back up what is
 already local; off, new analyses stay on the phone and existing cloud copies
 remain. **Wi-Fi only** holds uploads until Wi-Fi. The line under the switches
-says whether everything is backed up, or how many analyses are not. On a demo
+says whether everything is backed up, or how many analyses are not. On a Demo
 account this section, **Analyses data management** and Storage's Free-up controls
 are shown locked, with the licence note (Appendix D). **Analyses data management**
 lists local and cloud together, with three actions per row:
@@ -837,7 +837,7 @@ confirmed it erases the cloud copy, this device, and the sign-in itself, and
 signs you out. If the cloud cannot be reached nothing is deleted at all. A
 licence goes back first: an institution seat is freed for someone else, and an
 individual licence is released and re-offered to the same address, so signing
-up again with it is licensed straight away.
+up again with it is Licensed straight away.
 
 **Quota.** From 80% of the cap, a chip under the Home title reads
 `N / M analyses used`; it turns red at the cap. Below 80% it is hidden.
@@ -847,7 +847,7 @@ saves.
 Not a paywall: the limit screen asks for nothing. Delete an analysis and tap
 **Re-check**, or, if a seat or licence has just been added, tap **Refresh
 licence**. **Email support** opens a plain mail with the account details
-underneath. On demo the cap also counts every account's analyses stored from
+underneath. On Demo the cap also counts every account's analyses stored from
 this phone.
 
 **Help & support** is the last section, and it now opens the **Manual** directly
@@ -963,18 +963,18 @@ budget). What each chart shows and what to do when an alert fires:
 the backend that writes its log line is deployed, which is not the same as
 healthy.
 
-## Appendix D — Licensing (demo / individual / institution)
+## Appendix D — Licensing (Demo / individual / institution)
 
 Every account signs in, and every account is **Demo** (25 saved analyses, no
 share, no backup/restore *feature*) until the server attaches a paid
-entitlement to it. A demo account's analyses are still **recorded** — images
-and results upload and are stored exactly as a licensed account's are — but the
-app shows demo no sync icon or banner, shows Settings' backup, Analyses data and
-Free-up controls **locked**, and the backend refuses demo retrieval (`/content`,
+entitlement to it. A Demo account's analyses are still **recorded** — images
+and results upload and are stored exactly as a Licensed account's are — but the
+app shows a Demo account no sync icon or banner, shows Settings' backup, Analyses data and
+Free-up controls **locked**, and the backend refuses Demo retrieval (`/content`,
 bundle → `feature_not_licensed`). Recording is open so that installed builds
 predating licensing keep backing up after the backend deploy; a licence turns
-retrieval on with nothing to re-upload. The demo cap counts analyses stored at
-once, per account and, for demo, per phone (every account's analyses from that
+retrieval on with nothing to re-upload. The Demo cap counts analyses stored at
+once, per account and, for Demo, per phone (every account's analyses from that
 phone): deleting one frees its place.
 
 **Nothing is entered in the app, and nothing is sold there**
@@ -1001,7 +1001,7 @@ analysis-limit screen) asks the server for the account's licence now, rather
 than at the next check (every 4 hours, sooner when the stored entitlement is
 due for renewal). It answers
 with one line: "Licensed (institution seat)", "Licensed (Semper licence)", "Still
-on the demo", or "Couldn't reach Semper — will retry" (it then keeps trying in the
+on Demo", or "Couldn't reach Semper — will retry" (it then keeps trying in the
 background for about 15 minutes). After a licence is attached, tell the person
 to tap it. A first sign-in on a phone fetches the licence before Home opens.
 
@@ -1029,9 +1029,9 @@ approves/revokes accounts):
   records a pending invite against that address, and **that is the delivery**:
   the customer signs in with it and the licence attaches on their first
   request. If that address **already has an approved, verified account** — a
-  demo user, or an account from before licensing — the licence attaches
+  Demo user, or an account from before licensing — the licence attaches
   immediately at mint time instead; the response carries `claimedByUid`, and
-  the system demo key is dropped. It binds to the first device they sign in
+  the system Demo key is dropped. It binds to the first device they sign in
   on, and stays on that device.
 - **One licence per person.** An address that already holds or is promised a
   live licence — its own, an institution seat, or a pending invite — is
@@ -1066,7 +1066,7 @@ approves/revokes accounts):
 only — it never stops anyone using the product.
 
 **What grace means.** During grace the account keeps *everything*: cloud
-backup, share, the licensed analysis ceiling. The user sees a notice on Home
+backup, share, the Licensed analysis ceiling. The user sees a notice on Home
 saying a renewal is overdue, and nothing else changes. It exists so a renewal
 being processed does not interrupt someone mid-project. Entitlement stops at
 `expiresAt + graceDays`, at which point the account drops to Demo — which, as
@@ -1111,9 +1111,9 @@ to be typed first. A past date is refused even then: to end a key now, revoke
 it. The operator desk reports the expiry the server stored.
 
 **`maxAnalyses` is per person, not per licence**, and is normally left empty:
-empty gives every holder the licensed default (`LICENSED_MAX_SESSIONS_PER_USER`,
+empty gives every holder the Licensed default (`LICENSED_MAX_SESSIONS_PER_USER`,
 999). On the operator desk it is "Cloud analyses per person", and the table's
-"Analyses / person" column shows it. A value below the demo allowance
+"Analyses / person" column shows it. A value below the Demo allowance
 (`DEMO_MAX_ANALYSES`, 25) is refused, and the backend floors any older one at
 that allowance. To remove a cap, empty "Cloud analyses per person" in the
 row's **Edit** dialog, or:
@@ -1123,15 +1123,15 @@ PATCH /v1/admin/licenses/{licenseId}
 {"clearMaxAnalyses": true}
 ```
 
-**A demo key has no cap to set.** Every account gets a system-minted demo key
-(`createdByUid: "system"`, `mode: "demo"`), and a demo holder gets the demo
+**A Demo key has no cap to set.** Every account gets a system-minted Demo key
+(`createdByUid: "system"`, `mode: "demo"`), and a Demo holder gets the Demo
 allowance (`DEMO_MAX_ANALYSES`, 25) whatever the key stores
-(`resolve_user_config` reads a licence cap only for a licensed account). A
-`maxAnalyses` on a demo key is refused with `422 cap_on_demo_key` and nothing
-changes. On the desk a demo row's **Edit** dialog has the field disabled and its
-"Analyses / person" column reads "demo (25)". To give that person more
-analyses, issue them a licensed key. `clearMaxAnalyses` is still accepted on a
-demo key; use it to remove a cap stored before this refusal existed, which
+(`resolve_user_config` reads a licence cap only for a Licensed account). A
+`maxAnalyses` on a Demo key is refused with `422 cap_on_demo_key` and nothing
+changes. On the desk a Demo row's **Edit** dialog has the field disabled and its
+"Analyses / person" column reads "Demo (25)". To give that person more
+analyses, issue them a Licensed key. `clearMaxAnalyses` is still accepted on a
+Demo key; use it to remove a cap stored before this refusal existed, which
 never applied (SEMP-8AKN, set to 100 on 2026-09-25, is one).
 
 Renewing is also the fix when someone reports being dropped to Demo
@@ -1172,9 +1172,9 @@ sight, so a fresh mint overwrites it.
 `seating` at mint:
 
 - `seating: "assigned"` (the default) — every member of the roster is
-  licensed, and `maxSeats` caps how many members there can be.
+  Licensed, and `maxSeats` caps how many members there can be.
 - `seating: "floating"` — every member is *eligible*, but `maxSeats` caps how
-  many are licensed **at the same time**. The roster itself is uncapped, which
+  many are Licensed **at the same time**. The roster itself is uncapped, which
   is the point: fifty people in a lab can share ten seats. `maxSeats` is
   required for floating; an uncapped pool would never refuse anyone.
 
@@ -1201,7 +1201,7 @@ make people sign up on cue, so the roster is built from the list you have.
 The response says which of the two happened — exactly one of `seat` and
 `invite` comes back — and the seats console labels an unclaimed place
 *invited* rather than showing an error. An invitation holds no seat and counts
-against nothing until it is claimed. On an assigned key a seat is licensed
+against nothing until it is claimed. On an assigned key a seat is Licensed
 immediately; on a floating one it makes the member eligible, and they take a
 seat when they work.
 
@@ -1232,12 +1232,12 @@ Semper operator and runs a licence gets a choice rather than a guess.
 
 **Every user has an account page.** `/account` sets out the licence field by
 field, from `/v1/me`: **Mode** (Licensed or Demo), **Licence** (Individual or
-Institution, with the key prefix; "None — this account is on the demo" without
+Institution, with the key prefix; "None — this account is on Demo" without
 one), **Seats** (one seat each, or shared across the institution), **Ends**
 ("No end date" for a perpetual key), **Grace period ends**, and for a floating
 seat **Shared seat** (held until when, or not held right now). With a licence
-attached it also says what a phone does offline: licensed features keep working
-until the offline grace period ends, then the app falls back to the demo limits
+attached it also says what a phone does offline: Licensed features keep working
+until the offline grace period ends, then the app falls back to the Demo limits
 until it reconnects, and analyses already on the phone stay available either
 way. Below that, how many analyses are stored. From the page the person can give
 a floating seat back, move their licence to a different device, and download any
@@ -1248,7 +1248,7 @@ account), because it needs the phone's device signature. It erases every analysi
 and cloud backup and removes the sign-in itself for both apps, Semper and
 Semper Classroom, which share one account; signing in again with the same address
 starts a new, empty account. Point a customer here before answering "am I
-licensed?" by hand.
+Licensed?" by hand.
 
 **The seats console.** Institution IT can do all of the below from
 `/console/institution` on the Semper auth site instead of curl — sign in with
@@ -1325,7 +1325,7 @@ Semper staff can see the difference. In the operator console, **Verify** on an
 institution licence checks every seat against its holder and says, in words,
 which revocations have landed and which have not. Two answers matter:
 
-- *"The revoke did not land — this account is still licensed."* This is a
+- *"The removal did not land — this account is still Licensed."* This is a
   fault, not a delay: the demotion never wrote. **Revoke the seat again.** It
   is safe to repeat and re-runs the demotion.
 - *"This account has not been back since."* Nothing is wrong. The record is
@@ -1385,7 +1385,7 @@ staff release the old phone under **Release a Demo account's phone** in
 `/console/operator`, by the account's email (`POST /v1/admin/device-releases`).
 The old phone is signed out and held off for 24 hours, the same as after
 **New phone**, and the new one can sign in. There is no self-service path for
-Demo (decided 2026-09-26). A licensed account is refused there: use
+Demo (decided 2026-09-26). A Licensed account is refused there: use
 **New phone** on its licence.
 
 Only the holder's own change waits out a cooldown; a support request never
@@ -1401,14 +1401,14 @@ bound to the old phone. If someone reports "restore says I'm not licensed on
 my new phone", they are almost certainly at step 3 without step 2: check
 `GET /v1/admin/licenses` for whether the lock has actually moved.
 
-**Getting an analysis out through a browser.** A licensed user can download a
+**Getting an analysis out through a browser.** A Licensed user can download a
 stored analysis as a single zip from their `/account` page — images, results
 and reports together, ready to import back into the app on any device they are
 signed in on. It is `GET /v1/sessions/{sid}/bundle`, and it needs a second
 factor and a recent sign-in for the same reason the operator console does: a
 browser cannot produce the device attestation the phone uses, and this hands
 out data. Demo accounts are refused (`feature_not_licensed`) — their analyses are
-stored, but retrieval is the licensed half; so is an analysis with nothing
+stored, but retrieval is the Licensed half; so is an analysis with nothing
 finished uploading (`file_not_uploaded`). A large
 analysis takes a while to arrive — the archive is streamed as it is built, so
 a download that begins is not yet a download that finished.
@@ -1435,13 +1435,13 @@ licence since. A system Demo key cannot be deleted.
 single seat is revoked, or a seat is disabled, the affected account(s) simply
 stop being able to start *new* cloud analyses — everything already saved
 stays listable and restorable. Re-activating (or re-enabling) restores full
-licensed access with zero data loss.
+Licensed access with zero data loss.
 
 ## Appendix E — Test accounts (QC and CI)
 
 A **test account** is a login Semper staff make for internal QC or for the CI
 pipeline ([ADR-027](adr/ADR-027-test-accounts.md)). It is pre-approved and
-licensed, may be signed in on several phones at once, and ends on a date. It is
+Licensed, may be signed in on several phones at once, and ends on a date. It is
 never for a customer or an outside verifier, and it can never be an admin.
 
 **Before the first one.** The backend must hold `TEST_ACCOUNT_DOMAINS`
@@ -1476,15 +1476,15 @@ into the hand-over.
 the address in the ticket, the password in a direct message or a password
 manager share), never together in one chat line or email. The person signs in
 on the phone with **email and password**, accepts the Terms like anyone else,
-and is licensed. App builds that read `testAccount` from `/v1/config` show it in
+and is Licensed. App builds that read `testAccount` from `/v1/config` show it in
 Settings as a test account, with its end date.
 Each phone they sign in on takes one of the `maxDevices` places for that app;
 there is no 24-hour hold after a phone is released and no "new device" mail.
 
 **What is different about its data.** Its uploads go to the Shared Drive under
 `Research Storage/_test/{uid}`, apart from customers' `Research Storage/user/`.
-Its analyses do not count toward any phone's demo limit, so a QC phone handed
-back to someone on demo is not already full. Its licence is hidden from the
+Its analyses do not count toward any phone's Demo limit, so a QC phone handed
+back to someone on Demo is not already full. Its licence is hidden from the
 licence desk unless the desk asks for test licences (`include_test`). Its audit
 rows are kept like everyone's, and staff actions on it, its device registrations
 and its uploads are tagged `testAccount`. App builds that read the tag also mark
