@@ -12,8 +12,8 @@ Status: **Met** (the control is in the code, with evidence), **Partial**,
 **Gap** (owned by the TD id named), **N-A** (with the reason). App paths are
 from `app/src/main/java/com/sempermechanics/semper/` unless they start at the
 repository root. Written 2026-10-18 on `claude/new-session-jhfhj9`; every line
-citation was re-checked on 2026-10-24 against `main` @ `875e2334` (readiness TE5-009),
-and each names its symbol so a later shift can be followed. The Android half was not
+citation was re-checked on 2026-10-24 against `main` @ `875e2334` (readiness TE5-009;
+RESILIENCE-1's re-cited on 2026-10-28, readiness TE5-104), and each names its symbol so a later shift can be followed. The Android half was not
 compiled where it was written (TD-219).
 
 ## MASVS-STORAGE
@@ -66,7 +66,7 @@ compiled where it was written (TD-219).
 
 | Control | Status | Evidence |
 |---|---|---|
-| RESILIENCE-1: platform integrity | Partial | App Check with the Play Integrity provider (`firebase.appcheck.playintegrity`, `app/build.gradle.kts:416`), enforced for device callers only when `APP_CHECK_MODE=enforce`, which is off (TD-226). No root detection and no server-side Integrity verdict (TD-234) |
+| RESILIENCE-1: platform integrity | Partial | App Check with the Play Integrity provider (`implementation(libs.firebase.appcheck.playintegrity)`, `app/build.gradle.kts:434`), enforced for device callers only when `APP_CHECK_MODE=enforce`, which is off (TD-226). No root detection and no server-side Integrity verdict (TD-234) |
 | RESILIENCE-2: anti-tampering | Partial | Release APK inspected for debuggable, test-only, debug classes and the debug App Check provider (`scripts/check_release_apk.py`); the token is bound to the device key (`dkt`) and its stored state is HMAC-sealed. No signature or installer check at runtime (TD-235). Deleting both sealed state and HMAC key on a rooted phone falls back to the cached config (TD-261, accepted). A repackaged build that skips the licence check can use share, which has no server route (TD-274, accepted); it gains no cloud access |
 | RESILIENCE-3: anti-static analysis | Partial | R8 minification and obfuscation on release (`isMinifyEnabled`, `app/build.gradle.kts:258`; the release check fails when R8's mapping renames no app class); the mapping is not published ([RELEASING.md](RELEASING.md)). Native engine built `-O3` with LTO. No string encryption |
 | RESILIENCE-4: anti-dynamic analysis | Gap | No debugger, hook or Frida detection (TD-235) |
