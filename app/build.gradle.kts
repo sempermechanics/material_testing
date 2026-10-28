@@ -522,7 +522,8 @@ kover {
             // unrelated PRs while a real drop does. Every PR that adds tests
             // re-measures (`koverXmlReport`, the totals in
             // build/reports/kover/report.xml) and raises both to measured − 2;
-            // never lower them. 2026-10-22: lines 80.51 %, branches 62.69 %.
+            // never lower them. 2026-10-28: lines 82.33 %, branches 63.55 %.
+            // 2026-10-22: lines 80.51 %, branches 62.69 %.
             // 2026-10-10: lines 77.12 %, branches 59.99 %.
             // 2026-10-09: lines 76.38 %, branches 59.15 %.
             // 2026-10-08: lines 74.50 %, branches 56.41 %, the
@@ -531,10 +532,10 @@ kover {
             // measure, not lost coverage). The line floor once sat at 49 while
             // coverage climbed past 75, so a 26-point drop would have passed.
             rule("Line coverage") {
-                minBound(78)
+                minBound(80)
             }
             rule("Branch coverage") {
-                minBound(60, kotlinx.kover.gradle.plugin.dsl.CoverageUnit.BRANCH)
+                minBound(61, kotlinx.kover.gradle.plugin.dsl.CoverageUnit.BRANCH)
             }
         }
     }
