@@ -204,4 +204,10 @@ class ConvergenceBinsViewTest {
         assertEquals(1f, slots.gap, 0.001f)
         assertEquals(300f, 100 * slots.binWidth + 99 * slots.gap, 0.001f)
     }
+
+    @Test
+    fun `the axis labels carry their percent unit`() {
+        // Readiness AE1-112: the y axis read '100' and '50' with no unit.
+        assertEquals(listOf("100%", "50%"), ConvergenceBinsView.axisLabels())
+    }
 }

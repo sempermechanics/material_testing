@@ -4,6 +4,7 @@ import android.app.Dialog
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.text.TextUtils
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -13,6 +14,7 @@ import android.widget.EditText
 import android.widget.ImageView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.graphics.drawable.toDrawable
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -65,6 +67,9 @@ internal class SweepFramePicker(
     /** The frame the field shows; the dialog opens on it. */
     private var picked = 0
 
+    /** The picked frame's full name; the field may show it cut in the middle. */
+    private var label = ""
+
     /** The frame the thumbnail shows or is decoding. */
     private var thumbPath: String? = null
 
@@ -79,6 +84,24 @@ internal class SweepFramePicker(
         field = activity.findViewById(R.id.tilSweepFrame)
         name = activity.findViewById(R.id.ddSweepFrame)
         thumb = activity.findViewById(R.id.imgSweepFrame)
+        // Display only (a tap opens the dialog), one line, the name cut in the
+        // middle to the room the "23 / 40" suffix leaves, so it reads
+        // 'speck…_02.png' instead of wrapping into a clipped second line
+        // (readiness AE1-108). The field's editable text gets a DynamicLayout,
+        // which only cuts at the end, so the cut is made here before each draw.
+        name.isSingleLine = true
+        name.keyListener = null
+        name.ellipsize = TextUtils.TruncateAt.MIDDLE
+        name.viewTreeObserver.addOnPreDrawListener { fitName() }
+        // TalkBack reads the whole name, not the cut one.
+        field.setTextInputAccessibilityDelegate(
+            object : TextInputLayout.AccessibilityDelegate(field) {
+                override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfoCompat) {
+                    super.onInitializeAccessibilityNodeInfo(host, info)
+                    if (label.isNotEmpty()) info.text = label
+                }
+            },
+        )
         name.setOnClickListener { openDialog(picked) }
         field.setEndIconOnClickListener { openDialog(picked) }
         thumb.setOnClickListener { showOverlay() }
@@ -95,7 +118,8 @@ internal class SweepFramePicker(
             return
         }
         picked = index.coerceIn(0, count - 1)
-        name.setText(frameLabel(picked))
+        label = frameLabel(picked)
+        name.setText(label)
         field.suffixText = activity.getString(R.string.sweep_frame_count_fmt, picked + 1, count)
         showThumb(viewModel.defFilePaths.getOrNull(picked))
     }
@@ -110,10 +134,10 @@ internal class SweepFramePicker(
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         val content = SweepFrameOverlayBinding.inflate(LayoutInflater.from(activity))
         content.imgSweepFrameOverlay.setImageDrawable(image)
-        content.imgSweepFrameOverlay.contentDescription = name.text
+        content.imgSweepFrameOverlay.contentDescription = label
         content.tvSweepFrameOverlay.text = activity.getString(
             R.string.sweep_frame_overlay_caption_fmt,
-            name.text,
+            label,
             activity.getString(R.string.sweep_frame_position_fmt, picked + 1, frameCount),
         )
         content.root.setOnClickListener { dialog.dismiss() }
@@ -126,6 +150,22 @@ internal class SweepFramePicker(
             clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
         }
         dialog.show()
+    }
+
+    /**
+     * Shows [label] cut in the middle to the field's text room. True when the
+     * text is unchanged; false asks for another pass, which then finds it fitted.
+     */
+    private fun fitName(): Boolean {
+        val room = name.width - name.totalPaddingLeft - name.totalPaddingRight
+        val shown = if (room > 0 && label.isNotEmpty()) {
+            TextUtils.ellipsize(label, name.paint, room.toFloat(), TextUtils.TruncateAt.MIDDLE).toString()
+        } else {
+            null
+        }
+        val fitted = shown == null || shown == name.text.toString()
+        if (!fitted) name.setText(shown)
+        return fitted
     }
 
     /** Decodes the frame at [path] into the thumbnail; a result for a frame no longer picked is dropped. */

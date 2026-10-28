@@ -28,16 +28,34 @@ class LicenseErrorsTest {
     @Test
     fun `a paused restore or download says paused, not demo and not a failure`() {
         val body = """{"detail":"${ApiErrors.FEATURE_PAUSED}"}"""
-        val paused = ctx.getString(com.sempermechanics.semper.R.string.restore_paused)
-        assertEquals(paused, LicenseErrors.restoreMessage(ctx, body))
-        assertEquals(paused, LicenseErrors.downloadMessage(ctx, body))
+        val restorePaused = ctx.getString(com.sempermechanics.semper.R.string.restore_paused)
+        val downloadPaused = ctx.getString(com.sempermechanics.semper.R.string.download_paused)
+        assertEquals(restorePaused, LicenseErrors.restoreMessage(ctx, body))
+        assertEquals(downloadPaused, LicenseErrors.downloadMessage(ctx, body))
     }
 
     @Test
-    fun `demo feature refusal maps to the demo-mode restore message`() {
+    fun `every kill switch sentence has one shape and names its own feature`() {
+        // "<Feature> is paused right now. Your analyses on this phone aren't affected."
+        // (readiness AE3-108): a paused download no longer shows the restore sentence.
+        val tail = " is paused right now. Your analyses on this phone aren't affected."
+        assertEquals(
+            "Restoring from the cloud$tail",
+            ctx.getString(com.sempermechanics.semper.R.string.restore_paused),
+        )
+        assertEquals(
+            "Downloading from the cloud$tail",
+            ctx.getString(com.sempermechanics.semper.R.string.download_paused),
+        )
+        assertEquals("Sharing$tail", ctx.getString(com.sempermechanics.semper.R.string.share_paused))
+    }
+
+    @Test
+    fun `demo feature refusal maps to the Demo restore message`() {
         val msg = LicenseErrors.restoreMessage(ctx, ApiErrors.FEATURE_NOT_LICENSED)
         assertEquals(ctx.getString(com.sempermechanics.semper.R.string.restore_not_licensed), msg)
-        assertTrue(msg.contains("demo"))
+        // The tier is "Demo", capital D (readiness ADDENDUM-3).
+        assertTrue(msg.contains("on Demo"))
     }
 
     @Test

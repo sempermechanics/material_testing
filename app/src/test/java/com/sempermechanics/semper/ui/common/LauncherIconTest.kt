@@ -61,6 +61,46 @@ class LauncherIconTest {
     }
 
     @Test
+    fun `an entry that roots a live task is never disabled, so the task is not removed`() {
+        // Readiness AE1-101: disabling the alias a task was started from makes
+        // Android remove that task, closing Semper mid-wizard on a theme change.
+        LauncherIcon.sync(context, night = true, liveRoots = { setOf(LauncherIcon.LIGHT) })
+
+        assertEquals(PackageManager.COMPONENT_ENABLED_STATE_DEFAULT, state(LauncherIcon.LIGHT))
+        assertEquals(PackageManager.COMPONENT_ENABLED_STATE_DEFAULT, state(LauncherIcon.DARK))
+    }
+
+    @Test
+    fun `the deferred swap happens once no task is rooted on the old entry`() {
+        LauncherIcon.sync(context, night = true, liveRoots = { setOf(LauncherIcon.LIGHT) })
+        // The splash screen has finished and handed the task's identity to Home.
+        val home = "com.sempermechanics.semper.ui.home.HomeActivity"
+        LauncherIcon.sync(context, night = true, liveRoots = { setOf(home) })
+
+        assertEquals(PackageManager.COMPONENT_ENABLED_STATE_ENABLED, state(LauncherIcon.DARK))
+        assertEquals(PackageManager.COMPONENT_ENABLED_STATE_DISABLED, state(LauncherIcon.LIGHT))
+    }
+
+    @Test
+    fun `a task rooted on the wanted entry does not hold the swap back`() {
+        LauncherIcon.sync(context, night = true)
+        LauncherIcon.sync(context, night = false, liveRoots = { setOf(LauncherIcon.LIGHT) })
+
+        assertEquals(PackageManager.COMPONENT_ENABLED_STATE_ENABLED, state(LauncherIcon.LIGHT))
+        assertEquals(PackageManager.COMPONENT_ENABLED_STATE_DISABLED, state(LauncherIcon.DARK))
+    }
+
+    @Test
+    fun `leaving the app retries a deferred swap`() {
+        LauncherIcon.sync(context, night = true, liveRoots = { setOf(LauncherIcon.LIGHT) })
+
+        LauncherIcon.foregroundListener(context, night = { true }).onBackground()
+
+        assertEquals(PackageManager.COMPONENT_ENABLED_STATE_ENABLED, state(LauncherIcon.DARK))
+        assertEquals(PackageManager.COMPONENT_ENABLED_STATE_DISABLED, state(LauncherIcon.LIGHT))
+    }
+
+    @Test
     fun `night is read from the configuration's ui mode`() {
         val config = Configuration()
         config.uiMode = Configuration.UI_MODE_TYPE_NORMAL or Configuration.UI_MODE_NIGHT_YES

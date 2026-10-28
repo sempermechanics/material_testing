@@ -68,7 +68,7 @@
         <com.sempermechanics.semper.ui.viewer.inspect.FieldHistogramView
             android:id="@+id/plotFieldHistogram"
             android:layout_width="match_parent"
-            android:layout_height="150dp"
+            android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:contentDescription="@string/viewer_histogram_desc" />
 

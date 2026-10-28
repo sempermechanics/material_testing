@@ -128,9 +128,9 @@ internal class ShareCenter(private val activity: AppCompatActivity, private val 
         }
         val app = activity.applicationContext
         val resources = app.resources
-        val cacheDir = app.cacheDir
         source.startExport(kind, activity.getString(kind.progressText), destUri, direct) { report ->
-            ShareExportBuilder(s, resources, ShareExportBuilder.newJobDir(cacheDir)).produce(kind, report)
+            // The export runs off Main, and so does cacheDir's disk check (readiness TE1-103).
+            ShareExportBuilder(s, resources, ShareExportBuilder.newJobDir(app.cacheDir)).produce(kind, report)
         }
     }
 

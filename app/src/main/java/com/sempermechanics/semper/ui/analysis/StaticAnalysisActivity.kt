@@ -229,8 +229,9 @@ class StaticAnalysisActivity :
         // and keep the wizard nav above the nav-bar gesture area so the top
         // controls aren't in the system swipe-down zone.
         Insets.padTop(binding.toolbar)
+        // No title here: goToStep has set the step's, and this runs after it, so
+        // a rebuild on step 2 read 'New analysis' (readiness AE1-109).
         binding.toolbar.apply {
-            title = getString(R.string.new_analysis_title)
             setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
             setNavigationContentDescription(R.string.back)
             setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }

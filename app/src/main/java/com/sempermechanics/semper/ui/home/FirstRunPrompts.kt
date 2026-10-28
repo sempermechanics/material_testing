@@ -72,11 +72,15 @@ internal class FirstRunPrompts(private val activity: AppCompatActivity) {
         MaterialAlertDialogBuilder(activity)
             .setTitle(R.string.diagnostics_prompt_title)
             .setMessage(R.string.diagnostics_prompt_body)
-            .setPositiveButton(R.string.diagnostics_prompt_accept) { _, _ ->
-                Diagnostics.setEnabled(activity, true)
-            }
-            .setNegativeButton(R.string.diagnostics_prompt_decline) { _, _ ->
+            // The decline takes the first slot: stacked at a large font scale, only
+            // the first button is sure of its full height, and 'Not now' was cut
+            // to 26 dp under 'Send reports' (readiness AE1-103). Side by side the
+            // two read with equal weight either way.
+            .setPositiveButton(R.string.diagnostics_prompt_decline) { _, _ ->
                 Diagnostics.setEnabled(activity, false)
+            }
+            .setNegativeButton(R.string.diagnostics_prompt_accept) { _, _ ->
+                Diagnostics.setEnabled(activity, true)
             }
             .setCancelable(false)
             .setOnDismissListener { next() }

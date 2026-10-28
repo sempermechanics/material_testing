@@ -401,7 +401,8 @@
         android:baselineAligned="false"
         android:background="@color/viewer_canvas"
         android:elevation="0dp"
-        android:padding="12dp">
+        android:paddingHorizontal="@dimen/bar_side_padding"
+        android:paddingVertical="12dp">
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnBack"

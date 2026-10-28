@@ -309,6 +309,36 @@ object SessionStore {
     }
 
     /**
+     * Deletes the folders runs the process died in left behind (readiness
+     * TE1-101): a folder under the sessions root that no index row names,
+     * that holds a `run_staging/` and no record manifest, and that nothing has
+     * written since [startedAtMs] (a run started in this process is live).
+     * Nothing is deleted while the index does not parse. Returns the bytes freed.
+     */
+    @WorkerThread
+    fun reclaimDeadRuns(context: Context, startedAtMs: Long): Long = synchronized(lock) {
+        val rows = readRows(context) ?: return@synchronized 0L
+        val named = rows.flatMap { listOf(it.id, File(it.sessionDir).name) }.toSet()
+        root(context).listFiles().orEmpty()
+            .filter { dir ->
+                dir.isDirectory &&
+                    dir.name !in named &&
+                    SessionPaths.runStaging(dir).isDirectory &&
+                    !SessionLayout(dir).recordManifest.exists() &&
+                    dir.walkTopDown().all { it.lastModified() < startedAtMs }
+            }
+            .sumOf { dir ->
+                val bytes = CacheJanitor.sizeOf(dir)
+                if (dir.deleteRecursively()) {
+                    Timber.i("Reclaimed %d bytes a killed run left in %s", bytes, dir.name)
+                    bytes
+                } else {
+                    0L
+                }
+            }
+    }
+
+    /**
      * Wipes every local analysis — the index and all per-session directories.
      * Used by account deletion (GDPR); cloud erasure is handled separately.
      * Always allowed: intentional wipe, not a partial clobber of a corrupt file.

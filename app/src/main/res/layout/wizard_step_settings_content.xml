@@ -198,12 +198,13 @@
 
                 <EditText
                     android:id="@+id/etSubsetValue"
+                    style="@style/Widget.Semper.InlineValue"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="@dimen/space_8"
                     android:layout_marginEnd="4dp"
                     android:background="@android:color/transparent"
-                    android:gravity="end"
+                    android:gravity="end|center_vertical"
                     android:hint="@string/subset_size"
                     android:imeOptions="actionDone"
                     android:importantForAutofill="no"
@@ -303,11 +304,12 @@
 
                 <EditText
                     android:id="@+id/etStepValue"
+                    style="@style/Widget.Semper.InlineValue"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:background="@android:color/transparent"
                     android:contentDescription="@string/step_size_density"
-                    android:gravity="end"
+                    android:gravity="end|center_vertical"
                     android:imeOptions="actionDone"
                     android:importantForAutofill="no"
                     android:inputType="number"
@@ -390,12 +392,13 @@
 
                 <EditText
                     android:id="@+id/etStrainValue"
+                    style="@style/Widget.Semper.InlineValue"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="@dimen/space_8"
                     android:layout_marginEnd="4dp"
                     android:background="@android:color/transparent"
-                    android:gravity="end"
+                    android:gravity="end|center_vertical"
                     android:hint="@string/strain_window"
                     android:imeOptions="actionDone"
                     android:importantForAutofill="no"
@@ -496,11 +499,12 @@
 
                     <EditText
                         android:id="@+id/etOverlapValue"
+                        style="@style/Widget.Semper.InlineValue"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:background="@android:color/transparent"
                         android:contentDescription="@string/subset_overlap"
-                        android:gravity="end"
+                        android:gravity="end|center_vertical"
                         android:imeOptions="actionDone"
                         android:importantForAutofill="no"
                         android:inputType="numberDecimal"

@@ -8,8 +8,12 @@ import java.io.File
 /**
  * One user-facing word per concept in the app's strings (readiness AE3-001..008):
  * "back up" for the cloud copy, "phone" for the handset, "analysis" for a saved
- * run, "the demo" for the free tier, "free up" for removing local copies, and
- * British spelling. Identifiers keep "device" (Device ID, device key).
+ * run, "free up" for removing local copies, and British spelling. Identifiers
+ * keep "device" (Device ID, device key). The tiers are "Demo" and "Licensed"
+ * (readiness ADDENDUM-3), the product is lower-case "semper" (ADDENDUM-4), the
+ * account verb is "sign in", and an account holder's helpers are "your
+ * institution's IT" and "semper support" (AE3-107). The PDF report's literals
+ * follow the same product name and "analysis" word (AE3-102, AE3-112).
  */
 class UserTermsTest {
 
@@ -24,6 +28,21 @@ class UserTermsTest {
     private fun offenders(pattern: String, except: (String, String) -> Boolean = { _, _ -> false }): List<String> {
         val regex = Regex(pattern, RegexOption.IGNORE_CASE)
         return strings.filter { (name, value) -> regex.containsMatchIn(value) && !except(name, value) }.keys.sorted()
+    }
+
+    /** Like [offenders], but the capital matters: "Demo" and "semper" are spelled one way. */
+    private fun caseSensitiveOffenders(pattern: String): List<String> {
+        val regex = Regex(pattern)
+        return strings.filter { (_, value) -> regex.containsMatchIn(value) }.keys.sorted()
+    }
+
+    /** Every string literal in the PDF report's sources, as "File.kt: \"literal\"". */
+    private val reportLiterals: List<String> by lazy {
+        val literal = Regex("\"" + """(?:[^"\\\n]|\\.)*""" + "\"")
+        File("src/main/java/com/sempermechanics/semper/report").listFiles().orEmpty()
+            .filter { it.isFile && it.extension == "kt" }
+            .sortedBy { it.name }
+            .flatMap { file -> literal.findAll(file.readText()).map { "${file.name}: ${it.value}" }.toList() }
     }
 
     @Test
@@ -45,8 +64,62 @@ class UserTermsTest {
     }
 
     @Test
-    fun `a saved run is an analysis and the free tier is the demo`() {
-        assertEquals(emptyList<String>(), offenders("exporting session") + offenders("demo mode"))
+    fun `a saved run is an analysis`() {
+        assertEquals(emptyList<String>(), offenders("exporting session"))
+    }
+
+    @Test
+    fun `the free tier is Demo with a capital D`() {
+        // Readiness ADDENDUM-3: "on Demo", "the Demo limit", "Demo allows". Never
+        // "the demo", "on the demo", "the demo limit" or "demo mode".
+        assertEquals(
+            emptyList<String>(),
+            caseSensitiveOffenders("""\bdemo\b""") + offenders("""\b(on|to) the demo\b""") + offenders("demo mode"),
+        )
+        assertEquals("Still on Demo", strings.getValue("license_refresh_demo"))
+    }
+
+    @Test
+    fun `the paid tier is Licensed`() {
+        // Readiness ADDENDUM-3. The manual quotes these lines character for character.
+        assertEquals("Licensed (institution seat)", strings.getValue("license_refresh_institution"))
+        assertEquals("Licensed (semper licence)", strings.getValue("license_refresh_individual"))
+        assertEquals("""Couldn\'t reach semper — will retry""", strings.getValue("license_refresh_unreachable"))
+        // No other plan name, and the tier word keeps its capital.
+        val otherNames = offenders("""\b(professional|premium|pro|paid) (plan|tier)\b""")
+        assertEquals(emptyList<String>(), otherNames + caseSensitiveOffenders("""\blicensed\b"""))
+    }
+
+    @Test
+    fun `the product name is lower-case semper`() {
+        // Readiness ADDENDUM-4: lower-case even at the start of a sentence. The
+        // company, Semper Mechanics, keeps its capital; the sister app is written
+        // "semper Classroom", as the console writes it.
+        assertEquals("semper", strings.getValue("app_name"))
+        assertEquals(emptyList<String>(), caseSensitiveOffenders("""\bSemper\b(?! Mechanics\b)"""))
+        assertTrue(strings.getValue("delete_account_body").contains("semper Classroom"))
+    }
+
+    @Test
+    fun `the account verb is sign in, not log in`() {
+        assertEquals(emptyList<String>(), offenders("""\blog[ -]?(in|out)\b"""))
+    }
+
+    @Test
+    fun `account holders are sent only to their institution IT and semper support`() {
+        // Readiness AE3-107: not "an admin", "your IT contact" or "your semper contact".
+        assertEquals(emptyList<String>(), offenders("""\ban admin\b|\bIT contact\b|\bsemper contact\b"""))
+    }
+
+    @Test
+    fun `the PDF report says semper and analysis`() {
+        // The report's text is Kotlin literals, not strings.xml (readiness AE3-102,
+        // AE3-112, AE3-116): no capital product name, no "Session", no "Analyzed".
+        val product = Regex("""\bSemper\b(?! Mechanics\b)""")
+        val terms = Regex("""\bsessions?\b|analyz""", RegexOption.IGNORE_CASE)
+        assertTrue(reportLiterals.toString(), reportLiterals.isNotEmpty())
+        val offending = reportLiterals.filter { product.containsMatchIn(it) || terms.containsMatchIn(it) }
+        assertEquals(emptyList<String>(), offending)
     }
 
     @Test
