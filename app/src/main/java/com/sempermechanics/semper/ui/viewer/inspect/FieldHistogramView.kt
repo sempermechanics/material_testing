@@ -108,7 +108,8 @@ class FieldHistogramView @JvmOverloads constructor(
         )
 
         textPaint.textAlign = Paint.Align.LEFT
-        canvas.drawText(context.getString(R.string.viewer_histogram_y_axis), 0f, -textPaint.fontMetrics.ascent, textPaint)
+        val yAxis = context.getString(R.string.viewer_histogram_y_axis)
+        canvas.drawText(yAxis, 0f, -textPaint.fontMetrics.ascent, textPaint)
 
         val baseline = bottom + tickGap - textPaint.fontMetrics.ascent
         canvas.drawText(ReportBuilder.formatMetric(hist.min), left, baseline, textPaint)
