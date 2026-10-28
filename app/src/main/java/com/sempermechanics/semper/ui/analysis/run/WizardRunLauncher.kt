@@ -12,7 +12,9 @@ import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.launchBatchAnalysis
 import com.sempermechanics.semper.ui.analysis.wizard.launchSweep
 import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Starts a run from the wizard: freezes the settings into a [RunSpec], checks
@@ -47,6 +49,9 @@ class WizardRunLauncher(
         // Every run is a new analysis; a saved one is never written over.
         activity.lifecycleScope.launch {
             if (!AnalysisNavHelper.ensureCanStart(activity)) return@launch
+            // cacheDir checks the directory on disk: resolved on IO, before the
+            // run's chrome shows (readiness TE1-103).
+            val cacheDir = withContext(Dispatchers.IO) { activity.cacheDir }
 
             // Frozen here, on Main, so the sheet names the reference the run solves against.
             val inputs = viewModel.snapshotRunInputs()
@@ -60,7 +65,7 @@ class WizardRunLauncher(
                 activity.applicationContext,
                 spec,
                 inputs,
-                activity.cacheDir,
+                cacheDir,
                 chrome.overlay.processingStartTime,
             )
         }

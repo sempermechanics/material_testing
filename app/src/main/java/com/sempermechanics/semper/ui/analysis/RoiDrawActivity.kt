@@ -352,8 +352,9 @@ class RoiDrawActivity : AppCompatActivity() {
         val pixels = imageSize.width * imageSize.height
 
         saving = true
-        val maskFile = File(cacheDir, CacheJanitor.ROI_MASK_CACHE)
         lifecycleScope.launch {
+            // cacheDir checks the directory on disk: resolved off Main (readiness TE1-103).
+            val maskFile = withContext(Dispatchers.IO) { File(cacheDir, CacheJanitor.ROI_MASK_CACHE) }
             val maskBytes = withContext(Dispatchers.Default) {
                 if (maskInput == null) fullMask(pixels) else StudioOverlayMaskEncoder.encode(maskInput)
             }

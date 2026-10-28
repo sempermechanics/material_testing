@@ -31,9 +31,17 @@ import java.util.concurrent.TimeUnit
  * draft I/O shares. Which wizard may still write or delete it is decided by
  * the wizard's side, `WizardDraftBinding`.
  */
-class WizardDraft(private val dir: File) {
+class WizardDraft private constructor(dirOnFirstUse: Lazy<File>) {
 
-    constructor(context: Context) : this(dirIn(context.filesDir))
+    constructor(dir: File) : this(lazyOf(dir))
+
+    /**
+     * Resolves `filesDir` at the first read or write, on [io], not here: the
+     * wizard builds its draft on the main thread in onCreate (readiness TE1-103).
+     */
+    constructor(context: Context) : this(lazy { dirIn(context.filesDir) })
+
+    private val dir: File by dirOnFirstUse
 
     @WorkerThread
     fun writeReference(bytes: ByteArray?) = write(REFERENCE, bytes)
