@@ -318,3 +318,21 @@ def test_a_task_token_from_the_wrong_principal_logs_no_address(monkeypatch, capl
         tasks.tasks_caller("Bearer x")
     assert "intruder@example.com" not in caplog.text
     assert obs.short_hash("intruder@example.com") in caplog.text
+
+
+def test_the_offline_grace_and_the_licence_grace_default_to_14_days(monkeypatch):
+    """Two different 14s (readiness TE4-103). ENTITLEMENT_OFFLINE_GRACE_DAYS is
+    a signed token's offline lifetime (`entitlement_token.py`, ADR-023
+    decision 2); LICENSE_GRACE_DAYS_DEFAULT is how long a licence keeps working
+    past its expiry. The app's EntitlementClockTest.PRODUCTION_GRACE_DAYS
+    mirrors the first: change the two together."""
+    import importlib
+
+    monkeypatch.delenv("ENTITLEMENT_OFFLINE_GRACE_DAYS", raising=False)
+    monkeypatch.delenv("LICENSE_GRACE_DAYS_DEFAULT", raising=False)
+    try:
+        fresh = importlib.reload(config).Settings()
+        assert fresh.ENTITLEMENT_OFFLINE_GRACE_DAYS == 14
+        assert fresh.LICENSE_GRACE_DAYS_DEFAULT == 14
+    finally:
+        importlib.reload(config)
