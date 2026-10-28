@@ -49,6 +49,15 @@ is in it) — or changing `SemperNativeLib.kt` — triggers both, on the PR and 
 `main`. Tier 1 is the JVM suite only; it builds no native code. See
 [../ops/CI.md](../ops/CI.md).
 
+**What catches a native solver change.** The app's bit-exact `.dat` and GIF
+oracles (`DatFieldOracleTest`, `SummaryGifOracleTest`,
+[app/TESTING.md](../app/TESTING.md)) run on the JVM over committed input fields:
+they pin how the app writes and renders a field, and never call the solver. A
+change in the native solver's output is caught only by the engine's numeric
+goldens (`Host tests`, above), the determinism tests, and
+`EnginePipelineSmokeTest` through the JNI (Tier 3, and the arm64 device run
+below).
+
 ## Compiler flags and FMA contraction, per ABI
 
 No build file sets `-ffp-contract` or `-march`; the effective contraction comes
