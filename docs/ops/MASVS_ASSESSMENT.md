@@ -66,7 +66,7 @@ compiled where it was written (TD-219).
 
 | Control | Status | Evidence |
 |---|---|---|
-| RESILIENCE-1: platform integrity | Partial | App Check with the Play Integrity provider (`implementation(libs.firebase.appcheck.playintegrity)`, `app/build.gradle.kts:434`), enforced for device callers only when `APP_CHECK_MODE=enforce`, which is off (TD-226). No root detection and no server-side Integrity verdict (TD-234) |
+| RESILIENCE-1: platform integrity | Partial | App Check with the Play Integrity provider (`implementation(libs.firebase.appcheck.playintegrity)`, `app/build.gradle.kts:443`), enforced for device callers only when `APP_CHECK_MODE=enforce`, which is off (TD-226). No root detection and no server-side Integrity verdict (TD-234) |
 | RESILIENCE-2: anti-tampering | Partial | Release APK inspected for debuggable, test-only, debug classes and the debug App Check provider (`scripts/check_release_apk.py`); the token is bound to the device key (`dkt`) and its stored state is HMAC-sealed. No signature or installer check at runtime (TD-235). Deleting both sealed state and HMAC key on a rooted phone falls back to the cached config (TD-261, accepted). A repackaged build that skips the licence check can use share, which has no server route (TD-274, accepted); it gains no cloud access |
 | RESILIENCE-3: anti-static analysis | Partial | R8 minification and obfuscation on release (`isMinifyEnabled`, `app/build.gradle.kts:258`; the release check fails when R8's mapping renames no app class); the mapping is not published ([RELEASING.md](RELEASING.md)). Native engine built `-O3` with LTO. No string encryption |
 | RESILIENCE-4: anti-dynamic analysis | Gap | No debugger, hook or Frida detection (TD-235) |
