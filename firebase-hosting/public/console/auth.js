@@ -138,11 +138,13 @@ function sessionEndedError() {
   return Object.assign(new Error("invalid_token"), { code: "invalid_token", status: 401 });
 }
 
-/**
- * Sign the page out because the remembered sign-in is over (the error to throw is returned):
- * the status line says to sign in again and the dashboard hides, whoever called (AE2-105).
- */
+// Sign the page out because the remembered sign-in is over, and return the error to throw: the status
+// line says to sign in again and the dashboard hides, whoever called, until the next sign-in (AE2-105).
+let ended = false;
+/** Whether `endSession` ran since the last sign-in: a later answer must not show the dashboard. */
+export const sessionOver = () => ended;
 export async function endSession() {
+  ended = true;
   try {
     await signOut(auth);
   } catch (_) { /* already out: Firebase drops a session it cannot refresh */ }
@@ -475,13 +477,10 @@ export function requireSignIn(onReady, { showApp = true } = {}) {
 
   const signedOut = document.getElementById("signedOut");
 
-  // The page is started once per signed-in account. The return leg of a
-  // re-authentication fires this listener twice — once for the user restored
-  // from storage, again when `resolveChallenge` makes the re-authenticated
-  // object current — and both calls wait on the same redirect, so without
-  // this the page loaded twice and both copies were handed the same `resume`:
-  // two revoke confirmations, and the second load wiping whatever the first
-  // reported.
+  // The page is started once per signed-in account. The return leg of a re-authentication fires
+  // this listener twice — for the user restored from storage, again when `resolveChallenge` makes
+  // the re-authenticated object current — and both wait on the same redirect, so without this the
+  // page loaded twice with the same `resume`: two revoke confirmations, the second load wiping the first's.
   let readyUid = null;
   let resumeHanded = false;
   onAuthStateChanged(auth, async () => {
@@ -504,6 +503,7 @@ export function requireSignIn(onReady, { showApp = true } = {}) {
     }
     if (user.uid === readyUid) return;
     readyUid = user.uid;
+    ended = false;
     // Whatever was stashed is handed over once, on the first ready state.
     const resume = resumeHanded ? null : stashed;
     resumeHanded = true;

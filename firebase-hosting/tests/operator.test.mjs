@@ -115,6 +115,19 @@ test("the desk's reads go out with the role check, and show only once it says st
   assert.equal($("switch").hidden, false);
 });
 
+// AE2-105, rework: a desk read answered 401 and signed the page out before
+// the role check said staff; the desk must not then be shown behind Sign in.
+test("a role check answered after the session ended does not bring the desk back", async () => {
+  const role = deferred();
+  await open({ routes: { "GET /v1/me": () => role.promise, [LIST]: () => json(401, { detail: "invalid_token" }) } });
+  await settle();
+  role.resolve(json(200, { role: "admin" }));
+  await settle();
+  assert.equal($("app").hidden, true, "the desk stays hidden");
+  assert.equal($("signIn").hidden, false);
+  assert.equal(status()[0].startsWith("Your sign-in has expired."), true, status()[0]);
+});
+
 test("a toggle changed while the role check is pending gets the list it asks for", async () => {
   const role = deferred();
   const revoked = { ...IND, id: "lic-rev", keyPrefix: "SEMP-REV1", status: "revoked" };
