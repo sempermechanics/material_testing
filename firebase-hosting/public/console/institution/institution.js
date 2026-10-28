@@ -1,7 +1,7 @@
 import { requireSignIn } from "../auth.js";
 import { api } from "../api.js";
 import { setStatus, markFirstData, whileWaiting } from "../status.js";
-import { esc, day, licenceStatePill, placeholderRows, retryRow } from "../util.js";
+import { esc, day, licenceStatePill, placeholderRows, retryRow, sessionEnded } from "../util.js";
 import { explain } from "../messages.js";
 import { fetchRoster, wireRoster } from "../roster.js";
 import { mountSwitcher } from "../switcher.js";
@@ -68,6 +68,8 @@ async function administersSomething(user) {
       .licenses || [];
     setStatus("");
   } catch (e) {
+    // Signed out (api.js ended the session and said so): nothing more to show.
+    if (sessionEnded(e)) return false;
     if (e.code !== "email_not_verified") {
       setStatus(`Could not list your institution licences: ${explain(e)}`, true);
       return true;

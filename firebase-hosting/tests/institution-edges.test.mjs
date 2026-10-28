@@ -74,3 +74,22 @@ test("a roster with nothing but seats in its answer still renders", async () => 
   assert.equal(summary(), "licence one seat each unused 0 of unlimited seats taken.");
   assert.equal($("rows").querySelectorAll("tr").length, 1);
 });
+
+// AE2-105: the licence list answered 401 invalid_token (the sign-in is over).
+// The page signed out, but wrote the reason, then went on and drew the
+// roster with its buttons under Sign in, and the status line ended empty.
+test("an expired sign-in on the licence list says so and draws nothing behind Sign in", async () => {
+  await openPage("institution", {
+    search: "?license=L1",
+    routes: {
+      "GET /v1/institutions/licenses": () => json(401, { detail: "invalid_token" }),
+      [`GET ${SEATS}`]: () => json(401, { detail: "invalid_token" }),
+    },
+  });
+  await settle();
+  assert.deepEqual(status(), ["Your sign-in has expired. Sign in again.", "muted err"]);
+  assert.equal($("app").hidden, true);
+  assert.equal($("signIn").hidden, false);
+  assert.equal($("rows").querySelectorAll("button").length, 0, "no roster, no Remove or Pause");
+  assert.deepEqual(sent(/summary/), [], "no seat counts read for a signed-out page");
+});

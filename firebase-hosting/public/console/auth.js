@@ -139,14 +139,16 @@ function sessionEndedError() {
 }
 
 /**
- * Sign the page out because the remembered sign-in is over, and return the
- * error to throw: the page's status line then says to sign in again, with
- * Sign in on screen instead of a Sign out that hides a dead session.
+ * Sign the page out because the remembered sign-in is over (the error to throw is returned):
+ * the status line says to sign in again and the dashboard hides, whoever called (AE2-105).
  */
 export async function endSession() {
   try {
     await signOut(auth);
   } catch (_) { /* already out: Firebase drops a session it cannot refresh */ }
+  const app = document.getElementById("app");
+  if (app) app.hidden = true;
+  setStatus(SESSION_ENDED_TEXT, true);
   return sessionEndedError();
 }
 
@@ -462,8 +464,7 @@ export function requireSignIn(onReady, { showApp = true } = {}) {
         return unfinished("cancelled");
       }
       if (sessionEnded(e)) {
-        await endSession();
-        setStatus(SESSION_ENDED_TEXT, true);
+        await endSession(); // which says so on the status line
       } else {
         setStatus(challengeExpired(e)
           ? "That sign-in timed out before a code was accepted. Sign in again."
@@ -527,8 +528,7 @@ export function requireSignIn(onReady, { showApp = true } = {}) {
       }
       // A remembered sign-in Firebase can no longer renew: Sign in, not Sign out.
       if (sessionEnded(e)) {
-        await endSession();
-        setStatus(SESSION_ENDED_TEXT, true);
+        await endSession(); // which says so on the status line
         return;
       }
       setStatus(`Could not open the dashboard: ${authErrorText(e)}.`, true);

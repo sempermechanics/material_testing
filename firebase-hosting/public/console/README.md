@@ -215,9 +215,13 @@ Google.
 A remembered sign-in that is over — Firebase cannot refresh it
 (`auth/user-token-expired`, `auth/invalid-user-token`), or the backend refuses
 the token (401 `invalid_token`) — signs the page out (`endSession`), so Sign in
-is on screen, and the status line says "Your sign-in has expired. Sign in
-again." (COMMON's `invalid_token` on a page's action). It used to read "an
-unexpected sign-in error (ref: …)" beside a Sign out button.
+is on screen, the dashboard is hidden, and the status line says "Your sign-in
+has expired. Sign in again." (COMMON's `invalid_token` on a page's action).
+`endSession` writes that line itself, so a read whose own message lands
+somewhere now hidden (the Test accounts list) still says it, and the
+institution page stops rather than drawing the roster behind Sign in
+(AE2-105). It used to read "an unexpected sign-in error (ref: …)" beside a
+Sign out button.
 
 Nothing else uses `window.prompt` either. The operator desk's typed-key
 confirmations (revoke, delete, shortening a licence's term) and the password

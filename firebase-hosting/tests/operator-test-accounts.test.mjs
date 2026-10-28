@@ -615,3 +615,14 @@ test("Copy puts the password on the clipboard, or says to copy it by hand", asyn
     else delete navigator.clipboard;
   }
 });
+
+// AE2-105: Show list answered 401 invalid_token. The page signed out and
+// hid the desk, with the reason only in a row of the hidden list.
+test("an expired sign-in on Show list says so on the status line", async () => {
+  await openDesk({ routes: { [LIST]: () => json(401, { detail: "invalid_token" }) } });
+  $("loadTestAccounts").click();
+  await settle();
+  assert.deepEqual(status(), ["Your sign-in has expired. Sign in again.", "muted err"]);
+  assert.equal($("app").hidden, true);
+  assert.equal($("signIn").hidden, false);
+});
