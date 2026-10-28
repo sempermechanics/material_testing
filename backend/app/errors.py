@@ -110,7 +110,7 @@ def feature_not_licensed_detail() -> str:
     colon, as for the quota code. A function rather than another constant so
     test_error_codes keeps treating every constant here as a bare code.
     """
-    return f"{FEATURE_NOT_LICENSED}: Restore isn't available in demo mode."
+    return f"{FEATURE_NOT_LICENSED}: Restore isn't available on Demo."
 
 
 LICENSE_NOT_FOUND = "license_not_found"
