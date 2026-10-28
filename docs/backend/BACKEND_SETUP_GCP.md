@@ -413,7 +413,7 @@ gcloud run deploy semper-api \
   --min-instances 0 --max-instances 10 \
   --concurrency 40 --cpu 1 --memory 512Mi --timeout 300 \
   --set-env-vars "SERVICE_ACCOUNT_EMAIL=$API_SA,SHARED_DRIVE_ID=$SHARED_DRIVE_ID,GOOGLE_CLOUD_PROJECT=$PROJECT,FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID,AUTO_APPROVE_HD=yourdomain.com,ADMIN_EMAILS=you@yourdomain.com" \
-  --set-env-vars "SUPPORT_EMAIL=support@sempermechanics.com,NOTIFY_FROM=Semper <noreply@yourdomain.com>" \
+  --set-env-vars "SUPPORT_EMAIL=support@sempermechanics.com,NOTIFY_FROM=semper <noreply@yourdomain.com>" \
   --set-secrets "RESEND_API_KEY=resend-api-key:latest"
 ```
 > `FIREBASE_PROJECT_ID` can be omitted when Firebase Auth lives in the same
@@ -539,7 +539,7 @@ seconds, and `gcloud run services logs read semper-api --region $REGION` should
 carry no `access-request mail` warning.
 
 **New-device mail to the holder (optional, TD-295).** Set `NOTIFY_SECURITY_FROM`
-to a verified Resend sender (for example `Semper security <security@yourdomain.com>`)
+to a verified Resend sender (for example `semper security <security@yourdomain.com>`)
 and each account's holder is mailed, at their verified address, when a new device
 registers to the account: once per account and device, never for a key heal of
 the device already bound. Unset, that mail is off; the access-request mail is
