@@ -53,6 +53,7 @@ from .claims import (  # noqa: F401
 )
 from .invites import (  # noqa: F401
     find_user_by_email,
+    hold_institution_invite,
     invite_institution_member,
     list_institution_invites,
     revoke_institution_invite,

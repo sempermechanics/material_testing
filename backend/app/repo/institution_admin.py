@@ -1,7 +1,9 @@
 """Institution licence self-service for the licence's own IT admins.
 """
+import logging
+
 from .. import apps, errors
-from ..licenses import normalize_email
+from ..licenses import email_domain, normalize_email
 from ..errors import Refusal
 
 from ._base import (
@@ -26,11 +28,15 @@ from .holders import (
 )
 from .invites import (
     find_user_by_email,
+    hold_institution_invite,
     invite_institution_member,
+    _drop_held_invite,
 )
 from .mint import (
     _license_public,
 )
+
+log = logging.getLogger("semper.firestore")
 
 
 # ---------------- institution seat administration ----------------
@@ -75,8 +81,8 @@ def list_licenses_administered_by(email: str) -> list[dict]:
     return out
 
 
-def add_institution_member(license_id: str, email: str,
-                           invited_by_uid: str = "") -> tuple[dict | None, dict | None]:
+def add_institution_member(license_id: str, email: str, invited_by_uid: str = "", *,
+                           institution_it: bool = False) -> tuple[dict | None, dict | None]:
     """Put someone on an institution license's roster. Returns (seat, invite),
     or raises `Refusal`.
 
@@ -94,22 +100,48 @@ def add_institution_member(license_id: str, email: str,
     `license_seat_disabled` — disable is a deliberate hold that IT lifts with
     `enabled=true`, and silently undoing it here would make the two routes
     fight over the same state.
+
+    `institution_it` is the licence's own IT calling (ADDENDUM-2, readiness
+    TE3-102), with two rules Semper staff do not have:
+    - only an address on the licence's `domainLock` may be added; anything
+      else is `member_off_domain`, decided before the person is looked up.
+      Staff may still seat an external collaborator.
+    - an address another licence holds or promises is not refused with
+      `member_already_licensed`: it gets the invite an unknown address gets,
+      held rather than claimable (`hold_institution_invite`), so the reply
+      says nothing about other licences. The case is logged for staff.
     """
     lic = get_license(license_id)
     if not lic:
         raise Refusal(errors.LICENSE_NOT_FOUND)
+    if institution_it:
+        domain_lock = (lic.get("domainLock") or "").strip().lower()
+        if not domain_lock or email_domain(email) != domain_lock:
+            raise Refusal(errors.MEMBER_OFF_DOMAIN)
     user = find_user_by_email(email)
     # One licence per person: someone who holds, or is promised, a different
     # live licence is refused rather than moved onto this roster. Their own
     # seat on this licence is excluded, so re-adding a member stays a no-op.
-    if licence_held_by(email, user=user or {}, exclude_id=license_id):
+    held_by = licence_held_by(email, user=user or {}, exclude_id=license_id)
+    if held_by and institution_it:
+        log.info("roster add held: licence=%s already held by licence=%s", license_id, held_by)
+        return None, hold_institution_invite(license_id, email, invited_by_uid)
+    if held_by:
         raise Refusal(errors.MEMBER_ALREADY_LICENSED)
     # An account that is not approved, or whose address is unproven, is not
     # seated: the address is the whole claim to the seat. It gets the invite
     # an address with no account gets, which its next request claims once it
     # qualifies (`repo.entitlement`), as the mint path already did.
     if not _eligible_holder(user):
-        return None, invite_institution_member(license_id, email, invited_by_uid)
+        try:
+            return None, invite_institution_member(license_id, email, invited_by_uid)
+        except Refusal as refusal:
+            # `invite_exists`: promised to another licence that is past its
+            # grace but not revoked. To IT that is one more case of "held".
+            if not (institution_it and refusal.code == errors.INVITE_EXISTS):
+                raise
+            log.info("roster add held: licence=%s address promised elsewhere", license_id)
+            return None, hold_institution_invite(license_id, email, invited_by_uid)
     uid = user["uid"]
 
     # No device lock: IT adds a member before that member has picked a device,
@@ -118,6 +150,7 @@ def add_institution_member(license_id: str, email: str,
                      _member_patch(license_id, lic))
     if err:
         raise Refusal(_public_claim_error(err))
+    _drop_held_invite(license_id, email)
     return institution_seat(license_id, uid), None
 
 

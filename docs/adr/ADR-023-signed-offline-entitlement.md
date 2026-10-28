@@ -159,9 +159,18 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
   truth for seats and a third party on the licence path for what remains: one
   signing function of about 300 lines.
 - **Identity Platform multi-tenancy, one tenant per customer.** Rejected for
-  now. Semper's tenant is the institution licence: its `adminEmails` and
-  `domainLock` scope every IT route (`backend/app/routers/institutions.py:35-55`),
-  and cross-institution access answers 404. Tenants would split one account
+  now. Semper's tenant is the institution licence: its `adminEmails` scope
+  every IT route (`institution_admin_context`, `backend/app/routers/institutions.py:36-57`),
+  and cross-institution access answers 404. Its `domainLock` scopes whom IT may
+  add (since 2026-10-28, readiness TE3-102, ADDENDUM-2): a single add or an
+  import row off the domain is 422 `member_off_domain`, decided before the
+  person is looked up, and an address another licence holds or promises is
+  answered as an unknown one, a pending invite that is held and never claimed
+  (`add_institution_member`, `hold_institution_invite`;
+  `backend/app/repo/institution_admin.py`, `backend/app/repo/invites.py`), so
+  IT's replies say nothing about other licences. Semper staff, on the same
+  roster routes under `/v1/admin`, may add an external collaborator off the
+  domain and are told `member_already_licensed`. Tenants would split one account
   across pools and change every sign-in path for no gain until a customer needs
   its own IdP; per-institution SSO is FI-17.
 - **App Check replay protection on an activation function**
