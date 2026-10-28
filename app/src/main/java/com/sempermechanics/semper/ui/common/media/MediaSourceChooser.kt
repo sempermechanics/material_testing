@@ -21,17 +21,20 @@ object MediaSourceChooser {
     fun requiredPermissions(includeVideo: Boolean): Array<String> =
         MediaStoreBrowser.permissions(Build.VERSION.SDK_INT, includeVideo)
 
+    @Suppress("LongParameterList") // the host's callbacks and the reopen after a rotation (AE1-111)
     fun show(
         activity: AppCompatActivity,
         mode: Mode,
         requestPermission: () -> Unit,
         onBrowseSaf: () -> Unit,
         onPicked: (List<Uri>) -> Unit,
+        kept: MediaPickerSheet.Kept? = null,
     ): MediaPickerSheet = MediaPickerSheet.show(
         activity = activity,
         mode = mode,
         requestPermission = requestPermission,
         onBrowseSaf = onBrowseSaf,
         onPicked = onPicked,
+        kept = kept,
     )
 }

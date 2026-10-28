@@ -4,6 +4,8 @@
 
 package com.sempermechanics.semper.ui.home
 
+import android.app.Dialog
+import android.os.Bundle
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.TextView
@@ -11,6 +13,8 @@ import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.TooltipCompat
 import androidx.core.view.isVisible
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.checkbox.MaterialCheckBox
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -67,6 +71,36 @@ class SessionSelectionController(
     // Ids rather than indices, so the set survives a refresh() that reorders
     // or drops rows.
     private val selectedIds = linkedSetOf<String>()
+
+    /** The delete question on screen, if any. */
+    private var deleteDialog: Dialog? = null
+
+    /**
+     * The selection, and whether the delete question was open, as the screen
+     * this one replaces left them (a rotation or theme switch, readiness
+     * AE1-111): applied once the list has rows, then null.
+     */
+    private var restored: Bundle? = null
+
+    init {
+        val registry = activity.savedStateRegistry
+        restored = registry.consumeRestoredStateForKey(STATE_KEY)
+        registry.unregisterSavedStateProvider(STATE_KEY)
+        registry.registerSavedStateProvider(STATE_KEY) {
+            Bundle().apply {
+                putStringArrayList(SELECTED, ArrayList(selectedIds))
+                putBoolean(DELETE_OPEN, deleteDialog?.isShowing == true)
+            }
+        }
+        activity.lifecycle.addObserver(
+            object : DefaultLifecycleObserver {
+                // Saved by now; the rebuilt screen asks again.
+                override fun onDestroy(owner: LifecycleOwner) {
+                    deleteDialog?.dismiss()
+                }
+            },
+        )
+    }
 
     val inSelectionMode: Boolean get() = selectedIds.isNotEmpty()
 
@@ -132,6 +166,7 @@ class SessionSelectionController(
      * a single selection.
      */
     fun updateSelectionBar() {
+        val reopenDelete = applyRestored()
         // Rows can disappear under a selection (a refresh, a delete elsewhere);
         // drop ids that no longer exist so the count never lies.
         selectedIds.retainAll(adapter.allIds().toSet())
@@ -153,6 +188,22 @@ class SessionSelectionController(
         // the real state rather than just what was last tapped.
         val allIds = adapter.allIds()
         selectAllBox.isChecked = allIds.isNotEmpty() && selectedIds.size == allIds.size
+        if (reopenDelete && inSelectionMode) confirmDeleteSelected()
+    }
+
+    /**
+     * Puts back the selection the replaced screen saved, once the list has
+     * rows to select; true when its delete question was open too.
+     */
+    private fun applyRestored(): Boolean {
+        val state = restored
+        val ids = adapter.allIds()
+        if (state == null || ids.isEmpty()) return false
+        restored = null
+        val kept = state.getStringArrayList(SELECTED).orEmpty().filter { it in ids }
+        selectedIds.addAll(kept)
+        kept.forEach { adapter.rebindRow(it) }
+        return state.getBoolean(DELETE_OPEN)
     }
 
     /**
@@ -301,7 +352,7 @@ class SessionSelectionController(
     }
 
     private fun showChoices(title: String, message: String, records: List<SessionRecord>) {
-        DeleteChoiceDialog.show(
+        deleteDialog = DeleteChoiceDialog.show(
             activity = activity,
             title = title,
             message = message,
@@ -315,7 +366,7 @@ class SessionSelectionController(
     }
 
     private fun confirm(title: String, message: String, onDelete: () -> Unit) {
-        Dialogs.confirm(activity, title, message, R.string.action_delete, onDelete)
+        deleteDialog = Dialogs.confirm(activity, title, message, R.string.action_delete, onDelete)
     }
 
     /**
@@ -358,5 +409,11 @@ class SessionSelectionController(
         }
         clearSelection()
         onRefresh()
+    }
+
+    private companion object {
+        const val STATE_KEY = "home.selection"
+        const val SELECTED = "selected"
+        const val DELETE_OPEN = "deleteOpen"
     }
 }
