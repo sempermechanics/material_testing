@@ -65,7 +65,8 @@ object ExpandState {
         )
         ViewCompat.removeAccessibilityAction(header, AccessibilityActionCompat.ACTION_EXPAND.id)
         ViewCompat.removeAccessibilityAction(header, AccessibilityActionCompat.ACTION_COLLAPSE.id)
-        val action = if (expanded) AccessibilityActionCompat.ACTION_COLLAPSE else AccessibilityActionCompat.ACTION_EXPAND
+        val action =
+            if (expanded) AccessibilityActionCompat.ACTION_COLLAPSE else AccessibilityActionCompat.ACTION_EXPAND
         ViewCompat.replaceAccessibilityAction(header, action, null) { _, _ ->
             toggle()
             true
