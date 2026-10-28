@@ -113,7 +113,7 @@ def revoke_sessions(uid: str) -> bool:
     try:
         fb_auth.revoke_refresh_tokens(uid)
     except Exception as e:  # noqa: BLE001 - best-effort; see the block comment
-        log.warning("revoke_refresh_tokens failed uid=%s: %s: %s",
+        log.warning("revoke_refresh_tokens failed uid=%s: %s: %s",  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure - a uid and an Admin SDK error; no token is sent or held here
                     uid, type(e).__name__, str(e)[:200])
         return False
     return True
