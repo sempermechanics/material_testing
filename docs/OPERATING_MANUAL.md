@@ -1281,6 +1281,13 @@ attestation the phone path uses — the page walks you through enrolling an
 authenticator app the first time. Revoking asks you to type the key prefix
 before it will proceed. The phone admin screen still works exactly as before.
 
+**Authenticator entries.** Once the console from the 2026-10-28 readiness run
+is deployed, a new enrolment shows up in the authenticator app under the issuer
+**semper**. Entries
+enrolled before it keep their old label, **Semper DIC**, and their codes still
+work: the label is only what the app displays, so nobody needs to enrol again.
+Tell a holder or an IT contact who finds both names that either entry is theirs.
+
 **Institution IT self-service.** Once an institution key exists, its `adminEmails`
 manage seats themselves, with no semper staff involvement — from the console
 above, or by calling these routes directly (script, curl, or their own tooling):
