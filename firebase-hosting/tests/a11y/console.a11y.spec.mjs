@@ -25,9 +25,19 @@ const PAGES = [
   { name: "operator desk", path: "/console/operator/", persona: "staff", ready: "#licenceRows button[data-edit]" },
 ];
 
+/**
+ * The hosted pages outside the consoles, with no API behind them: each in
+ * the light and the dark scheme, since the two landing pages follow the
+ * system's (AE2-101).
+ */
+const STATIC = [
+  { name: "password-reset landing page", path: "/finishReset/", persona: "out", ready: "#continueLink" },
+  { name: "email-link sign-in landing page", path: "/finishSignIn/", persona: "out", ready: "h1" },
+];
+
 /** Open `path` as `persona` at `width`, and wait until `ready` is on the page. */
-async function open(browser, { path, persona, ready }, width) {
-  const context = await browser.newContext({ viewport: { width, height: 900 } });
+async function open(browser, { path, persona, ready }, width, colorScheme = "light") {
+  const context = await browser.newContext({ viewport: { width, height: 900 }, colorScheme });
   await stubContext(context, PERSONAS[persona]);
   const page = await context.newPage();
   const errors = [];
@@ -59,6 +69,21 @@ for (const target of PAGES) {
       expect(errors, "no uncaught page error").toEqual([]);
       await context.close();
     });
+  }
+}
+
+for (const target of STATIC) {
+  for (const scheme of ["light", "dark"]) {
+    for (const [label, width] of Object.entries(WIDTHS)) {
+      test(`${target.name}, ${scheme}, at ${width} px (${label}): no serious or critical axe violation, no sideways scroll`, async ({ browser }) => {
+        const { context, page, errors } = await open(browser, target, width, scheme);
+        expect(await violations(page)).toEqual([]);
+        const scroll = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
+        expect(scroll[0], "the page does not scroll sideways").toBeLessThanOrEqual(scroll[1]);
+        expect(errors, "no uncaught page error").toEqual([]);
+        await context.close();
+      });
+    }
   }
 }
 
