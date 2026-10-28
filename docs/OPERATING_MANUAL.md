@@ -1,4 +1,4 @@
-# Semper operating manual
+# semper operating manual
 
 How to get displacement and strain fields out of a DIC image set, using the app.
 
@@ -95,7 +95,7 @@ Got it puts that screen's tips away for good.
 <img src="images/home.png" width="300" alt="Home screen">
 
 The app icon follows your phone's dark theme: the S in black on a light
-disc, or in white on jet black. It changes the next time Semper is open after
+disc, or in white on jet black. It changes the next time semper is open after
 you switch. With **Themed icons** on (Wallpaper & style), the launcher tints
 it with your wallpaper's colours instead.
 
@@ -812,7 +812,7 @@ up · 4.2 of 12 MB"), for downloads as well as uploads. When it ends, the
 notification says so ("steel_00 is backed up"), or gives the reason it failed with
 **Retry** for a backup or a restore, and the row's cloud icon updates. From
 Android 13 on those end-of-transfer notifications appear only once you allow
-Semper's notifications in the system settings. A backup that *fails for good*
+semper's notifications in the system settings. A backup that *fails for good*
 (another device holds the account, the analysis is too large, or a render ran out
 of memory) turns the icon red; tap it for a dialog explaining why, with **Try
 again**. A restore that fails (the backup
@@ -983,7 +983,7 @@ type a licence key, no price, no buy button and no link to a payment page; that
 keeps the app within Google Play's rules for apps that only use what was paid
 for elsewhere. A paid entitlement reaches an account one of three ways:
 
-- a **roster seat**: an institution's IT (or Semper staff) adds the address;
+- a **roster seat**: an institution's IT (or semper staff) adds the address;
 - an **individual licence** minted against the address: it attaches when that
   address signs in;
 - a **one-time claim code**, redeemed by the person on the web account page
@@ -1000,16 +1000,16 @@ for the full design; this appendix is the day-to-day operator/support version.
 analysis-limit screen) asks the server for the account's licence now, rather
 than at the next check (every 4 hours, sooner when the stored entitlement is
 due for renewal). It answers
-with one line: "Licensed (institution seat)", "Licensed (Semper licence)", "Still
-on Demo", or "Couldn't reach Semper — will retry" (it then keeps trying in the
+with one line: "Licensed (institution seat)", "Licensed (semper licence)", "Still
+on Demo", or "Couldn't reach semper — will retry" (it then keeps trying in the
 background for about 15 minutes). After a licence is attached, tell the person
 to tap it. A first sign-in on a phone fetches the licence before Home opens.
 
 A feature the licence does not include is **locked, not hidden**: Settings'
 **Cloud backup**, **Analyses data management** and **Storage** Free-up / Auto-free
 controls, and the viewer's **Share**, stay on screen, disabled, with the note
-"Included with an institution seat or a Semper licence. Ask your institution's IT,
-or contact Semper support." A tap says the same. When a kill switch or the
+"Included with an institution seat or a semper licence. Ask your institution's IT,
+or contact semper support." A tap says the same. When a kill switch or the
 organisation's EMM switches backup off, those Settings sections are hidden as
 before; when the `share` switch is on, Share says "Sharing is temporarily
 unavailable."
@@ -1022,7 +1022,7 @@ retries by itself; a restore or download stops and says restoring is paused
 (not "failed"), to be started again once the switch is off. `share` has no
 server side: only builds that read the switch obey it.
 
-**Minting a key** (Semper staff, device-attested — same admin device that
+**Minting a key** (semper staff, device-attested — same admin device that
 approves/revokes accounts):
 
 - **Individual**: `POST /v1/admin/licenses` with an `emailLock`. Minting also
@@ -1072,7 +1072,7 @@ being processed does not interrupt someone mid-project. Entitlement stops at
 `expiresAt + graceDays`, at which point the account drops to Demo — which, as
 always, never deletes anything.
 
-**Renewing a key** (Semper staff, device-attested):
+**Renewing a key** (semper staff, device-attested):
 
 ```
 PATCH /v1/admin/licenses/{licenseId}
@@ -1143,7 +1143,7 @@ legacy `POST /v1/licenses/activate`) returns `403 license_expired` rather than
 appearing to succeed and leaving the user on Demo. Renew it first, then have
 them redeem it. A code still *inside* grace redeems normally.
 
-The plaintext key from a mint is shown once, in the mint response, and Semper
+The plaintext key from a mint is shown once, in the mint response, and semper
 does not store it anywhere retrievable afterward (only its hash). It is the
 **claim code**. Normal delivery needs none: the licence attaches at sign-in.
 Send it only when that path cannot work — a reseller deal sold to an address
@@ -1207,7 +1207,7 @@ seat when they work.
 
 The refusals worth recognising are `409 member_already_licensed` (that
 person already holds, or is promised, a different live licence — one licence
-per person; Semper staff move them), `409 invite_exists` (the address is
+per person; semper staff move them), `409 invite_exists` (the address is
 still invited to a different licence that has lapsed — withdraw that
 invitation first) and `409 license_seats_exhausted` on an assigned key.
 `503 claim_contended` is not a refusal: another request was claiming on the
@@ -1223,12 +1223,12 @@ floating seat it was using. A removed member cannot be resumed (`409
 seat_revoked`); add their address again instead, which takes a free seat.
 
 **One address for everybody.** `sempermechanics.com/login` is the only web
-address anyone needs — a customer, an IT contact, or Semper staff (it forwards
+address anyone needs — a customer, an IT contact, or semper staff (it forwards
 to `app.sempermechanics.com/login`, where the dashboards actually live). It signs
 them in and forwards them to whichever dashboard is theirs: staff to the
 operator console, an address named in a licence's `adminEmails` to that
 roster, and everyone else to their own account page. Somebody who is both a
-Semper operator and runs a licence gets a choice rather than a guess.
+semper operator and runs a licence gets a choice rather than a guess.
 
 **Every user has an account page.** `/account` sets out the licence field by
 field, from `/v1/me`: **Mode** (Licensed or Demo), **Licence** (Individual or
@@ -1245,18 +1245,18 @@ stored analysis as one zip. The last two need a second factor; the page offers t
 enrol an authenticator app if there is none. A **Delete your account** card says
 where deletion happens: in the app on the phone (Settings → Your data → Delete
 account), because it needs the phone's device signature. It erases every analysis
-and cloud backup and removes the sign-in itself for both apps, Semper and
+and cloud backup and removes the sign-in itself for both apps, semper and
 Semper Classroom, which share one account; signing in again with the same address
 starts a new, empty account. Point a customer here before answering "am I
 Licensed?" by hand.
 
 **The seats console.** Institution IT can do all of the below from
-`/console/institution` on the Semper auth site instead of curl — sign in with
+`/console/institution` on the semper auth site instead of curl — sign in with
 the address named in `adminEmails`, paste the licence id, and the roster,
 who currently holds a seat, and the add/hold/remove actions are all there. The
 routes below are what it calls, and stay equally usable from a script.
 
-Semper staff have `/console/operator`, which now does the whole job: issue an
+semper staff have `/console/operator`, which now does the whole job: issue an
 individual or institution licence, extend a term, revoke a key, unbind a
 licence or a seat from the device it is on, drive any institution's roster,
 and approve accounts. The desk is one page in this order: **Licences** (with
@@ -1282,7 +1282,7 @@ authenticator app the first time. Revoking asks you to type the key prefix
 before it will proceed. The phone admin screen still works exactly as before.
 
 **Institution IT self-service.** Once an institution key exists, its `adminEmails`
-manage seats themselves, with no Semper staff involvement — from the console
+manage seats themselves, with no semper staff involvement — from the console
 above, or by calling these routes directly (script, curl, or their own tooling):
 
 | Need | Route |
@@ -1301,7 +1301,7 @@ above, or by calling these routes directly (script, curl, or their own tooling):
 The listing is paged: `?page_size=` (up to 1000, default 500) and the answer's
 `page.nextPageToken` as `?page_token=` for the next page.
 
-Semper staff have the same roster routes under `/v1/admin/licenses/{id}/…`
+semper staff have the same roster routes under `/v1/admin/licenses/{id}/…`
 for any institution licence, without being on its `adminEmails`: reading the
 roster, export, summary and audit log needs a staff sign-in; changing the roster,
 the import included, needs the staff step-up
@@ -1321,7 +1321,7 @@ IT *intended*, and it is the only number IT has. The person's account is
 demoted a moment later, and their phone only finds out when the app next
 checks in, which for an idle phone is up to four hours.
 
-Semper staff can see the difference. In the operator console, **Verify** on an
+semper staff can see the difference. In the operator console, **Verify** on an
 institution licence checks every seat against its holder and says, in words,
 which revocations have landed and which have not. Two answers matter:
 
@@ -1333,7 +1333,7 @@ which revocations have landed and which have not. Two answers matter:
   nothing to do.
 
 This is the check to run when someone reports that an ex-member is still using
-Semper, and the answer to give when IT asks whether a removal "went through".
+semper, and the answer to give when IT asks whether a removal "went through".
 
 **Changing device.** A phone dies, is replaced, or the wrong one was signed
 in on. Three people can move a licence, and all three do the same thing —
@@ -1341,22 +1341,22 @@ empty the device lock:
 
 | Who | How |
 |---|---|
-| The holder | **Use Semper on a different device** on their own `/account` page — `POST /v1/licenses/unbind`. Needs a second factor and a sign-in from the last 15 minutes, and is allowed once every `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` (default 30). |
+| The holder | **Use semper on a different device** on their own `/account` page — `POST /v1/licenses/unbind`. Needs a second factor and a sign-in from the last 15 minutes, and is allowed once every `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` (default 30). |
 | Institution IT | `PATCH /v1/institutions/licenses/{id}/seats/{uid}` `{"clearDeviceLock": true}`, or **New phone** on the seat in `/console/institution`. |
-| Semper staff | **New phone** on the licence row (individual) or on the seat in the roster (institution) in `/console/operator`. |
+| semper staff | **New phone** on the licence row (individual) or on the seat in the roster (institution) in `/console/operator`. |
 
 Clearing the lock **is** the change: it releases the account's old phone, and
 the licence binds to the phone that registers next. Only the account's
 registered phone can take the lock, so a phone refused at sign-in cannot.
 
-**Semper and Semper Classroom each hold their own phone** (ADR-010). One
+**semper and Semper Classroom each hold their own phone** (ADR-010). One
 person can use both apps on one phone, or each on a different phone, on one
 licence. Staff and IT **New phone**, and the staff phone release below,
-move both apps at once. The holder moves one app at a time: **Use Semper on
+move both apps at once. The holder moves one app at a time: **Use semper on
 a different device** or **Use Semper Classroom on a different device** on
 `/account`, or the same from inside that app, each with its own 30-day
 cooldown. Seats and the operator's user list show a Semper Classroom device
-as "Semper Classroom …" beside Semper's. Semper Classroom was Material Testing
+as "Semper Classroom …" beside semper's. Semper Classroom was Material Testing
 until 2026-10 (ADR-030): a Material Testing build still installed is the same
 app to the account, and shares its phone and cooldown.
 
@@ -1416,13 +1416,13 @@ a download that begins is not yet a download that finished.
 This is the second route to moving someone's work to a new phone, alongside
 the app's own restore: pull the bundle here and import it.
 
-**Revoking the whole key** (Semper staff, e.g. a contract ends):
+**Revoking the whole key** (semper staff, e.g. a contract ends):
 `POST /v1/admin/licenses/{id}/revoke`. For an individual key, that one person
 drops to Demo. For a institution key, **every** activated seat drops to Demo at
 once — use this for "the institution's contract ended," not for offboarding
 one member (use the IT self-service `DELETE` above for that).
 
-**Deleting a key** (Semper staff): **Delete** on the desk, or
+**Deleting a key** (semper staff): **Delete** on the desk, or
 `DELETE /v1/admin/licenses/{id}`, with the same typed key and step-up as a
 revoke. A live key is revoked first. The licence then leaves the list and is
 held under **Recently deleted** for 30 days, with **Restore**; after that it is
@@ -1439,7 +1439,7 @@ Licensed access with zero data loss.
 
 ## Appendix E — Test accounts (QC and CI)
 
-A **test account** is a login Semper staff make for internal QC or for the CI
+A **test account** is a login semper staff make for internal QC or for the CI
 pipeline ([ADR-027](adr/ADR-027-test-accounts.md)). It is pre-approved and
 Licensed, may be signed in on several phones at once, and ends on a date. It is
 never for a customer or an outside verifier, and it can never be an admin.
@@ -1451,7 +1451,7 @@ every create is refused (`test_accounts_disabled`). The daily job that ends
 expired accounts is a Cloud Scheduler job
 ([DEPLOY_CHECKLIST_2026-10.md](ops/DEPLOY_CHECKLIST_2026-10.md)).
 
-**Creating one** (Semper staff, the fresh step-up a licence revoke asks for):
+**Creating one** (semper staff, the fresh step-up a licence revoke asks for):
 **Create a test account** on the operator console's **Test accounts** card (the
 form is folded under that heading until opened), or `POST /v1/admin/test-accounts`
 with `{"email", "purpose": "qc" or "ci", "days", "maxDevices", "note"}`
@@ -1464,12 +1464,12 @@ with `{"email", "purpose": "qc" or "ci", "days", "maxDevices", "note"}`
 - `days` is 1 to 90 (30 when left out for QC). A CI account may leave it out
   and then never ends; give it a date anyway if it will not be needed for long.
 - `maxDevices` is how many phones per app may be signed in at once, 1 to 10
-  (default 3). Semper and Semper Classroom each count their own.
+  (default 3). semper and Semper Classroom each count their own.
 - `note` says what it is for (who has it, which bench). Never put the password
   in it.
 
 The answer shows the **password once**: 20 letters, digits, `-` and `_`. It is
-not stored anywhere Semper can read back, logged or audited. Copy it straight
+not stored anywhere semper can read back, logged or audited. Copy it straight
 into the hand-over.
 
 **Handing it over.** Send the address and the password separately (for example

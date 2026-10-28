@@ -1,4 +1,4 @@
-# Semper FAQ
+# semper FAQ
 
 Canonical text for the public manual at
 `https://semperdic.github.io/website/manual/faq/`. Each **Why?** or **ⓘ** in the
@@ -300,7 +300,7 @@ four-letter codec this phone cannot decode.
 supported on this phone.
 
 **AVI:** MP4, 3GP, MKV/WebM and MPEG-TS are the containers Android itself opens;
-AVI is not one of them, so Semper demuxes AVI on its own. Uncompressed AVI (8-bit
+AVI is not one of them, so semper demuxes AVI on its own. Uncompressed AVI (8-bit
 gray, 4:2:2, 4:2:0, DIB) and motion-JPEG are read losslessly, and Xvid/DivX/H.264
 inside AVI go to the phone's own decoders. If the message names a codec — for
 example `XVID` — this phone has no decoder for it: re-save the clip as MP4
