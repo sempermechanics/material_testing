@@ -489,3 +489,24 @@ test("a roster longer than one page is read to the end", async () => {
   assert.deepEqual(rows().map((r) => r[0]),
     ["ana@uni.edu", "ben@uni.edu", "cy@uni.edu", "dee@uni.edu", "eve@uni.edu"]);
 });
+
+// TE3-102 (ADDENDUM-2): IT may add only addresses on the licence's domain;
+// the backend answers anything else 422 member_off_domain.
+test("an address off the licence's domain is refused in words that name the domain", async () => {
+  await open({
+    roster: { ...assigned, license: { ...assigned.license, domainLock: "uni.edu" } },
+    routes: { [`POST ${SEATS}`]: () => json(422, { detail: "member_off_domain" }) },
+  });
+  $("addEmail").value = "x@gmail.com";
+  $("add").click();
+  await settle();
+  assert.deepEqual(status(), [
+    "x@gmail.com is outside this licence's domain (uni.edu). Only addresses on it can be added.", "muted err"]);
+  assert.equal($("addEmail").value, "x@gmail.com", "the address stays to be corrected");
+
+  reset();
+  await add("x@gmail.com", () => json(422, { detail: "member_off_domain" }));
+  assert.deepEqual(status(), [
+    "x@gmail.com is outside this licence's domain. Only addresses on it can be added.", "muted err"],
+    "no domain on the roster's answer: the sentence without it");
+});

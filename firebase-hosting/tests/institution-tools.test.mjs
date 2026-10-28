@@ -292,6 +292,10 @@ test("every import outcome reads as a sentence", () => {
   assert.equal(said("refused", "license_seats_exhausted"), "no seats left on this licence");
   assert.equal(said("refused", "member_already_licensed"),
     "already has a semper licence of their own — semper support can move them");
+  // TE3-102: IT may add only addresses on the licence's domain.
+  assert.equal(said("refused", "member_off_domain"), "outside this licence's domain");
+  assert.equal(rowResult({ outcome: "refused", error: "member_off_domain" }, "uni.edu"),
+    "outside this licence's domain (uni.edu)");
   assert.equal(said("refused", "strange"), "not added — the server refused it (ref: strange)");
   assert.equal(said("unprocessed", "roster_row_unprocessed"), "not reached — import the file again to finish");
   assert.equal(said("novel"), "novel");
@@ -474,4 +478,24 @@ test("auditQuery sends only what is set", () => {
   assert.equal(auditQuery({ since: "2026-10-01" }, { format: "csv", page_token: "", page_size: 5 }),
     "?since=2026-10-01&format=csv&page_size=5");
   assert.equal(auditQuery({ until: "2026-10-02" }, { page_token: null }), "?until=2026-10-02");
+});
+
+test("an imported row off the licence's domain names the domain", async () => {
+  await openPage("institution", {
+    search: "?license=L1",
+    routes: {
+      "GET /v1/institutions/licenses": () => json(200, { licenses: [{ id: "L1" }] }),
+      "GET /v1/me": () => json(200, { role: "user" }),
+      [`GET ${L1}/seats`]: () => json(200, { ...roster, license: { ...roster.license, domainLock: "uni.edu" } }),
+      [`GET ${L1}/summary`]: () => json(200, { counts }),
+      [`POST ${L1}/seats/import`]: () => json(200, {
+        rows: 1, counts: { refused: 1 },
+        results: [{ row: 1, email: "x@gmail.com", outcome: "refused", error: "member_off_domain" }],
+      }),
+    },
+  });
+  typeImport("x@gmail.com");
+  $("importSubmit").click();
+  await settle();
+  assert.deepEqual(tableRows("importRows"), [["1", "x@gmail.com", "outside this licence's domain (uni.edu)"]]);
 });
