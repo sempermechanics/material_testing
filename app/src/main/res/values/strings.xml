@@ -1,6 +1,6 @@
 <resources xmlns:tools="http://schemas.android.com/tools"
     tools:ignore="TypographyDashes,UnusedResources">
-    <string name="app_name">Semper</string>
+    <string name="app_name">semper</string>
 
     <!-- Digital Asset Links for Credential Manager. Not user-facing. -->
     <string name="asset_statements" translatable="false">
@@ -72,7 +72,7 @@
     <string name="roi_invalid_size">Invalid ROI size</string>
 
     <!-- Static analysis -->
-    <string name="exit_semper_title">Exit Semper?</string>
+    <string name="exit_semper_title">Exit semper?</string>
     <string name="exit_analysis_title">Leave setup?</string>
     <string name="exit_analysis_message">Your region and settings will be lost.</string>
     <string name="action_stay">Stay</string>
@@ -328,13 +328,13 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- Diagnostics consent -->
     <string name="settings_diagnostics">Send crash reports and usage data</string>
     <string name="settings_diagnostics_sub">Share anonymous crash diagnostics and coarse usage events — which features ran, and whether they succeeded — so we can fix problems. Off by default; your images, results, specimen names, file paths and analysis data are never sent.</string>
-    <string name="diagnostics_prompt_title">Help improve Semper?</string>
-    <string name="diagnostics_prompt_body">Semper can send anonymous crash reports when something goes wrong, and coarse usage events such as whether an analysis started, finished or failed.\n\nThis never includes your images, results, specimen names, file paths or analysis data. You can change this at any time in Settings.</string>
+    <string name="diagnostics_prompt_title">Help improve semper?</string>
+    <string name="diagnostics_prompt_body">semper can send anonymous crash reports when something goes wrong, and coarse usage events such as whether an analysis started, finished or failed.\n\nThis never includes your images, results, specimen names, file paths or analysis data. You can change this at any time in Settings.</string>
     <string name="diagnostics_prompt_accept">Send reports</string>
     <string name="diagnostics_prompt_decline">Not now</string>
     <string name="delete_account">Delete account</string>
     <string name="delete_account_title">Delete your account?</string>
-    <string name="delete_account_body">This erases:\n\n• every analysis on this phone\n• every cloud backup\n• your profile and registered phone\n• your sign-in, for both Semper and Semper Classroom\n\nThis can\'t be undone.</string>
+    <string name="delete_account_body">This erases:\n\n• every analysis on this phone\n• every cloud backup\n• your profile and registered phone\n• your sign-in, for both semper and Semper Classroom\n\nThis can\'t be undone.</string>
     <string name="delete_account_confirm">Delete everything</string>
     <string name="delete_account_working">Erasing your account and data…</string>
     <string name="delete_account_done">Your account and all data have been deleted.</string>
@@ -353,7 +353,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="transfer_banner_download">Downloading…</string>
     <string name="transfer_banner_restore">Restoring…</string>
     <string name="help_support_feedback_action">Send feedback</string>
-    <string name="help_support_feedback_subject_fmt">Semper feedback (v%1$s / %2$d)</string>
+    <string name="help_support_feedback_subject_fmt">semper feedback (v%1$s / %2$d)</string>
     <string name="help_support_feedback_body_fmt">Describe your feedback below.\n\n---\nApp: %1$s (%2$d)\nPhone: %3$s\nAndroid: %4$d\nBuild: %5$s\n</string>
     <string name="settings_save_cloud">Back up to the cloud</string>
     <string name="settings_save_cloud_desc">Back up to the cloud: new analyses back up when a network is available. Off keeps them on this phone; existing backups remain</string>
@@ -433,18 +433,18 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="restore_api_off">Cloud backup is not configured on this build.</string>
     <string name="restore_failed_generic">This backup couldn\'t be restored.</string>
     <string name="restore_backup_gone">This backup\'s files are no longer in cloud storage. Back the analysis up again from a phone that still has it.</string>
-    <string name="restore_device_mismatch">This phone is not the one bound to the licence yet. Sign in, wait a moment for the phone to bind, then try restore again — or move the licence from the Semper account page first.</string>
+    <string name="restore_device_mismatch">This phone is not the one bound to the licence yet. Sign in, wait a moment for the phone to bind, then try restore again — or move the licence from the semper account page first.</string>
     <!-- Demo's refusals end with license_lock_note's sentence: how to unlock (readiness AE1-015). -->
-    <string name="restore_not_licensed">Restore isn\'t available on Demo. Included with an institution seat or a Semper licence. Ask your institution\'s IT, or contact Semper support.</string>
+    <string name="restore_not_licensed">Restore isn\'t available on Demo. Included with an institution seat or a semper licence. Ask your institution\'s IT, or contact semper support.</string>
     <string name="restore_paused">Restoring from the cloud is paused right now. Your analyses on this phone aren\'t affected.</string>
-    <string name="download_not_licensed">Downloading from the cloud isn\'t available on Demo. Included with an institution seat or a Semper licence. Ask your institution\'s IT, or contact Semper support.</string>
+    <string name="download_not_licensed">Downloading from the cloud isn\'t available on Demo. Included with an institution seat or a semper licence. Ask your institution\'s IT, or contact semper support.</string>
     <!-- A bundle download while the download kill switch is on: the restore_paused shape (readiness AE3-108). -->
     <string name="download_paused">Downloading from the cloud is paused right now. Your analyses on this phone aren\'t affected.</string>
     <!-- Share in the viewer while the share kill switch is on: not a licence lock. -->
     <string name="share_paused">Sharing is paused right now. Your analyses on this phone aren\'t affected.</string>
     <!-- Locked, not hidden (FeatureLocks): the one note beside, and on a tap of, anything
          the account's licence does not include. Never a price, a purchase or a link. -->
-    <string name="license_lock_note">Included with an institution seat or a Semper licence. Ask your institution\'s IT, or contact Semper support.</string>
+    <string name="license_lock_note">Included with an institution seat or a semper licence. Ask your institution\'s IT, or contact semper support.</string>
     <string name="license_locked">Locked</string>
     <string name="sync_status_up_to_date">Cloud backups up to date</string>
     <string name="home_empty_start">Start analysis</string>
@@ -455,7 +455,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="info_about">About %1$s</string>
     <string name="action_sign_out">Sign out</string>
     <string name="about_title">About</string>
-    <string name="about_message_fmt">Semper v%1$s (%2$d)\n\nPrivacy Policy and Terms of Service are available from the links below.</string>
+    <string name="about_message_fmt">semper v%1$s (%2$d)\n\nPrivacy Policy and Terms of Service are available from the links below.</string>
     <string name="legal_privacy">Privacy Policy</string>
     <string name="legal_terms">Terms of Service</string>
     <!-- Public legal pages on the product site. -->
@@ -465,18 +465,18 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- Clickwrap gate (TermsActivity) and the separate improvement consent -->
     <string name="terms_title">Before you continue</string>
     <string name="terms_version_fmt">Terms version %1$s</string>
-    <string name="terms_summary">Semper is a professional tool for digital image correlation. To use an account you need to agree to the Terms of Service and the Privacy Policy. In short: the app and engine stay our property and must not be reverse-engineered or shared; you are responsible for validating your own results; the service is provided as is; and Indian law applies, with disputes resolved in Chennai.</string>
+    <string name="terms_summary">semper is a professional tool for digital image correlation. To use an account you need to agree to the Terms of Service and the Privacy Policy. In short: the app and engine stay our property and must not be reverse-engineered or shared; you are responsible for validating your own results; the service is provided as is; and Indian law applies, with disputes resolved in Chennai.</string>
     <string name="terms_read_full_terms">Read the Terms</string>
     <string name="terms_read_privacy">Privacy Policy</string>
     <string name="terms_checkbox_agree">I have read and agree to the Terms of Service and the Privacy Policy</string>
-    <string name="terms_checkbox_improve">Use data to improve Semper</string>
+    <string name="terms_checkbox_improve">Use data to improve semper</string>
     <string name="terms_checkbox_improve_hint">Optional. Lets us use images, results and reports you back up to test and tune the engine. Untick to opt out; you can change this any time in Settings \u2192 Your data.</string>
     <string name="terms_action_agree">Agree and continue</string>
     <string name="terms_action_decline">Decline</string>
-    <string name="terms_error_update_app">This version of the app is out of date. Please update Semper to accept the current Terms.</string>
+    <string name="terms_error_update_app">This version of the app is out of date. Please update semper to accept the current Terms.</string>
     <string name="terms_error_generic">Could not record your acceptance. Please try again.</string>
     <string name="terms_register_hint">You\u2019ll be asked to accept the Terms next.</string>
-    <string name="settings_improve_title">Use my data to improve Semper</string>
+    <string name="settings_improve_title">Use my data to improve semper</string>
     <string name="settings_improve_summary">Optional. Backed-up images, results and reports may be used to test and tune the engine. Withdrawing stops future use and removes your data from improvement datasets within 30 days.</string>
     <string name="settings_terms_accepted_fmt">Terms accepted: version %1$s</string>
     <string name="settings_terms_not_accepted">Terms not yet accepted on this phone</string>
@@ -827,7 +827,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="warn_faq_desc">Why this warning</string>
     <string name="action_why">Why?</string>
     <string name="faq_redirect_title">Open in browser?</string>
-    <string name="faq_redirect_body">This opens the FAQ on the Semper website.</string>
+    <string name="faq_redirect_body">This opens the FAQ on the semper website.</string>
     <string name="faq_redirect_open">Open</string>
     <string name="results_title">Results</string>
     <string name="action_share">Share</string>
@@ -928,9 +928,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="send_to_title">Send to</string>
     <string name="save_success">Saved to this phone</string>
     <string name="save_failed">Couldn\'t save the file. Try again.</string>
-    <string name="app_name_short">Semper</string>
+    <string name="app_name_short">semper</string>
     <string name="approval_title">Access required</string>
-    <string name="approval_body">This account isn\'t approved for Semper yet. Tap Request access to email our team, then check back once you\'re approved.</string>
+    <string name="approval_body">This account isn\'t approved for semper yet. Tap Request access to email our team, then check back once you\'re approved.</string>
     <string name="check_now">Check now</string>
     <string name="action_request_access">Request access</string>
     <string name="error_generic">Something went wrong. Please try again.</string>
@@ -955,7 +955,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="admin_denied_toast_fmt">Denied %1$s</string>
     <string name="admin_action_error_fmt">Action failed: %1$s</string>
     <string name="support_email">support@sempermechanics.com</string>
-    <string name="request_access_subject">Semper access request</string>
+    <string name="request_access_subject">semper access request</string>
 
     <!-- Settings: help & support -->
     <string name="help_support_section">Help &amp; support</string>
@@ -965,7 +965,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="help_support_bug_action">Report a bug</string>
     <string name="help_support_feature_action">Request a feature</string>
     <string name="help_support_email_action">Email support</string>
-    <string name="help_support_subject">Semper support request</string>
+    <string name="help_support_subject">semper support request</string>
     <string name="url_manual">https://sempermechanics.com/manual/</string>
     <string name="url_faq_jpeg" translatable="false">https://sempermechanics.com/support/troubleshooting/#loading</string>
     <string name="url_faq_speckle" translatable="false">https://sempermechanics.com/support/troubleshooting/#loading</string>
@@ -993,7 +993,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="beta_notice_title">Beta notice</string>
     <!-- Says what terms_checkbox_improve_hint and settings_improve_summary say: optional,
          ticked at the Terms with the choice to untick, withdrawable (readiness AE1V-016). -->
-    <string name="beta_notice_body">Semper is in beta. \"Use data to improve Semper\" was ticked when you accepted the Terms, and you could untick it. While it is on, the images, results and reports you back up may be used to test and tune the engine.\n\nYou can turn it off any time in Settings \u2192 Your data: that stops future use and removes your data from improvement datasets within 30 days. Crash reports and usage data are sent only if you agree to them. You can access, update or delete your data at any time.</string>
+    <string name="beta_notice_body">semper is in beta. \"Use data to improve semper\" was ticked when you accepted the Terms, and you could untick it. While it is on, the images, results and reports you back up may be used to test and tune the engine.\n\nYou can turn it off any time in Settings \u2192 Your data: that stops future use and removes your data from improvement datasets within 30 days. Crash reports and usage data are sent only if you agree to them. You can access, update or delete your data at any time.</string>
     <string name="beta_notice_ack">I understand</string>
 
     <!-- Session/analysis quota limit screen -->
@@ -1005,7 +1005,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="limit_email_support">Email support@sempermechanics.com</string>
     <string name="limit_recheck">Re-check limit</string>
     <string name="limit_back">Back to my analyses</string>
-    <string name="limit_subject">Semper support</string>
+    <string name="limit_subject">semper support</string>
     <!-- The device half of the Demo cap (TD-279): this phone's stored analyses,
          every account's, are at Demo's. Says nothing of the other accounts. -->
     <string name="limit_body_device">This phone holds the most saved analyses Demo allows, counting every account used on it, so new analyses can\'t be saved.\n\nDelete an analysis you no longer need from this phone, including its cloud copy, then try again. If your institution has given you a seat or your licence was just added, tap Refresh licence.</string>
@@ -1041,13 +1041,13 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="error_rate_limited">The server is busy right now. Wait a moment and try again.</string>
     <!-- App Check refused the build, not the account. Nothing the user can fix
          except installing the real thing, so say only that. -->
-    <string name="error_app_check_required">This copy of Semper could not be verified. Reinstall it from the Play Store.</string>
+    <string name="error_app_check_required">This copy of semper could not be verified. Reinstall it from the Play Store.</string>
 
     <!-- Licence expiry notice on Home (HomeLicenseNotice). Advisory only — nothing is
          withdrawn during grace. Informational: the app only consumes the licence, so
          no renew, buy or price call to action, and no link to one. -->
     <string name="license_expiring_today">Licence expires today</string>
-    <string name="license_expired">Licence expired — ask your institution\'s IT or Semper support</string>
+    <string name="license_expired">Licence expired — ask your institution\'s IT or semper support</string>
     <!-- %1$s: the date grace ends, e.g. 15 Mar 2027 -->
     <string name="license_grace_until_fmt">Licence expired — after-expiry grace until %1$s</string>
     <string name="license_grace">Licence expired — in after-expiry grace</string>
@@ -1127,12 +1127,12 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="auth_account_exists">An account already exists for this email. Sign in instead.</string>
     <string name="auth_no_account">No account for this email.</string>
     <string name="auth_verify_email_first_fmt">Verify your email first. We\'ve sent a link to %1$s — open it, then sign in again.</string>
-    <string name="auth_totp_needs_enrolment">This account needs an authenticator app. Open the Semper website, enrol one, then try again on the phone.</string>
+    <string name="auth_totp_needs_enrolment">This account needs an authenticator app. Open the semper website, enrol one, then try again on the phone.</string>
     <string name="auth_reset_confirm_failed">Could not reset the password.</string>
     <string name="auth_account_check_failed">Could not verify your account. Try again later.</string>
     <string name="auth_account_check_offline">Could not verify account. Check your connection and sign in again.</string>
     <string name="auth_phone_released">Staff released this phone from this account, so it cannot be used with it again. Sign in with another account, or use another phone.</string>
-    <string name="auth_phone_linked_elsewhere">This phone is already linked to another account, or this account to another phone. Sign in with that account, or ask your institution\'s IT or Semper support to move it to this phone.</string>
+    <string name="auth_phone_linked_elsewhere">This phone is already linked to another account, or this account to another phone. Sign in with that account, or ask your institution\'s IT or semper support to move it to this phone.</string>
 
     <!-- Sign out confirmation -->
     <string name="sign_out_confirm_title">Sign out of this phone?</string>
@@ -1290,7 +1290,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="one">Extract 1 frame</item>
         <item quantity="other">Extract %1$d frames</item>
     </plurals>
-    <string name="wizard_draft_lost">Your images were cleared while Semper was in the background. Please add them again.</string>
+    <string name="wizard_draft_lost">Your images were cleared while semper was in the background. Please add them again.</string>
 
 
     <!-- One-off licence refresh (LicenseConfigWorker.refreshNow); shown only before Android 12 -->
@@ -1300,7 +1300,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
          no price, no purchase and no link to one here. -->
     <string name="license_refresh_action">Refresh licence</string>
     <string name="license_refresh_institution">Licensed (institution seat)</string>
-    <string name="license_refresh_individual">Licensed (Semper licence)</string>
+    <string name="license_refresh_individual">Licensed (semper licence)</string>
     <string name="license_refresh_demo">Still on Demo</string>
-    <string name="license_refresh_unreachable">Couldn\'t reach Semper — will retry</string>
+    <string name="license_refresh_unreachable">Couldn\'t reach semper — will retry</string>
 </resources>

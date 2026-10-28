@@ -76,7 +76,7 @@ class SupportMailBodiesTest {
                 SupportMail.deviceLines(),
             mail.getStringExtra(Intent.EXTRA_TEXT),
         )
-        assertEquals("Semper support — $unknown", mail.getStringExtra(Intent.EXTRA_SUBJECT))
+        assertEquals("semper support — $unknown", mail.getStringExtra(Intent.EXTRA_SUBJECT))
     }
 
     @Test
@@ -97,7 +97,7 @@ class SupportMailBodiesTest {
         val mail = mailFrom(PendingApprovalActivity::class.java, R.id.btnRequestAccess)
 
         assertEquals(
-            "I'd like access to Semper.\n\n" +
+            "I'd like access to semper.\n\n" +
                 "Account: $unknown\n" +
                 "Device ID: $deviceId\n" +
                 SupportMail.deviceLines(),

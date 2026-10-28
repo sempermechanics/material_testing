@@ -32,8 +32,11 @@ import kotlin.math.sqrt
  */
 object ReportBuilder {
 
-    /** The report's one name: its cover, its page footers and its field images (readiness AE1-010). */
-    const val REPORT_NAME = "Semper Analysis Report"
+    /**
+     * The report's one name: its cover, its page footers and its field images (readiness AE1-010).
+     * The product name is lower-case "semper" (readiness ADDENDUM-4).
+     */
+    const val REPORT_NAME = "semper analysis report"
 
     /** The PDF's mean row: a strain's mean averages |value|, the others the signed value (readiness AE1-017). */
     internal fun meanLabel(isStrain: Boolean): String = if (isStrain) "Mean of |value|" else "Mean"
