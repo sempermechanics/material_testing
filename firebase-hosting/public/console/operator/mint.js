@@ -110,7 +110,7 @@ $("mint").addEventListener("click", async () => {
 function mintOutcome(out, body) {
   if (body.kind === "institution") {
     return [`Institution licence issued. People with a verified ${body.domainLock || "domain"} ` +
-      "address can redeem the key below, or IT adds them from the roster."];
+      "address can redeem the claim code below on their account page, or IT adds them from the roster."];
   }
   const who = body.emailLock || "that address";
   if (out.inviteError === "invite_exists") {
@@ -119,7 +119,7 @@ function mintOutcome(out, body) {
   }
   if (out.inviteError) {
     return [`Issued, but the invite for ${who} failed (${out.inviteError}) — ` +
-      "it will not attach at sign-in. The key below still redeems it.", true];
+      "it will not attach at sign-in. The claim code below still redeems it.", true];
   }
   if (out.claimError === "holder_already_licensed") {
     return [`Issued, but ${who} already holds a live licence, so this one was ` +
@@ -127,7 +127,7 @@ function mintOutcome(out, body) {
   }
   if (out.claimError) {
     return [`Issued, but it could not be attached to ${who} (${out.claimError}). ` +
-      "The key below redeems it.", true];
+      "The claim code below redeems it.", true];
   }
   if (out.claimedByUid) {
     return [`Issued and attached to ${who} — Licensed from their next request.`];
