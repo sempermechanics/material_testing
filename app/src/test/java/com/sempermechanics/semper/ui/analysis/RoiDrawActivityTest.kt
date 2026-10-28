@@ -383,6 +383,25 @@ class RoiDrawActivityTest {
         assertEquals(0.toByte(), activity.maskAt(175, 175))
     }
 
+    /** The info pill read 'Mode: Crop' after a recreate though the ROI was kept (readiness AE1-110). */
+    @Test
+    fun `the HUD reads the kept selection after a recreate`() {
+        val controller = launch(intent(rawReference().path))
+        awaitCanvas(controller.get())
+        controller.get().apply {
+            check(R.id.rgEditMode, R.id.rbModeManual)
+            type("100", "200", "300", "150")
+            click(R.id.btnApplyManualRoi)
+            check(R.id.rgEditMode, R.id.rbModeDraw)
+        }
+
+        val activity = controller.recreate().get()
+        awaitCanvas(activity)
+        shadowOf(android.os.Looper.getMainLooper()).idle()
+
+        assertEquals(activity.getString(R.string.roi_hud_dimensions_fmt, 300, 150, 100, 200), activity.hud())
+    }
+
     private companion object {
         const val IMG_W = 640
         const val IMG_H = 400

@@ -140,6 +140,8 @@ class RoiDrawActivity : AppCompatActivity() {
                         shownRoi(binding.overlayRoi.getRelativeRoi(), crop = true)?.let(::fillManualFields)
                     }
                     binding.overlayRoi.restoreRelativeHoles(saved.holes)
+                    // The pill reads the kept selection, as after a drag (readiness AE1-110).
+                    if (saved.edges != null) showSelection(binding.overlayRoi.getRelativeRoi())
                 }
                 pendingSelection = null
             }
