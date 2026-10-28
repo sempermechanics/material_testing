@@ -1318,18 +1318,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Two rules are off, each all false positives on 2026-10-28:
-      # use-of-md5: Digests.md5 is Drive's md5Checksum format for the upload
-      #   integrity check (DriveUploader); the attestation is SHA-256.
-      # python-logger-credential-disclosure: a keyword match on "token" in
-      #   four log formats (deps.py, google_auth.py, tasks.py) that log a
-      #   bool, a uid, an exception or a hash, never a credential.
+      # No rule is off. A false positive gets a `nosemgrep: <rule id>` comment
+      # with its reason on the line it flags (e.g. Digests.kt's MD5, Drive's
+      # md5Checksum format; the backend's log lines that name a token).
       - name: Scan the backend, the console JS and the app's Kotlin
         run: >
           semgrep scan --error --metrics=off --disable-version-check
           --config p/python --config p/javascript --config p/kotlin
-          --exclude-rule kotlin.lang.security.use-of-md5.use-of-md5
-          --exclude-rule python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure
           backend/app firebase-hosting/public app/src/main/java
 
   # ===================================================================
