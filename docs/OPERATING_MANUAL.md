@@ -1376,9 +1376,12 @@ second **New phone** then releases it. Nothing is re-issued, nothing is typed, a
 the new phone first no longer demotes the account; a holder demoted that way
 before 2026-09-28 gets their mode back as part of the clear.
 
-The old phone is then refused for 24 hours (`DEVICE_RELEASE_HOLD_HOURS`): it shows
-"bound to a different device" and cannot take the account back before the new
-phone signs in. Signing in on the new phone ends that at once. If the holder
+The old phone is then refused for 24 hours (`DEVICE_RELEASE_HOLD_HOURS`): its
+registration is answered `device_conflict`, so its next account check shows
+"This phone is already linked to another account, or this account to another
+phone. Sign in with that account, or ask your institution's IT or semper support
+to move it to this phone." (`auth_phone_linked_elsewhere`), and it cannot take
+the account back before the new phone signs in. Signing in on the new phone ends that at once. If the holder
 cleared by mistake and never moves, the old phone works again after 24 hours.
 
 **New phone** on a seat that is on hold or revoked, or on a revoked licence,
