@@ -117,7 +117,7 @@ export async function loadUsers(started) {
 }
 
 /**
- * The number beside Approvals in the desk's section index: how many accounts
+ * The number beside Access requests in the desk's section index: how many accounts
  * wait, so a queue below the licence table is seen without scrolling to it.
  * Hidden when nobody waits; "50+" when the read stopped at its page.
  */

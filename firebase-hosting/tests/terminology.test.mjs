@@ -141,6 +141,9 @@ const RULES = [
   // AE3-109: what a mint shows once is the claim code the holder's page asks
   // for (the "Licence key" box that confirms a revoke keeps its name).
   [/\bkey below\b|\bredeems? the key\b|\bCopy this key\b/i, "the claim code", () => true],
+  // AE3-117: the staff approval queue is Access requests, as the app and the
+  // support mail call it.
+  [/\bApprovals\b|\bawaiting approval\b/, "Access requests", () => true],
   // AE3-005: two clocks, two names.
   [/\bgrace period\b/i, "after-expiry grace / offline allowance, not grace period", () => true],
   // AE3-006: have a seat; Pause / Resume; Remove; one release label.
