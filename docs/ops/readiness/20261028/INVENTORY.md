@@ -130,6 +130,11 @@ snapshot. Still absent: screenshot tests, Android accessibility checks, Lighthou
 Schemathesis (TD-319), a semantic OpenAPI breaking-change diff, semgrep. Room is not
 used, so Room migration tests do not apply.
 
+Added later in this run's fix round (2026-10-28, on the readiness branch): Lighthouse
+(`console-lighthouse`, AE2-110), semgrep (`semgrep`) and OSV-Scanner over the Android
+release graph (`android-deps-osv`), both TE5-105. The list above is the state at
+inventory time.
+
 ## External actions owed by the Admin (open on 2026-10-28)
 
 No commit since #489 touches the gate, `docs/ops/readiness`, `docs/legal` or
