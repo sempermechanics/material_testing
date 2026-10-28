@@ -11,6 +11,7 @@ import { wireAuditLog } from "../audit-log.js";
 let licenseId = "";
 let shownId = null; // the licence the import results and audit log are for
 let keyPrefix = ""; // the open licence's, for file names
+let domainLock = ""; // the open licence's domain: IT may add only addresses on it
 let members = new Map(); // uid → address, from the last roster read
 
 const $ = (id) => document.getElementById(id);
@@ -22,14 +23,14 @@ const fileName = () => (keyPrefix || licenseId).replace(/[^\w.-]+/g, "_");
 
 const renderRows = wireRoster({
   rows: $("rows"), email: $("addEmail"), add: $("add"), base, report: setStatus, reload: load,
-  filter: $("rowFilter"), count: $("rowCount"), head: $("rosterHead"),
+  filter: $("rowFilter"), count: $("rowCount"), head: $("rosterHead"), domain: () => domainLock,
 });
 
 wireExport({ button: $("exportRoster"), base, name: fileName, report: setStatus });
 const clearImport = wireImport({
   text: $("importText"), file: $("importFile"), preview: $("importPreview"),
   submit: $("importSubmit"), summary: $("importSummary"), results: $("importResults"),
-  rows: $("importRows"), base, report: setStatus, reload: load,
+  rows: $("importRows"), base, report: setStatus, reload: load, domain: () => domainLock,
 });
 const resetAudit = wireAuditLog({
   rows: $("auditRows"), since: $("auditSince"), until: $("auditUntil"), show: $("auditLoad"),
@@ -120,6 +121,7 @@ async function load(started) {
     // Another licence: nothing of the last one's may stay on screen under it.
     shownId = licenseId;
     keyPrefix = "";
+    domainLock = "";
     members = new Map();
     $("tiles").innerHTML = "";
     clearImport();
@@ -210,6 +212,7 @@ function render(data) {
   renderRows(data.seats, data.invites);
   $("rosterCard").hidden = false;
   keyPrefix = lic.keyPrefix || "";
+  domainLock = lic.domainLock || "";
   // The audit log names members by address, as the roster does.
   members = new Map(data.seats.filter((s) => s.email).map((s) => [s.uid, s.email]));
   $("importCard").hidden = false;

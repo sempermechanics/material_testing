@@ -70,6 +70,7 @@ export function wireExport({ button, base, name, report }) {
 /** What a refused import row says, by the single add's code. */
 const ROW_ERRORS = {
   license_seats_exhausted: "no seats left on this licence",
+  // Staff only since TE3-102: IT gets a pending invite for such an address.
   member_already_licensed: "already has a semper licence of their own — semper support can move them",
   invite_exists: "already promised a place on a different licence",
   license_seat_disabled: "their seat is paused — resume it instead",
@@ -77,8 +78,15 @@ const ROW_ERRORS = {
   claim_contended: "busy just now — import the file again",
 };
 
-/** One import row's result, as a sentence. */
-export function rowResult({ outcome, error }) {
+/**
+ * One import row's result, as a sentence. `domain` is the licence's
+ * domainLock, when the page has it: IT may add only addresses on it
+ * (TE3-102, `member_off_domain`).
+ */
+export function rowResult({ outcome, error }, domain = "") {
+  if (outcome === "refused" && error === "member_off_domain") {
+    return `outside this licence's domain${domain ? ` (${domain})` : ""}`;
+  }
   switch (outcome) {
     case "seated": return "on the licence now";
     case "invited": return "invited — joins at first sign-in";
@@ -134,7 +142,9 @@ export function importSummary(counts = {}) {
  * it, and read each row's result. `reload()` reads the roster again after
  * an import that changed it.
  */
-export function wireImport({ text, file, preview, submit, summary, results, rows, base, report, reload }) {
+export function wireImport({
+  text, file, preview, submit, summary, results, rows, base, report, reload, domain = () => "",
+}) {
   function update() {
     const n = importRowCount(text.value);
     submit.disabled = n === 0 || n > MAX_IMPORT_ROWS;
@@ -168,7 +178,7 @@ export function wireImport({ text, file, preview, submit, summary, results, rows
       // the table against the file they sent.
       rows.innerHTML = (out.results || []).map((r) => `
         <tr class="${r.outcome === "seated" || r.outcome === "invited" || r.outcome === "exists" ? "" : "err"}">
-          <td>${esc(r.row)}</td><td>${esc(r.email || "—")}</td><td>${esc(rowResult(r))}</td>
+          <td>${esc(r.row)}</td><td>${esc(r.email || "—")}</td><td>${esc(rowResult(r, domain()))}</td>
         </tr>`).join("");
       results.hidden = false;
       if (counts.seated || counts.invited) await reload();
