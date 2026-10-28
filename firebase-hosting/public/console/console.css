@@ -553,10 +553,13 @@ details.phones-fold > summary:hover { background: rgba(255, 255, 255, 0.04); }
   /* The term ("until May 12, 2027 (UTC) +14d") and the analyses count wrap
      beside their label; kept on one line they ran past a 360 px card. */
   table.licences td:nth-child(5), table.licences td:nth-child(6) { white-space: normal; }
-  /* The count, then the phones under it at the card's full width. */
+  /* The count beside its label, folded or not, then the phones under both
+     at the card's full width. Basis 0: unfolded, the list's width pushed the
+     fold, and the count with it, under the "Phones" label (AE2-107); the list
+     reaches back over the label column (6.5rem and the .75rem gap). */
   .wrap td.phones { flex-wrap: wrap; }
-  .phones-fold { flex: 1 1 auto; min-width: 0; }
-  .phone-list { flex-basis: 100%; min-width: 0; }
+  .phones-fold { flex: 1 1 0; min-width: 0; }
+  .phone-list { min-width: 0; margin-left: -7.25rem; }
   .card-head h2 { flex: 1 1 100%; }
   .card-head > .muted { flex-basis: 100%; }
   .toolbar > input { flex: 1 1 100%; }

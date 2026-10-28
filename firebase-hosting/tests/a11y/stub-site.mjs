@@ -85,6 +85,21 @@ const SUMMARY = { counts: {
   assigned: 120, activeLast7Days: 60, onHold: 7, invited: 2, revocationPending: 1, expiringWithin30Days: 120,
 } };
 
+/** The operator desk's Test accounts list: one account on two phones, one on none. */
+const TEST_ACCOUNTS = { accounts: [
+  {
+    uid: "uid-qc-1", email: "qc-1@test.example", purpose: "qc", expiresAt: day(21), maxDevices: 3,
+    note: "QC rack", activeDevices: 2, status: "active", devices: [
+      { deviceId: "and-phone-1", app: "semper", model: "Pixel 6" },
+      { deviceId: "and-phone-2", app: "semperclassroom", model: "Galaxy S22+" },
+    ],
+  },
+  {
+    uid: "uid-ci-1", email: "ci@test.example", purpose: "ci", expiresAt: null, maxDevices: 10,
+    note: "", activeDevices: 0, status: "active",
+  },
+] };
+
 /** Who is signed in, and what the API answers them. */
 export const PERSONAS = {
   out: null,
@@ -124,6 +139,7 @@ function answer(persona, method, path) {
     "GET /v1/admin/licenses": () => ({ licenses: [IND, UNI, DEMO], page: {}, demoMaxAnalyses: 25 }),
     "GET /v1/admin/licenses/L1/seats": () => ROSTER,
     "GET /v1/admin/licenses/L1/summary": () => SUMMARY,
+    "GET /v1/admin/test-accounts": () => TEST_ACCOUNTS,
     "GET /v1/admin/users": () => ({ users: [{ uid: "w1", email: "wait@lab.org", displayName: "Wai Tan" }], page: {} }),
     "GET /v1/sessions": () => ({
       sessions: [{ sessionId: "s1", specimenName: "Steel 24", app: "semper", status: "COMPLETED",

@@ -141,3 +141,32 @@ test("the roster's sort buttons are on screen and sort at 360 px", async ({ brow
   expect(await violations(page)).toEqual([]);
   await context.close();
 });
+
+/** The operator desk with its Test accounts list shown. */
+async function openTestAccounts(browser, width) {
+  const opened = await open(browser, PAGES[5], width);
+  await opened.page.locator("#loadTestAccounts").click();
+  await opened.page.locator("#testAccountRows details[data-ta-phones] summary").first().waitFor();
+  return opened;
+}
+
+// AE2-107: at 600 px and below a test account's phone count sat beside its
+// "Phones" label while folded, and dropped to the line under it unfolded.
+test("a test account's phone count stays beside its label when unfolded, at 360 px", async ({ browser }) => {
+  const { context, page } = await openTestAccounts(browser, WIDTHS.phone);
+  const summary = page.locator("#testAccountRows details[data-ta-phones] summary").first();
+  const cell = page.locator("#testAccountRows td.phones").first();
+  const top = async () => (await summary.boundingBox()).y - (await cell.boundingBox()).y;
+  const left = async () => (await summary.boundingBox()).x;
+  const folded = [await top(), await left()];
+  await summary.click();
+  await expect(page.locator("#testAccountRows details[data-ta-phones]").first()).toHaveAttribute("open", "");
+  expect([await top(), await left()], "the same place, folded or not").toEqual(folded);
+  const outside = await page.evaluate(() => {
+    const row = document.querySelector("#testAccountRows tr").getBoundingClientRect();
+    return [...document.querySelectorAll("#testAccountRows tr:first-child button[data-ta-release]")]
+      .map((b) => b.getBoundingClientRect()).filter((r) => r.left < row.left || r.right > row.right + 0.5).length;
+  });
+  expect(outside, "every phone's Release is inside the row's card").toBe(0);
+  await context.close();
+});
