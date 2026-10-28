@@ -11,7 +11,9 @@ Changed the API on purpose: rewrite the snapshot and commit it with the change,
     UPDATE_OPENAPI_SNAPSHOT=1 python -m pytest tests/test_openapi_snapshot.py
 
 and say in the PR whether the diff breaks a shipped client (ADR-029 lists what
-counts). The app and the consoles read response bodies the snapshot does not
+counts). The rewrite refuses a breaking change that
+`contracts/app-openapi.breaking.txt` does not declare, and
+`test_openapi_breaking.py` classifies the diff on every run. The app and the consoles read response bodies the snapshot does not
 type yet (no route declares a response_model); `test_wire_contracts.py` pins
 those that the Android app reads.
 """
@@ -22,6 +24,7 @@ import json
 import os
 from pathlib import Path
 
+import openapi_diff
 from app.main import app
 
 SNAPSHOT = Path(__file__).resolve().parents[1] / "contracts" / "app-openapi.json"
@@ -36,6 +39,13 @@ def render() -> str:
 def test_openapi_matches_the_committed_snapshot():
     current = render()
     if os.environ.get(UPDATE_ENV) == "1":
+        if SNAPSHOT.is_file():
+            undeclared = sorted(set(openapi_diff.breaking_changes(
+                json.loads(SNAPSHOT.read_text(encoding="utf-8")), json.loads(current),
+            )) - openapi_diff.acknowledged())
+            assert not undeclared, (
+                "Not rewritten: breaking API changes (ADR-029). Declare each line in "
+                "contracts/app-openapi.breaking.txt first:\n  " + "\n  ".join(undeclared))
         SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)
         SNAPSHOT.write_text(current, encoding="utf-8", newline="\n")
     committed = SNAPSHOT.read_text(encoding="utf-8") if SNAPSHOT.is_file() else ""
