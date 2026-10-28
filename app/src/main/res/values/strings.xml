@@ -301,7 +301,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="settings_used_image_size">Image size</string>
     <string name="settings_used_px_fmt">%1$d px</string>
     
-    <string name="settings_used_roi_fmt">%1$d × %2$d at (%3$d, %4$d)</string>
+    <string name="settings_used_roi_fmt">%1$d × %2$d px at (%3$d, %4$d) px</string>
     <string name="settings_used_size_fmt">%1$d × %2$d px</string>
     <!-- The record's check against the signed manifest its run wrote (ADR-028). -->
     <string name="settings_used_integrity">Record integrity</string>
@@ -660,7 +660,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="run_frame_of_fmt">Frame %1$d of %2$d</string>
     <!-- The run sheet's line under its header: the reference's name, then the time left. -->
     <string name="run_subline_fmt">%1$s · %2$s</string>
-    <string name="run_bins_caption">Convergence per frame</string>
+    <string name="run_bins_caption" formatted="false">Convergence per frame (%)</string>
     <!-- The run sheet for a moment after a run solved every frame, before the viewer opens. -->
     <plurals name="run_done_frames_fmt">
         <item quantity="one">%1$d frame solved</item>
@@ -865,7 +865,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="one">Distribution of %1$d accepted point</item>
         <item quantity="other">Distribution of %1$d accepted points</item>
     </plurals>
-    <string name="probe_reading_fmt">%1$s: %2$s %3$s\n(%4$d, %5$d)</string>
+    <string name="probe_reading_fmt">%1$s: %2$s %3$s\n(%4$d, %5$d) px</string>
     <string name="probe_no_data">No data</string>
     
     <!-- Share sheet rows: a title, then the file type at the row's end. Each row's

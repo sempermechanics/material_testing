@@ -219,8 +219,13 @@ class ConvergenceBinsView @JvmOverloads constructor(
         private const val GAP_FRACTION = 0.2f
         private const val SLOT_ALPHA = 110
         private const val LABEL_GAP_DP = 3f
-        private val AXIS_TOP_LABEL = FULL.toInt().toString()
-        private val AXIS_GATE_LABEL = MIN_PERCENT.toInt().toString()
+        // The axis carries the unit; the bars' own numbers stay bare (readiness AE1-112).
+        private val AXIS_TOP_LABEL = "${FULL.toInt()}%"
+        private val AXIS_GATE_LABEL = "${MIN_PERCENT.toInt()}%"
+
+        /** The y axis's labels, top first. */
+        @VisibleForTesting
+        internal fun axisLabels(): List<String> = listOf(AXIS_TOP_LABEL, AXIS_GATE_LABEL)
 
         /**
          * The slots for [count] bins across [width] px at [density]: the width
