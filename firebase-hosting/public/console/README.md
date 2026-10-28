@@ -533,9 +533,9 @@ media query in `console.css`.
 
 On the desk (`<body class="desk">`, up to 1400px wide), a pinned row of
 anchors (`.desk-nav`) jumps to each card, with the number waiting for approval
-beside Approvals (`#pendingCount`, filled by `people.js`). The licence table
+beside Access requests (`#pendingCount`, filled by `people.js`). The licence table
 comes first and **Issue a licence** opens its card from the table's heading;
-Roster and Verified seats open straight under the table. Approvals and the
+Roster and Verified seats open straight under the table. Access requests and the
 Demo phone release share a row on desktop; then Test accounts, whose create
 form is a `<details>` folded under it; Recently deleted is last. Each licence
 row keeps Edit (and Roster) in view; the rest is under **More**, a `<details>`
