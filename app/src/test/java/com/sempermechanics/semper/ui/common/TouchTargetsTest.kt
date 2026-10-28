@@ -7,9 +7,9 @@ import android.view.ViewGroup
 import android.widget.CompoundButton
 import android.widget.EditText
 import android.widget.ImageButton
+import android.widget.LinearLayout
 import android.widget.Spinner
 import android.widget.TextView
-import android.widget.LinearLayout
 import androidx.annotation.LayoutRes
 import androidx.appcompat.view.ContextThemeWrapper
 import androidx.test.core.app.ApplicationProvider
