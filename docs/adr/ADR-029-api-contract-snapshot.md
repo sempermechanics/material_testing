@@ -5,7 +5,9 @@ and merged in #489 (2026-10-26). Breaking-change classification added 2026-10-28
 TE3-105, decision 5).
 **Date:** 2026-10-24
 **Deciders:** Admin (readiness run 2026-10-24, finding TE3-006)
-**Register:** — (TE3-007, schema-driven fuzzing, is deferred: no new test dependency approved)
+**Register:** — (TE3-007, schema-driven fuzzing: the Admin approved Schemathesis on 2026-10-28;
+`backend/tests/test_schemathesis.py` fuzzes every operation of the snapshot's document against
+the local app, bounded and derandomized)
 
 Paths are from the repository root.
 
@@ -54,7 +56,7 @@ Paths are from the repository root.
 |---|---|
 | Snapshot + automated breaking-change diff (oasdiff, or a Python check against `origin/main`'s copy) in CI | Not chosen on 2026-10-24; the Python check was added on 2026-10-28 (decision 5), not oasdiff, to keep the tool count down |
 | `response_model` on every route, so responses are typed too | Large, and risky for the reason in decision 4; route by route later, behind the wire tests |
-| Schemathesis against the local app | New test dependencies not approved (TE3-007) |
+| Schemathesis against the local app | Not approved on 2026-10-24; adopted 2026-10-28 as a fuzz for unhandled failures (TE3-007), beside this snapshot rather than instead of it |
 | Rely on `backend/gateway/openapi.yaml` | It lists paths, not shapes |
 
 ## Trade-offs
