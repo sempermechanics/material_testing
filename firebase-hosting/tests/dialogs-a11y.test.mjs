@@ -132,3 +132,33 @@ test("a rejected code is announced, and the box and Try again point at why", asy
   enrolCard.querySelector(".cancel").click();
   await enrol.catch(() => {});
 });
+
+// AE2-108: the authenticator-code and enrolment cards are prompts like the
+// others, so they are announced and dismissed the same way.
+test("the code card is an alertdialog named by its heading, and Escape answers it as Cancel", async () => {
+  reset();
+  codes.generation += 1; // the test presses the keys itself
+  const card = codeCard();
+  const el = page.inserted.at(-1);
+  assert.equal(el.getAttribute("role"), "alertdialog");
+  assert.equal(byId(el.getAttribute("aria-labelledby")).textContent, "Enter your authenticator code");
+  const code = card.next();
+  el.dispatch("keydown", { key: "Escape" });
+  assert.equal(await code, null, "a code asked for: Escape is Cancel");
+  const again = card.rejected();
+  el.dispatch("keydown", { key: "Enter" });
+  el.dispatch("keydown", { key: "Escape" });
+  assert.equal(await again, false, "Try again offered: Escape is Cancel");
+  card.close();
+});
+
+test("the enrolment card is an alertdialog named by its heading, and Escape cancels it", async () => {
+  reset();
+  const enrol = enrolInPage({ qrUrl: "otpauth://x", secret: "S", finish: async () => {} }, "a@b.test", null);
+  const el = page.inserted.find((e) => e.className === "card enrol");
+  assert.equal(el.getAttribute("role"), "alertdialog");
+  assert.equal(byId(el.getAttribute("aria-labelledby")).textContent, "Set up two-factor authentication");
+  el.dispatch("keydown", { key: "Escape" });
+  await assert.rejects(enrol, { message: "console_cancelled" });
+  assert.equal(el.removed, true);
+});

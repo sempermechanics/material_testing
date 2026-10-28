@@ -171,6 +171,25 @@ function describeBy(feedback, ...controls) {
 }
 
 /**
+ * Make a second-factor card a dialog as `pageCard`'s are (AE2-108): an
+ * alertdialog named by its heading, and Escape calls `cancel`, as its Cancel
+ * button would.
+ */
+function asDialog(card, cancel) {
+  const heading = card.querySelector("h2");
+  cards += 1;
+  heading.id = `card-title-${cards}`;
+  card.setAttribute("role", "alertdialog");
+  card.setAttribute("aria-labelledby", heading.id);
+  card.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (e.preventDefault) e.preventDefault();
+    if (e.stopPropagation) e.stopPropagation();
+    cancel();
+  });
+}
+
+/**
  * The authenticator-code card: a code box, Confirm and Cancel under the
  * status line, and after a rejected code a Try again button.
  *
@@ -182,7 +201,8 @@ function describeBy(feedback, ...controls) {
  *
  * `next()` resolves the trimmed code, or null on Cancel. `rejected()` says the
  * code was not accepted and resolves true on Try again (the box cleared for a
- * fresh code), false on Cancel. `close()` removes the card.
+ * fresh code), false on Cancel. Escape answers as Cancel. `close()` removes
+ * the card.
  */
 export function codeCard() {
   const card = document.createElement("section");
@@ -227,6 +247,7 @@ export function codeCard() {
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") confirm(); });
   retryBtn.addEventListener("click", () => answer(true));
   card.querySelector(".cancel").addEventListener("click", () => answer(onCancel));
+  asDialog(card, () => answer(onCancel));
 
   return {
     next() {
@@ -259,7 +280,8 @@ export function codeCard() {
  * The enrolment card: a QR code to scan, the key for anyone who cannot, and
  * the code box. Built here rather than in each page's HTML because every
  * console needs it and the account page is the only one with a place of its
- * own for it. Resolves once Firebase accepts a code; rejects ERR_CANCELLED.
+ * own for it. Resolves once Firebase accepts a code; rejects ERR_CANCELLED
+ * on Cancel or Escape.
  *
  * The secret and the account go in as text nodes — never through innerHTML —
  * and the SVG is the library's own output for a URI we built, so the one
@@ -324,7 +346,8 @@ export function enrolInPage(enrolment, account, qrSvg) {
     };
     card.querySelector(".confirm").addEventListener("click", confirm);
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") confirm(); });
-    card.querySelector(".cancel").addEventListener("click", () =>
-      done(reject, new Error(ERR_CANCELLED)));
+    const cancel = () => done(reject, new Error(ERR_CANCELLED));
+    card.querySelector(".cancel").addEventListener("click", cancel);
+    asDialog(card, cancel);
   });
 }
