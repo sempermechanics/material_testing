@@ -24,7 +24,7 @@ export async function revokeLicence(id) {
     : "the person holding it";
   if (!(await confirmInPage({
     title: `Revoke ${label}`,
-    message: `Revoking ${label} drops ${who} to demo immediately.\n\n` +
+    message: `Revoking ${label} drops ${who} to Demo immediately.\n\n` +
       "Their saved analyses are untouched — this withdraws entitlement, " +
       "it does not delete anything.\n\nContinue?",
   }))) return;
@@ -81,7 +81,7 @@ async function sendRevoke(id, label) {
     // The answer is the revoked licence; there is nothing to reload.
     showLicence({ ...out, status: "revoked" });
     setStatus(
-      `${label} revoked — its holder is on demo from their next request.` +
+      `${label} revoked — its holder is on Demo from their next request.` +
       ($("showRevoked").checked ? "" : " Tick “Show revoked” to see it."),
     );
     closeRosterOf(id);
@@ -106,7 +106,7 @@ export async function deleteLicence(id) {
   if (!(await confirmInPage({
     title: `Delete ${label}`,
     message: `Delete ${label}?\n\n` +
-      (live ? `It is revoked first: ${who} drops to demo immediately. ` : "") +
+      (live ? `It is revoked first: ${who} drops to Demo immediately. ` : "") +
       "It leaves this list and is held under Recently deleted for 30 days, " +
       "then purged. Nobody's saved analyses are touched.",
   }))) return;

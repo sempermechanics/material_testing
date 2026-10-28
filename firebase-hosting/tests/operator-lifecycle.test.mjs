@@ -46,7 +46,7 @@ test("deleting a revoked licence does not say it is revoked first; an institutio
   assert.deepEqual(confirms.asked, [
     "Delete SEMP-REV1?\n\nIt leaves this list and is held under Recently deleted for 30 days, then purged. " +
     "Nobody's saved analyses are touched.",
-    "Delete SEMP-UNI1?\n\nIt is revoked first: every one of the 4 people on its roster drops to demo immediately. " +
+    "Delete SEMP-UNI1?\n\nIt is revoked first: every one of the 4 people on its roster drops to Demo immediately. " +
     "It leaves this list and is held under Recently deleted for 30 days, then purged. Nobody's saved analyses are touched.",
   ]);
   assert.equal(prompts.asked.length, 0, "declining the confirmation asks for no key");
@@ -121,7 +121,7 @@ test("with Show revoked ticked, a revoked row stays, offering only Delete, and n
   confirms.answer(true);
   prompts.answer("SEMP-IND1");
   await click(rowButton("revoke", IND.id));
-  assert.deepEqual(status(), ["SEMP-IND1 revoked — its holder is on demo from their next request.", "muted"]);
+  assert.deepEqual(status(), ["SEMP-IND1 revoked — its holder is on Demo from their next request.", "muted"]);
   assert.deepEqual(rows().map((r) => [r[0], r[6], r[8]]), [["SEMP-IND1", "revoked", "Delete"], ["SEMP-UNI1", "redeemed",
     "Edit Roster More Verify Phone history Revoke Delete"]]);
 });

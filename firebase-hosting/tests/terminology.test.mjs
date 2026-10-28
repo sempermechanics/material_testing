@@ -1,6 +1,7 @@
 // Run: node --test "firebase-hosting/tests/*.test.mjs"
 // One word per concept in what the consoles say (AE3): backup, not sync;
-// phone, not device, to an account holder; Demo as the plan's name; the two
+// phone, not device, to an account holder; Demo as the plan's name, always
+// with its capital (ADDENDUM-3); the two
 // grace clocks named apart; a seat you have, paused and resumed, removed (not
 // revoked); one label for giving a seat back; "your institution's IT".
 import { test } from "node:test";
@@ -102,6 +103,11 @@ function copyText(path, source) {
   return path.endsWith(".js") ? stringLiterals(source) : visibleText(path, source);
 }
 
+/** `copyText` less a script's one-word literals: a word alone there is a value, not a sentence. */
+function phrases(path, source) {
+  return copyText(path, source).filter((snippet) => path.endsWith(".html") || /\s/.test(snippet));
+}
+
 const RULES = [
   // AE3-001: the cloud feature is backup (a function named sync is code).
   [/\bsync(?:s|ed|ing)?\b(?!\()/i, "back up / backup, not sync", () => true],
@@ -112,8 +118,13 @@ const RULES = [
   // names keep "device".
   [/\bdevices?\b/i, "phone, not device, on the IT roster and the operator desk",
     (name) => !name.startsWith("account/"), copyText],
-  // AE3-003: the plan is Demo: on Demo, not on the demo.
-  [/\b(?:on|to) the demo\b/i, "on Demo, not on the demo", () => true],
+  // AE3-003 / AE3-105, ADDENDUM-3: the free tier is Demo, with its capital,
+  // wherever a sentence names it ("on Demo", "drops to Demo"). A one-word
+  // literal is a value compared in code (`mode === "demo"`), not copy.
+  [/\bdemo\b/, "Demo, capital D (ADDENDUM-3)", () => true, phrases],
+  // AE3-104: the Demo analysis cap is the Demo limit; "allowance" is only the
+  // offline window.
+  [/\bdemo allowance\b/i, "the Demo limit (allowance is the offline window)", () => true],
   // AE3-005: two clocks, two names.
   [/\bgrace period\b/i, "after-expiry grace / offline allowance, not grace period", () => true],
   // AE3-006: have a seat; Pause / Resume; Remove; one release label.

@@ -97,7 +97,7 @@ function renderLicence() {
   const lapsed = Date.parse(licence.graceEndsAt || licence.expiresAt || "") <= Date.now();
 
   const pills = [
-    `<span class="pill ${licensed ? "ok" : "off"}">${licensed ? "licensed" : "demo"}</span>`,
+    `<span class="pill ${licensed ? "ok" : "off"}">${licensed ? ACCOUNT.modes.licensed : ACCOUNT.modes.demo}</span>`,
   ];
   if (held) {
     if (licence.kind) pills.push(`<span class="pill">${esc(licence.kind)}</span>`);

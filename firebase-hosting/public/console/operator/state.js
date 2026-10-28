@@ -31,12 +31,12 @@ export const labelOf = (id) => {
 };
 
 /**
- * Why a demo key has no Cap. A demo holder gets the demo allowance whatever
+ * Why a Demo key has no Cap. A Demo holder gets the Demo limit whatever
  * the key stores, and the backend refuses the edit (`cap_on_demo_key`). It
  * used to answer 200 and change nothing, and the app kept showing "N of 25".
  */
 export function demoCapNote() {
-  const allowance = desk.demoAllowance == null
-    ? "the demo allowance" : `the demo allowance of ${desk.demoAllowance}`;
-  return `Demo keys use ${allowance}; issue a licensed key to raise it.`;
+  const limit = desk.demoAllowance == null
+    ? "the Demo limit" : `the Demo limit (${desk.demoAllowance})`;
+  return `Demo keys use ${limit}; issue a licensed key to raise it.`;
 }

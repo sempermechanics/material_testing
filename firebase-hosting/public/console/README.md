@@ -256,7 +256,7 @@ if anything calls them.
 
 ## Confirming destructive actions
 
-Revoking a licence drops a whole institution to demo, so the page asks more
+Revoking a licence drops a whole institution to Demo, so the page asks more
 than once: password (or Google) re-auth plus authenticator code, a plain
 confirmation naming who is affected, then typing the **key prefix**. The API
 also refuses a revoke on a session older than

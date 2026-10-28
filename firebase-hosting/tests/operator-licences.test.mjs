@@ -40,10 +40,10 @@ test("a row with less filled in still reads sensibly", async () => {
   assert.equal(kind.childNodes[0], "individual");
   assert.equal(kind.querySelector("span").textContent, "replaced by an institution licence", "on a line of its own");
   assert.deepEqual(rows().map((r) => r.slice(0, 8)), [
-    ["lic-no-pre", "individualreplaced by an institution licence", "licensed", "—",
+    ["lic-no-pre", "individualreplaced by an institution licence", "Licensed", "—",
       `until ${day("2027-06-30T23:59:59Z")}`, "default", "redeemed", "—"],
-    ["SEMP-ASG1", "institution", "licensed", "2/∞", "perpetual", "default", "redeemed", "—"],
-    ["SEMP-FLT1", "institution · shared", "licensed", "0/5 in use · 0 on roster", "perpetual", "default", "redeemed", "—"],
+    ["SEMP-ASG1", "institution", "Licensed", "2/∞", "perpetual", "default", "redeemed", "—"],
+    ["SEMP-FLT1", "institution · shared", "Licensed", "0/5 in use · 0 on roster", "perpetual", "default", "redeemed", "—"],
   ]);
 });
 
@@ -57,9 +57,9 @@ test("a list answer with nothing in it, and no demo allowance, still renders", a
   $("showDemo").checked = true;
   $("showDemo").dispatch("change");
   await settle();
-  assert.equal(rows()[0][5], "demo", "no number when the backend does not send the allowance");
+  assert.equal(rows()[0][5], "Demo limit", "no number when the backend does not send the allowance");
   await click(rowButton("edit", DEMO.id));
-  assert.equal($("editCap").title, "Demo keys use the demo allowance; issue a licensed key to raise it.");
+  assert.equal($("editCap").title, "Demo keys use the Demo limit; issue a licensed key to raise it.");
 });
 
 test("a licence list that cannot be read says why", async () => {

@@ -93,7 +93,7 @@ test("a live licence shows its kind, key, end date, and may be moved", async () 
     mode: "licensed", held: true, kind: "individual", prefix: "SEMP-4K2P", expiresAt,
   } });
   assert.deepEqual(pills(), [
-    ["licensed", "pill ok"], ["individual", "pill"], ["SEMP-4K2P", "pill mono"],
+    ["Licensed", "pill ok"], ["individual", "pill"], ["SEMP-4K2P", "pill mono"],
     [`ends ${day(expiresAt)}`, "pill"],
   ]);
   assert.equal($("explain").textContent, "Your licence is active on this account.");
@@ -103,7 +103,7 @@ test("a live licence shows its kind, key, end date, and may be moved", async () 
 
 test("a Demo key shows only 'demo', and there is nothing to move", async () => {
   await open({ license: { mode: "demo", held: false, kind: "individual", prefix: "SEMP-DEMO" } });
-  assert.deepEqual(pills(), [["demo", "pill off"]]);
+  assert.deepEqual(pills(), [["Demo", "pill off"]]);
   assert.match($("explain").textContent, /^You are on Demo\. Analyses are capped/);
   assert.equal($("unbind").hidden, true);
   assert.equal($("release").hidden, true);
@@ -111,7 +111,7 @@ test("a Demo key shows only 'demo', and there is nothing to move", async () => {
 
 test("a perpetual licence says it has no end date", async () => {
   await open({ license: { mode: "licensed", held: true, duration: "perpetual" } });
-  assert.deepEqual(pills(), [["licensed", "pill ok"], ["no end date", "pill"]]);
+  assert.deepEqual(pills(), [["Licensed", "pill ok"], ["no end date", "pill"]]);
 });
 
 test("a licence past its grace reads expired, and the account is on the demo", async () => {
@@ -119,7 +119,7 @@ test("a licence past its grace reads expired, and the account is on the demo", a
   await open({ license: {
     mode: "demo", held: true, kind: "individual", expiresAt, graceEndsAt: iso(-10 * DAY),
   } });
-  assert.deepEqual(pills(), [["demo", "pill off"], ["individual", "pill"], [`expired ${day(expiresAt)}`, "pill off"]]);
+  assert.deepEqual(pills(), [["Demo", "pill off"], ["individual", "pill"], [`expired ${day(expiresAt)}`, "pill off"]]);
   // Plain text, not a RegExp: day() ends "(UTC)".
   const ended = `Your licence ended on ${day(expiresAt)} and its after-expiry grace is over`;
   assert.ok($("explain").textContent.startsWith(ended), $("explain").textContent);
@@ -130,7 +130,7 @@ test("a licence in its grace period reads ended, and says when access ends", asy
   const expiresAt = iso(-2 * DAY);
   const graceEndsAt = iso(12 * DAY);
   await open({ license: { mode: "licensed", held: true, inGrace: true, expiresAt, graceEndsAt } });
-  assert.deepEqual(pills(), [["licensed", "pill ok"], [`ended ${day(expiresAt)}`, "pill warn"]]);
+  assert.deepEqual(pills(), [["Licensed", "pill ok"], [`ended ${day(expiresAt)}`, "pill warn"]]);
   const ends = `full access ends ${day(graceEndsAt)} unless it is renewed`;
   assert.ok($("explain").textContent.includes(ends), $("explain").textContent);
 });
@@ -152,7 +152,7 @@ test("no shared seat free: told to wait for a colleague, nothing to give back", 
 
 test("a backend without `held` counts a licensed account as holding its licence", async () => {
   await open({ license: { mode: "licensed", kind: "individual" } });
-  assert.deepEqual(pills(), [["licensed", "pill ok"], ["individual", "pill"]]);
+  assert.deepEqual(pills(), [["Licensed", "pill ok"], ["individual", "pill"]]);
   assert.equal($("unbind").hidden, false);
 });
 

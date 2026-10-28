@@ -32,7 +32,7 @@ const status = () => [$("status").textContent, $("status").className];
 
 test("an account answer with no licence block reads as the demo, with nothing to move", async () => {
   await open({ sessions: { sessions: [], quota: { used: 0, max: 25 } } });
-  assert.deepEqual(pills(), [["demo", "pill off"]]);
+  assert.deepEqual(pills(), [["Demo", "pill off"]]);
   assert.match($("explain").textContent, /^You are on Demo\./);
   assert.equal($("unbind").hidden, true);
   assert.equal($("unbindMt").hidden, true);
@@ -41,7 +41,7 @@ test("an account answer with no licence block reads as the demo, with nothing to
 
 test("a shared licence reported licensed without a seat lease has nothing to give back", async () => {
   await open({ me: { email: "user@example.com", license: { mode: "licensed", held: true, seating: "floating" } } });
-  assert.deepEqual(pills(), [["licensed", "pill ok"], ["no seat right now", "pill warn"]]);
+  assert.deepEqual(pills(), [["Licensed", "pill ok"], ["no seat right now", "pill warn"]]);
   assert.equal($("explain").textContent, "Your institution's seats are shared.");
   assert.equal($("release").hidden, true);
 });

@@ -124,7 +124,7 @@ test("a change the dialog can tell is wrong is said there, before anything is se
 test("the remaining edit refusals are explained in the dialog", async () => {
   for (const [lic, change, reply, text] of [
     [IND, () => { $("editCap").value = "40"; }, () => json(422, { detail: "cap_on_demo_key" }),
-      "Demo keys use the demo allowance of 25; issue a licensed key to raise it."],
+      "Demo keys use the Demo limit (25); issue a licensed key to raise it."],
     [UNI, () => { $("editNote").value = "x"; }, () => json(422, { detail: "floating_needs_max_seats" }),
       "A floating licence needs a number of seats."],
     [UNI, () => { $("editNote").value = "x"; }, () => json(422, { detail: "institution_only" }),
