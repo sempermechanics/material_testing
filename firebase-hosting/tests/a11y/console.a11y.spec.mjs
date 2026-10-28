@@ -119,3 +119,25 @@ test("every roster action is in view at 768 px, without scrolling the table", as
   expect(outside).toEqual([]);
   await context.close();
 });
+
+// AE2-104: at 600 px and below the table heading was clipped to 1 px, and
+// the roster's two sort buttons with it: Tab landed on controls nobody could
+// see, and a tap could not reach them. They show as a "Sort by" line.
+test("the roster's sort buttons are on screen and sort at 360 px", async ({ browser }) => {
+  const { context, page } = await open(browser, PAGES[4], WIDTHS.phone);
+  const member = page.locator('#rosterHead button[data-sort="member"]');
+  await page.locator("#rowFilter").focus();
+  await page.keyboard.press("Tab");
+  await expect(member).toBeFocused();
+  const box = await member.boundingBox();
+  expect(box.width, "the focused button is drawn, not clipped").toBeGreaterThan(20);
+  expect(box.height).toBeGreaterThan(10);
+  expect(await member.evaluate((b) => {
+    const r = b.getBoundingClientRect();
+    return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === b;
+  }), "nothing covers it").toBe(true);
+  await page.locator('#rosterHead button[data-sort="status"]').click();
+  await expect(page.locator('#rosterHead th:has(button[data-sort="status"])')).toHaveAttribute("aria-sort", "ascending");
+  expect(await violations(page)).toEqual([]);
+  await context.close();
+});

@@ -520,6 +520,25 @@ details.phones-fold > summary:hover { background: rgba(255, 255, 255, 0.04); }
     border: 1px solid var(--line); border-radius: 10px; padding: .6rem .8rem;
     margin-bottom: .75rem; background: var(--bg-elevated);
   }
+  /* A heading with sort buttons (the rosters) stays on screen as one
+     "Sort by" line over the cards, its other headings hidden: clipped with
+     the rest, Tab landed on two buttons nobody could see, and a tap could
+     not sort at all (AE2-104). aria-sort stays on each <th>. */
+  .wrap thead:has(button.sort) {
+    position: static; width: auto; height: auto; overflow: visible; clip-path: none; display: block;
+  }
+  .wrap thead:has(button.sort) tr {
+    display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .5rem;
+    border: 0; padding: 0; margin: 0 0 .5rem; background: none;
+  }
+  .wrap thead:has(button.sort) tr::before {
+    content: "Sort by"; color: var(--muted); font-size: .8rem; font-weight: 500;
+  }
+  .wrap thead:has(button.sort) th { display: block; border: 0; padding: 0; }
+  .wrap thead:has(button.sort) th:not(:has(button.sort)) { display: none; }
+  .wrap thead:has(button.sort) button.sort {
+    padding: .3rem .6rem; border: 1px solid var(--line-strong); border-radius: 999px;
+  }
   .wrap td { display: flex; gap: .75rem; border: 0; padding: .2rem 0; }
   .wrap td[data-label]::before {
     content: attr(data-label); flex: 0 0 6.5rem; color: var(--muted);
