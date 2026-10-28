@@ -342,6 +342,7 @@
 
                     <EditText
                         android:id="@+id/etFrameNumber"
+                        style="@style/Widget.Semper.InlineValue"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:background="@null"
@@ -351,7 +352,6 @@
                         android:importantForAutofill="no"
                         android:inputType="number"
                         android:maxLength="4"
-                        android:minWidth="28dp"
                         android:paddingVertical="1dp"
                         android:shadowColor="@color/viewer_text_halo"
                         android:shadowDx="0"

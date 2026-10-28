@@ -556,6 +556,7 @@
 
                     <TextView
                         android:id="@+id/btnViewTerms"
+                        style="@style/Widget.Semper.TextLink"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:padding="6dp"
@@ -567,6 +568,7 @@
 
                 <TextView
                     android:id="@+id/btnDeleteAccount"
+                    style="@style/Widget.Semper.TextLink"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_gravity="center_horizontal"

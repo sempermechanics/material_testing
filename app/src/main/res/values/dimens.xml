@@ -5,6 +5,8 @@
         from here instead of inline dp; older screens move over when they are
         next reworked, not in a sweep. Add a step only when a layout uses it.
     -->
+    <!-- The smallest tap target on any screen (readiness AE1-102). -->
+    <dimen name="min_touch_target">48dp</dimen>
     <dimen name="space_4">4dp</dimen>
     <dimen name="space_8">8dp</dimen>
     <dimen name="space_12">12dp</dimen>
