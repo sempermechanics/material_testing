@@ -822,6 +822,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # test_openapi_breaking.py diffs the OpenAPI snapshot against origin/main
+      # and skips when that ref is absent, which a depth-1 checkout leaves it
+      # (TE3-105). One commit of main is all it reads.
+      - name: Fetch main for the OpenAPI breaking-change check
+        working-directory: .
+        run: git fetch --no-tags --depth=1 origin +refs/heads/main:refs/remotes/origin/main
+
       - uses: ./.github/actions/backend-gate
 
       - name: Check ops shell scripts parse
