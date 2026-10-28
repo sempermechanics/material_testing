@@ -130,14 +130,9 @@ def _verified_claims(authorization: str, x_forwarded_authorization: str) -> dict
         raise HTTPException(401, errors.MISSING_BEARER)
     try:
         claims = verify_id_token(bearer[7:])
-    except Exception as e:  # noqa: BLE001
-        # google-auth and firebase-admin echo a malformed token in some of
-        # their messages ("Wrong number of segments in token: b'...'"); the
-        # token is cut out before the message is logged (readiness TE5-105).
-        token = bearer[7:]
-        reason = str(e).replace(token, "<token>") if token else str(e)
-        log.warning("id_token verify FAILED (x_forwarded_present=%s): %s: %s",  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure - the presented token is replaced with <token> above
-                    bool(x_forwarded_authorization), type(e).__name__, reason[:300])
+    except Exception as e:  # noqa: BLE001 - a google-auth message may echo a malformed token: cut out (TE5-105)
+        log.warning("id_token verify FAILED (x_forwarded_present=%s): %s: %s",  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure - the presented token is replaced with <token>
+                    bool(x_forwarded_authorization), type(e).__name__, (str(e).replace(bearer[7:], "<token>") if bearer[7:] else str(e))[:300])
         audit.record(action="AUTH_DENIED", outcome="DENIED", detail={"stage": "id_token"})
         raise HTTPException(401, errors.INVALID_TOKEN)
     try:
