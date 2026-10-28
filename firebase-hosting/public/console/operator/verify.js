@@ -35,6 +35,10 @@ const REVOKED_PROSE = {
   no_account: "Removed, and there is no account behind the seat.",
 };
 
+// A seat's status in the console's words (AE3-006): Pause and Remove, not
+// the stored disabled / revoked (AE3-111, TD-323).
+const SEAT_WORDS = { disabled: "paused", revoked: "removed" };
+
 const SEAT_PILL = {
   active: "ok",
   revokedConfirmed: "off",
@@ -126,7 +130,7 @@ function verifiedRow(s) {
   return `
     <tr>
       <td>${esc(s.email || s.uid)}</td>
-      <td><span class="pill ${pill}">${esc(s.status)}</span></td>
+      <td><span class="pill ${pill}">${esc(SEAT_WORDS[s.status] || s.status)}</span></td>
       <td>${esc(prose)}</td>
       <td class="muted">${seen}</td>
     </tr>`;
