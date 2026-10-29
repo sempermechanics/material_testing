@@ -77,6 +77,62 @@ Every run is the owner's: staging and production share one database.
    sends the old id: `--apply` again, then `--apply --retag`, before reads and
    tags move to the new names.
 
+### A licence per app: the split (ADR-033)
+
+[ADR-033](../adr/ADR-033-licence-per-app-explicit-activation.md) gives each app
+its own licence. A licence from before it names no `app`, holds for both apps
+and locks one phone per app; the backend runs whichever model the licence
+names, so both kinds work side by side and there is no `schemaVersion` bump.
+`backend/scripts/split_licences_per_app.py` moves every licence to the new
+model (CLOUD_ARCHITECTURE_GCP §20.19):
+
+- the licence is stamped `app: semper`, with `devicesActive`, `maxDevices` and
+  `splitInto`; its locks stay, so a backend from before ADR-033 still reads it;
+- a Semper Classroom twin is minted with the same terms, a fresh key nobody is
+  shown, and `splitFrom`; an institution's roster (not a revoked seat, not a
+  lease) is copied to it;
+- each locked phone is activated on the licence of its app
+  (`activatedBy: migration`), so nobody taps Activate;
+- each holder's account gets `licenseApp: semper` and the twin in Semper
+  Classroom's mirror; each pending or held invite is copied under Semper
+  Classroom's key;
+- one `LICENSE_SPLIT` audit row per split (`audit_logs/licence-split-{id}`).
+
+Left alone: a licence that names its app, a Demo key, a CI test account's
+licence (Tier 3 rotates emulators through one licence for every app,
+ADR-027), and a deleted one (restored, it is app-less again, and the next run
+splits it). A revoked licence is only stamped `app: semper`. A holder who
+already holds a live Semper Classroom licence keeps it: an individual licence
+gets no twin, an institution member is left off the twin's roster, and the
+run lists each case under `conflicts`, with any invite whose Semper Classroom
+key already promises another live licence.
+
+It resumes and re-runs safely: the twin's id is reserved on the licence
+(`splitPending`) before anything is written, the twin is built before any
+account or invite points at it, every later write is skipped where it is
+already in place, and the final stamp is conditional on the licence being
+unchanged (a licence that changed is read again and redone). A phone a legacy
+build binds while its licence is being split can be missed; its holder taps
+Activate, or the legacy build activates it itself (`IMPLICIT_ACTIVATION=legacy`).
+
+Every run is the owner's: staging and production share one database.
+
+1. After the backend with ADR-033 step 5 serves all traffic, dry-run:
+   `python backend/scripts/split_licences_per_app.py --project PROJECT_ID`.
+   It prints the licences to split and why others are left, the twins, seats,
+   activations, accounts and invites it would write, and every conflict.
+2. Rehearse on the QC domain:
+   `... --only-domain qa.sempermechanics.com --apply`, then check a QC
+   holder's phones on both apps and the twin in the staff console.
+3. At a quiet hour, apply everything: the same command with `--apply` and no
+   `--only-domain`. A dry run must then report nothing to split.
+4. Resolve each conflict by hand: a holder who keeps their own Semper
+   Classroom licence needs nothing; an invite conflict needs staff to decide
+   which licence the address gets.
+
+Rollback: a backend from before ADR-033 reads the original licence, both of
+its locks and the unsuffixed mirror, and ignores the twins; nothing to undo.
+
 ## How migrations are defined
 
 Migrations live in `backend/scripts/migrations/` as `NNN_slug.py`, each exporting:

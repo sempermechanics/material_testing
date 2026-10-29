@@ -2932,3 +2932,24 @@ both pointers, so the holder stops being offered it and the old licence may be
 upgraded again. A licence from before the split, an institution licence and a
 Demo key answer `409 license_not_upgradable`: the first converts in place, an
 institution is resized by an edit.
+
+### 20.19 The split: each licence becomes one per app
+
+[ADR-033](../adr/ADR-033-licence-per-app-explicit-activation.md), the
+migration (`backend/scripts/split_licences_per_app.py`, run by the owner per
+[FIRESTORE_SCHEMA_RUNBOOK](FIRESTORE_SCHEMA_RUNBOOK.md#a-licence-per-app-the-split-adr-033)).
+A licence from before the split becomes the Semper licence (`app: semper`,
+`splitInto`), and a twin with its terms, `splitFrom` and a key nobody is shown
+becomes the Semper Classroom one. Each phone its locks named is activated on
+the licence of its app, so §20.16 licenses it with no Activate; the holder's
+account points Semper Classroom's mirror at the twin and is marked split
+(`licenseApp`); an institution's roster and its pending and held invites are
+copied to the twin. The original keeps both locks, for a backend from before
+ADR-033 to read; they go with TD-363.
+
+Not split: Demo keys, a CI test account's licence (ADR-027), and a holder's
+place on a twin when they already hold a live Semper Classroom licence of their
+own, which they keep. An account that still holds an app-less licence (a Demo
+key, a CI account, or a licence the run has not reached) reads it for every app
+(`apps.licence_view`), as before. Tests `backend/tests/test_script_split_licences_per_app.py`
+and the emulator tier.
