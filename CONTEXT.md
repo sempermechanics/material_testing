@@ -131,17 +131,24 @@ no thresholds ([TESTING.md](docs/app/TESTING.md)); the phone-run gates (`benchma
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-27)
+## Current state (2026-10-29)
 
 - **Semper's UI plus two test choices ([ADR-022](docs/adr/ADR-022-semper-ui-plus-lab-tests.md)).**
   **Which test?** offers 2D DIC (Semper's analysis: no load card, no test type recorded),
   Tensile and Bending; a fork change to a shared screen runs only for a lab test.
   semperdic-app accepted making this a product flavour of its repo on 2026-10-22 ([ADR-025](docs/adr/ADR-025-test-type-extension-points.md), mirrored).
 - **Synced with `semperdic-app`** (forked at `bfe00e5`; `git log --merges
-  --grep=semperdic-app`; rules in its `docs/ops/FORK_SYNC.md`). Last: `6d2bde6c`, 2026-10-26,
+  --grep=semperdic-app`; rules in its `docs/ops/FORK_SYNC.md`). Last: `b1c15346`, 2026-10-29,
+  on `sync/semperdic-b1c1534` (not pushed): its #490–#503, the second readiness run (lower-case
+  "semper", here "semper Classroom"; "Demo" / "Licensed"; `--require-pins` in release.yml, so a
+  release needs this repo's own `SEMPER_API_CERT_PINS` and `SEMPER_RELEASE_CERT_SHA256`, TD-13;
+  Home's sheets kept across a configuration change, here the Which test? sheet too), the CI
+  speed-ups ported from here, and guava 33 (checker-qual left the APK). The fork-only readiness
+  findings MT-001, MT-AE1-001, MT-AE2-001/-002, MT-AE3-001/-002 and MT-TE5-001 were fixed
+  before it (#146, #148). Before: `6d2bde6c`, 2026-10-26,
   on `sync/semperdic-6d2bde6`: its #487–#489, the production-readiness fixes (the readiness
-  guards, Semper's CSV version 2, so a lab CSV is version 3; one report name, here "Semper
-  Classroom Analysis Report"). Before: `25334af1`, 2026-10-26, on `sync/semperdic-25334af`: its #471–#486, among them tamper-evident records (#471,
+  guards, Semper's CSV version 2, so a lab CSV is version 3; one report name, now "semper
+  Classroom analysis report"). Before: `25334af1`, 2026-10-26, on `sync/semperdic-25334af`: its #471–#486, among them tamper-evident records (#471,
   [ADR-028](docs/adr/ADR-028-tamper-evident-records.md)), the Data safety fixes (#475), the
   console redesign (#478) and the Semper Classroom rename's backend and consoles (#484,
   [ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md)). Before: `968637cb`, 2026-10-22,
@@ -159,7 +166,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   wizard state is `WizardInputs.lab`, changed through `edit {}`, and a run's result reads
   the lab test from its saved row (`ViewerArgs.of`). Metadata schema `/7` here (ours past
   `/3` are not the parent's numbers). Lab inputs ride its seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` (ADR-003),
-  `WizardDraft` (ADR-005). ADR numbers are shared; TD numbers are this repo's own since 2026-10-27 (ADR-032: restarted at TD-1, old numbers in `docs/ops/td-renumber-2026-10-27.csv`, upstream diffs through `scripts/td_numbers.py translate`). TD-56 is the rename, TD-57 and TD-58 the examples', TD-59 and TD-60 the Play listing's; next free TD-276.
+  `WizardDraft` (ADR-005). ADR numbers are shared; TD numbers are this repo's own since 2026-10-27 (ADR-032: restarted at TD-1, old numbers in `docs/ops/td-renumber-2026-10-27.csv`, upstream diffs through `scripts/td_numbers.py translate`). TD-56 is the rename, TD-57 and TD-58 the examples', TD-59 and TD-60 the Play listing's; next free TD-277.
 - **#140 merged 2026-10-20** (`a66606d9`, the 2026-10-19 review; not released): load logs
   in kgf/tf, decimal commas and the delimiter read after a long preamble, logged time units;
   photo times matched within 1 s when any lacks EXIF sub-seconds; E refitted over 10–40 % of

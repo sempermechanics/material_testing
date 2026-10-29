@@ -33,8 +33,12 @@ and INCIDENT_RESPONSE.md naming this repo on each `gh variable` and
 
 ## Syncing into material_testing
 
-**Last sync:** semperdic-app `6d2bde6c` (its #487–#489, the production-readiness fixes),
-merged on material_testing's `sync/semperdic-6d2bde6` on 2026-10-26; before it `25334af1`
+**Last sync:** semperdic-app `b1c15346` (its #490–#503: the second readiness run, #503, with
+lower-case "semper", "Demo" / "Licensed" and `--require-pins`; CI speed-ups ported from
+here; the console's test-account fixes), merged on material_testing's
+`sync/semperdic-b1c1534` on 2026-10-29, the first sync to run `td_numbers.py translate`
+(155 auto-merged lines and the conflict hunks); before it `6d2bde6c` (its #487–#489, the
+production-readiness fixes, `sync/semperdic-6d2bde6`, 2026-10-26), `25334af1`
 (material_testing #146), `968637cb` (material_testing #144) and `14b279d6` (on
 `ccr-603fe346-1bw2fa`, 2026-10-21).
 `git log --merges --grep=semperdic-app` on the fork lists them all.
@@ -423,3 +427,12 @@ git apply -3 upstream.patch
 becomes `semperdic-app's TD-n` and is listed on stderr: give it a row and a number here
 if this repo carries it, otherwise leave the prefix. Run it only on upstream text, never
 on this repo's files: their numbers are already the new ones.
+
+With a plain `git merge` (step 2), translate in two passes, as the sync of `b1c15346` did:
+resolve each conflict hunk from `translate(theirs)` (a hunk that differs only by the
+renumbering takes it whole; `git checkout --conflict=diff3` shows the base), then, for
+every line the upstream diff `OLD..NEW` added that still stands verbatim in the merged
+tree, replace it with its translation. Skip the files this repo keeps its own (CONTEXT,
+TECH_DEBT, CHANGELOG). Afterwards no raw upstream `+` line citing a TD should be left,
+and `check_framework_coverage.py` fails on a gate row that cites a number with no row
+here.
