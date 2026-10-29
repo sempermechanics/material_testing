@@ -81,8 +81,8 @@ function reason(error, code, text) {
  * the page's own for its code, else a common one, else `fallback` applied to
  * why it failed (`REASONS`, `GATEWAY`; "the server refused it (ref: <code>)"
  * for a code with no sentence; the message itself when it is already words,
- * as a validation 422's are). A suffixed code (`device_change_too_soon:
- * <instant>`) is matched on the code alone.
+ * as a validation 422's are). A suffixed code (`device_limit_reached:
+ * 1/1`) is matched on the code alone.
  */
 export function explain(error, sentences = {}, fallback = (text) => text) {
   const text = String(error?.message ?? error ?? "");

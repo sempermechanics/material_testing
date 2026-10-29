@@ -88,6 +88,11 @@ QUERY_SHAPES: dict[str, list[Shape]] = {
         _q("audit_logs", ("licenseId", "=="), ("ts", ">="), ("ts", "<"), order=(("ts", DESC),)),
     ],
     "app/repo/account.py::list_user_devices": [_q("devices", ("uid", "=="))],
+    # A licence's phones (ADR-033): its own subcollection, by holder or by
+    # status; and the holder's registered phones for the phones screen.
+    "app/repo/activations.py::_holder_activations": [_q("activations", ("uid", "=="))],
+    "app/repo/activations.py::licence_devices": [_q("activations", ("status", "=="))],
+    "app/repo/activations.py::account_devices": [_q("devices", ("uid", "=="))],
     # Every seat an erased account held, on any licence (TD-243).
     "app/repo/account.py::_seats_of": [
         _q("seats", ("uid", "=="), scope=GROUP),

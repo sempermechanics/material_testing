@@ -162,8 +162,8 @@ export function inviteCells(invite) {
  * A backend error detail split into its code and what follows the code.
  *
  * Some codes carry a value after a colon — `session_quota_exceeded: 25/25 …`,
- * `device_change_too_soon: <ISO instant>` — and an instant has colons of its
- * own, so only the first one separates. Pages match on `code`.
+ * `device_limit_reached: 1/1` — and a suffix may hold colons of its own (an
+ * ISO instant does), so only the first one separates. Pages match on `code`.
  */
 export function errorDetail(detail) {
   const text = String(detail ?? "");

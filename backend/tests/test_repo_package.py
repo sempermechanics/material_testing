@@ -16,9 +16,9 @@ from app.repo import (
     _base,
     activation,
     claims,
+    devlock,
     entitlement,
     institution_admin,
-    seats,
     user_config,
 )
 
@@ -52,8 +52,8 @@ def test_a_shared_helper_is_patched_in_every_module_that_imported_it():
     real = repo._now
     with pytest.MonkeyPatch.context() as mp:
         repo.patch(mp, "_now", lambda: "then")
-        assert user_config._now() == seats._now() == _base._now() == "then"
-    assert user_config._now is seats._now is _base._now is real
+        assert user_config._now() == devlock._now() == _base._now() == "then"
+    assert user_config._now is devlock._now is _base._now is real
 
 
 def test_the_client_lives_in_base_alone():

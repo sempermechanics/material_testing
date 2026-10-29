@@ -173,8 +173,12 @@ def checkout_lease(user: dict, device_id: str) -> dict:
         })
         if not renewing:
             tx.update(lic_ref, {"leasesActive": _base.firestore.Increment(1)})
+        # The phone the lease is for, mirrored with its expiry: on a licence
+        # that runs activations the lease is the activation, so only this
+        # phone is licensed (ADR-033, `repo.activations.revalidate`).
         tx.update(user_ref, {
             "leaseExpiresAt": expires_at,
+            "leaseDeviceId": device_id,
             "updatedAt": _base.firestore.SERVER_TIMESTAMP,
         })
         return ""
@@ -185,7 +189,7 @@ def checkout_lease(user: dict, device_id: str) -> dict:
     err = _run_tx(_checkout, on_contended=lambda: errors.NO_FLOATING_SEAT)
     if err:
         raise Refusal(err)
-    return resolve_user_config({**user, "leaseExpiresAt": expires_at})
+    return resolve_user_config({**user, "leaseExpiresAt": expires_at, "leaseDeviceId": device_id})
 
 
 def release_lease(user: dict) -> dict:
@@ -223,6 +227,7 @@ def release_lease(user: dict) -> dict:
             tx.update(lic_ref, {"leasesActive": _base.firestore.Increment(-1)})
         tx.update(user_ref, {
             "leaseExpiresAt": _base.firestore.DELETE_FIELD,
+            "leaseDeviceId": _base.firestore.DELETE_FIELD,
             "updatedAt": _base.firestore.SERVER_TIMESTAMP,
         })
         return ""

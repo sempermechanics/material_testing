@@ -253,7 +253,7 @@ retrieval (`/content`, bundle) is licensed. Ops steps in order:
 - [x] Create the six repository variables `deploy-backend.yml` now pins:
       `DEMO_MAX_ANALYSES`, `LICENSED_MAX_SESSIONS_PER_USER`,
       `ADMIN_WEB_MFA_ENABLED` (`1`), `APP_CHECK_MODE` (`off`),
-      `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` (`30`), `CONSOLE_ORIGINS`
+      `IMPLICIT_ACTIVATION` (`legacy`), `CONSOLE_ORIGINS`
       (`https://app.sempermechanics.com,https://indicvision-dic-app-auth.firebaseapp.com`).
       Unset resolves to those defaults, but set them so the value is a
       decision, not an accident.
