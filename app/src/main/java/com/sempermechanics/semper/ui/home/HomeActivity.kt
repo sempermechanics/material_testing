@@ -53,6 +53,7 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var adapter: SessionListAdapter
     private lateinit var selection: SessionSelectionController
     private lateinit var cloudBackups: CloudBackupsCard
+    private lateinit var activationCard: HomeActivationCard
     private lateinit var quotaCard: HomeQuotaCard
     private lateinit var backupBadge: BackupBadgeActions
 
@@ -100,6 +101,12 @@ class HomeActivity : AppCompatActivity() {
         Insets.padTop(binding.homeSelectionBar)
 
         cloudBackups = cloudBackupsCard()
+        activationCard = HomeActivationCard(
+            card = binding.homeActivation,
+            text = binding.tvActivation,
+            hideButton = binding.btnActivationHide,
+            goButton = binding.btnActivationGo,
+        )
         wirePullToRefresh()
         quotaCard = HomeQuotaCard(
             activity = this,
@@ -326,6 +333,7 @@ class HomeActivity : AppCompatActivity() {
         adapter.setSyncVisible(showsCloudState())
         binding.emptyState.isVisible = list.sessions.isEmpty()
         updateCloudBackups()
+        activationCard.render()
         quotaCard.render(list.sessions.size, list.entitlements.lines)
         // A refresh can drop rows out from under a selection.
         selection.updateSelectionBar()

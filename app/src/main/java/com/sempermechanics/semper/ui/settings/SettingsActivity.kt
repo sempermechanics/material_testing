@@ -24,6 +24,7 @@ import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.cloud.SessionDeletes
 import com.sempermechanics.semper.data.cloud.restore.CloudRestore
 import com.sempermechanics.semper.data.cloud.restore.RestoreStart
+import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.net.CloudSessionDto
 import com.sempermechanics.semper.data.policy.AppPolicy
 import com.sempermechanics.semper.data.policy.FeatureAccess
@@ -81,6 +82,13 @@ class SettingsActivity : AppCompatActivity() {
     /** Stashed while the SAF save-as picker is open. */
     private var pendingDownload: PendingBundleDownload? = null
 
+    /**
+     * This phone's place on the licence when Settings was left (ADR-033): an
+     * Activate or Deactivate on Your phones changes it, and the licence
+     * decides which rows are open, so a change rebuilds Settings on return.
+     */
+    private var phonesWhenLeft: Pair<AppRemoteConfig.Activation, AppRemoteConfig.PendingLicence?>? = null
+
     /** Sections the user opened, by title, kept across a rebuild (a theme or font change). */
     private val openSections = mutableSetOf<Int>()
 
@@ -96,6 +104,20 @@ class SettingsActivity : AppCompatActivity() {
     internal lateinit var transferBanner: TransferBannerController
     private lateinit var yourDataSection: SettingsYourDataSection
     private lateinit var deleteFeedback: DeleteFeedback
+
+    override fun onPause() {
+        super.onPause()
+        phonesWhenLeft = phonesNow()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val left = phonesWhenLeft ?: return
+        phonesWhenLeft = null
+        if (left != phonesNow()) recreate()
+    }
+
+    private fun phonesNow() = AppRemoteConfig.activation(this) to AppRemoteConfig.pendingLicence(this)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
