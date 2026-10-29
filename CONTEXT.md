@@ -140,8 +140,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   #508. Step 4 (a licence per app: mint, invites, mirror slots, per-app quota) merged as
   #510. Step 5 (upgrade by issue, QC accounts on activations) merged as #511. The split's
   migration (`backend/scripts/split_licences_per_app.py`, owner runs it) merged as #512.
-  The app's Activate and Your phones screen are `claude/licence-app-pr4`; cross-phone
-  sync, consoles and the fork sync follow.
+  The app's Activate and Your phones screen merged as #513; "Download from my other
+  phones" (cross-phone sync) is `claude/licence-sync-pr4b`. Consoles and the fork sync follow.
 - **Admin actions** are one table, [gate § Admin actions](docs/ops/PRODUCTION_READINESS_GATE.md#admin-actions-external):
   monitoring `--apply` (no notification channel yet), the posture FAILs (17 on 2026-10-24, the same 17 on 2026-10-28),
   TD-215, the checklist's §6; the readiness report's §4 adds that run's one-off actions.
