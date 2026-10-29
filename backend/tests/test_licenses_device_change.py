@@ -484,9 +484,8 @@ async def test_after_a_clear_the_new_phone_registers_over_http(client, monkeypat
     _registered_on(store, "dev-user")
     monkeypatch.setattr(deps, "_DEV_USER", dict(store._data["users"]["dev-user"]))
     new_phone = {"deviceId": "and-newphone1", "publicKeyPem": _ec_pem()}
-    refused = await client.post("/v1/devices/register", json=new_phone)
-    assert refused.status_code == 409, "the old phone still holds the account"
-
+    # The account may hold several phones (ADR-033); the licence stays on the
+    # old one until it is moved.
     assert (await client.post("/v1/licenses/unbind")).status_code == 200
     monkeypatch.setattr(deps, "_DEV_USER", dict(store._data["users"]["dev-user"]))
     resp = await client.post("/v1/devices/register", json=new_phone)
@@ -549,7 +548,11 @@ async def test_the_old_phone_cannot_take_the_account_back(client, monkeypatch):
     assert (await client.post("/v1/devices/register", json=new_phone)).status_code == 201
     user = store._data["users"]["dev-user"]
     assert user["activeDeviceId"] == "and-newphone1"
-    assert "releasedDeviceId" not in user and "releasedAt" not in user
+    # Another phone registering does not end the hold: the account holds
+    # several (ADR-033), so the old phone stays out until it runs out.
+    assert user["releasedDeviceId"] == "and-oldphone1"
+    refused_again = await client.post("/v1/devices/register", json=old_phone)
+    assert refused_again.status_code == 409
 
 
 @pytest.mark.asyncio
