@@ -206,6 +206,70 @@ def written_fields(name: str, app: str, value) -> dict:
     return out
 
 
+#: The licence fields mirrored onto `users/{uid}`, one set per app since a
+#: licence belongs to one app (ADR-033). Semper's are the unsuffixed fields
+#: every account already has; another app's are suffixed like its device
+#: fields (`field`). `licenseApp` marks an account whose mirror has been split
+#: per app: without it the unsuffixed fields are the shared licence of an
+#: account from before ADR-033, and they hold for every app (`licence_view`).
+LICENCE_MIRROR_FIELDS = (
+    "licenseId",
+    "licenseApp",
+    "mode",
+    "plan",
+    "licenseKind",
+    "licensePrefix",
+    "licenseExpiresAt",
+    "licenseGraceDays",
+    "licenseDuration",
+    "licenseSeating",
+    "licenseMaxAnalyses",
+    "leaseExpiresAt",
+    "leaseDeviceId",
+    "pendingLicenseId",
+)
+
+
+def licence_view(user: dict | None, app: str = SEMPER) -> dict:
+    """`user` as `app`'s licence sees it: that app's mirror fields under the
+    unsuffixed names, everything else unchanged. Pure, no reads.
+
+    Semper's mirror is the unsuffixed fields, so Semper gets `user` itself.
+    For another app:
+
+    - the account holds a licence for it (its `licenseId`): its own fields;
+    - the account was never split (no `licenseApp`): the unsuffixed fields,
+      the one licence that covered both apps before ADR-033;
+    - otherwise: no licence fields at all, which reads as Demo.
+    """
+    user = user or {}
+    app = canonical(app)
+    if app == SEMPER:
+        return user
+    if read_field(user, "licenseId", app):
+        own = {name: read_field(user, name, app) for name in LICENCE_MIRROR_FIELDS}
+        base = {k: v for k, v in user.items() if k not in LICENCE_MIRROR_FIELDS}
+        return {**base, **{k: v for k, v in own.items() if v is not None}}
+    if not user.get("licenseApp"):
+        return user
+    return {k: v for k, v in user.items() if k not in LICENCE_MIRROR_FIELDS}
+
+
+def licence_patch(patch: dict, app: str = SEMPER) -> dict:
+    """A user-document update written against unsuffixed licence names, as
+    `app`'s fields: mirror fields through `written_fields`, anything else as
+    given. The inverse of `licence_view` for writers."""
+    if canonical(app) == SEMPER:
+        return dict(patch)
+    out: dict = {}
+    for k, v in patch.items():
+        if k in LICENCE_MIRROR_FIELDS:
+            out.update(written_fields(k, app, v))
+        else:
+            out[k] = v
+    return out
+
+
 def spread(name: str, values: dict[str, str]) -> dict[str, str]:
     """`{app: value}` as the per-app fields a response or audit record carries,
     every app present: `{"releasedDeviceId": ..., "releasedDeviceIdSemperClassroom": ...}`.

@@ -3,6 +3,7 @@
 
 from dataclasses import dataclass
 
+from .. import apps
 from ..config import settings
 from ..licenses import (
     SEATING_FLOATING,
@@ -144,7 +145,10 @@ class Entitlement:
     lease_expires_at: object
 
 
-def entitlement_of(user: dict) -> Entitlement:
+def entitlement_of(user: dict, app: str = apps.SEMPER) -> Entitlement:
+    """`app`'s entitlement: each app holds its own licence (ADR-033), read
+    through `apps.licence_view`; Semper's is the unsuffixed fields."""
+    user = apps.licence_view(user, app)
     held = _license_mode(user) == MODE_LICENSED
     over, in_grace, grace_ends = _expiry_state(user)
     seating = normalize_seating(user.get("licenseSeating"))
@@ -170,17 +174,17 @@ def entitlement_of(user: dict) -> Entitlement:
     )
 
 
-def effective_mode(user: dict) -> str:
-    """`entitlement_of(user).mode`: licensed or demo, right now."""
-    return entitlement_of(user).mode
+def effective_mode(user: dict, app: str = apps.SEMPER) -> str:
+    """`entitlement_of(user, app).mode`: licensed or demo, right now."""
+    return entitlement_of(user, app).mode
 
 
-def inactive_licence_reason(user: dict) -> str:
-    """`entitlement_of(user).inactive_reason`: why a held licence resolves demo, or ""."""
-    return entitlement_of(user).inactive_reason
+def inactive_licence_reason(user: dict, app: str = apps.SEMPER) -> str:
+    """`entitlement_of(user, app).inactive_reason`: why a held licence resolves demo, or ""."""
+    return entitlement_of(user, app).inactive_reason
 
 
-def resolve_user_config(user: dict) -> dict:
+def resolve_user_config(user: dict, app: str = apps.SEMPER) -> dict:
     """Product limits and license entitlements for this account.
 
     Missing fields are not written at user creation so changing the env default
@@ -197,6 +201,7 @@ def resolve_user_config(user: dict) -> dict:
     The response is dual-keyed: `mode` is current, `plan` is the pre-rename
     mirror kept for installed clients. Both always describe the same state.
     """
+    user = apps.licence_view(user, app)
     dat_codec_override = _bool_override(user, "datCodecEncodingEnabled")
     summary = license_summary(user)
     mode = summary["mode"]
@@ -255,13 +260,14 @@ def resolve_user_config(user: dict) -> dict:
     }
 
 
-def license_summary(user: dict) -> dict:
-    """What license this account holds and when it stops — pure, no reads.
+def license_summary(user: dict, app: str = apps.SEMPER) -> dict:
+    """What license this account holds for `app` and when it stops — pure, no reads.
 
     `current_user` already returns the whole user document, so both /v1/me and
     resolve_user_config compute this without touching Firestore. Everything
     here is mirrored onto the user at activation; see _license_mirror_patch.
     """
+    user = apps.licence_view(user, app)
     ent = entitlement_of(user)
     return {
         "mode": ent.mode,
@@ -281,11 +287,11 @@ def license_summary(user: dict) -> dict:
     }
 
 
-def cloud_backup_enabled(user: dict) -> bool:
-    """May this account read its stored analyses back (restore, bundle)?
+def cloud_backup_enabled(user: dict, app: str = apps.SEMPER) -> bool:
+    """May this account read `app`'s stored analyses back (restore, bundle)?
 
     Not consulted on the recording path — see `resolve_user_config`."""
-    return bool(resolve_user_config(user)["cloudBackupEnabled"])
+    return bool(resolve_user_config(user, app)["cloudBackupEnabled"])
 
 
 #: Per-user config override fields and how to cast an incoming patch value for
