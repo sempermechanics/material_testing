@@ -473,10 +473,10 @@ Creates the **GitHub Release** with the APK and the AAB attached, gated on the
 | Variable | Description |
 |----------|-------------|
 | `SEMPER_API_BASE_URL` | HTTPS base URL of the API Gateway (preferred) or Cloud Run service |
-| `SEMPER_API_CERT_PINS` | Required: the four GTS root pins, comma-separated ([Certificate pins](#certificate-pins-semper_api_cert_pins)), passed to Gradle as env. Public, so a variable; a secret of the same name also works. Empty fails the release (`--require-pins`) |
+| `SEMPER_API_CERT_PINS` | Required: the four GTS root pins, comma-separated ([Certificate pins](#certificate-pins-semper_api_cert_pins)), passed to Gradle as env. Public, so a variable; a secret of the same name also works. Empty fails the release (`--require-pins`). Release builds run in this repository, so it is set here (repository or `release` environment), not on semperdic-app like the backend's levers; same value as semperdic-app's (TD-13) |
 | `SEMPER_ENTITLEMENT_PUBKEYS` | Public key(s) the app verifies signed entitlements with, passed to Gradle as env. Public material, so a variable, not a secret. Set, it also makes the APK inspection require an entitlement key in the build (step 5) |
 | `SEMPER_REQUIRE_ENTITLEMENT_PINS` | Optional, `true` once TD-10 is live: the APK inspection fails a release with no entitlement key compiled in, whatever `SEMPER_ENTITLEMENT_PUBKEYS` holds |
-| `SEMPER_RELEASE_CERT_SHA256` | Optional here (the workflow defaults to the release certificate of every release so far, step 5); set only to rotate the signing key deliberately. A fork must set it to its own release certificate |
+| `SEMPER_RELEASE_CERT_SHA256` | In semperdic-app optional (the workflow defaults to Semper's release certificate, step 5). **In this repository required**: the workflow has no default here, so the signer goes unchecked until it names semper Classroom's release certificate (alias `materialtesting`; `keytool -list -v` or `apksigner verify --print-certs` on a released APK). An Admin action, on this repository, not on semperdic-app (TD-13) |
 
 ### Certificate pins (`SEMPER_API_CERT_PINS`)
 
