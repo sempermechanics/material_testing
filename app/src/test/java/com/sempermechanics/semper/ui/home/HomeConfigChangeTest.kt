@@ -14,7 +14,8 @@ import org.robolectric.RobolectricTestRunner
 
 /**
  * A configuration change (rotation, font scale, dark theme, a resize) rebuilt
- * Home and closed the + sheet, the delete question, the rename dialog and
+ * Home and closed the + sheet (and, in semper Classroom, the Which test?
+ * sheet before it), the delete question, the rename dialog and
  * selection mode with it, so a half-made choice was lost (readiness AE1-111).
  * They come back on the rebuilt screen, the rename with what was typed.
  * Home's other questions are in [HomeQuestionsConfigChangeTest].
@@ -27,6 +28,9 @@ class HomeConfigChangeTest : HomeRecreateFixture() {
         val first = home()
         val old = first.get()
         old.findViewById<View>(R.id.fabNewAnalysis).performClick()
+        // semper Classroom asks Which test? first; the source chooser follows the pick.
+        idleUntil("the Which test? sheet") { showingOn(old, R.id.btnTestDic2d).isNotEmpty() }
+        showingOn(old, R.id.btnTestDic2d).single().findViewById<View>(R.id.btnTestDic2d).performClick()
         idleUntil("the + sheet") { showingOn(old, R.id.tvMediaTitle).isNotEmpty() }
 
         val rebuilt = first.recreate().get()
@@ -34,6 +38,28 @@ class HomeConfigChangeTest : HomeRecreateFixture() {
         idleUntil("the + sheet on the rebuilt Home") { showingOn(rebuilt, R.id.tvMediaTitle).isNotEmpty() }
         assertEquals("one sheet, not two", 1, showingOn(rebuilt, R.id.tvMediaTitle).size)
         assertTrue("the old screen's sheet is closed", showingOn(old, R.id.tvMediaTitle).isEmpty())
+    }
+
+    @Test
+    fun `the Which test? sheet is open again after a rotation`() {
+        // This app's first + question is a sheet of its own; it closed with the
+        // old screen, and the test type with it (readiness AE1-111, on the fork).
+        val first = home()
+        val old = first.get()
+        old.findViewById<View>(R.id.fabNewAnalysis).performClick()
+        idleUntil("the Which test? sheet") { showingOn(old, R.id.btnTestTensile).isNotEmpty() }
+
+        val rebuilt = first.recreate().get()
+
+        idleUntil("the Which test? sheet on the rebuilt Home") { showingOn(rebuilt, R.id.btnTestTensile).isNotEmpty() }
+        assertEquals("one sheet, not two", 1, showingOn(rebuilt, R.id.btnTestTensile).size)
+        assertTrue("the old screen's sheet is closed", showingOn(old, R.id.btnTestTensile).isEmpty())
+        assertTrue("no source chooser yet", showingOn(rebuilt, R.id.tvMediaTitle).isEmpty())
+
+        // A pick on the rebuilt screen still goes on to the source chooser.
+        showingOn(rebuilt, R.id.btnTestTensile).single().findViewById<View>(R.id.btnTestTensile).performClick()
+        idleUntil("the + sheet after the pick") { showingOn(rebuilt, R.id.tvMediaTitle).isNotEmpty() }
+        assertTrue("the Which test? sheet closed on the pick", showingOn(rebuilt, R.id.btnTestTensile).isEmpty())
     }
 
     @Test

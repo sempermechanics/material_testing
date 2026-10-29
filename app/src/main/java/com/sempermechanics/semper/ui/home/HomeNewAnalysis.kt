@@ -70,6 +70,9 @@ internal class HomeNewAnalysis(
     /** The source chooser comes back after a rotation or theme switch (readiness AE1-111). */
     private val reopenChooser = ReopenAfterRecreate(activity, "home.sourceChooser")
 
+    /** So does the Which test? sheet before it (AE1-111 on this app's own sheet). */
+    private val reopenTestType = ReopenAfterRecreate(activity, "home.testType")
+
     /** An older analysis's Re-run: its reference picked again. Registers launchers, so built with the screen. */
     private val rerunReference = RerunReferencePicker(activity, onPicked = ::openRerun)
     private val requestMediaPermission =
@@ -100,10 +103,11 @@ internal class HomeNewAnalysis(
 
     private fun chooseTestType() {
         val examples = { activity.startActivity(ExamplesActivity.intent(activity)) }
-        TestTypeSheet.show(activity, onExamples = examples) { type ->
+        val sheet = TestTypeSheet.show(activity, onExamples = examples) { type ->
             pendingTestType = type
             showSourceChooser()
         }
+        reopenTestType.keep(sheet)
     }
 
     /** Keeps [pendingTestType] across a recreation of Home; call from `onSaveInstanceState`. */
@@ -169,9 +173,15 @@ internal class HomeNewAnalysis(
         activity.startActivity(intent)
     }
 
-    /** Shows the source chooser again when the screen this one replaces had it open; call after `super.onCreate`. */
+    /**
+     * Shows the Which test? sheet or the source chooser again when the screen
+     * this one replaces had it open; call after `super.onCreate`.
+     */
     fun reopenAfterRecreate() {
-        if (reopenChooser.restored() != null) showSourceChooser()
+        when {
+            reopenTestType.restored() != null -> chooseTestType()
+            reopenChooser.restored() != null -> showSourceChooser()
+        }
     }
 
     /** In-sheet Images gallery; Files opens SAF for Drive / storage / DNG. */
