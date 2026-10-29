@@ -2343,7 +2343,7 @@ phone of the account signs (`deps._device_is_bound`); only the phone the licence
 lock names is licensed, and the others run as Demo. A clear signs out only the
 locked phone, and only when it is one of the account's registered phones; the
 account's other phones stay, and another phone registering no longer ends the
-released phone's hold. `scripts/retire_stale_devices.py` retires ACTIVE records
+released phone's hold. `backend/scripts/retire_stale_devices.py` retires ACTIVE records
 older paths left behind, before that backend serves. What follows describes the
 lock clear, which still moves the licence between phones until ADR-033's
 explicit activation replaces it.
