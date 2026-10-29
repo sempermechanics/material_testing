@@ -212,14 +212,13 @@ class Settings:
     # made either way. The names are historical — the staff console is what
     # first needed them.
 
-    # How long a holder must wait between changing their own device. A second
-    # factor proves who is asking, not how often, so without this one person
-    # could re-bind daily and pass a single licence round a lab. Counted
-    # against `deviceChangedAt`, which only the self-service route writes:
-    # staff- and IT-initiated changes neither read nor write it, so a support
-    # request is never blocked by a cooldown the holder has spent. Set to 0 to
-    # disable the wait entirely.
-    SELF_DEVICE_CHANGE_COOLDOWN_DAYS = _env_int("SELF_DEVICE_CHANGE_COOLDOWN_DAYS", "30")
+    # Whether a request from a build that does not tap Activate (no
+    # `X-Activation: explicit` header) activates its phone by itself, on a
+    # licence that runs the activation model (ADR-033). `legacy`: the holder's
+    # first phone activates on its own while a slot is free, so installed
+    # builds keep their licence. `off`: only Activate does; set once the
+    # builds that send the header are what the fleet runs (TD-363).
+    IMPLICIT_ACTIVATION = os.getenv("IMPLICIT_ACTIVATION", "legacy").strip().lower()
 
     # How long a phone released by a device-lock clear or a staff release is
     # refused if it tries to register again. The old phone's upload worker

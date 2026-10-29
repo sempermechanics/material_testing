@@ -861,7 +861,7 @@ one cap for everyone (default 4). `mode` now selects between
 deployment still setting the old variable silently gets 25 for every
 unlicensed account (`backend/app/config.py`). `deploy-backend.yml` pins
 `DEMO_MAX_ANALYSES`, `LICENSED_MAX_SESSIONS_PER_USER`, `ADMIN_WEB_MFA_ENABLED`,
-`APP_CHECK_MODE` and `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` with expression
+`APP_CHECK_MODE` and `IMPLICIT_ACTIVATION` with expression
 defaults, and its "Describe live env" step warns when the retired variable is
 still on the service. `deploy-cloudrun` merges env rather than replacing it,
 so removal is a manual `--remove-env-vars` after promote.
@@ -1589,7 +1589,7 @@ such account exists yet.
 
 **One licence per person.** A person is an address; the device is a lock on
 the licence they hold, changed in place (staff "New phone", IT unlock, or
-self-service with its cooldown), never by issuing a second licence. Every
+self-service), never by issuing a second licence. Every
 grant path asks `repo/holders.licence_held_by` first and refuses before
 writing anything:
 
@@ -2344,9 +2344,12 @@ lock names is licensed, and the others run as Demo. A clear signs out only the
 locked phone, and only when it is one of the account's registered phones; the
 account's other phones stay, and another phone registering no longer ends the
 released phone's hold. `backend/scripts/retire_stale_devices.py` retires ACTIVE records
-older paths left behind, before that backend serves. What follows describes the
-lock clear, which still moves the licence between phones until ADR-033's
-explicit activation replaces it.
+older paths left behind, before that backend serves. A licence that names
+its app licenses its activated phones instead of a lock, and a clear on one
+deactivates the holder's phones (§20.16). There is no self-service cooldown any
+more: the licence's device count is the limit. What follows describes the lock
+clear on a licence from before the split, which moves it between phones until
+`split_licences_per_app.py` stamps it.
 
 Three people can legitimately need a licence moved to a different phone, and
 until now only one of them could do it. The table is the whole feature:
@@ -2376,13 +2379,12 @@ A licence or seat holds `deviceIdLock` for Semper and
 `deviceIdLockSemperClassroom` for Semper Classroom (written beside
 `deviceIdLockMaterialTesting`, the field read until TD-330, ADR-030), and everything below is
 per app: the registered phone, the release hold (`releasedDeviceId…`,
-`releasedAt…`) and the self-service cooldown (`deviceChangedAt…`). A staff or
+`releasedAt…`). A staff or
 IT clear empties every app's lock and releases every app's phone, since the
 holder is changing phones. The holder's own clear moves only the app that
 asks (`X-App-Id`, or `?app=` from the account page, which sends the old
 `materialtesting` until TD-330 so that a backend from before the rename
-understands it; `semperclassroom` is accepted too), against
-that app's cooldown. Responses and audit details carry each app's ids side by
+understands it; `semperclassroom` is accepted too). Responses and audit details carry each app's ids side by
 side: `previousDeviceId` / `previousDeviceIdSemperClassroom`,
 `releasedDeviceId` / `releasedDeviceIdSemperClassroom`, each Semper Classroom
 key also under its old `…MaterialTesting` name for a console from before the
@@ -2468,18 +2470,15 @@ which is the contention that starved out concurrent claims before
 `_drop_superseded_demo` moved the same guarded read out of `claim_seat`
 (§20.1).
 
-#### Why the holder's own change is rate-limited and the others are not
+#### No cooldown
 
-Self-service re-binding is a licence-sharing vector. A second factor proves
-*who* is asking, not *how often*, so one person could re-bind daily and pass a
-single licence round a lab. `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` (default 30)
-is counted against a `deviceChangedAt` stamp that only the self-service path
-writes; a second change inside the window answers
-`429 device_change_too_soon: <ISO instant>` — the instant being
-`deviceChangedAt` plus the cooldown — with `Retry-After` in seconds, and the
-account page shows that time. Staff and IT
-neither read nor write that stamp, so a support request always works — a lost
-phone does not wait 30 days.
+The holder's own change used to wait `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` (30)
+between changes, answering `429 device_change_too_soon`. ADR-033 removed it:
+the licence's device count (`maxDevices`, §20.16) limits how many phones hold
+it at once, and every change is audited. Passing one licence round a lab by
+clearing and re-binding is bounded by that count and visible in the audit
+log. `deviceChangedAt…` stamps already written are no longer read, and the
+unbind answer's `nextChangeAllowedAt` is always empty.
 
 `POST /v1/licenses/unbind` sits on `attested_or_mfa_user`, the same step-up
 machinery as `attested_or_mfa_admin` with `current_user` beneath it instead of
@@ -2807,3 +2806,58 @@ invoker, absent from the gateway) suspends it, revokes its tokens and licence an
 erases it with the holder erasure's own steps, audited `test_account_expired`.
 Staff end one sooner with `DELETE /v1/admin/test-accounts/{uid}`
 (`test_account_ended`). Tests `backend/tests/test_test_accounts.py`.
+
+### 20.16 Activations: a licence licenses the phones activated on it
+
+[ADR-033](../adr/ADR-033-licence-per-app-explicit-activation.md), step 3. A
+licence that names its app (`licenses/{id}.app`) runs this model; one without
+keeps the device lock above, unchanged, until the split stamps it.
+
+**A phone is licensed only once activated.** Each has a document
+`licenses/{id}/activations/{deviceId}`: `uid`, `app`, `status` (`active` or
+`deactivated`, never deleted), `activatedAt/By`, `deactivatedAt/By`. The
+licence counts active ones in `devicesActive` against `maxDevices` (default 1);
+on an institution licence the count is a pool across the licence, and each seat
+keeps its member's own `devicesActive`. `deviceIdLock` stays filled with the
+first active phone, as a mirror for a rollback and the roster export.
+
+**The check on every request** (`devlock.revalidate_device_lock` →
+`activations.revalidate_activation`) reads the phone's activation and, on an
+institution licence, the seat, in one batched get. An active activation of the
+account is licensed. A revoked licence or seat stores Demo, as before. Anything
+else is Demo for that request only. On a floating licence the lease is the
+activation: only the phone that checked it out (`leaseDeviceId`, mirrored onto
+the user by `checkout_lease`) is licensed. The same read fills `/v1/config`'s
+`activation` block: `state` (`active`, `available`, `full`, `none`,
+`floating`), `devicesActive`, `maxDevices`, `pool`, and `model` (`activation`,
+or `lock` before the split).
+
+**Builds that do not tap Activate.** A build that taps Activate sends
+`X-Activation: explicit`. A request without it, while `IMPLICIT_ACTIVATION=legacy`
+(the default), activates its phone itself when the holder has none active, a
+slot is free, and the phone was not deactivated within
+`DEVICE_RELEASE_HOLD_HOURS`. It is recorded `activatedBy: legacy` and logged
+`event=activation stage=legacy`; `off` ends it once those builds are gone
+(TD-363).
+
+| Who | Route | Tier | Scope (`repo.deactivations`) |
+|---|---|---|---|
+| The holder | `POST /v1/me/devices/activate` | `DEVICE` | the signing phone, on the licence the account holds for the app |
+| The holder | `GET /v1/me/devices` | `USER` | the account's own phones for one app |
+| The holder | `DELETE /v1/me/devices/{deviceId}` | `USER_STEPUP` | their own active phone on their own licence |
+| Institution IT | `GET`, `DELETE /v1/institutions/licenses/{id}/devices[/{deviceId}]` | `INSTITUTION_STEPUP` | members whose seat address is on the licence's `domainLock`, on a licence naming them in `adminEmails` |
+| Semper staff | `GET /v1/admin/licenses/{id}/devices` | `ADMIN` | any licence |
+| Semper staff | `POST`, `DELETE /v1/admin/licenses/{id}/devices/{deviceId}` | `ADMIN_STEPUP` | any licence; Add activates a phone the holder registered, past the count with `override` |
+
+Each scope is checked in the repository, not only by route: a phone outside it
+answers `404 activation_not_found`, the same as one that is not there. Activate
+answers `409 device_limit_reached: <active>/<max>` when the count is full,
+`409 seating_floating` on a floating licence, and carries the phone's fresh
+`/v1/config`, so the app unlocks at once. An IT or staff deactivation also signs
+the phone out of the account (the release hold applies) and stops it holding
+the account's demo count; the holder's own does neither. Nothing touches an
+analysis: a deactivated phone keeps its files.
+
+Registration never retires an activated phone to make room
+(`activations.activated_devices`, read by `register_device`).
+

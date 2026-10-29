@@ -133,6 +133,11 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   Admin or counsel ([report](docs/ops/readiness/20261028/REPORT.md) §4): deploys, monitoring, posture, the entitlement
   key, and the two legal ones. Its backend adds the IT domain lock (ADDENDUM-2), msgpack 1.2.4, "Demo"/"Licensed" and
   the lower-case "semper" brand (ADDENDUM-3/4); both runs' backend and console changes need a deploy.
+- **Licensing rework** ([ADR-033](docs/adr/ADR-033-licence-per-app-explicit-activation.md)): a licence per app,
+  explicit Activate, a device count instead of the cooldown. Steps 1–2 merged 2026-10-29 (#506, #507),
+  not deployed; before step 2's backend serves, the owner runs `backend/scripts/retire_stale_devices.py`
+  (dry run, then `--apply`). Step 3 (activations, routes, cooldown gone) is branch
+  `claude/licence-per-app-pr2b`; steps 4+ (licence per app, upgrade, split, app, consoles) follow.
 - **Admin actions** are one table, [gate § Admin actions](docs/ops/PRODUCTION_READINESS_GATE.md#admin-actions-external):
   monitoring `--apply` (no notification channel yet), the posture FAILs (17 on 2026-10-24, the same 17 on 2026-10-28),
   TD-215, the checklist's §6; the readiness report's §4 adds that run's one-off actions.
@@ -170,6 +175,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - `MAX_SESSIONS_PER_USER` is deleted; a deployment still setting it silently gets `DEMO_MAX_ANALYSES` (25) — [§7](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - List env vars (`CONSOLE_ORIGINS`, `ADMIN_EMAILS`) are space-separated; the deploy action splits on commas — [§20.8](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - `GET /v1/sessions` lists the asking app's sessions (`X-App-Id`; an untagged session is Semper's), and `/files` answers only that app; a browser or export that needs the whole account asks `?app=all` or uses `iter_all_user_sessions` — [ADR-014](docs/adr/ADR-014-session-app-tag.md).
+- A licence with `app` licenses only the phones activated on it (`licenses/{id}/activations`); other phones are Demo per request. Builds without `X-Activation: explicit` auto-activate only while `IMPLICIT_ACTIVATION=legacy` — [§20.16](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - Restore on a new device has an order: sign in, let one authed request bind the lock, then restore — [§20.10](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - Licence terms are mirrored onto users, so editing a licence reaches nobody without `update_license`'s fan-out — [§20.6](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - Demo uploads silently; only retrieval is licence-gated. Gating `POST /v1/sessions` on the licence would loop old builds on 403; a kill switch refuses it with 503 `feature_paused`, which every build retries — [§20.3](docs/backend/CLOUD_ARCHITECTURE_GCP.md), [§20.14](docs/backend/CLOUD_ARCHITECTURE_GCP.md).

@@ -1348,7 +1348,7 @@ empty the device lock:
 
 | Who | How |
 |---|---|
-| The holder | **Move semper to another phone** on their own `/account` page — `POST /v1/licenses/unbind`. Needs a second factor and a sign-in from the last 15 minutes, and is allowed once every `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` (default 30). |
+| The holder | **Move semper to another phone** on their own `/account` page — `POST /v1/licenses/unbind`. Needs a second factor and a sign-in from the last 15 minutes. No cooldown (ADR-033): the licence's device count is the limit. |
 | Institution IT | `PATCH /v1/institutions/licenses/{id}/seats/{uid}` `{"clearDeviceLock": true}`, or **New phone** on the seat in `/console/institution`. |
 | semper staff | **New phone** on the licence row (individual) or on the seat in the roster (institution) in `/console/operator`. |
 
@@ -1361,11 +1361,10 @@ person can use both apps on one phone, or each on a different phone, on one
 licence. Staff and IT **New phone**, and the staff phone release below,
 move both apps at once. The holder moves one app at a time: **Move semper to
 another phone** or **Move semper Classroom to another phone** on
-`/account`, or the same from inside that app, each with its own 30-day
-cooldown. Seats and the operator's user list show a semper Classroom device
+`/account`, or the same from inside that app. Seats and the operator's user list show a semper Classroom device
 as "semper Classroom …" beside semper's. semper Classroom was Material Testing
 until 2026-10 (ADR-030): a Material Testing build still installed is the same
-app to the account, and shares its phone and cooldown.
+app to the account, and shares its phone.
 
 **Demo on the phone they use.** An account whose lock was taken by another
 device before 2026-09-27 reads Demo on the phone it is registered on. One
@@ -1398,11 +1397,11 @@ The old phone is signed out and held off for 24 hours, the same as after
 Demo (decided 2026-09-26). A Licensed account is refused there: use
 **New phone** on its licence.
 
-Only the holder's own change waits out a cooldown; a support request never
-does, so a lost phone is fixed the same day. `429 device_change_too_soon`
-means the holder has already moved device inside the window — the detail
-carries the instant they may again (`device_change_too_soon: <ISO time>`), and
-the account page shows it, and staff or IT can do it for them meanwhile.
+Nobody waits out a cooldown any more (ADR-033, 2026-10-29): the holder may move
+as often as they need, and the licence's device count limits how many phones
+hold it at once. A licence that names its app has phones activated on it
+rather than a lock; its phones and **Deactivate** are described in
+CLOUD_ARCHITECTURE_GCP §20.16.
 
 **The order on the new device matters.** Sign in first, then let one authed
 request bind the licence, and only then restore. Restoring first fails as

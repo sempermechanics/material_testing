@@ -41,10 +41,23 @@ from .user_config import (  # noqa: F401
     cloud_backup_enabled,
     set_user_config,
 )
+from .activations import (  # noqa: F401
+    ACTIVATIONS,
+    ACTOR_LEGACY,
+    account_devices,
+    activate_device,
+    activated_devices,
+    activation_block,
+    activation_summary,
+    licence_devices,
+    max_devices,
+    revalidate_activation,
+    runs_activations,
+)
 from .devlock import (  # noqa: F401
     DeviceLockContended,
     bind_device_lock,
-    locked_device,
+    licensed_devices,
     released_device_held,
     revalidate_device_lock,
 )
@@ -128,6 +141,10 @@ from .leases import (  # noqa: F401
     checkout_lease,
     release_lease,
 )
+from .deactivations import (  # noqa: F401
+    deactivate_device,
+    deactivate_holder,
+)
 from .seats import (  # noqa: F401
     ACTOR_SELF,
     ACTOR_STAFF,
@@ -210,6 +227,8 @@ from . import (
     account,
     audit_log,
     activation,
+    activations,
+    deactivations,
     claims,
     deletion,
     devices,
@@ -231,4 +250,4 @@ from . import (
 )
 
 #: Every module of the package, each after everything it imports.
-PACKAGE = (_base, audit_log, user_config, devlock, claims, invites, holders, mint, activation, entitlement, license_admin, upgrade, deletion, institution_admin, devices, users, leases, seats, reconcile, account, sessions, testaccounts)
+PACKAGE = (_base, audit_log, user_config, activations, devlock, claims, invites, holders, mint, activation, entitlement, license_admin, upgrade, deletion, institution_admin, devices, users, leases, deactivations, seats, reconcile, account, sessions, testaccounts)

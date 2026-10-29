@@ -270,6 +270,19 @@ def licence_patch(patch: dict, app: str = SEMPER) -> dict:
     return out
 
 
+def licence_app(user: dict | None, app: str = SEMPER) -> str:
+    """The app whose mirror holds `app`'s licence on `user`: `app` itself once
+    the account holds its own licence for it, Semper's unsuffixed fields for
+    Semper and for an account from before the split (no `licenseApp`), whose
+    one licence holds for every app. Pass it to `licence_patch` so a write
+    lands where `licence_view` will read it."""
+    user = user or {}
+    app = canonical(app)
+    if app == SEMPER or read_field(user, "licenseId", app) or user.get("licenseApp"):
+        return app
+    return SEMPER
+
+
 def spread(name: str, values: dict[str, str]) -> dict[str, str]:
     """`{app: value}` as the per-app fields a response or audit record carries,
     every app present: `{"releasedDeviceId": ..., "releasedDeviceIdSemperClassroom": ...}`.

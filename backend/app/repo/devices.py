@@ -29,7 +29,7 @@ from ._base import (
     staff_released_from,
     test_account_of,
 )
-from .devlock import locked_device
+from .devlock import licensed_devices
 from .entitlement import (
     ensure_entitlement,
 )
@@ -161,7 +161,7 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
     A real account holds up to `MAX_PHONES_PER_APP` phones per app. Past it,
     the phones that registered first make room, retired as superseded in the
     same transaction, but never the phone its licence is locked to
-    (`devlock.locked_device`, read before the transaction). The answer's
+    (`devlock.licensed_devices`, read before the transaction). The answer's
     `rotated` lists them.
 
     A test account (ADR-027) holds up to its own `maxDevices`. A full QC
@@ -201,7 +201,7 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
     # The licensed phone is never retired to make room. Read ahead of the
     # transaction: a transaction cannot query, and a lock that moves meanwhile
     # only changes which unlicensed phone goes.
-    locked = locked_device(_load_user(uid) or {}, app)
+    locked = licensed_devices(_load_user(uid) or {}, app)
     rotated: list[str] = []
     healed: list[bool] = []
 
@@ -225,7 +225,7 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
             over = len(others) - max(1, settings.MAX_PHONES_PER_APP) + 1
             if over > 0:
                 spare = [d for d in _oldest_active_devices(
-                    uid, app, exclude=body.deviceId, count=len(others)) if d != locked]
+                    uid, app, exclude=body.deviceId, count=len(others)) if d not in locked]
                 rotated.extend(spare[:over])
         existing = _get(device_ref, tx)
         held = (existing.to_dict() or {}) if existing.exists else {}

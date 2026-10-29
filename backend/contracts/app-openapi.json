@@ -803,6 +803,19 @@
         "title": "SessionCreate",
         "type": "object"
       },
+      "StaffActivation": {
+        "additionalProperties": false,
+        "description": "Staff adding a phone. `override` goes past the licence's count, for a\nsupport case the count should not block; it is audited as such.",
+        "properties": {
+          "override": {
+            "default": false,
+            "title": "Override",
+            "type": "boolean"
+          }
+        },
+        "title": "StaffActivation",
+        "type": "object"
+      },
       "TermsAcceptance": {
         "properties": {
           "version": {
@@ -2293,6 +2306,346 @@
           }
         },
         "summary": "Admin License Device History"
+      }
+    },
+    "/v1/admin/licenses/{license_id}/devices": {
+      "get": {
+        "description": "Any licence's active phones, with its count.",
+        "operationId": "licence_devices_v1_admin_licenses__license_id__devices_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "license_id",
+            "required": true,
+            "schema": {
+              "maxLength": 512,
+              "minLength": 1,
+              "title": "License Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-forwarded-authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Forwarded-Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-device-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Device-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-firebase-appcheck",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Firebase-Appcheck",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-app-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-App-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Licence Devices"
+      }
+    },
+    "/v1/admin/licenses/{license_id}/devices/{device_id}": {
+      "delete": {
+        "description": "Deactivate any phone on any licence; it is signed out of its account.",
+        "operationId": "staff_deactivate_v1_admin_licenses__license_id__devices__device_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "license_id",
+            "required": true,
+            "schema": {
+              "maxLength": 512,
+              "minLength": 1,
+              "title": "License Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "device_id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Device Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-forwarded-authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Forwarded-Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-device-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Device-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-firebase-appcheck",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Firebase-Appcheck",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-app-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-App-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-nonce",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Nonce",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-signature",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Signature",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Staff Deactivate"
+      },
+      "post": {
+        "description": "Add a phone: activate one the holder has registered, for the app it\nregistered under, on this licence. For a holder whose build cannot tap\nActivate, or a support case. Within `maxDevices` unless `override`.",
+        "operationId": "staff_activate_v1_admin_licenses__license_id__devices__device_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "license_id",
+            "required": true,
+            "schema": {
+              "maxLength": 512,
+              "minLength": 1,
+              "title": "License Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "device_id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Device Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-forwarded-authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Forwarded-Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-device-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Device-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-firebase-appcheck",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Firebase-Appcheck",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-app-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-App-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-nonce",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Nonce",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-signature",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Signature",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffActivation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Staff Activate"
       }
     },
     "/v1/admin/licenses/{license_id}/invites/{invite_key}": {
@@ -5331,6 +5684,237 @@
         "summary": "License Audit"
       }
     },
+    "/v1/institutions/licenses/{license_id}/devices": {
+      "get": {
+        "description": "The licence's active phones of members on its `domainLock`, with the\npool's count.",
+        "operationId": "institution_devices_v1_institutions_licenses__license_id__devices_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "license_id",
+            "required": true,
+            "schema": {
+              "maxLength": 512,
+              "minLength": 1,
+              "title": "License Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-forwarded-authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Forwarded-Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-device-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Device-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-firebase-appcheck",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Firebase-Appcheck",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-app-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-App-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-nonce",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Nonce",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-signature",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Signature",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Institution Devices"
+      }
+    },
+    "/v1/institutions/licenses/{license_id}/devices/{device_id}": {
+      "delete": {
+        "description": "Deactivate a member's phone, which also signs it out of their account\n(the release hold applies). Members off the licence's domain answer\n`404 activation_not_found`, as a phone that is not there does.",
+        "operationId": "institution_deactivate_v1_institutions_licenses__license_id__devices__device_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "device_id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Device Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "license_id",
+            "required": true,
+            "schema": {
+              "maxLength": 512,
+              "minLength": 1,
+              "title": "License Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-forwarded-authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Forwarded-Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-device-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Device-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-firebase-appcheck",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Firebase-Appcheck",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-app-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-App-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-nonce",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Nonce",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-signature",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Signature",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Institution Deactivate"
+      }
+    },
     "/v1/institutions/licenses/{license_id}/invites/{invite_key}": {
       "delete": {
         "description": "Withdraw a promise that has not been kept yet.\n\nAddressed by the invite id from the seats listing, not by email: an\naddress in a request path ends up in access logs and proxy history.\nNothing to undo on the account side — an unclaimed invite never\nentitled anyone. Removing someone who *has* signed in is the seat\nrevoke route.",
@@ -6540,7 +7124,7 @@
     },
     "/v1/licenses/unbind": {
       "post": {
-        "description": "\"Use Semper on a different device\" — the holder's own device change.\n\nUntil now only institution IT could unbind a device, which left an\nindividual customer, and any member whose IT is slow, writing to support\nfor something they can prove they are entitled to do. Since Gap A,\nclearing the lock is the whole operation: the licence or seat goes\nunbound, and the next device to sign in binds it, first writer wins.\n\n**Clearing is not revoking.** The entitlement, the seat, the lease and\nevery analysis stay exactly as they are; only the lock goes empty. Nothing\nhas to be typed on the new device.\n\nStep-up rather than plain USER: this is worth more than a bearer token,\nand it is reachable from a browser. But a second factor proves *who* is\nasking, not *how often*, so it is also the one caller subject to\nSELF_DEVICE_CHANGE_COOLDOWN_DAYS — one person could otherwise re-bind\ndaily and pass a single licence round a lab. Staff and IT are not, so a\nsupport request always works.\n\nThe order on the new device matters and the app should follow it: sign in\n(USER-tier, so `POST /v1/devices/register` works before any licence\nbinds), let the first authed request bind the lock, and only then restore.\nFile content is device-attested, so restoring first fails on a device the\nuser has legitimately just moved to.\n\nMoves one app's device (ADR-010): the app that asks, by `X-App-Id`, or\nfrom a browser, which cannot send that header, `?app=semperclassroom` (the\nold `?app=materialtesting` names the same app, ADR-030).\nEach app has its own cooldown. No app named is Semper.",
+        "description": "\"Use Semper on a different device\" — the holder's own device change.\n\nUntil now only institution IT could unbind a device, which left an\nindividual customer, and any member whose IT is slow, writing to support\nfor something they can prove they are entitled to do. Since Gap A,\nclearing the lock is the whole operation: the licence or seat goes\nunbound, and the next device to sign in binds it, first writer wins.\n\n**Clearing is not revoking.** The entitlement, the seat, the lease and\nevery analysis stay exactly as they are; only the lock goes empty. Nothing\nhas to be typed on the new device.\n\nStep-up rather than plain USER: this is worth more than a bearer token,\nand it is reachable from a browser. No cooldown (ADR-033): the licence's\ndevice count limits how many phones hold it, not how often they change.\nOn a licence that runs activations this deactivates the holder's phones\nfor it; `DELETE /v1/me/devices/{device_id}` deactivates one.\n\nThe order on the new device matters and the app should follow it: sign in\n(USER-tier, so `POST /v1/devices/register` works before any licence\nbinds), let the first authed request bind the lock, and only then restore.\nFile content is device-attested, so restoring first fails on a device the\nuser has legitimately just moved to.\n\nMoves one app's device (ADR-010): the app that asks, by `X-App-Id`, or\nfrom a browser, which cannot send that header, `?app=semperclassroom` (the\nold `?app=materialtesting` names the same app, ADR-030).\nNo app named is Semper.",
         "operationId": "unbind_device_v1_licenses_unbind_post",
         "parameters": [
           {
@@ -7019,6 +7603,314 @@
           }
         },
         "summary": "Set Consents"
+      }
+    },
+    "/v1/me/devices": {
+      "get": {
+        "description": "The caller's phones for one app: each registered phone, whether the\nlicence licenses it, and the licence's count. The app's phones screen\nand the web account page (`?app=`, since a browser sends no `X-App-Id`).\nOnly the caller's own phones, never another member's in a pool.",
+        "operationId": "my_devices_v1_me_devices_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "app",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "App",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-device-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Device-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-forwarded-authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Forwarded-Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-firebase-appcheck",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Firebase-Appcheck",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-app-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-App-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "My Devices"
+      }
+    },
+    "/v1/me/devices/activate": {
+      "post": {
+        "description": "Activate: license the phone that signs this request, for the app it\nruns (`X-App-Id`), on the licence the account holds for that app.\n\nSigned by the phone, so only the phone itself activates itself; staff add\none from the operator console instead. `409 device_limit_reached: n/m`\nwhen every slot is taken, `409 seating_floating` on a floating licence\n(check out a seat instead), `404 no_license` with none. A phone already\nactive answers as a success.\n\nThe answer carries the config the phone holds from now on, so the app\nunlocks without a restart or a second call.",
+        "operationId": "activate_this_phone_v1_me_devices_activate_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-device-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Device-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-forwarded-authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Forwarded-Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-firebase-appcheck",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Firebase-Appcheck",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-app-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-App-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-nonce",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Nonce",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-signature",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Signature",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Activate This Phone"
+      }
+    },
+    "/v1/me/devices/{device_id}": {
+      "delete": {
+        "description": "Deactivate one of the caller's own phones on their licence for the\napp, freeing its slot at once. Step-up, like a device change: it is\nreachable from a browser. A phone that is not the caller's, or not\nactive, is `404 activation_not_found`.",
+        "operationId": "deactivate_my_phone_v1_me_devices__device_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "device_id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Device Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "app",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "App",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-forwarded-authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Forwarded-Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-device-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Device-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-firebase-appcheck",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Firebase-Appcheck",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-app-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-App-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-nonce",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Nonce",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-signature",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Signature",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Deactivate My Phone"
       }
     },
     "/v1/me/erasure": {

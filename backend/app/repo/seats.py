@@ -1,18 +1,18 @@
 """Institution seat administration: clearing a device lock, holding and revoking a seat.
 """
-from datetime import timedelta
 
 from .. import apps, errors, statuses
-from ..config import settings
 from ..errors import Refusal
 from ..licenses import (
     MODE_LICENSED,
     STATUS_ACTIVE,
-    as_utc,
 )
 
 from . import _base
-from ._base import (
+from ._base import (  # ACTOR_IT is re-exported through `repo`
+    ACTOR_IT,  # noqa: F401
+    ACTOR_SELF,
+    ACTOR_STAFF,
     SCHEMA_VERSION,
     _is_institution,
     _is_revoked,
@@ -20,13 +20,13 @@ from ._base import (
     _lease_clear_patch,
     _license_mode,
     _mode_patch,
-    _now,
     _run_tx,
     _seat_lease_counted,
     _seat_ref,
     _get,
     _update_doc,
 )
+from .deactivations import deactivate_holder
 from .devices import (
     _release_devices,
     forget_device_sessions,
@@ -37,11 +37,6 @@ from .license_admin import (
 )
 
 
-#: Who asked for a device change. Only the holder is rate-limited; see
-#: `clear_device_lock`.
-ACTOR_SELF = "self"
-ACTOR_STAFF = "staff"
-ACTOR_IT = "it"
 
 
 def _live_holder(license_id: str, lic: dict, ref, scope: str, uid: str):
@@ -161,31 +156,31 @@ def clear_device_lock(license_id: str, uid: str = "", *,
 
     **Which apps.** Each app has its own lock (ADR-010). A staff or IT clear
     releases every app, because the holder's phone changed and both apps are
-    on it. The holder's own clear releases `app` alone, the app that asked,
-    and its cooldown is that app's: moving Semper to a new phone does not make
-    Semper Classroom wait a month to follow.
+    on it. The holder's own clear releases `app` alone, the app that asked.
 
     A staff or IT clear also stops the released phone's demo count holding
     the holder's analyses (`forget_device_sessions`, TD-276); the holder's
     own clear does not, or a second account on the same phone could shed
     the first one's count.
 
-    The cooldown applies to `ACTOR_SELF` alone. A second factor proves *who*
-    is asking, not *how often*, so one person could otherwise re-bind daily
-    and pass a single licence round a lab. It is counted against
-    `deviceChangedAt`, which only this path writes: a staff or IT clear
-    neither reads nor writes that stamp, so a support request always works
-    however recently the holder changed device themselves. Each app has its
-    own stamp (`apps.read_field(doc, "deviceChangedAt", app)`).
+    No cooldown (ADR-033): the holder may clear their own lock as often as
+    they like. The licence's device count is what limits how many phones hold
+    it, and every clear is audited.
+
+    **Activations.** A licence that names its app has no lock to clear: its
+    phones are its activations. A clear there deactivates every phone the
+    holder has active on it (`repo.activations.deactivate_holder`), with the
+    same release a staff or IT deactivation does, and the lock mirror empties
+    with them.
 
     The answer is the audit detail, including the device
     that was given up — the other half of the record `revalidate_device_lock`
     writes when the replacement binds. `previousDeviceId` is the lock's device
     and `releasedDeviceId` the registered one the account was signed out of;
     a registered phone the lock did not name is kept (`_settle_holder`), and either can be empty (a lock that never bound, an
-    account with nothing registered, or a holder `_settle_holder` skips). A
-    `device_change_too_soon` refusal carries the instant the next change is
-    allowed, so it can say when.
+    account with nothing registered, or a holder `_settle_holder` skips).
+    On a licence that runs activations, `deactivated` lists the phones
+    deactivated.
     Both device ids come once per app (`apps.spread`): `previousDeviceId` and
     `releasedDeviceId` are Semper's, `previousDeviceIdSemperClassroom` and so
     on the other app's (mirrored under the old `...MaterialTesting` names,
@@ -207,11 +202,21 @@ def clear_device_lock(license_id: str, uid: str = "", *,
         detail["app"] = app
     not_found = errors.SEAT_NOT_FOUND if scope == "seat" else errors.LICENSE_NOT_FOUND
 
+    if lic.get("app"):
+        holder = uid if scope == "seat" else lic.get("redeemedByUid") or ""
+        if scope == "seat" and not _get(ref).exists:
+            raise Refusal(not_found)
+        gone = deactivate_holder(license_id, holder, actor=actor) if holder else []
+        first = gone[0] if gone else ""
+        named = apps.canonical(lic.get("app"))
+        return {**detail, **apps.spread("previousDeviceId", {named: first}),
+                **apps.spread("releasedDeviceId", {named: first if actor != ACTOR_SELF else ""}),
+                "deactivated": gone}
+
     if actor != ACTOR_SELF:
-        # No invariant to protect: staff and IT have no cooldown, and two
-        # clears landing together produce the same empty lock. A plain read
-        # and update keeps the support path out of the transaction machinery
-        # entirely.
+        # No invariant to protect: two clears landing together produce the
+        # same empty lock. A plain read and update keeps the support path out
+        # of the transaction machinery entirely.
         snap = _get(ref)
         if not snap.exists:
             raise Refusal(not_found)
@@ -230,48 +235,19 @@ def clear_device_lock(license_id: str, uid: str = "", *,
         return {**detail, **apps.spread("previousDeviceId", previous),
                 **apps.spread("releasedDeviceId", released), "sessionsForgotten": forgotten}
 
-    now = _now()
-    cooldown = timedelta(days=max(0, settings.SELF_DEVICE_CHANGE_COOLDOWN_DAYS))
-
-    def too_soon(next_allowed) -> Refusal:
-        # The refusal says when, as the success does: "not yet" with no date
-        # left the holder guessing how long to wait.
-        return Refusal(errors.DEVICE_CHANGE_TOO_SOON, next_allowed.isoformat(),
-                       retry_at=next_allowed)
-
-    @_base.firestore.transactional
-    def _clear(tx) -> dict:
-        snap = _get(ref, tx)
-        if not snap.exists:
-            raise Refusal(not_found)
-        doc = snap.to_dict() or {}
-        changed = as_utc(apps.read_field(doc, "deviceChangedAt", app))
-        if cooldown and changed and now - changed < cooldown:
-            raise too_soon(changed + cooldown)
-        tx.update(ref, {
-            **apps.written_fields("deviceIdLock", app, ""),
-            **apps.written_fields("deviceChangedAt", app, now),
-            "updatedAt": _base.firestore.SERVER_TIMESTAMP,
-            "schemaVersion": SCHEMA_VERSION,
-        })
-        return {
-            **detail,
-            **apps.spread("previousDeviceId",
-                          {app: apps.read_field(doc, "deviceIdLock", app) or ""}),
-            "nextChangeAllowedAt": (now + cooldown).isoformat() if cooldown else "",
-        }
-
-    def _lost() -> dict:
-        # Two self-service clears at once is the only way to lose on
-        # contention, and the cooldown is exactly what one of them must lose.
-        # The winner has just stamped `now`, so the next change is a cooldown
-        # from here.
-        raise too_soon(now + cooldown)
-
-    cleared = _run_tx(_clear, on_contended=_lost)
-    previous = cleared.get(apps.field("previousDeviceId", app)) or ""
+    snap = _get(ref)
+    if not snap.exists:
+        raise Refusal(not_found)
+    doc = snap.to_dict() or {}
+    previous = apps.read_field(doc, "deviceIdLock", app) or ""
+    _update_doc(ref, {
+        **apps.written_fields("deviceIdLock", app, ""),
+        "updatedAt": _base.firestore.SERVER_TIMESTAMP,
+        "schemaVersion": SCHEMA_VERSION,
+    })
     released = _settle_holder(license_id, lic, ref, scope, uid, {app: previous})
-    return {**cleared, **apps.spread("releasedDeviceId", released)}
+    return {**detail, **apps.spread("previousDeviceId", {app: previous}),
+            **apps.spread("releasedDeviceId", released)}
 
 
 def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> None:

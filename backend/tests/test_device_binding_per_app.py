@@ -168,7 +168,9 @@ def test_a_staff_clear_moves_both_apps(store):
     assert repo.released_device_held(user, "and-mt", MT) is True
 
 
-def test_the_holder_moves_one_app_with_its_own_cooldown(store):
+def test_the_holder_moves_one_app_alone(store):
+    """The holder's own clear releases the app that asked and nothing else.
+    No stamp, no wait (ADR-033): either app may move again at once."""
     store._data["users"] = {}
     license_id = _licensed(store)
     repo.revalidate_device_lock(store._data["users"]["solo-1"], "and-mt", MT)
@@ -184,12 +186,14 @@ def test_the_holder_moves_one_app_with_its_own_cooldown(store):
     lic = store._data["licenses"][license_id]
     assert lic["deviceIdLock"] == "and-semper", "Semper's phone is untouched"
     assert lic["deviceIdLockSemperClassroom"] == ""
-    assert "deviceChangedAtSemperClassroom" in lic and "deviceChangedAt" not in lic
+    assert not {"deviceChangedAt", "deviceChangedAtSemperClassroom",
+                "deviceChangedAtMaterialTesting"} & set(lic)
     assert store._data["users"]["solo-1"]["activeDeviceId"] == "and-semper"
-    # Moving Semper Classroom does not make Semper wait, and the reverse.
+    # Either app may move again straight away; the device count is the limit.
     assert attempt(repo.clear_device_lock, license_id, "solo-1", actor=repo.ACTOR_SELF)[0] == ""
     assert attempt(repo.clear_device_lock,
-        license_id, "solo-1", actor=repo.ACTOR_SELF, app=MT)[0] == "device_change_too_soon"
+        license_id, "solo-1", actor=repo.ACTOR_SELF, app=MT)[0] == ""
+    assert lic["deviceIdLock"] == "" and lic["deviceIdLockSemperClassroom"] == ""
 
 
 # ------------------------------------------------------------------ over HTTP

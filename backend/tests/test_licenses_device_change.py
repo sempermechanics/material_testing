@@ -5,7 +5,7 @@ import pytest
 
 import fake_firestore
 
-from app import deps, errors
+from app import deps
 import repo_view as repo
 from app.config import settings
 from key_helpers import _ec_pem
@@ -21,8 +21,8 @@ from refusals import attempt
 # ======================================================= changing device (D)
 # One primitive, three actors. Since an individual licence binds on first use,
 # emptying the lock *is* the device change: whoever signs in next takes it.
-# The holder's own change is the one that carries a cooldown, because a second
-# factor proves who is asking and not how often.
+# No actor waits between changes (ADR-033): the licence's device count is the
+# limit, and every clear is audited.
 
 
 def _bound_individual(store, device_id="old-phone"):
@@ -81,56 +81,50 @@ def test_the_holder_changes_their_own_device(store):
 
     assert err == ""
     assert cleared["previousDeviceId"] == "old-phone"
-    # Only the self-service path stamps the clock the cooldown is read from.
-    assert store._data["licenses"][license_id]["deviceChangedAt"]
-    assert cleared["nextChangeAllowedAt"]
+    # No cooldown, so no clock to stamp and no "next allowed" to report.
+    assert "deviceChangedAt" not in store._data["licenses"][license_id]
+    assert not cleared.get("nextChangeAllowedAt")
     repo.revalidate_device_lock(store._data["users"]["solo-1"], "new-phone")
     assert store._data["licenses"][license_id]["deviceIdLock"] == "new-phone"
 
 
-def test_a_second_self_service_change_inside_the_cooldown_is_refused(store):
-    """The licence-sharing vector: one person re-binding daily passes a single
-    licence round a lab. A second factor cannot see that; the cooldown can."""
+def test_the_holder_may_change_device_again_at_once(store):
+    """No cooldown (ADR-033). A second and a third change straight after the
+    first all succeed, and the lock follows the newest phone each time."""
     license_id = _bound_individual(store)
+    users = store._data["users"]
+    lic = store._data["licenses"][license_id]
+
+    for old, new in (("old-phone", "second-phone"), ("second-phone", "third-phone"),
+                     ("third-phone", "fourth-phone")):
+        err, cleared = attempt(repo.clear_device_lock, license_id, "solo-1",
+                               actor=repo.ACTOR_SELF)
+        assert err == ""
+        assert cleared["previousDeviceId"] == old
+        repo.revalidate_device_lock(users["solo-1"], new)
+        assert lic["deviceIdLock"] == new
+
+    assert "deviceChangedAt" not in lic
+
+
+def test_staff_and_the_holder_clear_back_to_back(store):
+    """A lost phone does not wait, and neither does the holder after support
+    has helped. Staff, then the holder, then staff again, each straight away."""
+    license_id = _bound_individual(store)
+    users = store._data["users"]
+    lic = store._data["licenses"][license_id]
+
     assert attempt(repo.clear_device_lock, license_id, "solo-1", actor=repo.ACTOR_SELF)[0] == ""
-    repo.revalidate_device_lock(store._data["users"]["solo-1"], "new-phone")
-
-    with pytest.raises(errors.Refusal) as refused:
-        repo.clear_device_lock(license_id, "solo-1", actor=repo.ACTOR_SELF)
-
-    assert refused.value.code == "device_change_too_soon"
-    # The refusal says when (TD-116): a cooldown from the change just made.
-    changed = store._data["licenses"][license_id]["deviceChangedAt"]
-    next_allowed = changed + timedelta(days=settings.SELF_DEVICE_CHANGE_COOLDOWN_DAYS)
-    assert refused.value.suffix == next_allowed.isoformat()
-    assert refused.value.retry_at == next_allowed
-    assert store._data["licenses"][license_id]["deviceIdLock"] == "new-phone"
-
-
-def test_the_cooldown_lapses(store):
-    license_id = _bound_individual(store)
-    store._data["licenses"][license_id]["deviceChangedAt"] = (
-        datetime.now(timezone.utc)
-        - timedelta(days=settings.SELF_DEVICE_CHANGE_COOLDOWN_DAYS + 1)
-    )
-
-    assert attempt(repo.clear_device_lock, license_id, "solo-1", actor=repo.ACTOR_SELF)[0] == ""
-
-
-def test_a_support_clear_ignores_the_cooldown(store):
-    """A lost phone does not wait 30 days. Staff and IT neither read nor write
-    the stamp, so a support request always works however recently the holder
-    changed device themselves."""
-    license_id = _bound_individual(store)
-    repo.clear_device_lock(license_id, "solo-1", actor=repo.ACTOR_SELF)
-    stamped = store._data["licenses"][license_id]["deviceChangedAt"]
-    repo.revalidate_device_lock(store._data["users"]["solo-1"], "new-phone")
-
+    repo.revalidate_device_lock(users["solo-1"], "new-phone")
     err, cleared = attempt(repo.clear_device_lock, license_id, actor=repo.ACTOR_STAFF)
-
     assert err == ""
     assert cleared["previousDeviceId"] == "new-phone"
-    assert store._data["licenses"][license_id]["deviceChangedAt"] == stamped
+    repo.revalidate_device_lock(users["solo-1"], "newer-phone")
+    err, cleared = attempt(repo.clear_device_lock, license_id, "solo-1", actor=repo.ACTOR_SELF)
+    assert err == ""
+    assert cleared["previousDeviceId"] == "newer-phone"
+    assert lic["deviceIdLock"] == ""
+    assert "deviceChangedAt" not in lic
 
 
 def test_clearing_a_lock_is_not_revoking(store):
@@ -234,15 +228,17 @@ def test_it_clear_releases_the_seat_holders_phone(store):
 
 
 def test_a_refused_self_change_keeps_the_phone(store):
+    """A clear that is refused writes nothing: the account stays signed in on
+    its phone and the lock stays where it was."""
     license_id = _bound_individual(store)
     _registered_on(store, "solo-1")
-    assert attempt(repo.clear_device_lock, license_id, actor=repo.ACTOR_SELF)[0] == ""
-    _registered_on(store, "solo-1", "second-phone")
 
-    err, _ = attempt(repo.clear_device_lock, license_id, actor=repo.ACTOR_SELF)
+    err, _ = attempt(repo.clear_device_lock, "no-such-licence", "solo-1", actor=repo.ACTOR_SELF)
 
-    assert err == "device_change_too_soon"
-    assert store._data["users"]["solo-1"]["activeDeviceId"] == "second-phone"
+    assert err == "license_not_found"
+    assert store._data["users"]["solo-1"]["activeDeviceId"] == "old-phone"
+    assert store._data["devices"]["old-phone"]["status"] == "ACTIVE"
+    assert store._data["licenses"][license_id]["deviceIdLock"] == "old-phone"
 
 
 def test_an_account_on_another_licence_keeps_its_phone(store):
@@ -402,7 +398,7 @@ def test_a_self_change_names_the_phone_it_signed_out(store):
 
     assert err == ""
     assert cleared["releasedDeviceId"] == "old-phone"
-    assert cleared["nextChangeAllowedAt"]
+    assert not cleared.get("nextChangeAllowedAt")
 
 
 def test_the_mode_and_the_release_land_together(store, monkeypatch):
@@ -617,7 +613,8 @@ async def test_the_holder_changes_device_over_http(client, monkeypatch, audited)
     body = resp.json()
     assert body["deviceIdLock"] == ""
     assert body["previousDeviceId"] == "old-phone"
-    assert body["nextChangeAllowedAt"]
+    # Kept for older builds that read it; empty since there is no cooldown (ADR-033).
+    assert body["nextChangeAllowedAt"] == ""
     assert store._data["licenses"][license_id]["deviceIdLock"] == ""
     assert [r["action"] for r in audited if r["action"] == "LICENSE_DEVICE_UNBIND"]
 
@@ -636,21 +633,21 @@ async def test_a_holder_with_no_licence_has_no_device_to_change(client, monkeypa
 
 
 @pytest.mark.asyncio
-async def test_the_holder_cannot_change_device_twice_over_http(client, monkeypatch):
+async def test_the_holder_may_change_device_twice_over_http(client, monkeypatch):
+    """No cooldown (ADR-033): a second unbind straight after the first is a 200,
+    with no `Retry-After` and no "next allowed" instant."""
     store = fake_firestore.install(monkeypatch)
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     store._data["users"] = {}
-    _dev_user_holds(store, monkeypatch)
+    license_id = _dev_user_holds(store, monkeypatch)
     assert (await client.post("/v1/licenses/unbind")).status_code == 200
 
     resp = await client.post("/v1/licenses/unbind")
 
-    assert resp.status_code == 429
-    # The code, then when the holder may change again (TD-116).
-    code, _, when = resp.json()["detail"].partition(": ")
-    assert code == "device_change_too_soon"
-    assert datetime.fromisoformat(when) > datetime.now(timezone.utc)
-    assert int(resp.headers["Retry-After"]) > 0
+    assert resp.status_code == 200, resp.text
+    assert "Retry-After" not in resp.headers
+    assert resp.json()["nextChangeAllowedAt"] == ""
+    assert store._data["licenses"][license_id]["deviceIdLock"] == ""
 
 
 @pytest.mark.asyncio
