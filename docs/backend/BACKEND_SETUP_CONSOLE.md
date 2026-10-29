@@ -172,8 +172,8 @@ manual create or labs, not the pilot CD path:
      | `AUTO_APPROVE_HD` | your domain, e.g. `yourdomain.com` — verified emails there are approved on first sign-in |
      | `ADMIN_EMAILS` | admin addresses, space-separated (commas and `;` also parse) |
      | `SUPPORT_EMAIL` | where "a new user is waiting for approval" mail goes — defaults to `support@sempermechanics.com` |
-     | `NOTIFY_FROM` | verified Resend sender, e.g. `Semper <noreply@yourdomain.com>` — leave unset to disable notification mail |
-     | `NOTIFY_SECURITY_FROM` | verified Resend sender for the mail a holder gets when a new device registers to their account, e.g. `Semper security <security@yourdomain.com>` — leave unset to keep that mail off |
+     | `NOTIFY_FROM` | verified Resend sender, e.g. `semper <noreply@yourdomain.com>` — leave unset to disable notification mail |
+     | `NOTIFY_SECURITY_FROM` | verified Resend sender for the mail a holder gets when a new device registers to their account, e.g. `semper security <security@yourdomain.com>` — leave unset to keep that mail off |
 
      Optional, all with working defaults — add only the ones you need:
 

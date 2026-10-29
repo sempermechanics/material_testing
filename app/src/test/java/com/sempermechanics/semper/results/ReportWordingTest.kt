@@ -49,11 +49,13 @@ class ReportWordingTest {
 
     @Test
     fun `the report has one name`() {
-        assertEquals("Semper Classroom Analysis Report", ReportBuilder.REPORT_NAME)
+        // The product name is lower-case "semper", the report name sentence case (readiness ADDENDUM-4).
+        assertEquals("semper Classroom analysis report", ReportBuilder.REPORT_NAME)
         val sources = File("src/main/java/com/sempermechanics/semper").walkTopDown()
             .filter { it.isFile && it.extension == "kt" }
         val other = Regex(
-            """"[^"\n]*(Metrology Report|Master DIC|DIC Analysis Report|Semper (Classroom )?Analysis Report)""",
+            """"[^"\n]*(Metrology Report|Master DIC|DIC Analysis Report|semper (Classroom )?analysis report)""",
+            RegexOption.IGNORE_CASE,
         )
         val offenders = sources.filter { other.containsMatchIn(it.readText()) }.map { it.name }.toList()
         // The name is spelled once, as ReportBuilder.REPORT_NAME.

@@ -1,0 +1,8 @@
+# Breaking API changes this branch makes on purpose (ADR-029).
+#
+# One line per finding, exactly as tests/test_openapi_breaking.py prints it,
+# e.g. "POST /v1/x body.mode: request field now required". A listed change is
+# allowed through; anything else that can break a shipped client fails the
+# backend suite. Ship the client change first, or keep a compatibility window,
+# and say so in the PR. Empty this file (comments only) once the base branch
+# carries the change.

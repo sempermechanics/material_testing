@@ -125,14 +125,14 @@ def _verified_claims(authorization: str, x_forwarded_authorization: str) -> dict
     touched. Shared by `_authenticate` and `token_uid`."""
     bearer = _client_bearer(authorization, x_forwarded_authorization)
     if not bearer.startswith("Bearer "):
-        log.warning("no bearer token: authorization=%s x_forwarded=%s",
+        log.warning("no bearer token: authorization=%s x_forwarded=%s",  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure - logs two booleans, never a header value
                     bool(authorization), bool(x_forwarded_authorization))
         raise HTTPException(401, errors.MISSING_BEARER)
     try:
         claims = verify_id_token(bearer[7:])
-    except Exception as e:  # noqa: BLE001
-        log.warning("id_token verify FAILED (x_forwarded_present=%s): %s",
-                    bool(x_forwarded_authorization), e)
+    except Exception as e:  # noqa: BLE001 - a google-auth message may echo a malformed token: cut out (TE5-105)
+        log.warning("id_token verify FAILED (x_forwarded_present=%s): %s: %s",  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure - the presented token is replaced with <token>
+                    bool(x_forwarded_authorization), type(e).__name__, (str(e).replace(bearer[7:], "<token>") if bearer[7:] else str(e))[:300])
         audit.record(action="AUTH_DENIED", outcome="DENIED", detail={"stage": "id_token"})
         raise HTTPException(401, errors.INVALID_TOKEN)
     try:

@@ -38,12 +38,16 @@ object ReferencePreviewLoader {
         }
         // Off the main thread: getImageDimensions decodes the whole image
         // rather than parsing a header, ~0.3 s and tens of MB on a 12 MP shot.
-        val dims = withContext(SemperNativeLib.nativeDispatcher) {
+        // The first touch of SemperNativeLib loads the native library (11 MB);
+        // reading its dispatcher on IO keeps that off the main thread when a
+        // restored wizard asks for a preview first (readiness TE1-103).
+        val native = withContext(Dispatchers.IO) { SemperNativeLib.nativeDispatcher }
+        val dims = withContext(native) {
             runCatching { SemperNativeLib.getImageDimensions(bytes) }.getOrNull()
         }?.takeIf { it.size >= 2 && it[0] > 0 && it[1] > 0 }
         val width = dims?.get(0) ?: request.intentWidth
         val height = dims?.get(1) ?: request.intentHeight
-        val bitmap = withContext(SemperNativeLib.nativeDispatcher) {
+        val bitmap = withContext(native) {
             SemperNativeLib.getPreviewFromBytes(bytes, request.previewMaxEdge)
         }
         return Loaded(bitmap, width, height)

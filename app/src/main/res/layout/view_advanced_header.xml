@@ -8,7 +8,7 @@
     android:layout_height="wrap_content"
     android:background="?attr/selectableItemBackground"
     android:gravity="center_vertical"
-    android:minHeight="40dp"
+    android:minHeight="@dimen/min_touch_target"
     android:orientation="horizontal">
 
     <TextView

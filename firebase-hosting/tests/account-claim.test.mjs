@@ -171,7 +171,7 @@ test("after a claim the licence it attached is shown, the box is emptied, and th
   assert.equal($("claimCode").value, "");
   assert.equal($("claimRedeem").disabled, true);
   assert.deepEqual(facts().slice(0, 2), ["Licensed", "Institution · SEMP-UNI1"]);
-  assert.equal($("pills").querySelector(".pill").textContent, "licensed");
+  assert.equal($("pills").querySelector(".pill").textContent, "Licensed");
   assert.equal($("claimCard").hidden, true, "a licence attached: nothing more to claim");
   nowhere();
 });

@@ -4,9 +4,12 @@ package com.sempermechanics.semper.ui.analysis.frames
 
 import android.annotation.SuppressLint
 import android.graphics.BitmapFactory
+import android.os.Handler
+import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.annotation.WorkerThread
 import androidx.core.view.ViewCompat
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
@@ -18,25 +21,54 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asExecutor
 import java.io.File
 import java.util.Locale
+import java.util.concurrent.Executor
 
 /**
  * Horizontal strip of deformed-frame thumbs with 1…N order badges.
  *
  * Thumbnails decode off the main thread through [thumbnails]; the host calls
- * [release] from `onDestroy`.
+ * [release] from `onDestroy`. Their keys ([FrameThumb]) need a stat of each
+ * file, which runs on [statExecutor] when a list is submitted, never in a
+ * bind on the main thread (readiness TE1-103).
  */
 class FrameOrderAdapter(
     private val thumbnails: ThumbnailLoader<FrameThumb> = frameThumbnails(),
+    private val statExecutor: Executor = Dispatchers.IO.asExecutor(),
+    private val statKey: (String) -> FrameThumb = FrameThumb::of,
     private val onOrderChanged: (List<String>) -> Unit,
 ) : RecyclerView.Adapter<FrameOrderAdapter.Holder>() {
 
     private val paths = mutableListOf<String>()
     var dragEnabled: Boolean = false
 
+    /** Each path's key from the latest stat that landed; a tile with none shows the placeholder. */
+    private var keys: Map<String, FrameThumb> = emptyMap()
+
+    /** Counts submits, so only the latest list's stat lands. */
+    private var generation = 0
+    private val main = Handler(Looper.getMainLooper())
+
+    /**
+     * Shows [paths], then reads their keys on [statExecutor]. Until they land
+     * a tile keeps the key its path had, so a resubmit does not flash the
+     * placeholder; a path that now holds another file rebinds when they do.
+     */
     fun submit(paths: List<String>) {
         this.paths.clear()
         this.paths.addAll(paths)
         notifyDataSetChanged()
+        val submitted = ++generation
+        val snapshot = paths.toList()
+        statExecutor.execute {
+            val fresh = snapshot.associateWith(statKey)
+            main.post { if (submitted == generation) applyKeys(fresh) }
+        }
+    }
+
+    private fun applyKeys(fresh: Map<String, FrameThumb>) {
+        val old = keys
+        keys = fresh
+        paths.forEachIndexed { i, path -> if (old[path] != fresh[path]) notifyItemChanged(i, PAYLOAD_THUMB) }
     }
 
     fun currentPaths(): List<String> = paths.toList()
@@ -52,10 +84,14 @@ class FrameOrderAdapter(
     }
 
     override fun onBindViewHolder(holder: Holder, position: Int) {
-        holder.bind(paths[position], position + 1)
+        holder.bind(keys[paths[position]], position + 1)
     }
 
     override fun onBindViewHolder(holder: Holder, position: Int, payloads: MutableList<Any>) {
+        if (payloads.isNotEmpty() && payloads.all { it == PAYLOAD_THUMB }) {
+            holder.setThumb(keys[paths[position]])
+            return
+        }
         if (payloads.contains(PAYLOAD_BADGE)) {
             holder.setBadge(position + 1)
             // The refresh follows a drop, and the change animation it triggers
@@ -89,10 +125,15 @@ class FrameOrderAdapter(
             binding.tvFrameBadge.text = String.format(Locale.US, "%d", order)
         }
 
-        fun bind(path: String, order: Int) {
+        /** The tile's thumbnail; a null [key] (its stat has not landed) shows the placeholder. */
+        fun setThumb(key: FrameThumb?) {
+            thumbnails.bind(binding.imgFrameThumb, key)
+        }
+
+        fun bind(key: FrameThumb?, order: Int) {
             setBadge(order)
             applyDragging(itemView, false, animate = false)
-            thumbnails.bind(binding.imgFrameThumb, FrameThumb.of(path))
+            setThumb(key)
         }
     }
 
@@ -103,12 +144,15 @@ class FrameOrderAdapter(
      */
     data class FrameThumb(val path: String, val length: Long, val modifiedMs: Long) {
         companion object {
+            /** Stats [path]: off the main thread only ([submit] runs it on the stat executor). */
+            @WorkerThread
             fun of(path: String): FrameThumb = File(path).let { FrameThumb(path, it.length(), it.lastModified()) }
         }
     }
 
     companion object {
         private const val PAYLOAD_BADGE = "badge"
+        private const val PAYLOAD_THUMB = "thumb"
 
         /** Thumbnails are a strip of small tiles; decode no larger than they draw. */
         private const val THUMB_MAX_EDGE_PX = 160

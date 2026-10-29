@@ -352,7 +352,7 @@ class Settings:
     # shows in Settings -> Help & support and on the pending-approval screen.
     SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "support@sempermechanics.com")
 
-    # Verified sender for outbound mail, e.g. "Semper <noreply@indicvision.com>",
+    # Verified sender for outbound mail, e.g. "semper <noreply@indicvision.com>",
     # and the Resend API key (the one secret this service holds — set it with
     # --set-secrets, never --set-env-vars). Either one empty disables
     # notification mail entirely: nothing is sent and nothing fails.
@@ -360,7 +360,7 @@ class Settings:
     RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
     # Verified sender for the mail an account's holder gets when a new device
     # registers to it (`notify.device_registered`, TD-232), e.g.
-    # "Semper security <security@sempermechanics.com>". Its own sender, so
+    # "semper security <security@sempermechanics.com>". Its own sender, so
     # the holder's mail does not come from the support inbox's address.
     # Empty (the default) leaves that mail off; it also needs RESEND_API_KEY.
     NOTIFY_SECURITY_FROM = os.environ.get("NOTIFY_SECURITY_FROM", "")

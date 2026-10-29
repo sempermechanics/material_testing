@@ -12,7 +12,7 @@ every test.
 """
 import operator
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from google.api_core.exceptions import AlreadyExists, NotFound
 
@@ -89,11 +89,33 @@ def transactional(fn):
     return fn
 
 
+#: The last `SERVER_TIMESTAMP` handed out, for `_server_now`.
+_last_stamp: datetime | None = None
+
+
+def _server_now() -> datetime:
+    """What `SERVER_TIMESTAMP` resolves to: the wall clock, but strictly
+    later than the previous stamp (readiness TE3-101).
+
+    Real commit times are microsecond and a later commit is later. Windows'
+    clock on CPython 3.12 moves in 15.6 ms steps, so two writes in one tick
+    used to get the same stamp, and a strict comparison of two stamps
+    (`repo/reconcile.py`, a revoke against the holder's next request) read
+    the wrong way round depending on the host.
+    """
+    global _last_stamp
+    now = datetime.now(timezone.utc)
+    if _last_stamp is not None and now <= _last_stamp:
+        now = _last_stamp + timedelta(microseconds=1)
+    _last_stamp = now
+    return now
+
+
 def _resolve(data: dict) -> dict:
     out = {}
     for k, v in data.items():
         if v is SERVER_TIMESTAMP:
-            out[k] = datetime.now(timezone.utc)
+            out[k] = _server_now()
         else:
             out[k] = v
     return out
@@ -169,7 +191,7 @@ class _DocRef:
             if v is DELETE_FIELD:
                 cur.pop(k, None)
             elif v is SERVER_TIMESTAMP:
-                cur[k] = datetime.now(timezone.utc)
+                cur[k] = _server_now()
             elif isinstance(v, Increment):
                 cur[k] = int(cur.get(k, 0)) + v.value
             elif isinstance(v, ArrayUnion):
@@ -452,6 +474,9 @@ def install(monkeypatch):
     """
     from app.repo import _base
 
+    # Each store starts its own clock, so a test that froze or moved time
+    # cannot hold the next test's stamps at its own.
+    monkeypatch.setattr(sys.modules[__name__], "_last_stamp", None)
     client = FakeClient()
     monkeypatch.setattr(_base, "_DB", client)
 

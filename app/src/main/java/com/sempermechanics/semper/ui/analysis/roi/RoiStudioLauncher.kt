@@ -65,8 +65,9 @@ class RoiStudioLauncher(
      * froze the wizard for the length of the write.
      */
     private fun openStudio(bytes: ByteArray) {
-        val tempFile = File(activity.cacheDir, CacheJanitor.TEMP_ROI_REF)
         activity.lifecycleScope.launch {
+            // cacheDir checks the directory on disk: resolved on [io] too (readiness TE1-103).
+            val tempFile = withContext(io) { File(activity.cacheDir, CacheJanitor.TEMP_ROI_REF) }
             val written = withContext(io) {
                 try {
                     tempFile.writeBytes(bytes)

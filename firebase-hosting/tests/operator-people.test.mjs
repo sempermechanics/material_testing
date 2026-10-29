@@ -29,8 +29,8 @@ test("a refused New phone says so", async () => {
   await openDesk({ routes: { [`PATCH /v1/admin/licenses/${IND.id}`]: () => json(409, { detail: "license_revoked" }) } });
   confirms.answer(true);
   await click(rowButton("device", IND.id));
-  assert.match(confirms.asked[0], /^Unbind SEMP-IND1 from the phone it is on\?\n\nThe next phone they sign in on takes it\./);
-  assert.deepEqual(status(), ["Could not unbind: the server refused it (ref: license_revoked)", "muted err"]);
+  assert.match(confirms.asked[0], /^Free SEMP-IND1 for a new phone\?\n\nThe next phone they sign in on takes it\./);
+  assert.deepEqual(status(), ["Could not free it for a new phone: the server refused it (ref: license_revoked)", "muted err"]);
 });
 
 test("after a licence's row is redrawn, focus is back on that row", async () => {
@@ -72,8 +72,8 @@ test("a device history line names what was left, signed out and bound, per app",
   // its zone named, not the raw ISO string.
   assert.deepEqual(alerts, [
     "Phone history for SEMP-IND1\n\n" +
-    `${when("2026-10-07T11:21Z")}  clear  by staff  left dev-1  signed out dev-9  left sc-1 (Semper Classroom)\n` +
-    `${when("2026-10-06T09:00Z")}  clear  by staff  left mt-1 (Semper Classroom)\n` +
+    `${when("2026-10-07T11:21Z")}  clear  by staff  left dev-1  signed out dev-9  left sc-1 (semper Classroom)\n` +
+    `${when("2026-10-06T09:00Z")}  clear  by staff  left mt-1 (semper Classroom)\n` +
     `${when("2026-10-05T09:00Z")}  clear  by staff\n` +
     "—  clear  by —  left dev-2\n" +
     `${when("2026-10-07T11:25Z")}  bind  by u1`,
@@ -105,7 +105,7 @@ const WAITING = [
 test("accounts waiting for approval are listed with their phones, or 'Nobody waiting.'", async () => {
   await openDesk({ users: WAITING });
   assert.deepEqual(userRows(), [
-    ["a@lab.org", "Ann", "device-abc…; Semper Classroom sc-device-…", "Approve"],
+    ["a@lab.org", "Ann", "device-abc…; semper Classroom sc-device-…", "Approve"],
     ["u2", "—", "—", "Approve"],
   ]);
 
@@ -114,10 +114,10 @@ test("accounts waiting for approval are listed with their phones, or 'Nobody wai
   assert.deepEqual(userRows(), [["Nobody waiting."]]);
 });
 
-test("an account not yet migrated shows its Semper Classroom phone from the old field", async () => {
+test("an account not yet migrated shows its semper Classroom phone from the old field", async () => {
   // ADR-030: until TD-56, an account may hold only activeDeviceIdMaterialTesting.
   await openDesk({ users: [{ uid: "u3", email: "c@lab.org", activeDeviceIdMaterialTesting: "mt-device-xyz-9" }] });
-  assert.deepEqual(userRows(), [["c@lab.org", "—", "Semper Classroom mt-device-…", "Approve"]]);
+  assert.deepEqual(userRows(), [["c@lab.org", "—", "semper Classroom mt-device-…", "Approve"]]);
 
   // The new field alone is stale (H1): a backend from before the rename
   // cleared the old one and left it.
@@ -175,7 +175,7 @@ test("a refused approval says why and leaves the button to press again", async (
   } });
   const approve = $("userRows").querySelector('button[data-approve="u2"]');
   await click(approve);
-  assert.deepEqual(status(), ["Could not approve: No Semper account has that address.", "muted err"]);
+  assert.deepEqual(status(), ["Could not approve: No semper account has that address.", "muted err"]);
   assert.equal(approve.disabled, false);
   assert.deepEqual(sent(/users/), [PENDING, "POST /v1/admin/users/u2/approve"], "not re-read after a refusal");
 });
@@ -221,23 +221,23 @@ test("a release names each phone it freed, per app, and clears the box", async (
   answer.resolve(json(200, { email: "pat@lab.org", releasedDeviceId: "dev-1", releasedDeviceIdSemperClassroom: "sc-1",
     releasedDeviceIdMaterialTesting: "sc-1" }));
   await settle();
-  assert.deepEqual(status(), ["Released dev-1 and sc-1 (Semper Classroom) for pat@lab.org; the new phone can sign in.", "muted"]);
+  assert.deepEqual(status(), ["Released dev-1 and sc-1 (semper Classroom) for pat@lab.org; the new phone can sign in.", "muted"]);
   assert.equal($("releaseEmail").value, "");
   assert.equal($("releasePhone").disabled, false);
 });
 
-test("a release with only a Semper Classroom phone, or none, says which", async () => {
+test("a release with only a semper Classroom phone, or none, says which", async () => {
   // `apps.spread` answers Semper Classroom's phone under both names.
   await openDesk({ routes: { [RELEASE]: () => json(200, { email: "pat@lab.org", releasedDeviceId: "",
     releasedDeviceIdSemperClassroom: "sc-1", releasedDeviceIdMaterialTesting: "sc-1" }) } });
   await release("pat@lab.org");
-  assert.deepEqual(status(), ["Released sc-1 (Semper Classroom) for pat@lab.org; the new phone can sign in.", "muted"]);
+  assert.deepEqual(status(), ["Released sc-1 (semper Classroom) for pat@lab.org; the new phone can sign in.", "muted"]);
 
   // A backend from before ADR-030 answers only the old name.
   reset();
   await openDesk({ routes: { [RELEASE]: () => json(200, { email: "pat@lab.org", releasedDeviceIdMaterialTesting: "mt-1" }) } });
   await release("pat@lab.org");
-  assert.deepEqual(status(), ["Released mt-1 (Semper Classroom) for pat@lab.org; the new phone can sign in.", "muted"]);
+  assert.deepEqual(status(), ["Released mt-1 (semper Classroom) for pat@lab.org; the new phone can sign in.", "muted"]);
 
   reset();
   await openDesk({ routes: { [RELEASE]: () => json(200, {}) } });
@@ -249,9 +249,9 @@ test("a release with only a Semper Classroom phone, or none, says which", async 
 test("a refused release is explained, and the address stays for another try", async () => {
   for (const [reply, text] of [
     [() => json(409, { detail: "license_device_clear_required" }),
-      "Could not release: That account is licensed: use New phone on its licence."],
+      "Could not release: That account is Licensed: use New phone on its licence."],
     [() => json(429, { detail: "rate_limited" }), "Could not release: Too many requests just now — wait a moment and try again."],
-    [() => json(404, { detail: "user_not_found" }), "Could not release: No Semper account has that address."],
+    [() => json(404, { detail: "user_not_found" }), "Could not release: No semper account has that address."],
     [offline, "Could not release: The server could not be reached — check your connection and try again."],
   ]) {
     reset();

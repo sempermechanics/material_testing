@@ -1,0 +1,48 @@
+name: Android dependency scan (OSV-Scanner)
+description: >
+  Known vulnerabilities in what the release APK ships (readiness TE5-105).
+  Gradle writes app/gradle.lockfile for :app's releaseRuntimeClasspath through
+  an init script (the build itself locks nothing, so no lockfile is committed),
+  then a pinned, checksum-verified OSV-Scanner reads it. Needs JDK and Gradle
+  set up (setup-android-build) and no submodules: configuring :app does not
+  touch the engine. Triaged advisories are in osv-scanner.toml beside this
+  file, each with a reason and an expiry.
+
+runs:
+  using: composite
+  steps:
+    # The dependencies task resolves the one configuration, and --write-locks
+    # records what it resolved. releaseRuntimeClasspath is the shipped graph,
+    # the one AGP lists in app/build/outputs/sdk-dependencies/release/
+    # (178 modules on 2026-10-28). The configuration cache is off because the
+    # dependencies task does not support it.
+    - name: Resolve the release runtime graph into a lockfile
+      shell: bash
+      run: |
+        set -euo pipefail
+        ./gradlew --console=plain --no-configuration-cache \
+          --init-script "$GITHUB_ACTION_PATH/lock-all-configurations.init.gradle" \
+          :app:dependencies --configuration releaseRuntimeClasspath --write-locks \
+          > "$RUNNER_TEMP/release-runtime-deps.txt"
+        lock=app/gradle.lockfile
+        n=$(grep -c '=.*releaseRuntimeClasspath' "$lock" || true)
+        echo "$n modules in releaseRuntimeClasspath"
+        # A lockfile that lost the graph would scan clean; refuse it.
+        grep -q '^org.jetbrains.kotlin:kotlin-stdlib:' "$lock"
+        [ "$n" -ge 100 ] || { echo "::error::only $n modules locked"; exit 1; }
+
+    - name: Scan with OSV-Scanner
+      shell: bash
+      env:
+        OSV_VERSION: 2.7.0
+        # osv-scanner_linux_amd64 in the v2.7.0 release's osv-scanner_SHA256SUMS.
+        OSV_SHA256: 160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b
+      run: |
+        set -euo pipefail
+        bin="$RUNNER_TEMP/osv-scanner"
+        curl -sSfL -o "$bin" \
+          "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64"
+        echo "${OSV_SHA256}  $bin" | sha256sum -c -
+        chmod +x "$bin"
+        "$bin" scan source --config "$GITHUB_ACTION_PATH/osv-scanner.toml" \
+          -L app/gradle.lockfile

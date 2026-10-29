@@ -8,7 +8,7 @@ import {
   esc, day, licenceStatePill, licenceListPath, licenceSearchBody, searchableLicenceText, upsertLicence,
   placeholderRows, retryRow,
 } from "../util.js";
-import { explain } from "../messages.js";
+import { ACCOUNT, explain } from "../messages.js";
 import { $, desk, demoCapNote } from "./state.js";
 
 // Whoever shows something derived from one licence, told when it is re-read.
@@ -96,7 +96,7 @@ export async function loadLicences(started) {
   } catch (e) {
     if (ticket !== licenceLoad) return;
     const message = e.code === "not_admin"
-      ? "That account is not a Semper operator."
+      ? "That account is not a semper operator."
       : `Could not load licences: ${explain(e)}`;
     setStatus(message, true);
     $("licenceRows").innerHTML = retryRow(COLUMNS, message);
@@ -317,11 +317,11 @@ function licenceRow(lic) {
     : "perpetual";
   const revoked = lic.status === "revoked";
   // Shown because it used to be invisible after mint: a cap typed at issue
-  // time reached every holder with no trace of it on this desk. A demo key
-  // shows the demo allowance instead: a number stored on one never applied.
+  // time reached every holder with no trace of it on this desk. A Demo key
+  // shows the Demo limit instead: a number stored on one never applied.
   const demo = lic.mode === "demo";
   const cap = demo
-    ? `<span class="muted">demo${desk.demoAllowance == null ? "" : ` (${esc(desk.demoAllowance)})`}</span>`
+    ? `<span class="muted">Demo limit${desk.demoAllowance == null ? "" : ` (${esc(desk.demoAllowance)})`}</span>`
     : lic.maxAnalyses == null ? '<span class="muted">default</span>' : esc(lic.maxAnalyses);
   // An individual licensed key can become an institution one; a Demo key is
   // not a licence anyone bought, so there is nothing to carry over.
@@ -357,7 +357,7 @@ function licenceRow(lic) {
       <td class="mono">${esc(label)}</td>
       <td>${esc(lic.kind)}${lic.seating === "floating" ? " · shared" : ""}${lic.supersededBy
         ? '<br><span class="muted">replaced by an institution licence</span>' : ""}</td>
-      <td>${esc(lic.mode)}</td>
+      <td>${esc(ACCOUNT.modes[lic.mode] || lic.mode)}</td>
       <td>${seatSummary(lic)}</td>
       <td>${term}</td>
       <td>${cap}</td>

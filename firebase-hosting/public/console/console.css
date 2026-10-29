@@ -246,13 +246,23 @@ details.more .menu .secondary + .danger { margin-top: .5rem; }
 
 /* The status line sits above the first card, and the licence table is well
    below it: a result written there while the operator worked in the table was
-   off-screen. Pinned while it says something; empty, it takes no room. */
-#status:not(:empty) {
+   off-screen. Pinned while it says something; empty, it takes no room. Its
+   bar holds the line and a × that clears it (status.js), so a message read
+   need not stay pinned over the page. */
+.status-bar { display: flex; align-items: flex-start; gap: .5rem; margin: .5rem 0; }
+.status-bar > #status { flex: 1; min-width: 0; margin: 0; }
+.status-bar:has(> #status:not(:empty)) {
   position: sticky; top: .5rem; z-index: 5;
   background: var(--bg-elevated); border: 1px solid var(--line-strong);
-  border-radius: var(--radius); padding: .6rem 1rem;
+  border-radius: var(--radius); padding: .6rem .5rem .6rem 1rem;
 }
-#status.err:not(:empty) { border-color: currentColor; }
+.status-bar:has(> #status.err:not(:empty)) { border-color: var(--danger); }
+.status-close {
+  flex: none; padding: 0 .45rem; font-size: 1.15rem; line-height: 1.35; font-weight: 400;
+  background: transparent; border-color: transparent; color: var(--muted);
+}
+.status-close:hover { background: rgba(255, 255, 255, 0.06); border-color: transparent; color: var(--ink); }
+#status:empty + .status-close { display: none; }
 .ok { color: var(--ok); }
 /* The scroller is the containing block of what is positioned inside it: a
    heading's visually hidden label ("Actions") placed against the page instead
@@ -317,6 +327,10 @@ dialog::backdrop { background: rgba(0, 0, 0, .55); }
 }
 .card-head h2 { margin: 0 .25rem 0 0; }
 .card-head > .muted { font-size: .85rem; }
+/* A heading button that shows or hides the card's list (Show list): the
+   same caret as a row's More menu, turned up while the list is shown. */
+button.disclose::after { content: " ▾"; color: var(--muted); }
+button.disclose[aria-expanded="true"]::after { content: " ▴"; }
 /* What narrows a table (search, ticks), on its own line under the heading. */
 .toolbar { margin-bottom: .75rem; gap: .5rem 1rem; }
 .toolbar > input { flex: 0 1 26rem; min-width: 12rem; }
@@ -395,7 +409,7 @@ body.desk { --max-width: 1400px; }
 .desk #app .card { scroll-margin-top: 4.5rem; }
 /* With the index pinned at the top, a message on the status line pins
    under it rather than over it. */
-.desk main:has(#app:not([hidden])) #status:not(:empty) { top: 3.6rem; }
+.desk main:has(#app:not([hidden])) .status-bar:has(> #status:not(:empty)) { top: 3.6rem; }
 
 /* Approvals and the Demo phone release: two small account jobs, side by
    side where there is room, the queue the wider of the two. */
@@ -436,6 +450,16 @@ table.test-accounts td.account { min-width: 16rem; overflow-wrap: break-word; }
 .phone-name .mono { color: var(--muted); font-size: .78rem; font-weight: 400; overflow-wrap: break-word; }
 .phone-model .mono { color: var(--ink); font-size: .85rem; }
 .phone-list button { padding: .25rem .65rem; font-size: .8rem; }
+/* The count folds the phones away (test-accounts.js), with the caret a row's
+   More menu uses, turned up while they show. */
+details.phones-fold > summary {
+  list-style: none; display: inline-flex; align-items: center; cursor: pointer; white-space: nowrap;
+  padding: .1rem .4rem; margin-left: -.4rem; border-radius: 6px;
+}
+details.phones-fold > summary::-webkit-details-marker { display: none; }
+details.phones-fold > summary::after { content: " ▾"; white-space: pre; color: var(--muted); }
+details.phones-fold[open] > summary::after { content: " ▴"; }
+details.phones-fold > summary:hover { background: rgba(255, 255, 255, 0.04); }
 .tag {
   display: inline-block; white-space: nowrap; padding: 0 .5rem; border-radius: 999px;
   border: 1px solid var(--line-strong); color: var(--muted); font-size: .75rem; line-height: 1.5;
@@ -496,6 +520,25 @@ table.test-accounts td.account { min-width: 16rem; overflow-wrap: break-word; }
     border: 1px solid var(--line); border-radius: 10px; padding: .6rem .8rem;
     margin-bottom: .75rem; background: var(--bg-elevated);
   }
+  /* A heading with sort buttons (the rosters) stays on screen as one
+     "Sort by" line over the cards, its other headings hidden: clipped with
+     the rest, Tab landed on two buttons nobody could see, and a tap could
+     not sort at all (AE2-104). aria-sort stays on each <th>. */
+  .wrap thead:has(button.sort) {
+    position: static; width: auto; height: auto; overflow: visible; clip-path: none; display: block;
+  }
+  .wrap thead:has(button.sort) tr {
+    display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .5rem;
+    border: 0; padding: 0; margin: 0 0 .5rem; background: none;
+  }
+  .wrap thead:has(button.sort) tr::before {
+    content: "Sort by"; color: var(--muted); font-size: .8rem; font-weight: 500;
+  }
+  .wrap thead:has(button.sort) th { display: block; border: 0; padding: 0; }
+  .wrap thead:has(button.sort) th:not(:has(button.sort)) { display: none; }
+  .wrap thead:has(button.sort) button.sort {
+    padding: .3rem .6rem; border: 1px solid var(--line-strong); border-radius: 999px;
+  }
   .wrap td { display: flex; gap: .75rem; border: 0; padding: .2rem 0; }
   .wrap td[data-label]::before {
     content: attr(data-label); flex: 0 0 6.5rem; color: var(--muted);
@@ -510,9 +553,13 @@ table.test-accounts td.account { min-width: 16rem; overflow-wrap: break-word; }
   /* The term ("until May 12, 2027 (UTC) +14d") and the analyses count wrap
      beside their label; kept on one line they ran past a 360 px card. */
   table.licences td:nth-child(5), table.licences td:nth-child(6) { white-space: normal; }
-  /* The count, then the phones under it at the card's full width. */
+  /* The count beside its label, folded or not, then the phones under both
+     at the card's full width. Basis 0: unfolded, the list's width pushed the
+     fold, and the count with it, under the "Phones" label (AE2-107); the list
+     reaches back over the label column (6.5rem and the .75rem gap). */
   .wrap td.phones { flex-wrap: wrap; }
-  .phone-list { flex-basis: 100%; min-width: 0; }
+  .phones-fold { flex: 1 1 0; min-width: 0; }
+  .phone-list { min-width: 0; margin-left: -7.25rem; }
   .card-head h2 { flex: 1 1 100%; }
   .card-head > .muted { flex-basis: 100%; }
   .toolbar > input { flex: 1 1 100%; }

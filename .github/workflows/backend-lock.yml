@@ -18,7 +18,10 @@
 #                      download rather than a local Python 3.12 install.
 #   workflow_dispatch  compiles and pushes the lock to the chosen branch. Point
 #                      it at a Dependabot branch to fix that PR in place; this is
-#                      the case the workflow exists for.
+#                      the case the workflow exists for. `upgrade_packages`
+#                      (optional, space-separated names) adds one
+#                      `--upgrade-package <name>` each, for a security bump of a
+#                      transitive pin that requirements.txt does not name.
 name: Backend lock
 
 on:
@@ -34,6 +37,12 @@ on:
         # refused. Name the PR branch, usually Dependabot's.
         description: PR branch to regenerate the lock on and push to (not main)
         required: true
+      upgrade_packages:
+        # Optional. Space-separated package names, each passed to pip-compile
+        # as --upgrade-package <name> (e.g. a transitive pin with an advisory).
+        description: Packages to upgrade, space-separated (optional, e.g. "msgpack")
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -110,7 +119,23 @@ jobs:
 
       - name: Compile the lock
         working-directory: backend
-        run: pip-compile --generate-hashes --output-file=requirements.lock requirements.txt
+        env:
+          # Via env, not ${{ }} in the script: the names are user input.
+          UPGRADE_PACKAGES: ${{ inputs.upgrade_packages }}
+        run: |
+          args=()
+          # read -a splits on spaces without glob expansion.
+          read -r -a names <<< "$UPGRADE_PACKAGES"
+          for name in "${names[@]}"; do
+            # A package name only (PEP 508 name characters); anything else is refused.
+            if ! [[ "$name" =~ ^[A-Za-z0-9]([A-Za-z0-9._-]{0,99})$ ]]; then
+              echo "::error::upgrade_packages: '$name' is not a package name."
+              exit 1
+            fi
+            args+=(--upgrade-package "$name")
+          done
+          echo "pip-compile extra arguments: ${args[*]:-(none)}"
+          pip-compile --generate-hashes "${args[@]}" --output-file=requirements.lock requirements.txt
 
       - name: Commit and push if it changed
         env:

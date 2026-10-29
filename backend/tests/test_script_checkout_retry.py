@@ -14,10 +14,11 @@ import pytest
 
 _REPO = Path(__file__).resolve().parents[2]
 _RETRY = _REPO / ".github" / "actions" / "checkout-submodules" / "retry.sh"
+_BASH = shutil.which("bash")
 
 pytestmark = [
     pytest.mark.skipif(not _RETRY.is_file(), reason=".github/ not present (backend-only checkout)"),
-    pytest.mark.skipif(os.name == "nt" or shutil.which("bash") is None, reason="needs bash"),
+    pytest.mark.skipif(os.name == "nt" or _BASH is None, reason="needs bash"),
 ]
 
 # Fails (exit 3) on every call before call number $1, then succeeds.
@@ -26,8 +27,8 @@ _FLAKY = 'n=$(( $(cat calls 2>/dev/null || echo 0) + 1 )); echo "$n" > calls; [ 
 
 def _run(tmp_path: Path, succeed_on: int) -> subprocess.CompletedProcess[str]:
     env = {**os.environ, "RETRY_DELAYS": "0 0 0 0"}
-    return subprocess.run(  # noqa: S603 - this repo's own script and a fixed command, no shell
-        ["bash", _RETRY.as_posix(), "bash", "-c", _FLAKY, "flaky", str(succeed_on)],  # noqa: S607 - fixed bash on PATH
+    return subprocess.run(  # noqa: S603 - argv is bash, this repo's own script and a fixed snippet, no shell
+        [_BASH, _RETRY.as_posix(), _BASH, "-c", _FLAKY, "flaky", str(succeed_on)],
         capture_output=True, text=True, env=env, cwd=tmp_path, timeout=60,
     )
 

@@ -1,3 +1,7 @@
+// One entry point per thing Home asks of it (list, restore, erase, rename, queued
+// deletes); splitting them apart would scatter the one channel-per-outcome pattern.
+@file:Suppress("TooManyFunctions")
+
 package com.sempermechanics.semper.ui.home
 
 import android.app.Application
@@ -9,6 +13,7 @@ import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.cloud.CloudBackupListing
 import com.sempermechanics.semper.data.cloud.CloudSync
 import com.sempermechanics.semper.data.cloud.SessionDeletes
+import com.sempermechanics.semper.data.cloud.SessionMetadataSync
 import com.sempermechanics.semper.data.cloud.restore.RestoreStart
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
@@ -29,13 +34,14 @@ import kotlinx.coroutines.withContext
 /**
  * Home's work that must not die with a rotation (ADR-016): the phone's list
  * as last read, the rows a queued delete hides, the backups on offer, and the
- * restores and phone erases Home asks for.
+ * restores, phone erases and renames Home asks for.
  *
  * A restore used to run on the Activity's scope: a rotation during its cloud
  * lookup cancelled it after the selection had already been cleared, so the
  * tap did nothing. A multi-row erase did the same part-way through, with no
  * toast. Both run on [viewModelScope] here, and what each came to is handed
  * out once ([restoreOutcomes], [eraseOutcomes]) to whichever Home is current.
+ * A rename ([rename], [renameOutcomes]) followed them (readiness AE1-111).
  *
  * The licence state Home shows ([HomeEntitlements]) is read with the list, on
  * [io]: it reaches EntitlementStore, whose first read opens the Keystore and
@@ -78,6 +84,9 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         val kept: Int,
     )
 
+    /** What one [rename] came to: the name asked for and the one written (null when the row is gone). */
+    data class Rename(val requested: String, val applied: String?)
+
     private val _list = MutableStateFlow<HomeList?>(null)
 
     /** The latest list read; null before the first. */
@@ -103,6 +112,11 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     /** What each erase came to, once each; buffered while no Home is there to take it. */
     val eraseOutcomes: Flow<LocalErase> = eraseChannel.receiveAsFlow()
+
+    private val renameChannel = Channel<Rename>(Channel.UNLIMITED)
+
+    /** What each rename came to, once each; buffered while no Home is there to take it. */
+    val renameOutcomes: Flow<Rename> = renameChannel.receiveAsFlow()
 
     /** Where the disk reads run; tests hold them. */
     @VisibleForTesting
@@ -132,6 +146,22 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     @VisibleForTesting
     internal var eraseLocalOnly: suspend (String) -> Unit =
         { id -> CloudSync.eraseLocalOnly(getApplication(), id) }
+
+    /**
+     * Writes one row's new name and, for a backed-up row whose cloud
+     * metadata.json now lags, queues the send (ADR-013); returns the name
+     * written. Runs on [io] only. Tests stand in for it.
+     */
+    @VisibleForTesting
+    internal var applyRename: suspend (id: String, name: String) -> String? = { id, name ->
+        val app = getApplication<Application>()
+        withContext(io) {
+            // A name another analysis has comes back with a " (2)".
+            val applied = SessionStore.rename(app, id, name)
+            if (SessionStore.get(app, id)?.metadataStale == true) SessionMetadataSync.enqueue(app, id)
+            applied
+        }
+    }
 
     /**
      * Re-reads the phone's list. Latest wins: a newer call cancels the read
@@ -215,6 +245,13 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Renames row [id] to [name] and hands the outcome to [renameOutcomes]. Survives a rotation. */
+    fun rename(id: String, name: String) {
+        viewModelScope.launch {
+            renameChannel.send(Rename(name, applyRename(id, name)))
+        }
+    }
+
     private suspend fun readList(): HomeList {
         val app = getApplication<Application>()
         val justQueued = justQueuedDeletes.toSet()
@@ -230,6 +267,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     override fun onCleared() {
         restoreChannel.close()
         eraseChannel.close()
+        renameChannel.close()
         super.onCleared()
     }
 }

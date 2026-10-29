@@ -7,6 +7,7 @@ import android.text.style.ForegroundColorSpan
 import android.text.style.RelativeSizeSpan
 import android.view.Gravity
 import android.view.LayoutInflater
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -53,7 +54,7 @@ object DeleteChoiceDialog {
         title: CharSequence,
         message: CharSequence,
         choices: List<Choice>,
-    ) {
+    ): AlertDialog {
         val inflater = LayoutInflater.from(activity)
         val view = DialogDeleteChoiceBinding.inflate(inflater)
         view.tvDeleteMessage.text = message
@@ -73,6 +74,7 @@ object DeleteChoiceDialog {
             view.deleteChoices.addView(button)
         }
         dialog.show()
+        return dialog
     }
 
     /** The label, then the hint on its own line, smaller and in the secondary text colour. */

@@ -117,7 +117,66 @@ def test_posture_all_pass(tmp_path):
     assert "roles/firebaseauth.admin" in lines[("3.4-iam", "demo-auth-prod")][1]
     assert lines[("3.5-entitlement-key", "semper-api")][1].startswith("secret entitlement-signing-key")
     assert "FAIL: 0  UNKNOWN: 0" in proc.stdout
+    assert len(lines) == _ITEMS, proc.stdout
     assert calls, "the stub was never called"
+
+
+#: Lines a run prints for two projects and the two default services, read or not.
+_ITEMS = 28
+#: The exit code of a run with no FAIL but an item it could not read.
+_INCOMPLETE = 4
+
+
+def _nothing_answers(tmp_path: Path) -> Path:
+    """A scenario where every gcloud and curl call fails, as with an expired login."""
+    root = tmp_path / "nothing"
+    root.mkdir()
+    (root / "gcloud.json").write_text("[]", encoding="utf-8")
+    (root / "curl.json").write_text("[]", encoding="utf-8")
+    return root
+
+
+def test_posture_that_reads_nothing_is_not_a_pass(tmp_path):
+    """TE6-102: an expired login printed 20 UNKNOWN lines, dropped 8 items and
+    exited 0, so "no FAIL" was met by a run that read nothing."""
+    proc, calls = _run(tmp_path, _POSTURE, _nothing_answers(tmp_path), *_ARGS)
+    lines = _lines(proc.stdout)
+    assert proc.returncode == _INCOMPLETE, proc.stdout + proc.stderr
+    assert len(lines) == _ITEMS, proc.stdout
+    assert {s for s, _ in lines.values()} == {"UNKNOWN"}, proc.stdout
+    assert all(detail.strip() for _, detail in lines.values()), proc.stdout
+    assert f"FAIL: 0  UNKNOWN: {_ITEMS}" in proc.stdout
+    assert "nothing could be read" in proc.stdout
+    for item in ("2.1-groups", "2.5-idp-providers", "2.6-max-instances", "3.4-check-revoked",
+                 "3.5-entitlement-key", "2.7-delete-protection"):
+        assert any(i == item for i, _ in lines), f"{item} missing:\n{proc.stdout}"
+    assert calls
+
+
+def test_posture_tag_line_says_why_it_was_not_read(tmp_path):
+    """With the project number unread the tag lookup is skipped; its line used
+    to show the previous call's error (the liens list)."""
+    proc, _ = _run(tmp_path, _POSTURE, _nothing_answers(tmp_path), *_ARGS)
+    detail = _lines(proc.stdout)[("2.1-tag", "demo-app-prod")][1]
+    assert "project number unknown" in detail and "projects describe" in detail, detail
+    assert "liens" not in detail
+
+
+def test_posture_budget_without_a_project_number_is_unknown(tmp_path):
+    scenario = _variant(tmp_path, {}, [
+        # The stub matches words in order, so billing's describe goes first.
+        {"match": ["billing", "projects", "describe"], "stdout_file": "billing.json"},
+        {"match": ["projects", "describe", "demo-app-prod"], "stderr": "ERROR: PERMISSION_DENIED\n",
+         "exit": 1},
+    ])
+    proc, _ = _run(tmp_path, _POSTURE, scenario, *_ARGS)
+    lines = _lines(proc.stdout)
+    assert lines[("2.1-tag", "demo-app-prod")][0] == "UNKNOWN"
+    status, detail = lines[("2.6-budget", "demo-app-prod")]
+    assert status == "UNKNOWN" and "project number unknown" in detail, proc.stdout
+    assert lines[("2.6-budget", "demo-auth-prod")][0] == "PASS"
+    assert proc.returncode == _INCOMPLETE
+    assert len(lines) == _ITEMS
 
 
 def test_posture_reports_each_failure(tmp_path):
@@ -211,7 +270,9 @@ def test_posture_backups_unread_are_unknown_not_fail(tmp_path):
     proc, calls = _run(tmp_path, _POSTURE, scenario, *_ARGS)
     status, detail = _lines(proc.stdout)[("2.7-backup", "demo-app-prod")]
     assert status == "UNKNOWN" and "firestore-backup.yml" in detail and "--backup-bucket" in detail
-    assert proc.returncode == 0
+    # Not a pass: an item was not read (TE6-102).
+    assert proc.returncode == _INCOMPLETE, proc.stdout
+    assert "FAIL: 0  UNKNOWN: 1" in proc.stdout
     assert not any("storage" in c for c in calls)
     # A bucket that cannot be listed (the stub has no answer for it).
     proc, _ = _run(tmp_path, _POSTURE, scenario, *_ARGS, "--backup-bucket", "demo-backups")

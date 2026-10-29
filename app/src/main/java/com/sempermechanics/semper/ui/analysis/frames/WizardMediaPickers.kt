@@ -3,6 +3,7 @@ package com.sempermechanics.semper.ui.analysis.frames
 import android.net.Uri
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import com.sempermechanics.semper.ui.common.dialog.ReopenAfterRecreate
 import com.sempermechanics.semper.ui.common.media.MediaPickerSheet
 import com.sempermechanics.semper.ui.common.media.MediaSourceChooser
 
@@ -22,6 +23,10 @@ class WizardMediaPickers(
 ) {
     private var mediaPicker: MediaPickerSheet? = null
 
+    /** Each sheet, with its picks, comes back after a rotation or theme switch (readiness AE1-111). */
+    private val reopenReference = ReopenAfterRecreate(activity, "wizard.referenceSheet")
+    private val reopenDeformed = ReopenAfterRecreate(activity, "wizard.deformedSheet")
+
     private val requestMediaPermission =
         activity.registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
             mediaPicker?.onPermissionResult()
@@ -35,6 +40,18 @@ class WizardMediaPickers(
             onDeformed(uris)
         }
 
+    init {
+        // Built in onCreate, after super.onCreate: the saved state is readable.
+        val reference = reopenReference.restored()
+        val deformed = reopenDeformed.restored()
+        if (reference != null || deformed != null) {
+            activity.window.decorView.post {
+                if (reference != null) pickReference()
+                if (deformed != null) pickDeformed(MediaPickerSheet.picksIn(deformed))
+            }
+        }
+    }
+
     fun pickReference() {
         mediaPicker = MediaSourceChooser.show(
             activity = activity,
@@ -42,16 +59,19 @@ class WizardMediaPickers(
             requestPermission = ::requestPermission,
             onBrowseSaf = { pickRefFiles.launch(arrayOf(IMAGES)) },
             onPicked = { uris -> uris.firstOrNull()?.let(onReference) },
+            kept = MediaPickerSheet.Kept(reopenReference),
         )
     }
 
-    fun pickDeformed() {
+    /** The frames sheet; [picks] are ticked already (a sheet shown again after a rotation). */
+    fun pickDeformed(picks: List<Uri> = emptyList()) {
         mediaPicker = MediaSourceChooser.show(
             activity = activity,
             mode = MediaSourceChooser.Mode.DEFORMED,
             requestPermission = ::requestPermission,
             onBrowseSaf = { pickDefFiles.launch(arrayOf(IMAGES)) },
             onPicked = onDeformed,
+            kept = MediaPickerSheet.Kept(reopenDeformed, picks),
         )
     }
 

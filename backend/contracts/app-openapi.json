@@ -2727,7 +2727,7 @@
         "summary": "List Seats"
       },
       "post": {
-        "description": "Put someone on this license's roster, by email.\n\nThey do not need an account yet. An address that has one takes a seat\nat once; one that does not becomes a pending **invite**, redeemed the\nfirst time that person signs in. Exactly one of `seat` and `invite`\ncomes back: an invite holds no seat and consumes no slot.\n\nOn an assigned license a seat entitles them immediately. On a floating\none it makes them eligible; they check out a lease when they work.",
+        "description": "Put someone on this license's roster, by email.\n\nThey do not need an account yet. An address that has one takes a seat\nat once; one that does not becomes a pending **invite**, redeemed the\nfirst time that person signs in. Exactly one of `seat` and `invite`\ncomes back: an invite holds no seat and consumes no slot.\n\nOn an assigned license a seat entitles them immediately. On a floating\none it makes them eligible; they check out a lease when they work.\n\nInstitution IT may add only addresses on the licence's `domainLock`\n(422 `member_off_domain`), and an address another licence holds or\npromises is answered as one with no account: a pending invite, which\nis not claimed while that other licence holds them. Semper staff may\nadd any address and are told `member_already_licensed`.",
         "operationId": "add_seat_v1_admin_licenses__license_id__seats_post",
         "parameters": [
           {
@@ -5583,7 +5583,7 @@
         "summary": "List Seats"
       },
       "post": {
-        "description": "Put someone on this license's roster, by email.\n\nThey do not need an account yet. An address that has one takes a seat\nat once; one that does not becomes a pending **invite**, redeemed the\nfirst time that person signs in. Exactly one of `seat` and `invite`\ncomes back: an invite holds no seat and consumes no slot.\n\nOn an assigned license a seat entitles them immediately. On a floating\none it makes them eligible; they check out a lease when they work.",
+        "description": "Put someone on this license's roster, by email.\n\nThey do not need an account yet. An address that has one takes a seat\nat once; one that does not becomes a pending **invite**, redeemed the\nfirst time that person signs in. Exactly one of `seat` and `invite`\ncomes back: an invite holds no seat and consumes no slot.\n\nOn an assigned license a seat entitles them immediately. On a floating\none it makes them eligible; they check out a lease when they work.\n\nInstitution IT may add only addresses on the licence's `domainLock`\n(422 `member_off_domain`), and an address another licence holds or\npromises is answered as one with no account: a pending invite, which\nis not claimed while that other licence holds them. Semper staff may\nadd any address and are told `member_already_licensed`.",
         "operationId": "add_seat_v1_institutions_licenses__license_id__seats_post",
         "parameters": [
           {

@@ -34,6 +34,22 @@ export function setStatus(message, isError = false) {
   el.className = isError ? "muted err" : "muted";
 }
 
+// The × in the status bar (each page's markup) clears the message, and with it
+// the pinned bar. Listened for on the document, once: this module outlives a
+// page's markup in the tests, as a browser keeps it for the tab.
+document.addEventListener("click", (ev) => {
+  if (ev.target && ev.target.closest && ev.target.closest("#statusClose")) setStatus("");
+});
+
+/**
+ * Where a card under the status line goes: after its bar, not inside it, or
+ * it would be pinned to the top of the page with the message.
+ */
+export function statusAnchor() {
+  const el = document.getElementById("status");
+  return (el && el.closest(".status-bar")) || el;
+}
+
 /** Clear "Checking your sign-in…" if nothing has replaced it since. */
 export function clearPendingStatus() {
   const el = document.getElementById("status");

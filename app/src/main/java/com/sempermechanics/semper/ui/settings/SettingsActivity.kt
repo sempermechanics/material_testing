@@ -33,6 +33,7 @@ import com.sempermechanics.semper.databinding.ActivitySettingsBinding
 import com.sempermechanics.semper.databinding.ViewSettingsScrollContentBinding
 import com.sempermechanics.semper.databinding.ViewSettingsSectionHeaderBinding
 import com.sempermechanics.semper.ui.auth.AuthActivity
+import com.sempermechanics.semper.ui.common.ExpandState
 import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.Motion
 import com.sempermechanics.semper.ui.common.SettingsSectionHeader
@@ -185,16 +186,19 @@ class SettingsActivity : AppCompatActivity() {
     private fun wireCollapsible(header: ViewSettingsSectionHeaderBinding, @StringRes title: Int, body: View) {
         SettingsSectionHeader.bind(header, title)
         val chevron = header.imgSectionChevron
+        lateinit var toggle: () -> Unit
         fun apply(expanded: Boolean) {
             body.isVisible = expanded
             chevron.rotation = if (expanded) CHEVRON_EXPANDED_DEG else 0f
             if (expanded) openSections += title else openSections -= title
+            ExpandState.mark(header.root, expanded, toggle)
         }
-        apply(title in openSections)
-        header.root.setOnClickListener {
+        toggle = {
             Motion.animateExpandCollapse(binding.settingsSections)
             apply(!body.isVisible)
         }
+        apply(title in openSections)
+        header.root.setOnClickListener { toggle() }
     }
 
     // ── Analyses data management ─────────────────────────────────────────

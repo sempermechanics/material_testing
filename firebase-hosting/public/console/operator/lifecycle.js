@@ -24,7 +24,7 @@ export async function revokeLicence(id) {
     : "the person holding it";
   if (!(await confirmInPage({
     title: `Revoke ${label}`,
-    message: `Revoking ${label} drops ${who} to demo immediately.\n\n` +
+    message: `Revoking ${label} drops ${who} to Demo immediately.\n\n` +
       "Their saved analyses are untouched — this withdraws entitlement, " +
       "it does not delete anything.\n\nContinue?",
   }))) return;
@@ -81,7 +81,7 @@ async function sendRevoke(id, label) {
     // The answer is the revoked licence; there is nothing to reload.
     showLicence({ ...out, status: "revoked" });
     setStatus(
-      `${label} revoked — its holder is on demo from their next request.` +
+      `${label} revoked — its holder is on Demo from their next request.` +
       ($("showRevoked").checked ? "" : " Tick “Show revoked” to see it."),
     );
     closeRosterOf(id);
@@ -106,7 +106,7 @@ export async function deleteLicence(id) {
   if (!(await confirmInPage({
     title: `Delete ${label}`,
     message: `Delete ${label}?\n\n` +
-      (live ? `It is revoked first: ${who} drops to demo immediately. ` : "") +
+      (live ? `It is revoked first: ${who} drops to Demo immediately. ` : "") +
       "It leaves this list and is held under Recently deleted for 30 days, " +
       "then purged. Nobody's saved analyses are touched.",
   }))) return;
@@ -159,23 +159,37 @@ async function sendDelete(id, label) {
   }
 }
 
-$("loadDeleted").addEventListener("click", loadDeleted);
+// Show list / Hide list at the right of the card's heading, where the desk
+// keeps what a card does to its whole list. Show reads it afresh; Hide only
+// puts it away. Never disabled mid-read, so Hide always works.
+$("loadDeleted").addEventListener("click", () => {
+  if ($("deletedWrap").hidden) loadDeleted();
+  else showDeleted(false);
+});
+
+/** Show or hide the list, the button naming what its next click does. */
+function showDeleted(shown) {
+  $("deletedWrap").hidden = !shown;
+  $("loadDeleted").textContent = shown ? "Hide list" : "Show list";
+  $("loadDeleted").setAttribute("aria-expanded", String(shown));
+}
+
+let deletedLoad = 0; // the latest read; an older answer is not drawn over it
 
 async function loadDeleted() {
-  $("loadDeleted").textContent = "Refresh";
-  $("deletedWrap").hidden = false;
+  const ticket = ++deletedLoad;
+  showDeleted(true);
   $("deletedRows").innerHTML = placeholderRows(7, 2);
-  $("loadDeleted").disabled = true;
   try {
     const data = await api("/v1/admin/deleted-licenses?limit=50");
+    if (ticket !== deletedLoad) return;
     const rows = data.licenses || [];
     $("deletedRows").innerHTML = rows.length
       ? rows.map(deletedRow).join("")
       : '<tr><td colspan="7" class="muted">Nothing deleted in the last 30 days.</td></tr>';
   } catch (e) {
+    if (ticket !== deletedLoad) return;
     $("deletedRows").innerHTML = retryRow(7, `Could not load: ${explain(e)}`);
-  } finally {
-    $("loadDeleted").disabled = false;
   }
 }
 

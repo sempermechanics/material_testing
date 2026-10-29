@@ -200,7 +200,32 @@ step of sign-in nobody could complete there. A wrong code keeps the card: it
 says the code was not accepted and offers **Try again**, which takes the next
 code against the same challenge, with no second trip to Google. Cancel is
 `ERR_CANCELLED`, or after a wrong code that code's error, as before. A challenge
-that timed out ends the card, and the status line says to sign in again.
+that timed out ends the card, and the status line says to sign in again. SDK
+12.4.0 reports a lapsed challenge as `auth/invalid-multi-factor-session`,
+`auth/missing-multi-factor-session` or `auth/code-expired`, not
+`auth/totp-challenge-timeout`; `CHALLENGE_EXPIRED` in `auth.js` holds all four.
+
+A step-up's freshness is measured on Google's clock: `authAge` forces a token
+refresh and takes issued-at minus `auth_time`, both Google's. It used
+`Date.now()`, so a computer whose clock was a minute off disagreed with the
+backend's 90 s / 120 s windows: a step-up whose code had just been accepted was
+skipped as fresh and then refused as stale, or every change went back to
+Google.
+
+A remembered sign-in that is over — Firebase cannot refresh it
+(`auth/user-token-expired`, `auth/invalid-user-token`), or the backend refuses
+the token (401 `invalid_token`) — signs the page out (`endSession`), so Sign in
+is on screen, the dashboard is hidden, and the status line says "Your sign-in
+has expired. Sign in again." (COMMON's `invalid_token` on a page's action).
+`endSession` writes that line itself, so a read whose own message lands
+somewhere now hidden (the Test accounts list) still says it, and the
+institution page stops rather than drawing the roster behind Sign in
+(AE2-105). Until the next sign-in `sessionOver()` stays true, and every
+page (front door, account, institution, operator desk) checks it after each
+read it sends alongside another, on the answer and on the failure alike: an
+answer that arrives after another read ended the session, a 200, a 503 or no
+network, neither brings the dashboard back nor writes over that line. It used to read "an unexpected sign-in error (ref: …)" beside a
+Sign out button.
 
 Nothing else uses `window.prompt` either. The operator desk's typed-key
 confirmations (revoke, delete, shortening a licence's term) and the password
@@ -235,7 +260,7 @@ if anything calls them.
 
 ## Confirming destructive actions
 
-Revoking a licence drops a whole institution to demo, so the page asks more
+Revoking a licence drops a whole institution to Demo, so the page asks more
 than once: password (or Google) re-auth plus authenticator code, a plain
 confirmation naming who is affected, then typing the **key prefix**. The API
 also refuses a revoke on a session older than
@@ -512,9 +537,9 @@ media query in `console.css`.
 
 On the desk (`<body class="desk">`, up to 1400px wide), a pinned row of
 anchors (`.desk-nav`) jumps to each card, with the number waiting for approval
-beside Approvals (`#pendingCount`, filled by `people.js`). The licence table
+beside Access requests (`#pendingCount`, filled by `people.js`). The licence table
 comes first and **Issue a licence** opens its card from the table's heading;
-Roster and Verified seats open straight under the table. Approvals and the
+Roster and Verified seats open straight under the table. Access requests and the
 Demo phone release share a row on desktop; then Test accounts, whose create
 form is a `<details>` folded under it; Recently deleted is last. Each licence
 row keeps Edit (and Roster) in view; the rest is under **More**, a `<details>`

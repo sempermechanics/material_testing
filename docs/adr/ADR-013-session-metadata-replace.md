@@ -63,7 +63,7 @@ Two ways to reach the cloud copy were weighed:
      (`CloudRestore.recordFrom`).
 3. **Who sends.**
    - The viewer queues `SessionMetadataWorker` after a correction (Home's
-     rename dialog after a rename, `SessionSelectionController.promptRename`). The worker
+     rename, `HomeViewModel.rename` from `SessionSelectionController.promptRename`). The worker
      waits out an upload in flight and transient failures with WorkManager's
      backoff, and stops after nine tries.
    - `CloudSync.reconcile` queues it again for any SYNCED row still marked.

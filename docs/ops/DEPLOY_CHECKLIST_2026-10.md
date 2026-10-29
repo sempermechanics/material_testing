@@ -8,6 +8,31 @@ deploy, and what it did is in [CHANGELOG.md](CHANGELOG.md). §5 and most of §6 
 Everything deploys **from semperdic-app only**. Never deploy Hosting from
 material_testing: any Hosting deploy replaces the whole site.
 
+## Before the next deploy (readiness 2026-10-28)
+
+The 2026-10-28 readiness run's backend (TE3-102 domain lock, ADDENDUM-4 name) adds
+two Admin checks before its production deploy; neither changes anything.
+
+- [ ] **IT-added addresses off the licence's domain (read-only).** From that deploy,
+      institution IT may add only an address at the licence's `domainLock`; any other
+      is refused with 422 `member_off_domain`, and a licence with no `domainLock`
+      lets IT add nobody (`backend/app/repo/institution_admin.py:117-120`). Semper
+      staff are not limited. Before the deploy, list for each `licenses` document
+      with `kind` `institution` (Firestore console, read-only): its `domainLock`
+      (flag an empty one), every seat in `licenses/{id}/seats` and every pending
+      `licenseInvites` entry with that `licenseId` whose `email` is at another
+      domain. Existing seats and invites stay; IT just cannot add such an address
+      again, so tell the institution, or have staff seat the collaborator, or set
+      the right `domainLock`. The audit log (`audit_logs`, `licenseId`) says who
+      added each one.
+- [ ] **Mail sender names say "semper" (ADDENDUM-4).** The display name of
+      `NOTIFY_FROM` and `NOTIFY_SECURITY_FROM` is whatever the variable holds, not
+      code. On 2026-10-28 `NOTIFY_FROM` was `onboarding@resend.dev` with no display
+      name and `NOTIFY_SECURITY_FROM` was unset (`gh variable list`); whenever a
+      display name is set, write it lower-case, e.g. `semper <noreply@…>` and
+      `semper security <security@…>` (an Admin variable change, applied by the
+      next deploy).
+
 ## 0. Prerequisites (once)
 
 - [x] **Google credentials** for whoever runs steps 1, 4 and 5: Firestore index
@@ -29,7 +54,7 @@ material_testing: any Hosting deploy replaces the whole site.
       (`scripts/check_secret_access.sh`) and stops with the command to run when it
       is missing. Without a key the backend behaves as today and issues no token.
 - [ ] **New-device mail (TD-232, TD-245)**, optional, and only once #457 is merged.
-      Verify a sender in Resend (for example `Semper security <security@yourdomain.com>`),
+      Verify a sender in Resend (for example `semper security <security@yourdomain.com>`),
       then set the repo variable `NOTIFY_SECURITY_FROM` (the workflow passes it since
       `a02ef2f`, `deploy-backend.yml:340`) and redeploy. Unset, that mail is off and the
       access-request mail is unaffected ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md)).
@@ -227,7 +252,9 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
       (material_testing#139). Both now require **Android 11 (minSdk 30)**.
       Steps: [RELEASING.md](RELEASING.md).
 - [ ] Set `SEMPER_ENTITLEMENT_PUBKEYS` before the release build if offline tokens
-      should be enforced; `SEMPER_API_CERT_PINS` is optional (TD-13).
+      should be enforced. Set `SEMPER_API_CERT_PINS` (the four GTS root pins,
+      [RELEASING.md § Certificate pins](RELEASING.md#certificate-pins-semper_api_cert_pins)):
+      the release fails without it (TD-251).
 - [ ] Device smoke (TD-14): installs on Android 11 and is refused on Android 10;
       Refresh licence; a demo account sees locked features; the device-limit
       screen.

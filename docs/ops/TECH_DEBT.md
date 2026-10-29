@@ -157,7 +157,7 @@ Tier 1 (TD-14).
   (`LicenseConfigWorker.refreshNow`, `data/LicenseConfigWorker.kt:106-117`). Queued at
   launch and on each return to the foreground when the token is past `refreshAfter` or
   lapsed (`refreshNowIfDue`, `:121-126`, through the `AppForeground` listener
-  `foregroundCheck`, `:134-139`, installed at `SemperApp.kt:47-51`; it was
+  `foregroundCheck`, `:134-139`, installed at `SemperApp.kt:56-61`; it was
   `installForegroundCheck` until #457 merged the app's three foreground counts into
   `data/AppForeground.kt`).
   Tests `EntitlementRefreshTest`, `LicenseConfigWorkerTest`.

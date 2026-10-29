@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The first-run diagnostics question's body and its two choices (readiness
+     AE1-103). The stock stacked button bar scrolls on its own and, at font
+     scale 2.0, cut whichever choice came second to 26 dp. Here the body takes
+     what height is left and scrolls, and the choices sit side by side at equal
+     weight below it, both always whole; a label that needs it wraps (the
+     dialog bar's own button style forces one line, so the plain text button). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingBottom="8dp">
+
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/diagnosticsBodyScroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fadeScrollbars="false"
+        android:scrollbarStyle="outsideOverlay">
+
+        <TextView
+            android:id="@+id/tvDiagnosticsBody"
+            style="?attr/materialAlertDialogBodyTextStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingHorizontal="24dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="8dp"
+            android:text="@string/diagnostics_prompt_body" />
+    </androidx.core.widget.NestedScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:baselineAligned="false"
+        android:orientation="horizontal"
+        android:paddingHorizontal="8dp"
+        android:paddingTop="4dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnDiagnosticsDecline"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginEnd="4dp"
+            android:layout_weight="1"
+            android:maxLines="3"
+            android:text="@string/diagnostics_prompt_decline" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnDiagnosticsAccept"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="4dp"
+            android:layout_weight="1"
+            android:maxLines="3"
+            android:text="@string/diagnostics_prompt_accept" />
+    </LinearLayout>
+</LinearLayout>

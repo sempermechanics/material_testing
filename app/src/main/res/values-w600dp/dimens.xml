@@ -2,4 +2,5 @@
 <resources>
     <!-- 600-839 dp: a little air at the sides. See values/dimens.xml. -->
     <dimen name="content_side_inset">48dp</dimen>
+    <dimen name="bar_side_padding">60dp</dimen>
 </resources>

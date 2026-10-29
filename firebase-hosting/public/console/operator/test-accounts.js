@@ -26,7 +26,7 @@ import { $ } from "./state.js";
 const SENTENCES = {
   test_accounts_disabled: "Test accounts are switched off on this server, or that address is " +
     "not on one of its test domains (TEST_ACCOUNT_DOMAINS).",
-  email_in_use: "That address already has a Semper account or sign-in. A test account " +
+  email_in_use: "That address already has a semper account or sign-in. A test account " +
     "needs an address nobody has used.",
   device_not_found: "That phone is no longer one of this account's active phones. " +
     "Refresh the list.",
@@ -90,7 +90,7 @@ async function sendCreate(body) {
     $("taEmail").value = "";
     $("taNote").value = "";
     setStatus(`Test account ${email} created (${PURPOSES[out.purpose || body.purpose]}): ` +
-      `approved and licensed, ${ends}, on up to ${phones} phone${phones === 1 ? "" : "s"} at once. ` +
+      `approved and Licensed, ${ends}, on up to ${phones} phone${phones === 1 ? "" : "s"} at once. ` +
       "Copy its password now.");
     showPassword(email, out.password);
     loadTestAccounts();
@@ -129,15 +129,26 @@ $("taCopyPassword").addEventListener("click", () => {
 
 /* ---------------------------------------------------------------- list */
 
-$("loadTestAccounts").addEventListener("click", () => loadTestAccounts());
+// Show list / Hide list at the right of the card's heading, where the desk
+// keeps what a card does to its whole list. Show reads it afresh; Hide only
+// puts it away. Never disabled mid-read, so Hide always works.
+$("loadTestAccounts").addEventListener("click", () => {
+  if ($("testAccountsWrap").hidden) loadTestAccounts();
+  else showList(false);
+});
 
-/** Read and draw the test accounts (on demand: most visits never look). */
+/** Show or hide the list, the button naming what its next click does. */
+function showList(shown) {
+  $("testAccountsWrap").hidden = !shown;
+  $("loadTestAccounts").textContent = shown ? "Hide list" : "Show list";
+  $("loadTestAccounts").setAttribute("aria-expanded", String(shown));
+}
+
+/** Show the list and read the test accounts (on demand: most visits never look). */
 export async function loadTestAccounts() {
   const ticket = ++loads;
-  $("loadTestAccounts").textContent = "Refresh";
-  $("testAccountsWrap").hidden = false;
+  showList(true);
   $("testAccountRows").innerHTML = placeholderRows(7, 2);
-  $("loadTestAccounts").disabled = true;
   try {
     const data = await api("/v1/admin/test-accounts");
     if (ticket !== loads) return;
@@ -149,30 +160,43 @@ export async function loadTestAccounts() {
     if (ticket !== loads) return;
     $("testAccountRows").innerHTML = retryRow(7,
       explain(e, SENTENCES, (text) => `Could not load: ${text}`));
-  } finally {
-    if (ticket === loads) $("loadTestAccounts").disabled = false;
   }
 }
+
+// The accounts whose phones are unfolded, by uid: a reload (after a Release,
+// say) draws them unfolded again rather than closing what was being worked on.
+const phonesOpen = new Set();
 
 function accountRow(a) {
   const uid = esc(a.uid);
   const live = a.status === "active";
   const phones = a.devices || [];
+  const count = `${esc(a.activeDevices ?? 0)} of ${esc(a.maxDevices ?? "—")}`;
+  // Each control names the account it acts on, as the roster's do: every
+  // row's End now read the same to a screen reader (AE2-106).
+  const who = esc(a.email || a.uid);
+  // The count folds the phones away, as a row's More menu does its actions:
+  // three phones, each with a Release, made one account's row a tall stack.
+  const phonesCell = phones.length
+    ? `<details class="phones-fold" data-ta-phones="${uid}"${phonesOpen.has(a.uid) ? " open" : ""}>
+          <summary aria-label="${count} phones for ${who}">${count}</summary>
+          <ul class="phone-list">${phones.map((d) => phoneLine(uid, d)).join("")}</ul>
+        </details>`
+    : count;
   // End now erases the account: drawn as the destructive one, apart from
   // the two that only change it.
   return `
     <tr>
-      <td class="account">${esc(a.email || a.uid)}</td>
+      <td class="account">${who}</td>
       <td>${esc(PURPOSES[a.purpose] || a.purpose || "—")}</td>
       <td class="nowrap">${esc(testAccountEnds(a))}</td>
-      <td class="phones">${esc(a.activeDevices ?? 0)} of ${esc(a.maxDevices ?? "—")}${phones.length
-        ? `<ul class="phone-list">${phones.map((d) => phoneLine(uid, d)).join("")}</ul>` : ""}</td>
+      <td class="phones">${phonesCell}</td>
       <td><span class="pill ${live ? "ok" : "off"}">${esc(a.status || "—")}</span></td>
       <td class="muted">${esc(a.note || "—")}</td>
       <td class="actions">
-        <button class="secondary" data-ta-extend="${uid}">Extend</button>
-        <button class="secondary" data-ta-password="${uid}">New password</button>
-        <button class="danger" data-ta-end="${uid}">End now</button>
+        <button class="secondary" data-ta-extend="${uid}" aria-label="Extend ${who}">Extend</button>
+        <button class="secondary" data-ta-password="${uid}" aria-label="New password for ${who}">New password</button>
+        <button class="danger" data-ta-end="${uid}" aria-label="End now: ${who}">End now</button>
       </td>
     </tr>`;
 }
@@ -201,6 +225,14 @@ function phoneLine(uid, d) {
 }
 
 $("testAccountRows").addEventListener("click", (ev) => {
+  // A click on a phone count fires before the fold toggles: it is about to
+  // become the opposite of what it is.
+  const fold = ev.target.closest("summary") && ev.target.closest("details[data-ta-phones]");
+  if (fold) {
+    if (fold.open) phonesOpen.delete(fold.dataset.taPhones);
+    else phonesOpen.add(fold.dataset.taPhones);
+    return;
+  }
   const btn = ev.target.closest("button");
   if (!btn) return;
   if ("retry" in btn.dataset) loadTestAccounts();

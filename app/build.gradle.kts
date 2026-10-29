@@ -432,6 +432,15 @@ aboutLibraries {
 }
 
 dependencies {
+    constraints {
+        // Guava arrives only through play-services-measurement 24.0.0 (Firebase
+        // Analytics) at 31.1-android, which OSV-Scanner flags for
+        // GHSA-xxph-c9ww-hj94, GHSA-7g45-4rm6-3mm3 and GHSA-5mg8-w23w-74h3
+        // (readiness TE5-105). Raise it to a fixed release.
+        implementation("com.google.guava:guava:33.7.2-android") {
+            because("GHSA-xxph-c9ww-hj94, GHSA-7g45-4rm6-3mm3, GHSA-5mg8-w23w-74h3 in guava 31.1-android")
+        }
+    }
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)

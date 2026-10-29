@@ -28,6 +28,7 @@ REQUIRED = (
     "Legal pages match their source",
     "Console pages",
     "Console accessibility",
+    "Console Lighthouse",
     "Engine pin is a tagged release",
     "Engine host tests (ASan+UBSan)",
     "Tier 1 — Static checks",
@@ -36,6 +37,8 @@ REQUIRED = (
     "Tier 4 — Backend",
     "Firestore rules",
     "Tier 5 — Signed release",
+    "Android dependencies (OSV-Scanner)",
+    "SAST (semgrep)",
     "CI OK",
 )
 

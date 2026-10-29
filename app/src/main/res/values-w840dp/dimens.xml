@@ -2,4 +2,5 @@
 <resources>
     <!-- (840 - 600) / 2: a 600 dp column on an 840 dp screen. See values/dimens.xml. -->
     <dimen name="content_side_inset">120dp</dimen>
+    <dimen name="bar_side_padding">132dp</dimen>
 </resources>

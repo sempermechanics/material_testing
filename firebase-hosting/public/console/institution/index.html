@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Seats · Semper DIC</title>
+  <title>Seats · semper</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&amp;family=Plus+Jakarta+Sans:wght@600;700;800&amp;display=swap" rel="stylesheet" />
@@ -51,7 +51,10 @@
     <!-- Outside #app: enrolment, step-up and sign-in errors report here while
          the dashboard is still hidden. A live region, so each step of a load
          is read out; it says it is checking the sign-in until auth.js knows. -->
-    <p id="status" class="muted" role="status" aria-live="polite" data-pending>Checking your sign-in…</p>
+    <div class="status-bar">
+      <p id="status" class="muted" role="status" aria-live="polite" data-pending>Checking your sign-in…</p>
+      <button id="statusClose" type="button" class="status-close" aria-label="Dismiss this message" title="Dismiss">×</button>
+    </div>
 
     <!-- Shown instead of the seat manager when no licence names this
          address as an administrator (institution.js decides). -->
@@ -59,8 +62,8 @@
       <h2>No institution licence to manage</h2>
       <p class="muted">
         No institution licence names <span id="notAdminWho" class="mono"></span>
-        as an administrator. If your institution has one, ask your Semper
-        contact to add this address to it.
+        as an administrator. If your institution has one, ask semper support
+        to add this address to it.
       </p>
       <p><a href="../account/">Your account</a></p>
     </section>
