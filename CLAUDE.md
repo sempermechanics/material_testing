@@ -16,6 +16,7 @@ Windows: `gradlew.bat`. Quote `-Pandroid.testInstrumentationRunnerArguments…` 
 | `cd backend && python -m pytest tests/ -q --cov=app --cov-fail-under=93` | Backend (install lock + `requirements-test.txt`) |
 | `python scripts/render_legal_pages.py --check` | Hosted legal pages match `docs/legal/` |
 | `python scripts/check_console.py` | Console pages: wiring, CSP, placeholders, gateway paths |
+| `python scripts/qa/qa.py check` | QC catalogue in `qa/` (ids, references, automation refs); `plan` / `report` drive a QC run: [qa/README.md](qa/README.md) |
 | `gitleaks detect --config .gitleaks.toml` | Secret scan |
 
 Clone needs `git submodule update --init --recursive`. First native build compiles

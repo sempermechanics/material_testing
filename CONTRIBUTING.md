@@ -136,6 +136,7 @@ python scripts/check_activity_scope_work.py    # no network/enqueue on a screen'
 python scripts/check_engine_pin.py             # engine gitlink is a v* tag, never backwards
 python scripts/check_console.py                # console wiring, CSP, gateway paths, codes with words
 node --test "firebase-hosting/tests/*.test.mjs"  # console module tests
+python scripts/qa/qa.py check                  # QC catalogue in qa/ (ADR-034; see qa/README.md)
 (cd firebase-hosting && npm ci && npx playwright install chromium && npm run test:a11y)  # console accessibility (axe + Playwright)
 gitleaks detect --config .gitleaks.toml        # secrets (full history; human PRs)
 ```
