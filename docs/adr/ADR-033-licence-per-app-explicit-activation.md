@@ -8,8 +8,9 @@ Step 4 built: staff mint a licence for one app with its device count, and it
 lives in that app's mirror, invite and quota (CLOUD_ARCHITECTURE_GCP §20.17).
 Licences minted without an app, every one before the split, keep the old
 model. Step 5 built: upgrade by issue, applied on Activate (CLOUD_ARCHITECTURE_GCP §20.18), and QC
-test accounts on the activation model. Every later step is listed under
-Action items.
+test accounts on the activation model. The split's migration is built
+(`backend/scripts/split_licences_per_app.py`, CLOUD_ARCHITECTURE_GCP §20.19);
+the owner runs it. Every later step is listed under Action items.
 **Date:** 2026-10-29
 **Deciders:** product owner
 **Supersedes in part:** [ADR-007](ADR-007-licence-lifecycle.md) (one licence per person becomes one per person per app; conversion becomes issue then activate),
@@ -152,10 +153,11 @@ The product owner's decisions (2026-10-29):
 - **Backend:** `apps.licence_view` / `licence_patch` / `LICENCE_MIRROR_FIELDS`;
   `user_config` takes `app`; `repo/activations.py` (the check, Activate, the
   lists), `repo/deactivations.py` (role-scoped deactivation),
-  `routers/activations.py`, the gateway and the contract snapshot. Still to
-  come: `repo/licence_upgrade.py`, a migration script that splits existing
-  licences per app, and an index override on `activations.uid` once a query
-  crosses licences (step 3's stay inside one licence's subcollection).
+  `routers/activations.py`, the gateway and the contract snapshot;
+  `repo/licence_upgrade.py`; `backend/scripts/split_licences_per_app.py`, the
+  migration. Still to come: an index override on `activations.uid` once a
+  query crosses licences (every one so far stays inside one licence's
+  subcollection).
 - **App:** an Activate step, a phones screen with Deactivate, instant unlock, a sync
   toggle. Semper Classroom gets it by fork sync.
 - **Consoles:** mint per app with `maxDevices`, per-phone Deactivate, staff Add phone,
@@ -193,7 +195,11 @@ The product owner's decisions (2026-10-29):
       test accounts on the activation model, one licence per app
       (`backend/tests/test_licence_upgrade.py`, `test_test_accounts.py`). `/convert`
       stays for licences from before the split.
-- [ ] Migration to split existing licences, dry run first, run by the owner.
+- [x] The split's migration: `backend/scripts/split_licences_per_app.py`, with
+      `--only-domain` for a QC rehearsal (FIRESTORE_SCHEMA_RUNBOOK,
+      `backend/tests/test_script_split_licences_per_app.py`, the emulator tier).
+- [ ] Run the split (owner): dry run, the QC rehearsal, then `--apply`, once the
+      step-5 backend serves all traffic.
 - [ ] App and consoles; fork sync.
 - [ ] Set `IMPLICIT_ACTIVATION=off` once adoption allows, then remove the legacy
       paths (TD-363).

@@ -138,8 +138,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   not deployed; before step 2's backend serves, the owner runs `backend/scripts/retire_stale_devices.py`
   (dry run, then `--apply`). Step 3 (activations, routes, cooldown gone) merged as
   #508. Step 4 (a licence per app: mint, invites, mirror slots, per-app quota) merged as
-  #510. Step 5 (upgrade by issue, QC accounts on activations) is `claude/licence-upgrade-pr2d`;
-  the split, app and consoles follow.
+  #510. Step 5 (upgrade by issue, QC accounts on activations) merged as #511. The split's
+  migration (`backend/scripts/split_licences_per_app.py`, owner runs it) is
+  `claude/licence-split-pr3`; app and consoles follow.
 - **Admin actions** are one table, [gate § Admin actions](docs/ops/PRODUCTION_READINESS_GATE.md#admin-actions-external):
   monitoring `--apply` (no notification channel yet), the posture FAILs (17 on 2026-10-24, the same 17 on 2026-10-28),
   TD-215, the checklist's §6; the readiness report's §4 adds that run's one-off actions.

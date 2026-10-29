@@ -1033,3 +1033,56 @@ def test_a_revoke_killed_part_way_is_finished_against_the_real_store(emulator_re
     assert users.document(member["uid"]).get().to_dict()["mode"] == "demo"
     assert lic["maxAnalyses"] == 40
     assert emulator_repo.finish_license_fanout(license_id) == []
+
+
+def test_the_licence_split_runs_against_the_real_store(emulator_repo):
+    """ADR-033's migration with Firestore's own preconditions, `create` and
+    paged walk: an app-less licence with a phone locked per app becomes a
+    Semper licence and a Semper Classroom twin, each phone stays licensed,
+    and a second run writes nothing. `--only-domain` keeps it to this test's
+    licence, since the emulator holds every other test's too."""
+    import sys
+    from pathlib import Path
+
+    from google.cloud import firestore
+
+    from app import apps
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    import split_licences_per_app as split
+
+    tag = uuid.uuid4().hex[:8]
+    domain = f"split-{tag}.test"
+    db = emulator_repo.db()
+    license_id = emulator_repo.create_individual_license(
+        email_lock=f"solo@{domain}", created_by_uid="emu-admin")["license"]["id"]
+    user = _emu_user(emulator_repo, f"emu-{tag}", f"solo@{domain}")
+    emulator_repo.ensure_entitlement(user, None)
+    phones = {apps.SEMPER: f"s-{tag}", apps.SEMPER_CLASSROOM: f"c-{tag}"}
+    lock = {}
+    for app, device_id in phones.items():
+        db.collection("devices").document(device_id).set(
+            {"uid": user["uid"], "status": "ACTIVE", "app": apps.stored_name(app)})
+        lock.update(apps.written_fields("deviceIdLock", app, device_id))
+    db.collection("licenses").document(license_id).update(lock)
+
+    def run():
+        return split.split(db, True, firestore.DELETE_FIELD, firestore.SERVER_TIMESTAMP,
+                           only_domain=domain)
+
+    assert run().counts["split"] == 1
+
+    lic = db.collection("licenses").document(license_id).get().to_dict()
+    twin_id = lic["splitInto"]
+    twin = db.collection("licenses").document(twin_id).get().to_dict()
+    assert (lic["app"], lic["devicesActive"]) == ("semper", 1) and "splitPending" not in lic
+    assert apps.canonical(twin["app"]) == apps.SEMPER_CLASSROOM and twin["devicesActive"] == 1
+    stored = {**db.collection("users").document(user["uid"]).get().to_dict(), "uid": user["uid"]}
+    assert apps.read_field(stored, "licenseId", apps.SEMPER_CLASSROOM) == twin_id
+    for app, device_id in phones.items():
+        out = emulator_repo.revalidate_device_lock(stored, device_id, app, explicit=True)
+        assert emulator_repo.effective_mode(out, app) == "licensed", app
+
+    again = run()
+    assert again.counts["split"] == 0 and again.counts["twins"] == 0
+    assert db.collection("licenses").document(license_id).get().to_dict()["splitInto"] == twin_id
