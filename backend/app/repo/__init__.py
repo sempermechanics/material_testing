@@ -44,6 +44,7 @@ from .user_config import (  # noqa: F401
 from .devlock import (  # noqa: F401
     DeviceLockContended,
     bind_device_lock,
+    locked_device,
     released_device_held,
     revalidate_device_lock,
 )

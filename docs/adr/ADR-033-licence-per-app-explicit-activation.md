@@ -1,8 +1,9 @@
 # ADR-033: A licence per app, explicit activation per phone, a device count instead of a cooldown, upgrade by issue
 
 **Status:** Accepted 2026-10-29; in progress. Step 1 built: each app reads its own
-licence off the user (`apps.licence_view`), with no change in behaviour. Every later
-step is listed under Action items.
+licence off the user (`apps.licence_view`), with no change in behaviour. Step 2
+built: an account holds several phones per app. Every later step is listed under
+Action items.
 **Date:** 2026-10-29
 **Deciders:** product owner
 **Supersedes in part:** [ADR-007](ADR-007-licence-lifecycle.md) (one licence per person becomes one per person per app; conversion becomes issue then activate),
@@ -157,8 +158,13 @@ The product owner's decisions (2026-10-29):
 
 - [x] Step 1: each app reads its own licence (`apps.licence_view`), `user_config`
       takes `app`; no change in behaviour (`backend/tests/test_licence_view.py`).
-- [ ] Several phones per account per app; `_device_is_bound`; the release hold for
-      staff and IT releases only.
+- [x] Step 2: several phones per account per app (`MAX_PHONES_PER_APP`, default 5;
+      the oldest phone not holding the licence makes room); any ACTIVE phone of the
+      account signs (`deps._device_is_bound`); a clear signs out only a registered
+      phone it released, and another phone registering no longer ends its hold.
+- [ ] Before the step-2 backend serves: `backend/scripts/retire_stale_devices.py`
+      dry run, then `--apply` (owner), so no ACTIVE record an older path left
+      behind can sign.
 - [ ] The activation model, routes, `/v1/config` and `/v1/me` blocks, role-scoped
       deactivation, cooldown removal, floating lease device.
 - [ ] A licence per app: one per person per app, per-app invites, mint `app` and

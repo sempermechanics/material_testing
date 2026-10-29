@@ -349,7 +349,7 @@ def release_account_device(uid: str) -> dict[str, str]:
     released = {app: device for app, device in released.items() if device}
     if not released:
         return {}
-    _release_devices(user_ref, released, {"updatedAt": _base.firestore.SERVER_TIMESTAMP})
+    _release_devices(user_ref, released, {"updatedAt": _base.firestore.SERVER_TIMESTAMP}, user)
     return released
 
 

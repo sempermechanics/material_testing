@@ -751,12 +751,15 @@ def test_the_first_device_wins_an_unbound_lock(emulator_repo):
     assert emulator_repo.get_license(license_id)["deviceIdLock"] == locked
 
 
-def test_concurrent_register_leaves_one_active(emulator_repo):
-    """Two phones registering one account at once used to both pass the
-    "already bound?" check the router read before the write, and both end up
-    ACTIVE. The check now runs inside the registration's transaction, so
-    exactly one device is ACTIVE for the account and it is the one its
-    binding names; every other registration is refused (or told to retry)."""
+def test_concurrent_registers_stay_within_the_phone_cap(emulator_repo):
+    """An account holds several phones per app (ADR-033), up to
+    `MAX_PHONES_PER_APP`; one more registering retires the oldest. Six phones
+    registering one account at once must still land as if one after another:
+    no more ACTIVE than the cap, one ACTIVE per registration that committed
+    (up to the cap), and the account's latest phone among them. Registration
+    reads the account's phones inside its transaction, so contenders retry
+    rather than each counting the others as absent."""
+    from app.config import settings
     from app.models import DeviceReg
     from key_helpers import _ec_pem
 
@@ -764,6 +767,7 @@ def test_concurrent_register_leaves_one_active(emulator_repo):
     uid = f"emu-{tag}"
     _emu_user(emulator_repo, uid, f"reg-{tag}@lab.org")
     devices = [f"dev-{tag}-{i}" for i in range(6)]
+    cap = max(1, settings.MAX_PHONES_PER_APP)
     pem = _ec_pem()
 
     def _register(device):
@@ -775,13 +779,12 @@ def test_concurrent_register_leaves_one_active(emulator_repo):
             return list(pool.map(_register, devices))
 
     def settled(codes):
-        assert set(codes) <= {"", "device_conflict", "claim_contended"}, codes
+        assert set(codes) <= {"", "claim_contended"}, codes
         active = [d for d in devices
                   if (emulator_repo.get_device(d) or {}).get("status") == "ACTIVE"]
-        assert len(active) <= 1, f"{len(active)} devices ACTIVE: {active}"
-        bound = emulator_repo._load_user(uid).get("activeDeviceId")
-        assert active == ([bound] if bound else []), (active, bound)
-        assert codes.count("") == len(active), codes
+        assert len(active) == min(codes.count(""), cap), (codes, active)
+        latest = emulator_repo._load_user(uid).get("activeDeviceId")
+        assert (latest in active) if active else not latest, (active, latest)
         return bool(active)
 
     _race_until(race, settled, what="no registration committed")

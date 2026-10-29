@@ -104,7 +104,11 @@ def test_a_release_frees_the_phone_in_both_apps(store):
 
 
 @pytest.mark.asyncio
-async def test_released_over_http_then_the_new_phone_registers(client, monkeypatch, audited):
+async def test_released_over_http_the_old_phone_is_held_and_a_new_one_registers(
+        client, monkeypatch, audited):
+    """A staff release signs a lost phone out: it is retired and held off
+    for the hold, while another phone registers as it always may now
+    (several per app, ADR-033)."""
     store = fake_firestore.install(monkeypatch)
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     staff = dict(deps._DEV_USER)
@@ -113,10 +117,7 @@ async def test_released_over_http_then_the_new_phone_registers(client, monkeypat
     def as_holder():
         monkeypatch.setattr(deps, "_DEV_USER", dict(store._data["users"]["demo-1"]))
 
-    as_holder()
     new_phone = {"deviceId": "and-newphone1", "publicKeyPem": _ec_pem()}
-    assert (await client.post("/v1/devices/register", json=new_phone)).status_code == 409
-
     monkeypatch.setattr(deps, "_DEV_USER", staff)
     resp = await client.post("/v1/admin/device-releases", json={"email": "Demo@Lab.org"})
 

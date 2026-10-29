@@ -2,7 +2,7 @@
 """
 from datetime import timedelta
 
-from .. import apps, errors
+from .. import apps, errors, statuses
 from ..config import settings
 from ..errors import Refusal
 from ..licenses import (
@@ -94,16 +94,15 @@ def _settle_holder(license_id: str, lic: dict, ref, scope: str, uid: str,
       re-stamped here. Nothing is resurrected: `effective_mode` still
       re-applies expiry, grace and the floating-lease check, so a licence that
       has run out stays demo either way.
-    - **Registered device.** `POST /v1/devices/register` refuses any device but
-      `users/{uid}.activeDeviceId` with `device_conflict`, and nothing else
-      empties that field short of suspending the account. It is dropped here
-      and the old device retired (`_retire_device`), so the new phone can
-      register. Only when it is the phone the cleared `lock` named, or the
-      lock named none: a lock on some other device (bound before
-      `revalidate_device_lock` bound only the registered phone) leaves the
-      account split, and the registered phone is the one still working. It
-      is kept and binds the empty lock on its next request; a holder who did
-      want a new phone gets it from a second clear, which then releases it.
+    - **Registered device.** The phone the cleared `lock` named (with no
+      lock, the latest registered one) is retired (`_retire_device`) and
+      signed out, and the account's `activeDeviceId` dropped where it names
+      that phone. Only when it is one of the account's registered phones: a
+      lock on a phone that never registered (bound before
+      `revalidate_device_lock` bound only the registered phone) releases
+      nothing. An account holds several phones (ADR-033), so its other
+      registered phones stay; the latest of them binds the empty lock on its
+      next request.
     - **Release hold.** The released id is stamped (`releasedDeviceId`,
       `releasedAt`) so registration can hold it off for
       `DEVICE_RELEASE_HOLD_HOURS`: the old phone's upload worker re-registers as
@@ -131,10 +130,11 @@ def _settle_holder(license_id: str, lic: dict, ref, scope: str, uid: str,
     }
     releasing = {}
     for app, lock in locks.items():
-        active = apps.read_field(user, "activeDeviceId", app) or ""
-        if active and (not lock or lock == active):
-            releasing[app] = active
-    _release_devices(user_ref, releasing, patch)
+        phone = lock or apps.read_field(user, "activeDeviceId", app) or ""
+        dev = (_get(db().collection("devices").document(phone)).to_dict() or {}) if phone else {}
+        if dev.get("uid") == user_ref.id and dev.get("status") == statuses.DEVICE_ACTIVE:
+            releasing[app] = phone
+    _release_devices(user_ref, releasing, patch, user)
     return {**none, **releasing}
 
 

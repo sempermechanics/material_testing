@@ -212,10 +212,8 @@ async def test_semper_classroom_registers_beside_semper(client, monkeypatch):
     # Device ids are at least eight characters (`validation.DeviceId`).
     mt_phone = {"deviceId": "and-mtphone1", "publicKeyPem": _ec_pem()}
 
-    without_header = await client.post("/v1/devices/register", json=mt_phone)
     registered = await client.post("/v1/devices/register", json=mt_phone, headers=MT_HEADER)
 
-    assert without_header.status_code == 409, "read as Semper, whose phone is another"
     assert registered.status_code == 201, registered.text
     user = store._data["users"]["dev-user"]
     assert user["activeDeviceId"] == "and-semper"
