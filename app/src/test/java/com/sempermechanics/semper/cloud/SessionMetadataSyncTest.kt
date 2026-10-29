@@ -14,6 +14,8 @@ import com.sempermechanics.semper.data.net.QuotaDto
 import com.sempermechanics.semper.data.net.SessionsResponse
 import com.sempermechanics.semper.data.session.SessionRecord.SyncState
 import com.sempermechanics.semper.data.session.SessionStore
+import com.sempermechanics.semper.data.session.setCurveCorrection
+import com.sempermechanics.semper.data.session.setDeflectionCorrection
 import com.sempermechanics.semper.fixtures.sessionRecord
 import com.sempermechanics.semper.report.BeamDeflection
 import kotlinx.coroutines.runBlocking
