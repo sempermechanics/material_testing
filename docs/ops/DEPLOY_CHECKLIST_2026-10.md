@@ -254,7 +254,7 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
 - [ ] Set `SEMPER_ENTITLEMENT_PUBKEYS` before the release build if offline tokens
       should be enforced. Set `SEMPER_API_CERT_PINS` (the four GTS root pins,
       [RELEASING.md § Certificate pins](RELEASING.md#certificate-pins-semper_api_cert_pins)):
-      the release fails without it (TD-251).
+      the release fails without it (TD-13).
 - [ ] Device smoke (TD-14): installs on Android 11 and is refused on Android 10;
       Refresh licence; a demo account sees locked features; the device-limit
       screen.

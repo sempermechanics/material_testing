@@ -43,7 +43,7 @@ compiled where it was written (TD-14).
 | Control | Status | Evidence |
 |---|---|---|
 | NETWORK-1: secure traffic | Met | Cleartext is refused app-wide (`app/src/main/res/xml/network_security_config.xml`); release builds require an HTTPS API URL (`-PrequireCloudApi=true`, [RELEASING.md](RELEASING.md)); the APK inspection fails on cleartext (`scripts/check_release_apk.py`). Backend sends HSTS behind HTTPS (`_HSTS`, `backend/app/main.py:120`, set at `:161`) |
-| NETWORK-2: identity pinning | Partial | `CertificatePinner` from `SEMPER_API_CERT_PINS` (`certificatePins`, `data/net/SemperApiClients.kt:55-68`; read from the environment, `app/build.gradle.kts:80-81`). The pin set is decided (the four GTS root SPKI pins, Admin 2026-10-28, [RELEASING.md § Certificate pins](RELEASING.md#certificate-pins-semper_api_cert_pins)) and the release gate fails a build without them (`check_release_apk.py --require-pins`, `.github/workflows/release.yml:280`); until `SEMPER_API_CERT_PINS` is set no release can ship (TD-251) |
+| NETWORK-2: identity pinning | Partial | `CertificatePinner` from `SEMPER_API_CERT_PINS` (`certificatePins`, `data/net/SemperApiClients.kt:55-68`; read from the environment, `app/build.gradle.kts:80-81`). The pin set is decided (the four GTS root SPKI pins, Admin 2026-10-28, [RELEASING.md § Certificate pins](RELEASING.md#certificate-pins-semper_api_cert_pins)) and the release gate fails a build without them (`check_release_apk.py --require-pins`, `.github/workflows/release.yml:280`); until `SEMPER_API_CERT_PINS` is set no release can ship (TD-13) |
 
 ## MASVS-PLATFORM
 

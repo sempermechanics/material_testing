@@ -149,7 +149,7 @@ drill passed with an import RTO of 111 s
    verify with `scripts/firestore_verify.py`, then decide what to copy back.
 3. **Stop writers** while copying back: set `KILL_SWITCHES="backup restore upload"`
    and redeploy, so phones queue instead of writing. A redeploy is a full
-   `deploy-backend.yml` run (~5 min plus the production approval) that fails on
+   `deploy-backend.yml` run in semperdic-app (~5 min plus the production approval) that fails on
    any new dependency advisory and ships every undeployed `main` commit; when
    that is in the way, use the **Emergency lever** in
    [RELEASING.md](RELEASING.md) (the serving image, env only, no code change). The backend refuses new
