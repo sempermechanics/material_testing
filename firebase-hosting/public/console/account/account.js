@@ -254,10 +254,7 @@ async function unbind(app, name) {
     const out = await api(path, { method: "POST" });
     setStatus(
       `Done. Sign in on the new phone, open ${name} once so the licence ` +
-      "attaches, and then restore your analyses." +
-      (out.nextChangeAllowedAt
-        ? ` You can do this again after ${when(out.nextChangeAllowedAt)}.`
-        : ""),
+      "attaches, and then restore your analyses.",
     );
   } catch (e) {
     setStatus(unbindError(e), true);
@@ -265,18 +262,8 @@ async function unbind(app, name) {
 }
 
 function unbindError(e) {
-  // The cooldown refusal carries the instant it ends after the code.
-  const rest = e.rest || "";
+  // No cooldown since ADR-033: the licence's device count is the limit.
   return refusalText(e, {
-    // Not a refusal of entitlement: a second factor proves who is asking,
-    // not how often, so the cooldown is what stops one licence being
-    // passed round a lab.
-    device_change_too_soon:
-      "You have moved this licence recently" +
-      // Local date and time, as the success message gives it: the cooldown
-      // ends at the instant of the last move, not at a day boundary.
-      (rest ? `, so you can move it yourself again after ${when(rest)}` : "") +
-      ". Ask your institution's IT or semper support if you need to move it now.",
     mfa_required:
       "Set up two-factor authentication first — moving a licence needs it.",
     no_license: "There is no licence on this account to move.",

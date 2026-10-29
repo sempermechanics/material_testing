@@ -10,8 +10,8 @@ import { errorDetail, sessionEnded } from "./util.js";
  * A refusal from the Semper API.
  *
  * `code` is what a page branches on — the backend's own code, without what
- * follows its colon (`device_change_too_soon: <instant>` is code
- * `device_change_too_soon`, rest the instant). `message` is the whole detail,
+ * follows its colon (`device_limit_reached: 1/1` is code
+ * `device_limit_reached`, rest the count). `message` is the whole detail,
  * as every page has always shown it; `status` is the HTTP status. A gateway
  * refusal is not JSON, and then the status is all there is: `http_<status>`.
  */
