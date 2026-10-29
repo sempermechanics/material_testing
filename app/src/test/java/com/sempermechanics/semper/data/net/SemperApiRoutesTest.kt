@@ -173,6 +173,54 @@ class SemperApiRoutesTest {
     }
 
     @Test
+    fun `activate is signed, sends whether it is an upgrade, and reads the config it answers`() {
+        answer(
+            200,
+            body = """{"activation":{"licenseId":"l1","deviceId":"device-1","already":false,""" +
+                """"devicesActive":1,"maxDevices":2},"config":{"mode":"licensed","maxSessions":500,""" +
+                """"activation":{"state":"active","devicesActive":1,"maxDevices":2}}}""",
+        )
+        answer(409, "device_limit_reached: 2/2")
+
+        val done = runBlocking { api.activateDevice("tok", upgrade = true) }
+
+        assertEquals(1, done.activation?.devicesActive)
+        assertEquals("active", done.config.activation?.state)
+        val sent = server.takeRequest()
+        assertEquals("POST", sent.method)
+        assertEquals("/v1/me/devices/activate", sent.target)
+        assertEquals("""{"upgrade":true}""", sent.body?.utf8())
+        assertEquals("device-1", sent.headers["X-Device-Id"])
+        val refused = fails<ApiException> { api.activateDevice("tok") }
+        assertEquals("device_limit_reached: 2/2", refused.parsedDetail)
+    }
+
+    @Test
+    fun `the phones list is a token call, and deactivate a signed delete`() {
+        answer(
+            200,
+            body = """{"app":"semper","licenseId":"l1","devicesActive":1,"maxDevices":1,"pool":false,""" +
+                """"model":"activation","devices":[{"deviceId":"device-1","model":"Pixel 6",""" +
+                """"activated":true,"thisDevice":true,"activatedAt":"2026-10-29T10:00:00+00:00"}]}""",
+        )
+        answer(200, body = """{"licenseId":"l1","deviceId":"and-2","devicesActive":0,"maxDevices":1}""")
+        answer(404, "activation_not_found")
+
+        val phones = runBlocking { api.listDevices("tok") }
+        val gone = runBlocking { api.deactivateDevice("tok", "and-2") }
+
+        assertEquals(listOf("device-1"), phones.devices.map { it.deviceId })
+        assertEquals(true, phones.devices.single().thisDevice)
+        assertEquals(0, gone.devicesActive)
+        assertEquals("/v1/me/devices", server.takeRequest().target)
+        val delete = server.takeRequest()
+        assertEquals("DELETE", delete.method)
+        assertEquals("/v1/me/devices/and-2", delete.target)
+        assertEquals(true, delete.headers["X-Signature"]?.isNotEmpty())
+        assertEquals("activation_not_found", fails<ApiException> { api.deactivateDevice("tok", "x") }.parsedDetail)
+    }
+
+    @Test
     fun `listSessionUploads walks every page and signs each page's query`() {
         answer(
             200,

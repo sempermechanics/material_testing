@@ -329,6 +329,14 @@ CLIENT_BRANCHED = frozenset(
         NO_FLOATING_SEAT,
         FEATURE_NOT_LICENSED,
         LICENSE_DEVICE_MISMATCH,
+        # Activate and Deactivate (ADR-033): the app says the count is full,
+        # there is no licence, check out a seat, or no upgrade waits, rather
+        # than "something went wrong" (`DeviceActivation.kt`).
+        DEVICE_LIMIT_REACHED,
+        NO_LICENSE,
+        SEATING_FLOATING,
+        NO_PENDING_UPGRADE,
+        ACTIVATION_NOT_FOUND,
         APP_CHECK_REQUIRED,
         DRIVE_FILE_GONE,
         # The upload worker rebuilds the session on the first and restages on

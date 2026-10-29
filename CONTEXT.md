@@ -139,8 +139,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   (dry run, then `--apply`). Step 3 (activations, routes, cooldown gone) merged as
   #508. Step 4 (a licence per app: mint, invites, mirror slots, per-app quota) merged as
   #510. Step 5 (upgrade by issue, QC accounts on activations) merged as #511. The split's
-  migration (`backend/scripts/split_licences_per_app.py`, owner runs it) is
-  `claude/licence-split-pr3`; app and consoles follow.
+  migration (`backend/scripts/split_licences_per_app.py`, owner runs it) merged as #512.
+  The app's Activate and Your phones screen are `claude/licence-app-pr4`; cross-phone
+  sync, consoles and the fork sync follow.
 - **Admin actions** are one table, [gate § Admin actions](docs/ops/PRODUCTION_READINESS_GATE.md#admin-actions-external):
   monitoring `--apply` (no notification channel yet), the posture FAILs (17 on 2026-10-24, the same 17 on 2026-10-28),
   TD-215, the checklist's §6; the readiness report's §4 adds that run's one-off actions.
@@ -178,8 +179,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - `MAX_SESSIONS_PER_USER` is deleted; a deployment still setting it silently gets `DEMO_MAX_ANALYSES` (25) — [§7](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - List env vars (`CONSOLE_ORIGINS`, `ADMIN_EMAILS`) are space-separated; the deploy action splits on commas — [§20.8](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - `GET /v1/sessions` lists the asking app's sessions (`X-App-Id`; an untagged session is Semper's), and `/files` answers only that app; a browser or export that needs the whole account asks `?app=all` or uses `iter_all_user_sessions` — [ADR-014](docs/adr/ADR-014-session-app-tag.md).
-- A licence with `app` licenses only the phones activated on it (`licenses/{id}/activations`); other phones are Demo per request. Builds without `X-Activation: explicit` auto-activate only while `IMPLICIT_ACTIVATION=legacy` — [§20.16](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
-- Restore on a new device has an order: sign in, let one authed request bind the lock, then restore — [§20.10](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
+- A licence with `app` licenses only the phones activated on it (`licenses/{id}/activations`); other phones are Demo per request. This app sends that header (`AppIdHeader`), so a new phone of this build is Demo until Activate (Your phones, `ui/phones/`); builds without it auto-activate only while `IMPLICIT_ACTIVATION=legacy` — [§20.16](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
+- Restore on a new device has an order: sign in, then Activate (a licence that names its app) or let one authed request bind the lock (one from before the split), then restore — [§20.10](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - Licence terms are mirrored onto users, so editing a licence reaches nobody without `update_license`'s fan-out — [§20.6](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - Demo uploads silently; only retrieval is licence-gated. Gating `POST /v1/sessions` on the licence would loop old builds on 403; a kill switch refuses it with 503 `feature_paused`, which every build retries — [§20.3](docs/backend/CLOUD_ARCHITECTURE_GCP.md), [§20.14](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - Share has no backend route: the cached `/v1/config` licence is its only gate. A signed token can narrow it, never widen it, and none is issued until TD-215, so today the TLS-delivered cache alone decides, and a modified APK can share (accepted, TD-274). Anything that touches the cloud is checked by the server — [ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md).

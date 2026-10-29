@@ -13,6 +13,7 @@ import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.DeviceKeys
 import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.net.AccountCache
+import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.session.SessionQuota
 import com.sempermechanics.semper.databinding.ActivitySessionLimitBinding
 import com.sempermechanics.semper.ui.common.Insets
@@ -20,6 +21,7 @@ import com.sempermechanics.semper.ui.common.auth.SupportMail
 import com.sempermechanics.semper.ui.common.auth.contextLines
 import com.sempermechanics.semper.ui.common.dialog.Feedback
 import com.sempermechanics.semper.ui.common.setBusy
+import com.sempermechanics.semper.ui.phones.PhonesActivity
 import kotlinx.coroutines.launch
 
 /**
@@ -50,6 +52,26 @@ class SessionLimitActivity : AppCompatActivity() {
         binding.btnRefreshLicense.setOnClickListener { viewModel.refreshLicense() }
         binding.tvLimitBack.setOnClickListener { finish() }
         observeViewModel()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        renderActivate()
+    }
+
+    /**
+     * Activate, when the account holds a licence for this app that this phone
+     * is not on (ADR-033), or a new one waits: Demo's limit is then not the
+     * account's, and Activate lifts it. It opens Your phones, which taps it.
+     */
+    private fun renderActivate() {
+        val activation = AppRemoteConfig.activation(this)
+        val upgrade = AppRemoteConfig.pendingLicence(this) != null
+        binding.btnLimitActivate.apply {
+            isVisible = upgrade || activation.canActivate
+            setText(if (upgrade) R.string.phones_activate_upgrade else R.string.phones_activate)
+            setOnClickListener { PhonesActivity.open(this@SessionLimitActivity, activate = true, upgrade = upgrade) }
+        }
     }
 
     /**
@@ -107,6 +129,7 @@ class SessionLimitActivity : AppCompatActivity() {
         when (outcome) {
             is SessionLimitViewModel.Outcome.Refreshed -> {
                 Feedback.toast(this, outcome.message, long = true)
+                renderActivate()
                 // A changed licence is checked again next, which renders.
                 if (!outcome.changed) renderQuota()
             }
@@ -125,6 +148,7 @@ class SessionLimitActivity : AppCompatActivity() {
         binding.progressLimit.setBusy(
             loading,
             binding.btnRecheckLimit,
+            binding.btnLimitActivate,
             binding.btnRefreshLicense,
             binding.btnEmailSupport,
             idleVisibility = View.INVISIBLE,
