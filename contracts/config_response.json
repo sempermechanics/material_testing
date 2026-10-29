@@ -29,5 +29,6 @@
     "maxDevices": 0,
     "pool": true,
     "model": "activation"
-  }
+  },
+  "pendingLicence": null
 }

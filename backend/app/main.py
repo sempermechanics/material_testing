@@ -27,6 +27,7 @@ from .routers import (
     licenses,
     provision_tasks,
     sessions,
+    upgrades,
 )
 
 obs.configure_logging(structured=settings.ON_CLOUD_RUN)
@@ -306,6 +307,7 @@ for _router in (
     admin_test_accounts.router,
     institutions.router,
     activations.router,
+    upgrades.router,
 ):
     app.include_router(_router)
 

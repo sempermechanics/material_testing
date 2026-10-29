@@ -103,6 +103,11 @@ from .license_admin import (  # noqa: F401
 from .upgrade import (  # noqa: F401
     convert_to_institution,
 )
+from .licence_upgrade import (  # noqa: F401
+    apply_upgrade,
+    issue_upgrade,
+    pending_upgrade,
+)
 from .deletion import (  # noqa: F401
     DELETED,
     DELETED_SEATS,
@@ -238,6 +243,7 @@ from . import (
     institution_admin,
     invites,
     leases,
+    licence_upgrade,
     license_admin,
     mint,
     reconcile,
@@ -250,4 +256,4 @@ from . import (
 )
 
 #: Every module of the package, each after everything it imports.
-PACKAGE = (_base, audit_log, user_config, activations, devlock, claims, invites, holders, mint, activation, entitlement, license_admin, upgrade, deletion, institution_admin, devices, users, leases, deactivations, seats, reconcile, account, sessions, testaccounts)
+PACKAGE = (_base, audit_log, user_config, activations, devlock, claims, invites, holders, mint, activation, entitlement, license_admin, upgrade, licence_upgrade, deletion, institution_admin, devices, users, leases, deactivations, seats, reconcile, account, sessions, testaccounts)

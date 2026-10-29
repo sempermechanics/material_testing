@@ -2785,7 +2785,9 @@ Decided in [ADR-027](../adr/ADR-027-test-accounts.md). A test account is an
 ordinary account carrying `users/{uid}.testAccount`
 (`{purpose, createdByUid, createdAt, expiresAt, maxDevices, note}`), made by staff
 through `POST /v1/admin/test-accounts` ([ADMIN_API.md](ADMIN_API.md)) on an address
-in `TEST_ACCOUNT_DOMAINS`, with an individual licence flagged `testAccount: true`.
+in `TEST_ACCOUNT_DOMAINS`, with an individual licence flagged `testAccount: true`:
+a CI account one for every app, a QC account one per app it is for, which run the
+activation model (§20.16) like any holder's, or none for a Demo QC account.
 Every branch that treats it differently asks `repo.test_account_of(user)`; a real
 account takes the path it always took.
 
@@ -2793,7 +2795,7 @@ account takes the path it always took.
 |---|---|
 | `repo.register_device` | up to `maxDevices` ACTIVE devices per app, counted in the registration's transaction; `activeDeviceId` is the latest |
 | `deps.verified_device` | any ACTIVE device of the account for the asking app signs |
-| `repo.devlock` | the licence binds no `deviceIdLock`: a registered device is licensed, an unregistered one while there is room, else Demo for that request |
+| `repo.devlock` | a CI account's licence binds no `deviceIdLock`: a registered device is licensed, an unregistered one while there is room, else Demo for that request. A QC account's licences, which name their app, license its activated phones |
 | `routers/devices.py` | no release hold, no new-device mail; audit detail `testAccount: true` |
 | `repo.create_session` | the device is stored as `testDeviceId`, so the demo device count (§7) skips it; `testAccount: true` |
 | `drive.ensure_session_folders` | `Research Storage/_test/{uid}/session/{sid}/` instead of `user/` |
@@ -2898,3 +2900,35 @@ licence and deactivates its phones. Staff may raise or lower `maxDevices`, never
 below the phones active. An app's licence does not convert in place
 (`/convert` answers `license_not_convertible`); step 5 issues a new licence the
 holder activates instead.
+
+### 20.18 Upgrade by issue
+
+[ADR-033](../adr/ADR-033-licence-per-app-explicit-activation.md), step 5
+(`repo/licence_upgrade.py`). An app's individual licence is not changed in
+place: staff issue the holder a new licence for the same app
+(`POST /v1/admin/licenses/{id}/upgrade`), carrying the old one's terms unless
+they name new ones, or an assigned institution licence on the holder's domain.
+The new licence names the old in `supersedes`; nobody holds it yet.
+
+**It waits for Activate.** The holder's account points at it
+(`pendingLicenseId`, in the app's mirror slot) and the old licence at it
+(`upgradePendingId`); one upgrade waits at a time (`409 upgrade_pending`). The
+old licence keeps licensing its phones. `/v1/config`'s `pendingLicence` and
+`/v1/me`'s `licences.<app>.pendingLicence` show it (`{licenseId, prefix, kind,
+expiresAt, maxDevices, supersedes}`, or null), read only while one waits.
+
+**Activate moves the account.** `POST /v1/me/devices/activate` with
+`{"upgrade": true}` runs `apply_upgrade`: the phone is checked first, then the
+account takes the new licence (a seat on an institution one), the old licence
+is revoked with `supersededBy`, the pointers go, and the phone is activated on
+the new licence. Each step is safe to run again, and the pointer stays until the
+revoke, so an apply that dies part-way finishes on the next tap. The old
+licence's other phones each activate again, within the new count. Staff apply it
+with no phone (`.../apply-upgrade`) for a build that has no Activate.
+
+**Edge cases.** A holder who never signed in has their invite moved and the old
+licence revoked at once, as `/convert` does. Revoking a waiting licence clears
+both pointers, so the holder stops being offered it and the old licence may be
+upgraded again. A licence from before the split, an institution licence and a
+Demo key answer `409 license_not_upgradable`: the first converts in place, an
+institution is resized by an edit.
