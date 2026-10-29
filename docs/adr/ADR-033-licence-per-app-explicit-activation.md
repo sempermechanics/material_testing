@@ -144,8 +144,8 @@ The product owner's decisions (2026-10-29):
 
 - **Backend:** `apps.licence_view` / `licence_patch` / `LICENCE_MIRROR_FIELDS`;
   `user_config` takes `app`. Still to come: `repo/activations.py`,
-  `repo/licence_upgrade.py`, `routers/activations.py`, a migration script
-  `backend/scripts/split_licences_per_app.py`, an index override on
+  `repo/licence_upgrade.py`, `routers/activations.py`, a migration script that
+  splits existing licences per app, an index override on
   `activations.uid`, and the gateway and contract snapshot.
 - **App:** an Activate step, a phones screen with Deactivate, instant unlock, a sync
   toggle. Semper Classroom gets it by fork sync.
