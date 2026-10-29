@@ -20,6 +20,7 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.ViewConfiguration
+import androidx.annotation.VisibleForTesting
 import androidx.appcompat.widget.AppCompatImageView
 import com.sempermechanics.semper.ui.common.ViewportMath
 import kotlin.math.abs
@@ -404,6 +405,10 @@ class TouchImageView @JvmOverloads constructor(
 
     /** Logical zoom matrix in true image-pixel space (for overlays / probe). */
     fun getZoomMatrix(): Matrix = Matrix(matrix)
+
+    /** The pinch floor (the whole photo in the chrome-safe box), below the rest pose when the ROI is smaller. */
+    @VisibleForTesting
+    internal val pinchFloorScale: Float get() = minScale
 
     private fun publishMatrix() {
         if (contentScaleX != 1f || contentScaleY != 1f) {

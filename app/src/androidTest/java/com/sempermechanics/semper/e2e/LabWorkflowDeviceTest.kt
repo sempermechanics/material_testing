@@ -192,9 +192,16 @@ class LabWorkflowDeviceTest {
             device.click(box.centerX(), box.centerY())
             awaitOn(scenario, "the probe readout") { it.binding.tvProbeReadout.isVisible }
 
+            // Pinching closed may zoom out past the rest pose (the ROI) to the whole photo,
+            // TouchImageView's floor, but never below it. On API 30 the pinch ended at that
+            // floor (5.4, rest 6.75), which the old rest-scale floor read as a failure.
+            // On API 36.1 the injected pinch-close leaves the scale where it was (TD-276).
             image().pinchClose(PINCH_PERCENT)
             device.waitForIdle()
-            assertTrue("pinch-close went below the rest scale", scaleOf(scenario) >= restScale * 0.98f)
+            val closed = scaleOf(scenario)
+            var floor = 0f
+            scenario.onActivity { floor = it.binding.imgBaseResult.pinchFloorScale }
+            assertTrue("pinch-close went below the floor ($closed < $floor, rest $restScale)", closed >= floor * 0.98f)
         }
     }
 
