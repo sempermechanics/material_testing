@@ -1,6 +1,6 @@
 # Real 3-point bend: reinforced concrete beam (published data)
 
-**In Semper Classroom:** + → *Try an example* (or Settings → Help → Example data) → this set. **Try it** opens a new analysis with the photos, the load log and the dimensions already in (you still tap the beam's edges); **Save to phone** copies this folder to `Download/Semper examples/` so you can run it like your own photos, with the steps below.
+**In semper Classroom:** + → *Try an example* (or Settings → Help → Example data) → this set. **Try it** opens a new analysis with the photos, the load log and the dimensions already in (you still tap the beam's edges); **Save to phone** copies this folder to `Download/semper examples/` so you can run it like your own photos, with the steps below.
 
 Credit and licence: [CREDIT.txt](CREDIT.txt).
 

@@ -65,7 +65,7 @@ class ExampleDownloadsTest {
         }
     }
 
-    private val folder = "Download/Semper examples/DICe translation/"
+    private val folder = "Download/semper examples/DICe translation/"
 
     @Test
     fun `every file of the set is saved, notes and licence first`() = runTest {
@@ -110,7 +110,7 @@ class ExampleDownloadsTest {
     @Test
     fun `the folder is under Downloads, named for the set`() {
         assertEquals(
-            "Download/Semper examples/PMMA bending/",
+            "Download/semper examples/PMMA bending/",
             ExampleDownloads.relativePathOf(
                 requireNotNull(ExampleCatalog.find(app.assets, "pmma_bending")),
             ),

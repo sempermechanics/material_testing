@@ -1,6 +1,6 @@
 # Real tensile test: steel 1.4016 (published data)
 
-**In Semper Classroom:** + → *Try an example* (or Settings → Help → Example data) → this set. **Try it** opens a new analysis with the photos, the load log and the dimensions already in; **Save to phone** copies this folder to `Download/Semper examples/` so you can run it like your own photos, with the steps below.
+**In semper Classroom:** + → *Try an example* (or Settings → Help → Example data) → this set. **Try it** opens a new analysis with the photos, the load log and the dimensions already in; **Save to phone** copies this folder to `Download/semper examples/` so you can run it like your own photos, with the steps below.
 
 Credit and licence: [CREDIT.txt](CREDIT.txt). Ground truth: `truth_gauge_strain.csv`, the authors' two gauge points' strain and the force at every deformed frame.
 

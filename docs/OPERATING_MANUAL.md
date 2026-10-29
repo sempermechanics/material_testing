@@ -2,8 +2,8 @@
 
 How to get displacement and strain fields out of a DIC image set, using the app.
 
-Semper Classroom (Material Testing before ADR-030) is Semper with two lab
-tests added. **+** asks which test it is: **2D DIC** is Semper's analysis,
+semper Classroom (Material Testing before ADR-030) is semper with two lab
+tests added. **+** asks which test it is: **2D DIC** is semper's analysis,
 unchanged, and everything in §1–§11 is about it; **Tensile** and **Bending**
 add a load log, the specimen's size, a **Results** page with E, and a lab
 report ([§12](#12-lab-tests)).
@@ -749,7 +749,7 @@ towards your analyses like any other and is named after the reference, with
 one frame it was solved against, so its Re-run has that frame alone. Re-run
 needs the original photos on this phone: an **Only in cloud** row asks you to
 restore it first, and a freed-up one says this phone doesn't have them.
-In Semper Classroom, Re-run copies the test too: a **Tensile** or **Bending**
+In semper Classroom, Re-run copies the test too: a **Tensile** or **Bending**
 analysis comes back as one, with its cross-section or beam dimensions, its
 strain axis, its beam-edge taps (and the deflection scale and bias set in
 Results), and bending's typed hanger masses. A machine's load log is not kept
@@ -1447,7 +1447,7 @@ cooldown. Seats and the operator's user list show a semper Classroom device
 as "semper Classroom …" beside semper's. semper Classroom was Material Testing
 until 2026-10 (ADR-030): a Material Testing build still installed is the same
 app to the account and shares its phone and cooldown, but it cannot register a
-new device; install Semper Classroom instead.
+new device; install semper Classroom instead.
 
 **Demo on the phone they use.** An account whose lock was taken by another
 device before 2026-09-27 reads Demo on the phone it is registered on. One

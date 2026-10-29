@@ -95,8 +95,9 @@ class UserTermsTest {
     fun `the product name is lower-case semper`() {
         // Readiness ADDENDUM-4: lower-case even at the start of a sentence. The
         // company, Semper Mechanics, keeps its capital; the sister app is written
-        // "semper Classroom", as the console writes it.
-        assertEquals("semper", strings.getValue("app_name"))
+        // "semper Classroom", as the console writes it. In this repository the app
+        // is that sister app, so its own name is "semper Classroom" (AppNameTest).
+        assertEquals("semper Classroom", strings.getValue("app_name"))
         assertEquals(emptyList<String>(), caseSensitiveOffenders("""\bSemper\b(?! Mechanics\b)"""))
         assertTrue(strings.getValue("delete_account_body").contains("semper Classroom"))
     }

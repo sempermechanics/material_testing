@@ -15,7 +15,7 @@ import java.io.IOException
 import java.io.InputStream
 
 /**
- * Save to phone: copies a bundled set into `Download/Semper examples/<folder>/`
+ * Save to phone: copies a bundled set into `Download/semper examples/<folder>/`
  * so the student can pick it like their own photos. The set's README and
  * credit (and its licence text, for a BSD set) always go with it: both
  * licences ask that the notice travels with every copy.
@@ -98,7 +98,7 @@ class ExampleDownloads(private val assets: AssetManager, private val sink: Sink)
 
     companion object {
         /** The folder under Downloads every set is saved in. */
-        const val PARENT_FOLDER = "Semper examples"
+        const val PARENT_FOLDER = "semper examples"
 
         fun relativePathOf(set: ExampleManifest): String =
             "${Environment.DIRECTORY_DOWNLOADS}/$PARENT_FOLDER/${set.folderName}/"

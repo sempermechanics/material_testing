@@ -72,7 +72,7 @@ documentation and/or other materials".
      (`ExampleAssetProvider`, read only, not exported), plus the test, its
      dimensions (`LabRerun.putOn`), the ROI and the load log. The student still
      taps a beam's edges.
-   - **Save to phone** copies the set to `Download/Semper examples/<set>/` through
+   - **Save to phone** copies the set to `Download/semper examples/<set>/` (lower case since 2026-10-29, readiness ADDENDUM-4) through
      MediaStore, with no permission needed (minSdk 30).
 
    Both pass the same gates as the + button. An example run counts toward the

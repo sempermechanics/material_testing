@@ -16,7 +16,7 @@ import kotlinx.serialization.Serializable
  *
  * @property outcome [OUTCOME_WORKS], or [OUTCOME_EXPECTED_TO_FAIL] for a set
  *   kept to show what photos that cannot be tracked do.
- * @property folderName the folder Save to phone writes under `Download/Semper examples/`.
+ * @property folderName the folder Save to phone writes under `Download/semper examples/`.
  * @property imageSize the reference's width and height in pixels.
  * @property roi x, y, width, height in reference pixels.
  */
