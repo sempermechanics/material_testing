@@ -446,7 +446,7 @@ Everything above is required (or near enough). These are the rest of what
 | `APP_CHECK_MODE` | `off` | `off` / `monitor` / `enforce`. Whether a caller sending `X-Device-Id` must also carry a valid Firebase App Check token. Roll out through `monitor` — see [AUTH_SETUP.md §3.2](AUTH_SETUP.md). A value outside the three fails startup. **Never `enforce` while a build without App Check is still installed** — every request from it would 403 |
 | `LICENSE_GRACE_DAYS_DEFAULT` | `14` | Grace applied at mint time when the request names none. A licence already stored without `graceDays` reads as zero, so changing this never reinstates an expired account |
 | `LICENSE_LEASE_HOURS` · `LICENSE_LEASE_HEARTBEAT_MINUTES` | `8` · `30` | Floating-seat lease length and how often the app renews it. A crashed client parks a seat for at most the lease |
-| `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` | `30` | Wait between self-service device changes on one licence. `0` disables the wait. Staff-initiated changes ignore it |
+| `IMPLICIT_ACTIVATION` | `legacy` | Whether a build that does not send `X-Activation: explicit` activates its phone itself on a licence that runs activations (ADR-033). `off` once the fleet taps Activate. Replaces `SELF_DEVICE_CHANGE_COOLDOWN_DAYS`, which is no longer read |
 | `DEVICE_RELEASE_HOLD_HOURS` | `24` | How long the phone a device-lock clear released is refused at `POST /v1/devices/register`, so its upload worker cannot take the account back before the new phone signs in. Registering any other device ends it; `0` disables it. Not pinned by `deploy-backend.yml` |
 | `AUTH_ADMIN_CALLS_PER_SECOND` · `AUTH_ADMIN_BURST` | `10` · `20` | Per-instance budget for Firebase Auth Admin calls: the step-up revocation check, refresh-token revocation and Auth-user deletion share it (`backend/app/config.py:290-291`, `rate_limit.auth_admin_bucket`). Spent, a revoke or delete is skipped and reported as not done in its audit row, and the revocation check answers 503 `auth_check_busy` with `Retry-After`; each logs `auth_admin_rate_limited` (metric `semper_auth_admin_rate_limited`). Not pinned by `deploy-backend.yml` |
 | `CHECK_REVOKED_ON_STEP_UP` | `false` | `true` re-verifies a browser step-up caller's ID token with revocation checked, so a revoked or disabled user stops at once rather than when the token expires. Needs A8 step 1 first; without the grant it fails closed (`backend/app/config.py:260-275`) |
@@ -468,7 +468,7 @@ Everything above is required (or near enough). These are the rest of what
 >
 > [`deploy-backend.yml`](../../.github/workflows/deploy-backend.yml) pins
 > `DEMO_MAX_ANALYSES`, `LICENSED_MAX_SESSIONS_PER_USER`, `ADMIN_WEB_MFA_ENABLED`,
-> `APP_CHECK_MODE`, `SELF_DEVICE_CHANGE_COOLDOWN_DAYS`, `CONSOLE_ORIGINS`,
+> `APP_CHECK_MODE`, `IMPLICIT_ACTIVATION`, `CONSOLE_ORIGINS`,
 > `CHECK_REVOKED_ON_STEP_UP`, `ENTITLEMENT_KID`, `ENTITLEMENT_OFFLINE_GRACE_DAYS`,
 > `MIN_SUPPORTED_VERSION_CODE`, `RECOMMENDED_VERSION_CODE`, their `_SEMPER_CLASSROOM` pair (falling back to the
 > `_MATERIAL_TESTING` variables) and `KILL_SWITCHES` from repository

@@ -33,7 +33,8 @@ adding the member, 403 to a typed key). Nothing said whether that was intended.
   no status is refused when the `Refusal` is built (`ValueError`).
 - `main.refusal_handler` is the one place a refusal becomes a response:
   `{"detail": "<code>"}` (or `"<code>: <suffix>"`) with `STATUS[code]`, plus
-  `Retry-After` when `retry_at` is set (`device_change_too_soon`).
+  `Retry-After` when `retry_at` is set (no code sets it since ADR-033 removed
+  `device_change_too_soon`; the handler keeps it).
 - Routes do not map codes. The two existing deviations were kept at first,
   named where they happened with `errors.restatus({code: status})`: activation
   (`license_seat_disabled` → 403), conversion and seat holds (`license_revoked`

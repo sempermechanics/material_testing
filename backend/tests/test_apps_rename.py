@@ -183,16 +183,17 @@ def test_a_self_clear_of_a_legacy_lock_clears_both_names(store):
     assert cleared["releasedDeviceIdSemperClassroom"] == "and-classroom"
     lic = store._data["licenses"][license_id]
     assert lic["deviceIdLockSemperClassroom"] == "" and lic["deviceIdLockMaterialTesting"] == ""
-    assert "deviceChangedAtSemperClassroom" in lic and "deviceChangedAtMaterialTesting" in lic
+    assert not {"deviceChangedAtSemperClassroom", "deviceChangedAtMaterialTesting"} & set(lic)
     assert lic["deviceIdLock"] == "and-semper"
     user = store._data["users"]["solo-1"]
     assert not {"activeDeviceIdSemperClassroom", "activeDeviceIdMaterialTesting"} & set(user)
     assert user["releasedDeviceIdSemperClassroom"] == "and-classroom"
     assert user["releasedDeviceIdMaterialTesting"] == "and-classroom"
-    # The cooldown is read back through the new field and the old alike.
-    again = pytest.raises(repo.Refusal, repo.clear_device_lock, license_id, "solo-1",
-                          actor=repo.ACTOR_SELF, app=OLD)
-    assert again.value.code == "device_change_too_soon"
+    # The old name clears the same lock again at once: no cooldown (ADR-033).
+    again = repo.clear_device_lock(license_id, "solo-1", actor=repo.ACTOR_SELF, app=OLD)
+    assert again["previousDeviceIdSemperClassroom"] == ""
+    assert lic["deviceIdLockSemperClassroom"] == "" and lic["deviceIdLockMaterialTesting"] == ""
+    assert lic["deviceIdLock"] == "and-semper"
 
 
 def _as(store, monkeypatch, uid):

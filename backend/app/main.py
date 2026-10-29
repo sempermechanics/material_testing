@@ -17,6 +17,7 @@ from .config import settings
 from .deps import DEPENDENCY_RETRY_AFTER_SECONDS
 from .routers import (
     account,
+    activations,
     admin,
     admin_test_accounts,
     devices,
@@ -304,6 +305,7 @@ for _router in (
     admin.router,
     admin_test_accounts.router,
     institutions.router,
+    activations.router,
 ):
     app.include_router(_router)
 

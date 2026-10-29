@@ -2,8 +2,10 @@
 
 **Status:** Accepted 2026-10-29; in progress. Step 1 built: each app reads its own
 licence off the user (`apps.licence_view`), with no change in behaviour. Step 2
-built: an account holds several phones per app. Every later step is listed under
-Action items.
+built: an account holds several phones per app. Step 3 built: the activation
+model, its routes and the cooldown's removal, for licences that name their app
+(none do until step 4 mints them and the split stamps the rest). Every later
+step is listed under Action items.
 **Date:** 2026-10-29
 **Deciders:** product owner
 **Supersedes in part:** [ADR-007](ADR-007-licence-lifecycle.md) (one licence per person becomes one per person per app; conversion becomes issue then activate),
@@ -144,10 +146,12 @@ The product owner's decisions (2026-10-29):
 ## Consequences
 
 - **Backend:** `apps.licence_view` / `licence_patch` / `LICENCE_MIRROR_FIELDS`;
-  `user_config` takes `app`. Still to come: `repo/activations.py`,
-  `repo/licence_upgrade.py`, `routers/activations.py`, a migration script that
-  splits existing licences per app, an index override on
-  `activations.uid`, and the gateway and contract snapshot.
+  `user_config` takes `app`; `repo/activations.py` (the check, Activate, the
+  lists), `repo/deactivations.py` (role-scoped deactivation),
+  `routers/activations.py`, the gateway and the contract snapshot. Still to
+  come: `repo/licence_upgrade.py`, a migration script that splits existing
+  licences per app, and an index override on `activations.uid` once a query
+  crosses licences (step 3's stay inside one licence's subcollection).
 - **App:** an Activate step, a phones screen with Deactivate, instant unlock, a sync
   toggle. Semper Classroom gets it by fork sync.
 - **Consoles:** mint per app with `maxDevices`, per-phone Deactivate, staff Add phone,
@@ -165,8 +169,14 @@ The product owner's decisions (2026-10-29):
 - [ ] Before the step-2 backend serves: `backend/scripts/retire_stale_devices.py`
       dry run, then `--apply` (owner), so no ACTIVE record an older path left
       behind can sign.
-- [ ] The activation model, routes, `/v1/config` and `/v1/me` blocks, role-scoped
-      deactivation, cooldown removal, floating lease device.
+- [x] Step 3: the activation model (`repo/activations.py`), Activate and the
+      phones routes for holder, IT and staff (`routers/activations.py`),
+      role-scoped deactivation (`repo/deactivations.py`), `/v1/config`'s
+      `activation` and `/v1/me`'s `licences`, `X-Activation` and
+      `IMPLICIT_ACTIVATION`, the cooldown removed, the floating lease's phone
+      mirrored (CLOUD_ARCHITECTURE_GCP §20.16).
+- [ ] Before the step-3 backend serves: drop `SELF_DEVICE_CHANGE_COOLDOWN_DAYS`
+      from the service (`--remove-env-vars`, owner); it is no longer read.
 - [ ] A licence per app: one per person per app, per-app invites, mint `app` and
       `maxDevices`, per-app quota, issue and apply upgrade, QC test accounts on the
       activation model.

@@ -80,6 +80,15 @@ export const COLLECTIONS = [
     source: 'backend/app/repo/_base.py',
   },
   {
+    // A licence's activated phones (ADR-033), keyed by device id.
+    name: 'activations',
+    parentCollection: 'licenses',
+    collectionPath: (parent = 'lic-1') => `licenses/${parent}/activations`,
+    path: (id, parent = 'lic-1') => `licenses/${parent}/activations/${id}`,
+    ownerFields: (uid) => ({ uid, app: 'semper', status: 'active' }),
+    source: 'backend/app/repo/activations.py',
+  },
+  {
     name: 'licenseInvites',
     collectionPath: () => 'licenseInvites',
     path: (id) => `licenseInvites/${id}`,

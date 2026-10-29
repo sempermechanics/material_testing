@@ -147,12 +147,18 @@ SEATING_NOT_FLOATING = "seating_not_floating"
 # report would read like a clean bill of health.
 KIND_NOT_INSTITUTION = "kind_not_institution"
 EMAIL_NOT_VERIFIED = "email_not_verified"
-# Self-service device change only. Clearing a lock is not revoking — the
-# entitlement is untouched and the next device to sign in binds — so the only
-# thing that limits it is how often the holder may do it themselves. Staff and
-# IT are never subject to this. Sent as `device_change_too_soon: <ISO instant>`
-# (with `Retry-After`), the instant being when the holder may change again.
-DEVICE_CHANGE_TOO_SOON = "device_change_too_soon"
+# Activation (ADR-033). Every slot of the licence's device count is taken:
+# 409 `device_limit_reached: <active>/<max>`, so the app can say "1 of 1
+# phones" and offer Deactivate. The count is the only limit on moving a
+# licence between phones; the self-service cooldown it replaced is gone.
+DEVICE_LIMIT_REACHED = "device_limit_reached"
+# 404: no activation the caller may act on for that phone. Another member's
+# phone in the same pool, or a licence outside an IT admin's domain, reads the
+# same as one that does not exist.
+ACTIVATION_NOT_FOUND = "activation_not_found"
+# 409: Activate on a floating licence. Its lease is the activation
+# (`POST /v1/licenses/checkout`), so there is nothing to activate.
+SEATING_FLOATING = "seating_floating"
 # 422 on a staff licence edit: a `maxSeats` below the members already on an
 # assigned roster. Lowering the cap removes nobody, so it would only make the
 # count read "12 of 10"; remove members first.
@@ -336,6 +342,7 @@ STATUS: dict[str, int] = {
     NO_LICENSE: 404,
     SEAT_NOT_FOUND: 404,
     DELETED_LICENSE_NOT_FOUND: 404,
+    ACTIVATION_NOT_FOUND: 404,
     # There, but not for this caller.
     LICENSE_EXPIRED: 403,
     LICENSE_REVOKED: 403,
@@ -359,6 +366,8 @@ STATUS: dict[str, int] = {
     INVITE_EXISTS: 409,
     SEAT_REVOKED: 409,
     SEAT_BUSY: 409,
+    DEVICE_LIMIT_REACHED: 409,
+    SEATING_FLOATING: 409,
     # Device registration (`repo.register_device`): the account is bound to
     # another phone for this app, or this phone is another account's, or
     # staff released this phone from this test account.
@@ -378,8 +387,6 @@ STATUS: dict[str, int] = {
     MAX_SEATS_BELOW_USED: 422,
     INVALID_EMAIL: 400,
     KIND_NOT_INSTITUTION: 400,
-    # Not yet: the caller is told when.
-    DEVICE_CHANGE_TOO_SOON: 429,
     # Lost a race; a retry succeeds.
     CLAIM_CONTENDED: 503,
 }
@@ -389,7 +396,7 @@ class Refusal(Exception):
     """A request the service refuses, named by its wire code.
 
     Raised by the repo; `main.py` answers it as `{"detail": "<code>"}` (or
-    `"<code>: <suffix>"`, as `device_change_too_soon` carries its instant) with
+    `"<code>: <suffix>"`, as `device_limit_reached` carries its count) with
     `STATUS[code]`, and `Retry-After` when `retry_at` says when to come back.
     A code without a status is a programming error, refused at construction.
     """

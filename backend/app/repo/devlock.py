@@ -14,9 +14,10 @@ from ..licenses import (
     MODE_LICENSED,
 )
 from .. import observability as obs
+from ..errors import Refusal
 from ..observability import DependencyError
 
-from . import _base
+from . import _base, activations
 from ._base import (
     SCHEMA_VERSION,
     _active_devices,
@@ -51,27 +52,29 @@ class _Lock(Enum):
     UNBOUND = "unbound"
     REVOKED = "revoked"
     MISMATCH = "mismatch"
+    #: A licence that runs activations, and a build that does not tap
+    #: Activate: the phone may activate itself (`IMPLICIT_ACTIVATION`).
+    IMPLICIT = "implicit"
 
 
-def locked_device(user: dict, app: str = apps.SEMPER) -> str:
-    """The phone this account's licence (or its seat) is locked to for `app`,
-    or "" when none is: no licence, a revoked one, an empty lock, or a test
-    account's licence, which locks nothing (ADR-027). Two reads at most; for
-    registration, which must not retire the licensed phone to make room."""
-    license_id = user.get("licenseId")
-    if not license_id or test_account_of(user) is not None:
-        return ""
-    lic = _get(db().collection("licenses").document(license_id)).to_dict() or {}
-    if not lic or _is_revoked(lic):
-        return ""
-    if not _is_institution(lic):
-        return apps.read_field(lic, "deviceIdLock", app) or ""
-    seat = _get(_seat_ref(license_id, user.get("uid") or "")).to_dict() or {}
-    return apps.read_field(seat, "deviceIdLock", app) or ""
+_BY_ACTIVATION = {
+    activations.OK: _Lock.OK,
+    activations.REVOKED: _Lock.REVOKED,
+    activations.MISMATCH: _Lock.MISMATCH,
+    activations.IMPLICIT: _Lock.IMPLICIT,
+}
 
 
-def _device_lock_state(user: dict, device_id: str,
-                       app: str = apps.SEMPER) -> tuple[_Lock, object | None]:
+def licensed_devices(user: dict, app: str = apps.SEMPER) -> set[str]:
+    """The phones this account's licence for `app` licenses: its active
+    activations, or the one its lock names on a licence from before the split.
+    Empty for no live licence or a test account's (ADR-027). For registration,
+    which must not retire a licensed phone to make room."""
+    return activations.activated_devices(user, app)
+
+
+def _device_lock_state(user: dict, device_id: str, app: str = apps.SEMPER, *,
+                       explicit: bool = False) -> tuple[_Lock, object | None, dict]:
     """Judge `device_id` against this account's entitlement.
 
     Returns the verdict and, when the lock is still empty, the document that
@@ -85,6 +88,10 @@ def _device_lock_state(user: dict, device_id: str,
     device for the first time with nothing bound — so the caller binds, and
     the licence ties itself to a device without anyone typing a key.
 
+    A licence that names its app runs activations instead (ADR-033): the
+    phone is licensed by its activation, not by a lock (`repo.activations`),
+    and `explicit` says the build taps Activate, so it never activates itself.
+
     Individual: the lock lives on the licence, one device for the licence.
     Institution: on the seat, one device per member. Either way there is one
     lock per app (`apps.read_field`), so a licence holds one phone for each app
@@ -92,26 +99,31 @@ def _device_lock_state(user: dict, device_id: str,
     """
     license_id = user.get("licenseId")
     if not license_id:
-        return _Lock.OK, None
+        return _Lock.OK, None, activations.NONE_BLOCK
     ref = db().collection("licenses").document(license_id)
     snap = _get(ref)
     if not snap.exists:
-        return _Lock.OK, None
+        return _Lock.OK, None, activations.NONE_BLOCK
     lic = snap.to_dict() or {}
+    if activations.runs_activations(lic) and test_account_of(user) is None:
+        verdict, shown = activations.revalidate_activation(user, license_id, lic, device_id, app,
+                                                explicit=explicit)
+        return _BY_ACTIVATION[verdict], None, shown
     if _is_revoked(lic):
-        return _Lock.REVOKED, None
+        return _Lock.REVOKED, None, activations.NONE_BLOCK
     if not _is_institution(lic):
         tag = test_account_of(user)
         if tag is not None:
-            return _test_lock_verdict(user, tag, device_id, app), None
+            verdict = _test_lock_verdict(user, tag, device_id, app)
+            return verdict, None, _lock_block(verdict)
         return _lock_verdict(apps.read_field(lic, "deviceIdLock", app), device_id, ref)
     seat_ref = _seat_ref(license_id, user.get("uid") or "")
     seat_snap = _get(seat_ref)
     if not seat_snap.exists:
-        return _Lock.OK, None
+        return _Lock.OK, None, activations.NONE_BLOCK
     seat = seat_snap.to_dict() or {}
     if seat.get("status") in ("revoked", "disabled"):
-        return _Lock.REVOKED, None
+        return _Lock.REVOKED, None, activations.NONE_BLOCK
     return _lock_verdict(apps.read_field(seat, "deviceIdLock", app), device_id, seat_ref)
 
 
@@ -137,13 +149,23 @@ def _test_lock_verdict(user: dict, tag: dict, device_id: str, app: str) -> _Lock
     return _Lock.MISMATCH
 
 
-def _lock_verdict(locked, device_id: str, ref) -> tuple[_Lock, object | None]:
+def _lock_verdict(locked, device_id: str, ref) -> tuple[_Lock, object | None, dict]:
     """The individual and institution branches differ only in which document
     carries the lock, so the comparison itself lives in one place."""
     locked = locked or ""
     if not locked:
-        return _Lock.UNBOUND, ref
-    return (_Lock.OK, None) if locked == device_id else (_Lock.MISMATCH, None)
+        return _Lock.UNBOUND, ref, _lock_block(_Lock.UNBOUND)
+    verdict = _Lock.OK if locked == device_id else _Lock.MISMATCH
+    return verdict, None, _lock_block(verdict)
+
+
+def _lock_block(verdict: _Lock) -> dict:
+    """`/v1/config`'s `activation` block for a licence that keeps the device
+    lock: one phone, this one or another."""
+    state = {_Lock.OK: activations.STATE_ACTIVE, _Lock.UNBOUND: activations.STATE_AVAILABLE,
+             _Lock.MISMATCH: activations.STATE_FULL}.get(verdict, activations.STATE_NONE)
+    used = 0 if state == activations.STATE_AVAILABLE else 1
+    return activations.activation_block(state, used, 1, model="lock")
 
 
 #: Whole bind transactions tried before giving up, each with the client's own
@@ -251,7 +273,8 @@ def _may_bind(user: dict, device_id: str, app: str = apps.SEMPER) -> bool:
 
 
 def revalidate_device_lock(user: dict, device_id: str | None,
-                           app: str = apps.SEMPER) -> dict:
+                           app: str = apps.SEMPER, *, explicit: bool = False,
+                           shown: dict | None = None) -> dict:
     """Re-check this account's entitlement against `device_id` on every authed
     call that carries X-Device-Id — activation is not "trust forever". A
     revoked license/seat drops the account to Demo immediately, and stored,
@@ -282,17 +305,45 @@ def revalidate_device_lock(user: dict, device_id: str | None,
     lock, so Semper and Semper Classroom on one phone are each checked against
     their own device id, and neither is a mismatch for the other (ADR-010).
 
+    **Activations (ADR-033).** A licence that names its app licenses the
+    phones activated on it, not the first to ask: any other phone is a
+    mismatch. A build that does not tap Activate (`explicit` false: no
+    `X-Activation: explicit` header) may still activate its phone here while
+    `IMPLICIT_ACTIVATION=legacy` and the holder has none active, so installed
+    builds keep their licence. Each app reads its own licence
+    (`apps.licence_view`), and Demo is written to that app's fields.
+
+    `shown`, when given, is filled with `/v1/config`'s `activation` block for
+    this phone, from the documents this call read anyway.
+
     This only ever *removes* entitlement in place — it never deletes or hides
     the account's sessions/files, and re-locking to a *different* device
     happens only after a staff, IT or self-service clear of the existing lock.
     """
-    if not device_id or not user.get("licenseId"):
+    view = apps.licence_view(user, app)
+    if not device_id or not view.get("licenseId"):
         return user
-    if effective_mode(user) != MODE_LICENSED:
+    if effective_mode(view) != MODE_LICENSED:
         return user
-    verdict, ref = _device_lock_state(user, device_id, app)
+    verdict, ref, block = _device_lock_state(view, device_id, app, explicit=explicit)
+    if shown is not None:
+        shown.update(block)
+    demo = apps.licence_patch(_mode_patch(MODE_DEMO), apps.licence_app(user, app))
+    if verdict == _Lock.IMPLICIT:
+        try:
+            done = activations.activate_device(user.get("uid") or "", device_id, app,
+                                        actor=activations.ACTOR_LEGACY, implicit=True, user=user)
+        except Refusal:
+            # Taken in the meantime, or no longer allowed: this phone is
+            # simply not the licensed one.
+            verdict = _Lock.MISMATCH
+        else:
+            if shown is not None:
+                shown.update(state=activations.STATE_ACTIVE,
+                             devicesActive=done.get("devicesActive", 0))
+            return user
     if verdict == _Lock.UNBOUND:
-        if not _may_bind(user, device_id, app):
+        if not _may_bind(view, device_id, app):
             # Proceeds, but leaves the lock for the phone that may take it.
             return user
         try:
@@ -302,17 +353,19 @@ def revalidate_device_lock(user: dict, device_id: str | None,
             # request it rides on should not fail for it: leave the licence
             # unbound and let this device's next request bind it.
             log.info("device lock bind starved uid=%s license=%s",
-                     user.get("uid"), user.get("licenseId"))
+                     user.get("uid"), view.get("licenseId"))
             return user
         if bound:
             log.info("device lock bound uid=%s license=%s app=%s",
-                     user.get("uid"), user.get("licenseId"), app)
+                     user.get("uid"), view.get("licenseId"), app)
+            if shown is not None:
+                shown.update(_lock_block(_Lock.OK))
             # The record matters because it is the second half of a device
             # change — `clear_device_lock` writes the device that was given
             # up, and this writes the one that took its place.
             audit.record(
                 user.get("uid"), device_id, action="LICENSE_DEVICE_BIND",
-                target={"type": "license", "id": user.get("licenseId")},
+                target={"type": "license", "id": view.get("licenseId")},
                 detail={"deviceId": device_id, "app": app},
             )
         return user
@@ -320,17 +373,17 @@ def revalidate_device_lock(user: dict, device_id: str | None,
         return user
     if verdict == _Lock.MISMATCH:
         log.info("device lock mismatch uid=%s license=%s app=%s: demo for this request",
-                 user.get("uid"), user.get("licenseId"), app)
-        _devlock_drop(user, "mismatch")
-        return {**user, **_mode_patch(MODE_DEMO)}
-    _devlock_drop(user, "revoked")
+                 user.get("uid"), view.get("licenseId"), app)
+        _devlock_drop(view, "mismatch")
+        return {**user, **demo}
+    _devlock_drop(view, "revoked")
     uid = user.get("uid")
     if uid:
         _update_doc(db().collection("users").document(uid), {
-            **_mode_patch(MODE_DEMO),
+            **demo,
             "updatedAt": _base.firestore.SERVER_TIMESTAMP,
         })
-    return {**user, **_mode_patch(MODE_DEMO)}
+    return {**user, **demo}
 
 
 def _devlock_drop(user: dict, stage: str) -> None:

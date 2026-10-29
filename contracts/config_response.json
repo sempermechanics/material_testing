@@ -22,5 +22,12 @@
   "killSwitches": [
     "restore"
   ],
-  "testAccount": null
+  "testAccount": null,
+  "activation": {
+    "state": "floating",
+    "devicesActive": 0,
+    "maxDevices": 0,
+    "pool": true,
+    "model": "activation"
+  }
 }

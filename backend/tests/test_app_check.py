@@ -25,7 +25,7 @@ def real_auth(monkeypatch):
     monkeypatch.setattr(deps, "verify_id_token", lambda tok: {"sub": "u1", "email": "a@b.com"})
     user = {"uid": "u1", "email": "a@b.com", "access_status": "APPROVED"}
     monkeypatch.setattr(deps.repo, "get_or_create_user", lambda claims, device_id=None: dict(user))
-    monkeypatch.setattr(deps.repo, "revalidate_device_lock", lambda u, did, app=None: u)
+    monkeypatch.setattr(deps.repo, "revalidate_device_lock", lambda u, did, app=None, **kw: u)
     return user
 
 

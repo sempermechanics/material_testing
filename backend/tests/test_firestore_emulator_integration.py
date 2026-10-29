@@ -790,6 +790,58 @@ def test_concurrent_registers_stay_within_the_phone_cap(emulator_repo):
     _race_until(race, settled, what="no registration committed")
 
 
+def test_phones_racing_for_the_last_slot_leave_the_count_true(emulator_repo):
+    """ADR-033's activation model against a real Firestore: three phones of
+    one account tapping Activate at once on a licence with one slot. At most
+    one activation is active, `devicesActive` matches the documents, the
+    others are refused (or told to retry), and the licence check reads the
+    activation through a batched get. Deactivating gives the slot back."""
+    from app.models import DeviceReg
+    from key_helpers import _ec_pem
+
+    tag = uuid.uuid4().hex[:8]
+    address = f"activator-{tag}@lab.org"
+    license_id = _emu_individual(emulator_repo, address)
+    uid = f"emu-{tag}"
+    user = emulator_repo.ensure_entitlement(dict(_emu_user(emulator_repo, uid, address)), None)
+    assert user["licenseId"] == license_id
+    emulator_repo.db().collection("licenses").document(license_id).update(
+        {"app": "semper", "maxDevices": 1})
+    devices = [f"dev-{tag}-{i}" for i in range(3)]
+    pem = _ec_pem()
+    for device in devices:
+        emulator_repo.register_device(uid, DeviceReg(deviceId=device, publicKeyPem=pem))
+    activations = (emulator_repo.db().collection("licenses").document(license_id)
+                   .collection("activations"))
+
+    def _activate(device):
+        return attempt(emulator_repo.activate_device, uid, device, "semper")[0]
+
+    def race():
+        with ThreadPoolExecutor(max_workers=len(devices)) as pool:
+            return list(pool.map(_activate, devices))
+
+    def settled(codes):
+        assert set(codes) <= {"", "device_limit_reached", "claim_contended"}, codes
+        active = [s.id for s in activations.stream()
+                  if (s.to_dict() or {}).get("status") == "active"]
+        assert len(active) == codes.count("") <= 1, (codes, active)
+        assert emulator_repo.get_license(license_id).get("devicesActive", 0) == len(active)
+        return bool(active)
+
+    _race_until(race, settled, what="no phone activated")
+    winner = next(s.id for s in activations.stream()
+                  if (s.to_dict() or {}).get("status") == "active")
+    loser = next(d for d in devices if d != winner)
+    fresh = emulator_repo._load_user(uid) | {"uid": uid}
+    assert emulator_repo.revalidate_device_lock(dict(fresh), winner, explicit=True)["mode"] == "licensed"
+    assert emulator_repo.revalidate_device_lock(dict(fresh), loser, explicit=True)["mode"] == "demo"
+
+    emulator_repo.deactivate_device(license_id, winner, actor="self", caller=fresh)
+    assert emulator_repo.get_license(license_id)["devicesActive"] == 0
+    assert attempt(emulator_repo.activate_device, uid, loser, "semper")[0] == ""
+
+
 def test_an_address_finds_the_licences_it_administers(emulator_repo):
     """`array_contains` against a real Firestore, not the double.
 

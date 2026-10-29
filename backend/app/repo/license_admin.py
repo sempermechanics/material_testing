@@ -267,7 +267,8 @@ def _run_ops(ref, license_id: str, lic: dict, ops) -> None:
     if clear_leases:
         _clear_seat_leases(ref)
     if FANOUT_TERMS in ops or clear_leases:
-        extra = {"leaseExpiresAt": _base.firestore.DELETE_FIELD} if clear_leases else {}
+        extra = ({"leaseExpiresAt": _base.firestore.DELETE_FIELD,
+                  "leaseDeviceId": _base.firestore.DELETE_FIELD} if clear_leases else {})
         _refresh_license_mirrors(_license_holder_uids(ref, lic), license_id,
                                  {**_license_mirror_patch(lic), **extra})
 
@@ -520,6 +521,7 @@ def _demo_drop_patch() -> dict:
     return {
         **_mode_patch(MODE_DEMO),
         "leaseExpiresAt": _base.firestore.DELETE_FIELD,
+        "leaseDeviceId": _base.firestore.DELETE_FIELD,
         "updatedAt": _base.firestore.SERVER_TIMESTAMP,
         # The instant from which "has this account been back since?" is
         # asked. `_touch_user` throttles lastSeenAt to the hour, which

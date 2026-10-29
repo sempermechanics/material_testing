@@ -2,7 +2,8 @@
 
 Each test pins one fix, named by its TECH_DEBT id:
 
-- TD-116  a device-change refusal says when the holder may change again
+- TD-116  a refusal's suffix and `Retry-After` reach the wire (its cooldown
+          is gone, ADR-033)
 - TD-117  `maxSeats` cannot be set below an assigned roster ("12 of 10 seats")
 - TD-118  a whole-licence revoke answers with the counts it just wrote
 - TD-119  an invite is not claimed onto a licence past its grace
@@ -13,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from app import audit, deps, drive, rate_limit, session_provision, statuses, tasks
+from app import audit, deps, drive, errors, rate_limit, session_provision, statuses, tasks
 import repo_view as repo
 from app.config import settings
 from license_helpers import _mint_individual, _mint_institution, _signed_in
@@ -35,27 +36,31 @@ def _seat(store, license_id, key, uid):
     assert err == ""
 
 
-# ============================================================ TD-116 cooldown
+# ============================================================ TD-116 says when
 
 
 @pytest.mark.asyncio
-async def test_a_refused_device_change_says_when_over_http(store, client, monkeypatch):
-    """The route promised "the caller is told when"; the refusal was a bare code."""
+async def test_a_refusal_says_its_suffix_and_when_over_http(store, client, monkeypatch):
+    """The route promised "the caller is told when"; the refusal was a bare code.
+    The device-change cooldown that first needed it is gone (ADR-033), so a
+    stubbed refusal carries the suffix and the instant through the real route."""
     monkeypatch.setattr(audit, "record", lambda *a, **k: None)
     store._data["users"] = {}
-    license_id = _mint_individual(email="dev@local")["license"]["id"]
+    _mint_individual(email="dev@local")
     user = repo.ensure_entitlement(_signed_in(store, DEV_UID, "dev@local"), None)
     monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, **user})
-    changed = datetime.now(timezone.utc) - timedelta(days=2)
-    store._data["licenses"][license_id]["deviceChangedAt"] = changed
+    when = datetime.now(timezone.utc) + timedelta(days=2)
 
+    def refuse(*_a, **_k):
+        raise errors.Refusal(errors.DEVICE_LIMIT_REACHED, "1/1", retry_at=when)
+
+    repo.patch(monkeypatch, "clear_device_lock", refuse)
     resp = await client.post("/v1/licenses/unbind")
 
-    assert resp.status_code == 429
-    expected = changed + timedelta(days=settings.SELF_DEVICE_CHANGE_COOLDOWN_DAYS)
-    assert resp.json()["detail"] == f"device_change_too_soon: {expected.isoformat()}"
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == "device_limit_reached: 1/1"
     retry_after = int(resp.headers["Retry-After"])
-    remaining = (expected - datetime.now(timezone.utc)).total_seconds()
+    remaining = (when - datetime.now(timezone.utc)).total_seconds()
     assert abs(retry_after - remaining) < 60
 
 

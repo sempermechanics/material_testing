@@ -183,9 +183,12 @@ def _authenticate(
         # or revoked institution seat, or a device that no longer matches the lock
         # drops the account to Demo immediately (fails closed); it never
         # touches the account's stored sessions/files. Checked against the
-        # lock of the app the request came from (ADR-010).
+        # lock of the app the request came from (ADR-010; ADR-033 for Activate).
         if x_device_id:
-            user = repo.revalidate_device_lock(user, x_device_id, app)
+            explicit = request.headers.get("x-activation", "").strip().lower() == "explicit"
+            request.state.activation = shown = {}
+            user = repo.revalidate_device_lock(user, x_device_id, app,
+                                               explicit=explicit, shown=shown)
     request.state.uid = user["uid"]
     obs.bind_uid(user["uid"])
     # Verified claims, for dependencies that need to know *how* the caller
