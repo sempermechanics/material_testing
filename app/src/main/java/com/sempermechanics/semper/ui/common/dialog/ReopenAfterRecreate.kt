@@ -15,15 +15,19 @@ import androidx.lifecycle.LifecycleOwner
  *
  * Build one per sheet while the Activity is built (it registers under [key]
  * in the saved-instance state). Call [shown] when the sheet opens, with what
- * showing it again needs, and [closed] from its dismiss. After
- * `super.onCreate`, [restored] answers that state once when the screen this
- * one replaces had the sheet open; the host shows it again with it. The old
- * Activity's sheet is dismissed when that Activity is destroyed.
+ * showing it again needs, and [closed] from its dismiss; or hand an alert to
+ * [keep], which does both. After `super.onCreate`, [restored] answers that
+ * state once when the screen this one replaces had the sheet open; the host
+ * shows it again with it. The old Activity's sheet is dismissed when that
+ * Activity is destroyed.
  */
 class ReopenAfterRecreate(private val activity: ComponentActivity, private val key: String) {
 
     private var state: (() -> Bundle)? = null
     private var closer: DefaultLifecycleObserver? = null
+
+    /** The dialog [shown] last, while it is up. */
+    private var showing: Dialog? = null
 
     init {
         activity.savedStateRegistry.registerSavedStateProvider(key) {
@@ -35,6 +39,7 @@ class ReopenAfterRecreate(private val activity: ComponentActivity, private val k
     fun shown(dialog: Dialog, state: () -> Bundle = { Bundle() }) {
         closed()
         this.state = state
+        showing = dialog
         val observer = object : DefaultLifecycleObserver {
             override fun onDestroy(owner: LifecycleOwner) {
                 // The state is saved by now: the rebuilt screen shows its own.
@@ -48,8 +53,20 @@ class ReopenAfterRecreate(private val activity: ComponentActivity, private val k
     /** The sheet closed; nothing to show again. */
     fun closed() {
         state = null
+        showing = null
         closer?.let(activity.lifecycle::removeObserver)
         closer = null
+    }
+
+    /**
+     * [dialog], just shown, is [shown] with [state] and [closed] when it is
+     * dismissed, unless another dialog has been [shown] here since (a dismiss
+     * lands after the click that opened the next one). Returns [dialog].
+     */
+    fun <D : Dialog> keep(dialog: D, state: () -> Bundle = { Bundle() }): D {
+        shown(dialog, state)
+        dialog.setOnDismissListener { if (showing === dialog) closed() }
+        return dialog
     }
 
     /** What [shown] saved when the replaced screen had the sheet open, once; null otherwise. */

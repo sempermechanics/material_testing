@@ -3,6 +3,7 @@ package com.sempermechanics.semper.ui.home
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import androidx.appcompat.app.AlertDialog
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.ui.common.dialog.Dialogs
@@ -25,11 +26,15 @@ object SessionOpenHelper {
      */
     fun openOrExplain(activity: Activity, session: SessionRecord, hasLocalData: Boolean) {
         if (!hasLocalData) {
-            Dialogs.info(activity, R.string.session_data_gone_title, R.string.session_data_gone_body)
+            explainGone(activity)
             return
         }
         activity.startActivity(intentFor(activity, session))
     }
+
+    /** "Not on this phone": the frames are gone from here. Returns the dialog, for a host that keeps it. */
+    fun explainGone(activity: Activity): AlertDialog =
+        Dialogs.info(activity, R.string.session_data_gone_title, R.string.session_data_gone_body)
 
     fun intentFor(context: Context, session: SessionRecord): Intent = ViewerArgs.of(session).toIntent(context)
 }

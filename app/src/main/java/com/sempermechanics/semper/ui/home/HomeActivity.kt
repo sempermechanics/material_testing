@@ -31,6 +31,7 @@ import com.sempermechanics.semper.ui.common.auth.SignOutRun
 import com.sempermechanics.semper.ui.common.dialog.CrispToast
 import com.sempermechanics.semper.ui.common.dialog.Dialogs
 import com.sempermechanics.semper.ui.common.dialog.Feedback
+import com.sempermechanics.semper.ui.common.dialog.ReopenAfterRecreate
 import com.sempermechanics.semper.ui.common.transfer.DeleteFeedback
 import com.sempermechanics.semper.ui.common.transfer.RestoreRequest
 import com.sempermechanics.semper.ui.limit.UpdateRequiredActivity
@@ -69,17 +70,19 @@ class HomeActivity : AppCompatActivity() {
 
     /** Confirm before leaving Home (and the app). Selection-mode back is separate. */
     private val exitAppCallback = object : androidx.activity.OnBackPressedCallback(true) {
-        override fun handleOnBackPressed() {
-            Dialogs.confirm(
-                this@HomeActivity,
-                getText(R.string.exit_semper_title),
-                null,
-                R.string.exit,
-            ) {
-                finish()
-            }
-        }
+        override fun handleOnBackPressed() = askExit()
     }
+
+    /**
+     * Exit semper?, Not on this phone, and a backed-up row's restore question
+     * come back when a configuration change rebuilds Home (readiness AE1-111).
+     */
+    private val reopenExit = ReopenAfterRecreate(this, "home.exit")
+    private val reopenNotHere = ReopenAfterRecreate(this, "home.notHere")
+    private val reopenRestoreAsk = ReopenAfterRecreate(this, "home.restoreAsk")
+
+    /** The row the replaced screen asked to restore: asked again once the list shows it. */
+    private var restoreAskId: String? = null
 
     /** The + button's source chooser and Re-run; registers its launchers, so built with the screen. */
     private val newAnalysis = HomeNewAnalysis(this) { quotaCard.openLimitScreenIfReached() }
@@ -131,6 +134,18 @@ class HomeActivity : AppCompatActivity() {
         deleteFeedback.observe()
         observeViewModel()
         newAnalysis.reopenAfterRecreate()
+        reopenQuestions()
+    }
+
+    /** Asks again what the screen this one replaces was asking; the restore question waits for its row. */
+    private fun reopenQuestions() {
+        if (reopenExit.restored() != null) askExit()
+        if (reopenNotHere.restored() != null) sayNotHere()
+        restoreAskId = reopenRestoreAsk.restored()?.getString(ROW_ID)
+    }
+
+    private fun askExit() {
+        reopenExit.keep(Dialogs.confirm(this, getText(R.string.exit_semper_title), null, R.string.exit) { finish() })
     }
 
     /** Each list read, and each restore's, erase's and rename's outcome once, on whichever Home is current. */
@@ -152,6 +167,7 @@ class HomeActivity : AppCompatActivity() {
         hideButton = binding.btnCloudBackupsHide,
         onRestore = { targets -> viewModel.restore { targets } },
         onHide = { backups -> hideCloudBackups(backups) },
+        reopen = ReopenAfterRecreate(this, "home.cloudBackupsPick"),
     )
 
     private fun wirePullToRefresh() {
@@ -301,6 +317,10 @@ class HomeActivity : AppCompatActivity() {
     /** A list read from [HomeViewModel.refreshList], with which rows have no frames here. */
     private fun showList(list: HomeViewModel.HomeList) {
         adapter.submit(list.sessions, list.withoutLocalData)
+        restoreAskId?.let { id ->
+            restoreAskId = null
+            adapter.recordsFor(listOf(id)).firstOrNull()?.let(::askRestore)
+        }
         // Demo: analyses are recorded silently and there is no restore, so
         // the list carries no sync badge, bar or "only in cloud" state.
         adapter.setSyncVisible(showsCloudState())
@@ -331,14 +351,25 @@ class HomeActivity : AppCompatActivity() {
             hasLocal -> startActivity(SessionOpenHelper.intentFor(this, record))
             // A demo account cannot pull its recorded copy back, so a row with
             // no local data is simply unopenable — no download offer.
-            record.isRestorable(hasLocal) && viewModel.entitlements.restoreEnabled -> Dialogs.confirm(
-                this,
-                getString(R.string.restore_analysis_title_fmt, record.name),
-                getText(R.string.restore_analysis_body),
-                R.string.restore_action,
-            ) { startRestore(listOf(record)) }
-            else -> SessionOpenHelper.openOrExplain(this, record, hasLocal)
+            record.isRestorable(hasLocal) && viewModel.entitlements.restoreEnabled -> askRestore(record)
+            else -> sayNotHere()
         }
+    }
+
+    /** "Restore <name>?" for a row backed up but not on this phone. */
+    private fun askRestore(record: SessionRecord) {
+        val dialog = Dialogs.confirm(
+            this,
+            getString(R.string.restore_analysis_title_fmt, record.name),
+            getText(R.string.restore_analysis_body),
+            R.string.restore_action,
+        ) { startRestore(listOf(record)) }
+        reopenRestoreAsk.keep(dialog) { Bundle().apply { putString(ROW_ID, record.id) } }
+    }
+
+    /** A row whose frames are gone and that cannot be restored: "Not on this phone". */
+    private fun sayNotHere() {
+        reopenNotHere.keep(SessionOpenHelper.explainGone(this))
     }
 
     /**
@@ -392,3 +423,6 @@ class HomeActivity : AppCompatActivity() {
         super.onDestroy()
     }
 }
+
+/** The saved-state key of the row a restore question is about. */
+private const val ROW_ID = "rowId"

@@ -80,9 +80,13 @@ class SessionSelectionController(
     private var renameId: String? = null
     private var renameInput: EditText? = null
 
+    /** "Can't re-run this analysis" on screen, if any, and why ([rerunBlockedBody]). */
+    private var rerunBlocked: Dialog? = null
+    private var rerunBlockedBody = 0
+
     /**
-     * The selection, and whether the delete question or the rename dialog
-     * (with what was typed) was open, as the screen this one replaces left
+     * The selection, and whether the delete question, the rename dialog
+     * (with what was typed) or "Can't re-run" (with why) was open, as the screen this one replaces left
      * them (a rotation or theme switch, readiness AE1-111): applied once the
      * list has rows, then null.
      */
@@ -96,6 +100,7 @@ class SessionSelectionController(
             Bundle().apply {
                 putStringArrayList(SELECTED, ArrayList(selectedIds))
                 putBoolean(DELETE_OPEN, deleteDialog?.isShowing == true)
+                if (rerunBlocked?.isShowing == true) putInt(RERUN_BLOCKED, rerunBlockedBody)
                 val input = renameInput
                 if (renameDialog?.isShowing == true && input != null) {
                     putString(RENAME_ID, renameId)
@@ -111,6 +116,7 @@ class SessionSelectionController(
                 override fun onDestroy(owner: LifecycleOwner) {
                     deleteDialog?.dismiss()
                     renameDialog?.dismiss()
+                    rerunBlocked?.dismiss()
                 }
             },
         )
@@ -220,9 +226,10 @@ class SessionSelectionController(
         return state
     }
 
-    /** Asks again what the replaced screen was asking: delete, or rename with the name typed so far. */
+    /** Asks again what the replaced screen asked: delete, can't re-run, or rename with the name typed so far. */
     private fun reopenDialogs(state: Bundle) {
         if (state.getBoolean(DELETE_OPEN)) confirmDeleteSelected()
+        state.getInt(RERUN_BLOCKED).takeIf { it != 0 }?.let(::sayRerunBlocked)
         val id = state.getString(RENAME_ID) ?: return
         val record = selectedRecords().singleOrNull()?.takeIf { it.id == id } ?: return
         val typed = state.getString(RENAME_TEXT).orEmpty()
@@ -256,12 +263,17 @@ class SessionSelectionController(
         val record = selectedRecords().singleOrNull() ?: return
         if (!hasLocalData(record)) {
             val inCloud = restoreEnabled() && record.isRestorable(hasLocalData = false)
-            val body = if (inCloud) R.string.rerun_photos_in_cloud_body else R.string.rerun_photos_missing_body
-            Dialogs.info(activity, R.string.rerun_unavailable_title, body)
+            sayRerunBlocked(if (inCloud) R.string.rerun_photos_in_cloud_body else R.string.rerun_photos_missing_body)
             return
         }
         clearSelection()
         onRerun(record)
+    }
+
+    /** "Can't re-run this analysis", saying why ([body]); the row stays selected. */
+    private fun sayRerunBlocked(body: Int) {
+        rerunBlockedBody = body
+        rerunBlocked = Dialogs.info(activity, R.string.rerun_unavailable_title, body)
     }
 
     /** Reads phone presence from the list, which read it on IO: a toggle never touches the disk. */
@@ -446,6 +458,7 @@ class SessionSelectionController(
         const val STATE_KEY = "home.selection"
         const val SELECTED = "selected"
         const val DELETE_OPEN = "deleteOpen"
+        const val RERUN_BLOCKED = "rerunBlocked"
         const val RENAME_ID = "renameId"
         const val RENAME_TEXT = "renameText"
         const val RENAME_SEL_START = "renameSelStart"

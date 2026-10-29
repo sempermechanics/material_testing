@@ -14,7 +14,6 @@ import com.sempermechanics.semper.ui.analysis.StaticAnalysisActivity
 import com.sempermechanics.semper.ui.analysis.rerun.PickedReference
 import com.sempermechanics.semper.ui.analysis.rerun.RerunSource
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisNavHelper
-import com.sempermechanics.semper.ui.common.dialog.Dialogs
 import com.sempermechanics.semper.ui.common.dialog.ReopenAfterRecreate
 import com.sempermechanics.semper.ui.common.media.MediaPickerSheet
 import com.sempermechanics.semper.ui.common.media.MediaSourceChooser
@@ -109,11 +108,8 @@ internal class HomeNewAnalysis(
         activity.lifecycleScope.launch {
             val source = withContext(Dispatchers.IO) { RerunSource.of(record) }
             when {
-                source == RerunSource.MISSING -> Dialogs.info(
-                    activity,
-                    R.string.rerun_unavailable_title,
-                    R.string.rerun_photos_missing_body,
-                )
+                // Said again if a configuration change rebuilds Home (readiness AE1-111).
+                source == RerunSource.MISSING -> rerunReference.unavailable(R.string.rerun_photos_missing_body)
                 !mayStart() -> Unit
                 source == RerunSource.NEEDS_REFERENCE -> rerunReference.ask(record)
                 else -> openRerun(record, null)

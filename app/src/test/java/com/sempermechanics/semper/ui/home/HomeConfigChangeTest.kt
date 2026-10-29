@@ -1,87 +1,26 @@
 package com.sempermechanics.semper.ui.home
 
-import android.annotation.SuppressLint
 import android.app.Activity
-import android.app.Dialog
-import android.content.Context
-import android.content.ContextWrapper
 import android.view.View
 import android.widget.EditText
 import android.widget.TextView
-import androidx.lifecycle.ViewModelProvider
-import androidx.recyclerview.widget.RecyclerView
-import androidx.test.core.app.ApplicationProvider
-import androidx.work.impl.WorkManagerImpl
-import androidx.work.testing.WorkManagerTestInitHelper
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.net.AccountCache
-import com.sempermechanics.semper.data.prefs.AppSettings
-import com.sempermechanics.semper.data.session.SessionStore
-import com.sempermechanics.semper.fixtures.CleanAppState
 import com.sempermechanics.semper.fixtures.idleUntil
-import com.sempermechanics.semper.fixtures.sessionRecord
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Before
-import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.android.controller.ActivityController
-import org.robolectric.shadows.ShadowDialog
 
 /**
  * A configuration change (rotation, font scale, dark theme, a resize) rebuilt
  * Home and closed the + sheet, the delete question, the rename dialog and
  * selection mode with it, so a half-made choice was lost (readiness AE1-111).
  * They come back on the rebuilt screen, the rename with what was typed.
+ * Home's other questions are in [HomeQuestionsConfigChangeTest].
  */
 @RunWith(RobolectricTestRunner::class)
-class HomeConfigChangeTest {
-
-    @get:Rule
-    val clean = CleanAppState()
-
-    private val context: Context = ApplicationProvider.getApplicationContext()
-    private val screens = mutableListOf<ActivityController<HomeActivity>>()
-
-    @Before
-    fun setUp() {
-        WorkManagerTestInitHelper.initializeTestWorkManager(context)
-        // No first-run prompt over the screen.
-        AccountCache.setBetaNoticeAcked(context)
-        AppSettings.setDiagnosticsEnabled(context, false)
-    }
-
-    @SuppressLint("RestrictedApi")
-    @After
-    fun tearDown() {
-        screens.forEach { it.close() }
-        WorkManagerTestInitHelper.closeWorkDatabase()
-        WorkManagerImpl.setDelegate(null)
-    }
-
-    private fun home(): ActivityController<HomeActivity> =
-        Robolectric.buildActivity(HomeActivity::class.java).setup().also { built ->
-            screens += built
-            val vm = ViewModelProvider(built.get())[HomeViewModel::class.java]
-            idleUntil("Home's first list") { vm.list.value != null }
-        }
-
-    private fun Dialog.activity(): Activity? {
-        var c: Context? = context
-        while (c is ContextWrapper) {
-            if (c is Activity) return c
-            c = c.baseContext
-        }
-        return null
-    }
-
-    /** The dialogs showing over [activity] whose content holds [viewId]. */
-    private fun showingOn(activity: Activity, viewId: Int): List<Dialog> = ShadowDialog.getShownDialogs()
-        .filter { it.isShowing && it.activity() === activity && it.findViewById<View>(viewId) != null }
+class HomeConfigChangeTest : HomeRecreateFixture() {
 
     @Test
     fun `the + sheet is open again after a rotation`() {
@@ -99,15 +38,13 @@ class HomeConfigChangeTest {
 
     @Test
     fun `selection mode and the delete question survive a rotation`() {
-        SessionStore.save(context, sessionRecord(id = "s1", name = "Beam test"), allowOverLimit = true)
-        SessionStore.save(context, sessionRecord(id = "s2", name = "Coupon"), allowOverLimit = true)
+        saved("s1", "Beam test")
+        saved("s2", "Coupon")
         val first = home()
         val old = first.get()
-        val list = old.findViewById<RecyclerView>(R.id.sessionList)
         // The list leads with a day header; the first long-pressable row is an analysis.
-        val row = { (0 until list.childCount).map { list.getChildAt(it) }.firstOrNull { it.isLongClickable } }
-        idleUntil("an analysis row") { row() != null }
-        assertTrue(row()!!.performLongClick())
+        idleUntil("an analysis row") { rows(old).isNotEmpty() }
+        assertTrue(rows(old).first().performLongClick())
         old.findViewById<View>(R.id.btnSelectionDelete).performClick()
         idleUntil("the delete question") { showingOn(old, android.R.id.message).isNotEmpty() }
 
@@ -127,9 +64,35 @@ class HomeConfigChangeTest {
         assertTrue("the old screen's question is closed", showingOn(old, android.R.id.message).isEmpty())
     }
 
+    /** The rows marked selected (their tick showing) on [screen], by title. */
+    private fun selectedRows(screen: Activity): List<String> = rows(screen)
+        .filter { it.findViewById<View>(R.id.sessionCheck).visibility == View.VISIBLE }
+        .map { it.findViewById<TextView>(R.id.sessionTitle).text.toString() }
+        .sorted()
+
+    @Test
+    fun `two selected rows are still selected after a rotation`() {
+        saved("s1", "Beam test")
+        saved("s2", "Coupon")
+        saved("s3", "Plate")
+        val first = home()
+        val old = first.get()
+        assertTrue(row(old, "Beam test").performLongClick())
+        assertTrue(row(old, "Plate").performClick())
+        idleUntil("two rows selected") { selectedRows(old).size == 2 }
+
+        val rebuilt = first.recreate().get()
+
+        idleUntil("the selection bar") { rebuilt.findViewById<View>(R.id.homeSelectionBar).visibility == View.VISIBLE }
+        assertEquals(
+            rebuilt.resources.getQuantityString(R.plurals.selection_count_fmt, 2, 2),
+            rebuilt.findViewById<TextView>(R.id.tvSelectionCount).text.toString(),
+        )
+        idleUntil("the same two rows selected") { selectedRows(rebuilt) == listOf("Beam test", "Plate") }
+    }
+
     /** The rename dialogs showing over [activity]: the ones whose content is an [EditText]. */
-    private fun renameFieldsOn(activity: Activity): List<EditText> = ShadowDialog.getShownDialogs()
-        .filter { it.isShowing && it.activity() === activity }
+    private fun renameFieldsOn(activity: Activity): List<EditText> = dialogsOn(activity)
         .mapNotNull { dialog -> dialog.findViewById<View>(android.R.id.content)?.findEditText() }
 
     private fun View.findEditText(): EditText? = when (this) {
@@ -140,13 +103,11 @@ class HomeConfigChangeTest {
 
     @Test
     fun `the rename dialog survives a rotation with the name typed so far`() {
-        SessionStore.save(context, sessionRecord(id = "s1", name = "Beam test"), allowOverLimit = true)
+        saved("s1", "Beam test")
         val first = home()
         val old = first.get()
-        val list = old.findViewById<RecyclerView>(R.id.sessionList)
-        val row = { (0 until list.childCount).map { list.getChildAt(it) }.firstOrNull { it.isLongClickable } }
-        idleUntil("an analysis row") { row() != null }
-        assertTrue(row()!!.performLongClick())
+        idleUntil("an analysis row") { rows(old).isNotEmpty() }
+        assertTrue(rows(old).first().performLongClick())
         old.findViewById<View>(R.id.btnSelectionRename).performClick()
         idleUntil("the rename dialog") { renameFieldsOn(old).isNotEmpty() }
         renameFieldsOn(old).single().apply {
