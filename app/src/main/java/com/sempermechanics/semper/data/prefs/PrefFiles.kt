@@ -17,6 +17,9 @@ object PrefFiles {
         val SCHEMA = PrefKey.int("schema")
         val SAVE_TO_CLOUD = PrefKey.boolean("save_to_cloud", default = true)
         val UPLOAD_WIFI_ONLY = PrefKey.boolean("upload_wifi_only")
+
+        /** Download, on Wi-Fi, what the account's other phones backed up (`PhoneSyncWorker`). */
+        val SYNC_FROM_OTHER_PHONES = PrefKey.boolean("sync_from_other_phones", default = true)
         val MAX_FRAMES = PrefKey.int("max_frames", AppSettings.DEFAULT_MAX_FRAMES)
         val AUTO_FREE_GB = PrefKey.int("auto_free_gb", AppSettings.AUTO_FREE_OFF)
         val DIAGNOSTICS_ENABLED = PrefKey.boolean("diagnostics_enabled")
@@ -200,6 +203,9 @@ object PrefFiles {
         /** JSON array of the listed backups. */
         val BACKUPS = PrefKey.string("backups")
         val HIDDEN = PrefKey.stringSet("hidden")
+
+        /** Backups the sync from other phones has already started a restore of, once each (`PhoneSync`). */
+        val SYNC_TRIED = PrefKey.stringSet("sync_tried")
     }
 
     /** `CloudSync.reconcile`'s throttle. */

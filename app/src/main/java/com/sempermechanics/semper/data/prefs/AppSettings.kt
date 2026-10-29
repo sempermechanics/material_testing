@@ -87,6 +87,16 @@ object AppSettings {
         prefs(context).edit { put(Settings.UPLOAD_WIFI_ONLY, value) }
 
     /**
+     * "Download from my other phones": on Wi-Fi, restore the account's backups
+     * this phone has no row for. Default true; only a licence with restore
+     * acts on it.
+     */
+    fun syncFromOtherPhonesEnabled(context: Context): Boolean = prefs(context)[Settings.SYNC_FROM_OTHER_PHONES]
+
+    fun setSyncFromOtherPhonesEnabled(context: Context, value: Boolean) =
+        prefs(context).edit { put(Settings.SYNC_FROM_OTHER_PHONES, value) }
+
+    /**
      * Hard ceiling for deformed frames: the cloud [remoteMaxFrames] when > 0,
      * else the [MAX_MAX_FRAMES] fallback. Pass `AppRemoteConfig.maxFrames(context)`.
      */

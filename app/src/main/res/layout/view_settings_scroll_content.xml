@@ -187,6 +187,10 @@
                             android:contentDescription="@string/settings_wifi_only_desc" />
                     </LinearLayout>
 
+                    <include
+                        android:id="@+id/rowSyncOtherPhones"
+                        layout="@layout/view_settings_sync_row" />
+
                     <TextView
                         android:id="@+id/tvCloudSyncStatus"
                         android:layout_width="match_parent"

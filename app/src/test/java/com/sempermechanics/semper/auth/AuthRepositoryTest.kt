@@ -122,6 +122,16 @@ class AuthRepositoryTest {
     }
 
     @Test
+    fun `an approved status check schedules the sync from other phones`() = runBlocking {
+        serverUp()
+
+        assertEquals(AccessStatus.APPROVED, repo.refreshStatus().getOrThrow())
+
+        val sync = WorkManager.getInstance(context).getWorkInfosForUniqueWork("phone-sync-periodic").get()
+        assertEquals(WorkInfo.State.ENQUEUED, sync.single().state)
+    }
+
+    @Test
     fun `a status check whose config read failed schedules no refresh`() = runBlocking {
         serverUp()
 

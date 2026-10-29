@@ -4,6 +4,7 @@ import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.cloud.CloudSync
+import com.sempermechanics.semper.data.cloud.sync.PhoneSyncWorker
 import com.sempermechanics.semper.data.net.SemperApi
 import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.session.SessionRecord
@@ -17,10 +18,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Settings → Cloud backup: the save-to-cloud and Wi-Fi-only switches, the
- * backup status line, and the offer to back up what is still phone-only
- * when backup is turned on. Wired for licensed accounts; an account whose
- * licence lacks backup sees it [lock]ed.
+ * Settings → Cloud backup: the save-to-cloud, Wi-Fi-only and "Download from my
+ * other phones" switches, the backup status line, and the offer to back up
+ * what is still phone-only when backup is turned on. Wired for licensed
+ * accounts; an account whose licence lacks backup sees it [lock]ed.
  */
 internal class SettingsCloudSection(
     private val activity: SettingsActivity,
@@ -30,16 +31,20 @@ internal class SettingsCloudSection(
     fun wire() {
         val switchSave = views.switchSaveCloud
         val switchWifi = views.switchWifiOnly
+        val switchSync = views.rowSyncOtherPhones.switchSyncOtherPhones
         val status = views.tvCloudSyncStatus
 
         switchSave.isChecked = AppSettings.saveToCloudEnabled(activity)
         switchWifi.isChecked = AppSettings.wifiOnlyUploadEnabled(activity)
+        switchSync.isChecked = AppSettings.syncFromOtherPhonesEnabled(activity)
 
         switchSave.setOnCheckedChangeListener { _, checked ->
             AppSettings.setSaveToCloudEnabled(activity, checked)
             if (checked) maybeOfferBackfill()
         }
         switchWifi.setOnCheckedChangeListener { _, checked -> AppSettings.setWifiOnlyUploadEnabled(activity, checked) }
+        // Off stops future runs; restores already queued carry on.
+        switchSync.setOnCheckedChangeListener { _, checked -> PhoneSyncWorker.setEnabled(activity, checked) }
 
         activity.lifecycleScope.launch {
             val states = withContext(Dispatchers.IO) {
@@ -50,15 +55,21 @@ internal class SettingsCloudSection(
     }
 
     /**
-     * Locked, not hidden: both switches shown off and disabled, the status
+     * Locked, not hidden: the switches shown off and disabled, the status
      * line gone, the licence note in their place. A tap says the note.
      */
     fun lock() {
         SettingsSectionHeader.setLocked(views.headerCloud, true)
         views.switchSaveCloud.isChecked = false
         views.switchWifiOnly.isChecked = false
+        val switchSync = views.rowSyncOtherPhones.switchSyncOtherPhones
+        switchSync.isChecked = false
         views.tvCloudSyncStatus.isVisible = false
-        LicenseLock.lock(views.bodyCloud, views.tvCloudLockNote, listOf(views.switchSaveCloud, views.switchWifiOnly))
+        LicenseLock.lock(
+            views.bodyCloud,
+            views.tvCloudLockNote,
+            listOf(views.switchSaveCloud, views.switchWifiOnly, switchSync),
+        )
     }
 
     private fun maybeOfferBackfill() {

@@ -206,7 +206,10 @@ The product owner's decisions (2026-10-29):
       screen's Activate, and the config's `activation` and `pendingLicence` kept
       by `AppRemoteConfig`. Activate stores the config it answers, so the
       licence's features open at once; no licence change touches a local analysis.
-- [ ] App: sync across the holder's phones (a Settings switch and a worker).
+- [x] App: sync across the holder's phones: Settings' **Download from my other
+      phones** (default on) and `data/cloud/sync/PhoneSyncWorker` (every 6 hours,
+      unmetered, battery not low), which restores the account's backups this
+      phone lacks through `RestoreStart`. Its leftovers are TD-364.
 - [ ] Consoles; fork sync.
 - [ ] Set `IMPLICIT_ACTIVATION=off` once adoption allows, then remove the legacy
       paths (TD-363).

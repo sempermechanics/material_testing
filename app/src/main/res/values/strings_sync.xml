@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Settings → Cloud backup: "Download from my other phones" (PhoneSyncWorker). -->
+<resources>
+    <string name="settings_sync_other_phones">Download from my other phones</string>
+    <string name="settings_sync_other_phones_desc">Download from my other phones: on Wi‑Fi, get the analyses your other phones backed up. Analyses freed from this phone are not downloaded again</string>
+</resources>
