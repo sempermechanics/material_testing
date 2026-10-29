@@ -9,7 +9,7 @@ regardless — the mint reporting afterwards that the licence had not attached,
 the other two moving the account onto the new licence and leaving the old one
 `redeemed` in its name.
 """
-from .. import statuses
+from .. import apps, statuses
 from ..licenses import (
     MODE_DEMO,
     normalize_email,
@@ -74,13 +74,27 @@ def licence_is_live(lic: dict | None) -> bool:
     return not _license_past_grace(lic)
 
 
-def licence_held_by(email: str, *, user: dict | None = None, exclude_id: str = "") -> str:
+def _covers(lic: dict | None, app: str | None) -> bool:
+    """Whether `lic` is a licence for `app`: any licence when `app` is None
+    (a grant from before the split, which holds for every app), and a licence
+    from before the split for every app (ADR-033)."""
+    named = (lic or {}).get("app")
+    return not app or not named or apps.same_app(named, app)
+
+
+def licence_held_by(email: str, *, user: dict | None = None, exclude_id: str = "",
+                    app: str | None = None) -> str:
     """The id of a live licence this person holds or is promised, or "".
 
     Three places say a person has a licence: the account points at it; a
     licence is locked to the address and waiting for them to sign in; or an
     invite promises the address a roster place. `exclude_id` is the licence
     being granted, which may already be one of those.
+
+    One licence per person **per app** (ADR-033): `app` is the app of the
+    licence being granted, and only a licence for that app, or one from before
+    the split, which holds for every app, is in the way. `app` None is a grant
+    from before the split, which any live licence is in the way of.
 
     `user` is the account when the caller has it; otherwise it is looked up
     by address. Costs a handful of reads, on paths that run when a person is
@@ -89,17 +103,24 @@ def licence_held_by(email: str, *, user: dict | None = None, exclude_id: str = "
     address = normalize_email(email)
     if user is None and address:
         user = find_user_by_email(address)
-    held = (user or {}).get("licenseId") or ""
-    if held and held != exclude_id and licence_is_live(get_license(held)):
-        return held
+    for slot in apps.ALL:
+        held = apps.read_field(user or {}, "licenseId", slot) or ""
+        if held and held != exclude_id:
+            lic = get_license(held)
+            if licence_is_live(lic) and _covers(lic, app):
+                return held
     if not address:
         return ""
     for doc in _stream(db().collection("licenses").where("emailLock", "==", address)):
-        if doc.id != exclude_id and licence_is_live(doc.to_dict()):
+        lic = doc.to_dict()
+        if doc.id != exclude_id and licence_is_live(lic) and _covers(lic, app):
             return doc.id
-    invite = _get(_invite_ref(address))
-    if invite.exists:
-        promised = (invite.to_dict() or {}).get("licenseId") or ""
-        if promised and promised != exclude_id and licence_is_live(get_license(promised)):
-            return promised
+    for slot in apps.ALL:
+        invite = _get(_invite_ref(address, slot))
+        if invite.exists:
+            promised = (invite.to_dict() or {}).get("licenseId") or ""
+            if promised and promised != exclude_id:
+                lic = get_license(promised)
+                if licence_is_live(lic) and _covers(lic, app):
+                    return promised
     return ""

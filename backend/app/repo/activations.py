@@ -88,10 +88,22 @@ def runs_activations(lic: dict | None) -> bool:
 
 
 def max_devices(lic: dict | None) -> int:
-    """How many phones `lic` may have active at once: `maxDevices`, 1 when
-    unset."""
-    raw = (lic or {}).get("maxDevices")
-    return 1 if raw is None else max(0, int(raw))
+    """How many phones `lic` may have active at once: `maxDevices`. Unset, it
+    is 1 on an individual licence and, on an institution one, its seat cap,
+    or no limit without one (`_UNCOUNTED`)."""
+    lic = lic or {}
+    raw = lic.get("maxDevices")
+    if raw is not None:
+        return max(0, int(raw))
+    if not _is_institution(lic):
+        return 1
+    seats = lic.get("maxSeats")
+    return _UNCOUNTED if seats is None else max(0, int(seats))
+
+
+#: An institution licence with no seat cap and no device count: as good as
+#: no limit, and still an int for the `n/m` a refusal carries.
+_UNCOUNTED = 1_000_000
 
 
 def _count(doc: dict | None) -> int:

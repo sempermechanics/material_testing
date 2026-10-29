@@ -382,7 +382,7 @@ def roster_router(tier: Tier) -> APIRouter:
         """Single-seat revoke: drops the holder to Demo (in place, no data
         loss) and frees the slot. Whole-key revoke is the staff
         `POST /v1/admin/licenses/{id}/revoke`."""
-        if not repo.revoke_institution_seat(license_id, uid):
+        if not repo.revoke_institution_seat(license_id, uid, actor=tier.actor):
             raise HTTPException(404, errors.SEAT_NOT_FOUND)
         audit.record(
             admin.user["uid"], action=f"{tier.audit}_SEAT_REVOKE",

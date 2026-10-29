@@ -78,6 +78,22 @@
             "title": "Adminemails",
             "type": "array"
           },
+          "app": {
+            "anyOf": [
+              {
+                "enum": [
+                  "semper",
+                  "semperclassroom",
+                  "materialtesting"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App"
+          },
           "deviceIdLock": {
             "anyOf": [
               {
@@ -171,6 +187,19 @@
               }
             ],
             "title": "Maxanalyses"
+          },
+          "maxDevices": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxdevices"
           },
           "maxSeats": {
             "anyOf": [
@@ -348,6 +377,19 @@
               }
             ],
             "title": "Maxanalyses"
+          },
+          "maxDevices": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxdevices"
           },
           "maxSeats": {
             "anyOf": [
@@ -8172,7 +8214,7 @@
     },
     "/v1/sessions": {
       "get": {
-        "description": "The caller's cloud analyses. The app reconciles local sync state against\nthis, so a session deleted in the cloud stops showing as 'synced'.\n\nOne app's analyses (ADR-014): the asking app's, by `X-App-Id`, unless\n`?app=semper|semperclassroom` (or the old `materialtesting`) names one or\n`?app=all` asks for the whole account (the console). Each entry carries its\n`app`, by its name today. Semper and Semper Classroom share accounts, and each restoring the other's backups dropped\nwhat it did not understand.\n\nCursor-paginated (`page_size` 1..100, `page_token`, `nextPageToken`). Quota\n`used` is the full account count, every app's, not the page length: the\ncap is the account's.\n\nFirestore is only an index. `?verify=true` additionally confirms each\nsession on the *current page* still exists in Drive (bounded parallel\nprobes — not a full-account N+1). Orphaned metadata on that page is purged.",
+        "description": "The caller's cloud analyses. The app reconciles local sync state against\nthis, so a session deleted in the cloud stops showing as 'synced'.\n\nOne app's analyses (ADR-014): the asking app's, by `X-App-Id`, unless\n`?app=semper|semperclassroom` (or the old `materialtesting`) names one or\n`?app=all` asks for the whole account (the console). Each entry carries its\n`app`, by its name today. Semper and Semper Classroom share accounts, and each restoring the other's backups dropped\nwhat it did not understand.\n\nCursor-paginated (`page_size` 1..100, `page_token`, `nextPageToken`). Quota\n`used` is the asking app's count (ADR-033), whichever app is listed, not\nthe page length: each app's licence has its own cap.\n\nFirestore is only an index. `?verify=true` additionally confirms each\nsession on the *current page* still exists in Drive (bounded parallel\nprobes — not a full-account N+1). Orphaned metadata on that page is purged.",
         "operationId": "list_sessions_v1_sessions_get",
         "parameters": [
           {
@@ -8291,7 +8333,7 @@
         "summary": "List Sessions"
       },
       "post": {
-        "description": "Record an analysis: create the session and hand back its upload slots.\n\nOpen to every approved account, demo included. Recording is not the\nlicensed feature — retrieval is. A demo account's frames and results are\nstored under the same quota (`DEMO_MAX_ANALYSES`) and are never deleted\non downgrade; what a licence buys is getting them back (`/content` and\nthe session bundle), so the `cloudBackupEnabled` gate lives on those two\nroutes and deliberately not here. Installed builds that predate licensing\nretry a 403 from this route forever, which is one more reason the gate\nwould be the wrong shape.\n\nThe cap counts analyses stored at once, per account; for a demo account\nalso per device, whichever account stored them\n(`services.sessions._device_cap_reached`).",
+        "description": "Record an analysis: create the session and hand back its upload slots.\n\nOpen to every approved account, demo included. Recording is not the\nlicensed feature — retrieval is. A demo account's frames and results are\nstored under the same quota (`DEMO_MAX_ANALYSES`) and are never deleted\non downgrade; what a licence buys is getting them back (`/content` and\nthe session bundle), so the `cloudBackupEnabled` gate lives on those two\nroutes and deliberately not here. Installed builds that predate licensing\nretry a 403 from this route forever, which is one more reason the gate\nwould be the wrong shape.\n\nThe cap counts analyses stored at once, per account and app (ADR-033);\nfor a demo account also per device, whichever account stored them\n(`services.sessions._device_cap_reached`).",
         "operationId": "create_session_v1_sessions_post",
         "parameters": [
           {

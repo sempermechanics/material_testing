@@ -260,6 +260,15 @@ class AdminLicenseCreate(BaseModel):
     supportUntil: Optional[datetime] = None
     maxAnalyses: Optional[int] = Field(default=None, gt=0)
     note: DisplayString = ""
+    #: The app this licence is for (ADR-033): it then licenses only the
+    #: phones activated on it, up to `maxDevices`. Omitted, the licence holds
+    #: for every app and locks to one phone per app, as before the split.
+    #: `materialtesting` is Semper Classroom's old name (ADR-030).
+    app: Optional[Literal["semper", "semperclassroom", "materialtesting"]] = None
+    #: Phones that may be active at once; with `app` only. Default 1 on an
+    #: individual licence and `maxSeats` on an assigned institution one, a
+    #: pool across the licence; a floating licence counts its leases instead.
+    maxDevices: Optional[int] = Field(default=None, ge=0, le=100000)
 
     @field_validator("expiresAt", "supportUntil")
     @classmethod
@@ -337,6 +346,11 @@ class AdminLicenseCreate(BaseModel):
                 # A floating pool with no cap is an assigned license with extra
                 # steps: nobody would ever be refused a lease.
                 raise ValueError("floating licenses require maxSeats")
+        if self.maxDevices is not None:
+            if not self.app:
+                raise ValueError("maxDevices goes with an app (ADR-033)")
+            if self.seating == "floating":
+                raise ValueError("a floating licence counts leases, not maxDevices")
         return self
 
 
@@ -423,6 +437,9 @@ class AdminLicenseUpdate(BaseModel):
     seating: Optional[Literal["assigned", "floating"]] = None
     perpetual: Optional[Literal[True]] = None
     allowShorten: Optional[Literal[True]] = None
+    #: The licence's device count (ADR-033), on a licence that names its
+    #: app; not below the phones active on it now.
+    maxDevices: Optional[int] = Field(default=None, ge=0, le=100000)
 
     model_config = ConfigDict(extra="forbid")
 
@@ -449,7 +466,7 @@ class AdminLicenseUpdate(BaseModel):
             getattr(self, name) is None
             for name in ("expiresAt", "graceDays", "supportUntil", "maxSeats",
                          "maxAnalyses", "clearMaxAnalyses", "note", "clearDeviceLock",
-                         "adminEmails", "seating", "perpetual")
+                         "adminEmails", "seating", "perpetual", "maxDevices")
         ):
             raise ValueError("at least one field must be set")
         if self.clearMaxAnalyses and self.maxAnalyses is not None:

@@ -159,6 +159,12 @@ ACTIVATION_NOT_FOUND = "activation_not_found"
 # 409: Activate on a floating licence. Its lease is the activation
 # (`POST /v1/licenses/checkout`), so there is nothing to activate.
 SEATING_FLOATING = "seating_floating"
+# 422 on a staff licence edit: a `maxDevices` below the phones active on the
+# licence now. Lowering the count deactivates nobody; deactivate first.
+MAX_DEVICES_BELOW_ACTIVE = "max_devices_below_active"
+# 422 on a staff licence edit: a `maxDevices` on a licence from before the
+# split, which locks one phone per app and has no count to change.
+MAX_DEVICES_NEEDS_APP = "max_devices_needs_app"
 # 422 on a staff licence edit: a `maxSeats` below the members already on an
 # assigned roster. Lowering the cap removes nobody, so it would only make the
 # count read "12 of 10"; remove members first.
@@ -385,6 +391,8 @@ STATUS: dict[str, int] = {
     INSTITUTION_ONLY: 422,
     FLOATING_NEEDS_MAX_SEATS: 422,
     MAX_SEATS_BELOW_USED: 422,
+    MAX_DEVICES_BELOW_ACTIVE: 422,
+    MAX_DEVICES_NEEDS_APP: 422,
     INVALID_EMAIL: 400,
     KIND_NOT_INSTITUTION: 400,
     # Lost a race; a retry succeeds.

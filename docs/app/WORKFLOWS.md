@@ -886,7 +886,7 @@ Every run is checked at its start (`AnalysisNavHelper.ensureCanStart`, then
 whatever a run saves is a new row (owner decision, 2026-10-15). A save no start
 check admitted would meet the rule and end as `RunStop.SessionLimit`
 (`afterSave`); no run path makes one today.
-The backend counts account-wide (every app and phone) and refuses only at
+The backend counts per app (ADR-033), across every phone of the account, and refuses only at
 `POST /v1/sessions`, the upload. For a demo account it also counts every
 account's analyses stored from this phone, and refuses at the cap with its own
 `409 device_quota_exceeded` (`count_device_sessions`,

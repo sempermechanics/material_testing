@@ -3,9 +3,11 @@
 **Status:** Accepted 2026-10-29; in progress. Step 1 built: each app reads its own
 licence off the user (`apps.licence_view`), with no change in behaviour. Step 2
 built: an account holds several phones per app. Step 3 built: the activation
-model, its routes and the cooldown's removal, for licences that name their app
-(none do until step 4 mints them and the split stamps the rest). Every later
-step is listed under Action items.
+model, its routes and the cooldown's removal, for licences that name their app.
+Step 4 built: staff mint a licence for one app with its device count, and it
+lives in that app's mirror, invite and quota (CLOUD_ARCHITECTURE_GCP §20.17).
+Licences minted without an app, every one before the split, keep the old
+model. Every later step is listed under Action items.
 **Date:** 2026-10-29
 **Deciders:** product owner
 **Supersedes in part:** [ADR-007](ADR-007-licence-lifecycle.md) (one licence per person becomes one per person per app; conversion becomes issue then activate),
@@ -177,9 +179,15 @@ The product owner's decisions (2026-10-29):
       mirrored (CLOUD_ARCHITECTURE_GCP §20.16).
 - [ ] Before the step-3 backend serves: drop `SELF_DEVICE_CHANGE_COOLDOWN_DAYS`
       from the service (`--remove-env-vars`, owner); it is no longer read.
-- [ ] A licence per app: one per person per app, per-app invites, mint `app` and
-      `maxDevices`, per-app quota, issue and apply upgrade, QC test accounts on the
-      activation model.
+- [x] Step 4: a licence per app: one per person per app (`holders.licence_held_by`),
+      per-app invites (`licenses.invite_id`), mint `app` and `maxDevices`, the staff
+      edit of `maxDevices`, each mirror writer and guard by the licence's slot
+      (`apps.licence_slot`, `apps.slot_holding`), the per-app quota
+      (`sessions.count_user_sessions`), and a seat revoke or account erasure giving
+      the phones back (`backend/tests/test_licence_per_app.py`).
+- [ ] Step 5: issue and apply upgrade (`pendingLicenseId`, the old licence revoked
+      on Activate; `/convert` refuses an app's licence until then), and QC test
+      accounts on the activation model.
 - [ ] Migration to split existing licences, dry run first, run by the owner.
 - [ ] App and consoles; fork sync.
 - [ ] Set `IMPLICIT_ACTIVATION=off` once adoption allows, then remove the legacy

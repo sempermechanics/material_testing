@@ -93,10 +93,12 @@ def _claim_terms(user_patch: dict, lic: dict) -> dict:
     Only a patch that carries the terms gets them: a caller writing something
     else through the claim is not asking for a mirror. Mutating the caller's
     dict is deliberate — they merge it into the config they answer with, and
-    that should describe what was stored.
+    that should describe what was stored. The terms go to the licence's own
+    app's fields (`apps.licence_slot`, ADR-033).
     """
-    if "licenseExpiresAt" in user_patch:
-        user_patch.update(_license_mirror_patch(lic))
+    slot = apps.licence_slot(lic)
+    if apps.field("licenseExpiresAt", slot) in user_patch:
+        user_patch.update(apps.licence_patch(_license_mirror_patch(lic), slot))
     return user_patch
 
 
@@ -263,7 +265,9 @@ def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch
     # one outcome that breaks the cap; a caller who lost the race just tries
     # again, and on a pool with room they win immediately.
     err = _run_tx(_claim, on_contended=lambda: _CONTENDED)
-    if not err:
+    if not err and "licenseId" in user_patch:
+        # Only a claim into Semper's fields can have replaced the Demo key,
+        # which lives there; another app's licence sits beside it.
         _drop_superseded_demo(uid, license_id)
     return err
 
@@ -322,7 +326,7 @@ def claim_individual_license(license_id: str, uid: str, email: str,
     # could not commit is the outcome that breaks single-redeemer. The caller
     # retries on their next request, which for the invite path is moments away.
     err = _run_tx(_claim, on_contended=lambda: _CONTENDED)
-    if not err:
+    if not err and "licenseId" in user_patch:
         _drop_superseded_demo(uid, license_id)
     return err
 
@@ -335,13 +339,21 @@ def _member_patch(license_id: str, lic: dict) -> dict:
     for one, a restore, a conversion — so they cannot drift into entitling
     people differently. An institution seat is licensed whatever the key
     record says; an individual licence grants the mode it carries.
+
+    Written to the licence's own app's fields (`apps.licence_slot`, ADR-033),
+    with `licenseApp` naming that app, so another app stops reading this
+    licence as its own; a licence from before the split clears it, and holds
+    for every app as before.
     """
     institution = _is_institution(lic)
-    return {
+    named = lic.get("app")
+    return apps.licence_patch({
         **_mode_patch(MODE_LICENSED if institution else _license_mode(lic)),
         "licenseId": license_id,
+        # "" rather than a delete: the patch is merged into the answer too.
+        "licenseApp": apps.stored_name(named) if named else "",
         "licenseKind": KIND_INSTITUTION if institution else KIND_INDIVIDUAL,
         "licensePrefix": lic.get("keyPrefix") or "",
         "updatedAt": _base.firestore.SERVER_TIMESTAMP,
         **_license_mirror_patch(lic),
-    }
+    }, apps.licence_slot(lic))

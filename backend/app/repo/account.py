@@ -10,6 +10,7 @@ from ..licenses import (
 
 from . import _base
 from ._base import (
+    ACTOR_STAFF,
     SCHEMA_VERSION,
     _is_institution,
     _is_revoked,
@@ -25,6 +26,7 @@ from ._base import (
     _delete_doc,
     _seat_ref,
 )
+from .deactivations import deactivate_holder
 from .invites import (
     _write_invite,
 )
@@ -124,8 +126,17 @@ def _give_back_license(uid: str) -> None:
     snap = _get(db().collection("users").document(uid))
     if not snap.exists:
         return
-    license_id = (snap.to_dict() or {}).get("licenseId") or ""
-    lic = get_license(license_id) if license_id else None
+    user = snap.to_dict() or {}
+    # One licence per app (ADR-033); a licence from before the split sits in
+    # Semper's fields alone.
+    for license_id in dict.fromkeys(apps.read_field(user, "licenseId", a) or "" for a in apps.ALL):
+        if license_id:
+            _give_back_one(uid, license_id)
+
+
+def _give_back_one(uid: str, license_id: str) -> None:
+    """`_give_back_license` for one licence the account held."""
+    lic = get_license(license_id)
     if not lic or _is_revoked(lic):
         return
     if _is_institution(lic):
@@ -133,6 +144,8 @@ def _give_back_license(uid: str) -> None:
         return
     if (lic.get("redeemedByUid") or "") != uid or _license_mode(lic) == MODE_DEMO:
         return
+    # Its phones go with the account: the licence is free for a new one.
+    deactivate_holder(license_id, uid, actor=ACTOR_STAFF)
     _update_doc(db().collection("licenses").document(license_id), {
         "status": "unused",
         "redeemedByUid": _base.firestore.DELETE_FIELD,
@@ -142,7 +155,7 @@ def _give_back_license(uid: str) -> None:
     })
     email = lic.get("emailLock") or ""
     if email:
-        err, _ = _write_invite(license_id, email, "system")
+        err, _ = _write_invite(license_id, email, "system", app=apps.licence_slot(lic))
         if err:
             # The licence is free and its key still redeems it; only the
             # automatic delivery is missing, as a mint that hits this says.

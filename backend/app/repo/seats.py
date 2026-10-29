@@ -64,7 +64,7 @@ def _live_holder(license_id: str, lic: dict, ref, scope: str, uid: str):
     if not snap.exists:
         return None
     user = snap.to_dict() or {}
-    if user.get("licenseId") != license_id:
+    if apps.slot_holding(user, license_id) is None:
         return None
     return user_ref, user
 
@@ -297,11 +297,12 @@ def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> None:
         tx.update(ref, patch)
         if release and lic_snap.exists:
             tx.update(lic_ref, {"leasesActive": _base.firestore.Increment(-1)})
-        if user_snap.exists and (user_snap.to_dict() or {}).get("licenseId") == license_id:
-            tx.update(user_ref, _demo_drop_patch() if not enabled else {
+        slot = apps.slot_holding(user_snap.to_dict() if user_snap.exists else None, license_id)
+        if slot:
+            tx.update(user_ref, apps.licence_patch(_demo_drop_patch() if not enabled else {
                 **_mode_patch(MODE_LICENSED),
                 "updatedAt": _base.firestore.SERVER_TIMESTAMP,
-            })
+            }, slot))
         return ""
 
     # Losing means a revoke, checkout or another hold landed on this seat
@@ -312,9 +313,11 @@ def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> None:
         raise Refusal(err)
 
 
-def revoke_institution_seat(license_id: str, uid: str) -> bool:
+def revoke_institution_seat(license_id: str, uid: str, *, actor: str = ACTOR_STAFF) -> bool:
     """Single-seat revoke: drops the holder to Demo and frees the slot
-    (decrements seatsUsed) so another roster member can take it.
+    (decrements seatsUsed) so another roster member can take it. On a licence
+    that names its app, the member's phones are deactivated too, as `actor`,
+    so they free the pool's phone slots as well (ADR-033).
 
     Transactional for the same reason `claim_seat` is, and against the mirror
     image of its race: two concurrent revokes of one seat both read a status
@@ -363,4 +366,5 @@ def revoke_institution_seat(license_id: str, uid: str) -> bool:
     revoked = _run_tx(_revoke, on_contended=lambda: _get(seat_ref).exists)
     if revoked:
         _drop_user_to_demo_if_licensed(uid, license_id)
+        deactivate_holder(license_id, uid, actor=actor)
     return revoked

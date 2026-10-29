@@ -2861,3 +2861,40 @@ analysis: a deactivated phone keeps its files.
 Registration never retires an activated phone to make room
 (`activations.activated_devices`, read by `register_device`).
 
+### 20.17 A licence per app
+
+[ADR-033](../adr/ADR-033-licence-per-app-explicit-activation.md), step 4. Staff
+mint a licence for one app (`POST /v1/admin/licenses` with `app`, and
+`maxDevices`); a licence minted without one holds for every app, as every
+licence did before the split.
+
+**Where it lives on the account.** The licence decides its slot
+(`apps.licence_slot`): Semper's licence writes the unsuffixed mirror fields with
+`licenseApp: semper`, Semper Classroom's its own suffixed fields. Every writer
+(claims, revoke and edit fan-outs, seats, leases, erasure) writes through
+`apps.licence_patch` into that slot, and every "is this account on licence X"
+guard asks `apps.slot_holding`. An account from before the split, with no
+`licenseApp`, reads its one licence for both apps (`apps.licence_view`).
+
+**One per person per app.** `holders.licence_held_by(email, app=)` counts a
+licence that covers the app: one of that app, or one from before the split.
+Each app's licence is promised under its own invite (`licenses.invite_id(email,
+app)`; Semper's keeps the old id), and the first request of a new account claims
+every app's, Semper last, since its slot is where Demo is minted
+(`entitlement._claim_pending_invite`). A failed claim retries on that app's own
+clock (`inviteBlockedAt` per app). A typed key or claim code for an app's
+licence takes the account but binds no phone: Activate does.
+
+**The quota counts per app.** `count_user_sessions(uid, app)` counts the asking
+app's stored analyses; Semper's is the account's less every other app's, since a
+session from before the tag is Semper's. `GET /v1/sessions`'s `quota` and
+`POST /v1/sessions`'s cap use it; restore (`/v1/files/{id}/content`) checks the
+asking app's licence, and the browser bundle the analysis's own app's. The
+demo per-device cap is unchanged.
+
+**Leaving gives the phones back.** A seat revoke on an app's licence deactivates
+the member's phones as the revoking tier; account erasure gives back each app's
+licence and deactivates its phones. Staff may raise or lower `maxDevices`, never
+below the phones active. An app's licence does not convert in place
+(`/convert` answers `license_not_convertible`); step 5 issues a new licence the
+holder activates instead.

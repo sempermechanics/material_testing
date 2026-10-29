@@ -1,6 +1,6 @@
 """Pending invites: the promise of a licence to an address with no account yet.
 """
-from .. import errors
+from .. import apps, errors
 from ..errors import Refusal
 from ..licenses import (
     invite_id,
@@ -47,23 +47,29 @@ def find_user_by_email(email: str) -> dict | None:
 _INVITES = "licenseInvites"
 
 
-def _invite_ref(email: str):
-    return db().collection(_INVITES).document(invite_id(email))
+def _invite_id(email: str, app: str = apps.SEMPER) -> str:
+    """An address's claim key for `app`'s licence (ADR-033): Semper's is the
+    key every invite has had."""
+    return invite_id(email, apps.canonical(app))
 
 
-def _held_ref(license_id: str, email: str):
+def _invite_ref(email: str, app: str = apps.SEMPER):
+    return db().collection(_INVITES).document(_invite_id(email, app))
+
+
+def _held_ref(license_id: str, email: str, app: str = apps.SEMPER):
     """A held invite: IT's add of an address another licence holds or
     promises (`hold_institution_invite`). Its own document in `licenseInvites`,
     never at the address's claim key, so the sign-in claim never reads it and
     the other licence's promise is untouched."""
-    return db().collection(_INVITES).document(f"held_{license_id}_{invite_id(email)}")
+    return db().collection(_INVITES).document(f"held_{license_id}_{_invite_id(email, app)}")
 
 
 def _invite_public(doc_id: str, inv: dict) -> dict:
     if inv.get("held"):
         # Listed under the id an ordinary invite of this address has, so
         # nothing in a roster tells a held invite from a pending one.
-        doc_id = invite_id(inv.get("email") or "")
+        doc_id = _invite_id(inv.get("email") or "", inv.get("app") or apps.SEMPER)
     return {
         "id": doc_id,
         "email": inv.get("email") or "",
@@ -93,10 +99,11 @@ def invite_institution_member(
         raise Refusal(errors.LICENSE_NOT_FOUND)
     if _is_revoked(lic):
         raise Refusal(errors.LICENSE_REVOKED)
-    err, invite = _write_invite(license_id, email, invited_by_uid)
+    app = apps.licence_slot(lic)
+    err, invite = _write_invite(license_id, email, invited_by_uid, app=app)
     if err:
         raise Refusal(err)
-    _drop_held_invite(license_id, email)
+    _drop_held_invite(license_id, email, app)
     return invite
 
 
@@ -123,10 +130,11 @@ def hold_institution_invite(license_id: str, email: str, invited_by_uid: str) ->
     address = normalize_email(email)
     if not address:
         raise Refusal(errors.INVALID_EMAIL)
-    own = _get(_invite_ref(address))
+    app = apps.licence_slot(lic)
+    own = _get(_invite_ref(address, app))
     if own.exists and ((own.to_dict() or {}).get("licenseId") or "") == license_id:
         return _invite_public(own.id, own.to_dict() or {})
-    ref = _held_ref(license_id, address)
+    ref = _held_ref(license_id, address, app)
     snap = _get(ref)
     if snap.exists:
         return _invite_public(ref.id, snap.to_dict() or {})
@@ -135,6 +143,7 @@ def hold_institution_invite(license_id: str, email: str, invited_by_uid: str) ->
         "licenseId": license_id,
         "invitedByUid": invited_by_uid,
         "held": True,
+        **({"app": app} if app != apps.SEMPER else {}),
         "createdAt": _base.firestore.SERVER_TIMESTAMP,
         "schemaVersion": SCHEMA_VERSION,
     }
@@ -142,10 +151,10 @@ def hold_institution_invite(license_id: str, email: str, invited_by_uid: str) ->
     return _invite_public(ref.id, _get(ref).to_dict() or data)
 
 
-def _drop_held_invite(license_id: str, email: str) -> None:
+def _drop_held_invite(license_id: str, email: str, app: str = apps.SEMPER) -> None:
     """Remove this roster's held invite for the address, if any: it has just
     been seated or invited for real."""
-    ref = _held_ref(license_id, email)
+    ref = _held_ref(license_id, email, app)
     if _get(ref).exists:
         _delete_doc(ref)
 
@@ -163,7 +172,8 @@ def _invite_is_stale(license_id: str) -> bool:
     return not lic or _is_revoked(lic)
 
 
-def _delete_license_invites(license_id: str, email_lock: str = "") -> None:
+def _delete_license_invites(license_id: str, email_lock: str = "",
+                            app: str = apps.SEMPER) -> None:
     """Drop the promises a revoked licence can no longer keep.
 
     Revoking used to leave `licenseInvites` untouched, which turned the most
@@ -179,7 +189,7 @@ def _delete_license_invites(license_id: str, email_lock: str = "") -> None:
     instead, over a list that is small by construction.
     """
     if email_lock:
-        ref = _invite_ref(email_lock)
+        ref = _invite_ref(email_lock, app)
         snap = _get(ref)
         if snap.exists and ((snap.to_dict() or {}).get("licenseId") or "") == license_id:
             _delete_doc(ref)
@@ -188,8 +198,8 @@ def _delete_license_invites(license_id: str, email_lock: str = "") -> None:
         _delete_doc(doc.reference)
 
 
-def _write_invite(license_id: str, email: str,
-                  invited_by_uid: str) -> tuple[str, dict | None]:
+def _write_invite(license_id: str, email: str, invited_by_uid: str,
+                  app: str = apps.SEMPER) -> tuple[str, dict | None]:
     """Record the promise itself, having already established the licence is
     one worth promising.
 
@@ -198,12 +208,15 @@ def _write_invite(license_id: str, email: str,
     but reaches this point through a different set of checks. The record is
     identical either way, and `claim_pending_invite` reads the licence to
     decide what to grant, so the invite carries no notion of kind.
+
+    `app` is the licence's app (`apps.licence_slot`): each app has its own
+    claim key, so a person may be promised one licence per app (ADR-033).
     """
     address = normalize_email(email)
     if not address:
         return errors.INVALID_EMAIL, None
 
-    ref = _invite_ref(address)
+    ref = _invite_ref(address, app)
     existing = _get(ref)
     if existing.exists:
         held = existing.to_dict() or {}
@@ -221,6 +234,7 @@ def _write_invite(license_id: str, email: str,
         "email": address,
         "licenseId": license_id,
         "invitedByUid": invited_by_uid,
+        **({"app": apps.canonical(app)} if apps.canonical(app) != apps.SEMPER else {}),
         "createdAt": _base.firestore.SERVER_TIMESTAMP,
         "schemaVersion": SCHEMA_VERSION,
     }

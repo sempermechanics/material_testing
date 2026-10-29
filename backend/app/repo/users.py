@@ -221,13 +221,15 @@ def _refresh_seat_address(user: dict, email: str) -> None:
     licences the account has left keep the address it had there. A seat that
     is gone is left gone.
     """
-    license_id = user.get("licenseId")
-    if not license_id or normalize_kind(user.get("licenseKind")) != KIND_INSTITUTION:
-        return
-    try:
-        _update_doc(_seat_ref(license_id, user["uid"]), {"email": normalize_email(email)})
-    except NotFound:
-        pass
+    seated = {apps.read_field(user, "licenseId", app): apps.read_field(user, "licenseKind", app)
+              for app in apps.ALL}
+    for license_id, kind in seated.items():
+        if not license_id or normalize_kind(kind) != KIND_INSTITUTION:
+            continue
+        try:
+            _update_doc(_seat_ref(license_id, user["uid"]), {"email": normalize_email(email)})
+        except NotFound:
+            pass
 
 
 def get_or_create_user(claims: dict, device_id: str | None = None) -> dict:
@@ -343,7 +345,8 @@ def release_account_device(uid: str) -> dict[str, str]:
     if not snap.exists:
         raise Refusal(errors.USER_NOT_FOUND)
     user = snap.to_dict() or {}
-    if user.get("licenseId") and effective_mode(user) == MODE_LICENSED:
+    if any(apps.licence_view(user, app).get("licenseId") and effective_mode(user, app) == MODE_LICENSED
+           for app in apps.ALL):
         raise Refusal(errors.LICENSE_DEVICE_CLEAR_REQUIRED)
     released = {app: apps.read_field(user, "activeDeviceId", app) or "" for app in apps.ALL}
     released = {app: device for app, device in released.items() if device}

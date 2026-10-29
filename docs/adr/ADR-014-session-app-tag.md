@@ -44,7 +44,9 @@ Every app call already names its app (`X-App-Id`, ADR-010), resolved once in
    which `iter_all_user_sessions` keeps for `GET /v1/me/export` and erasure.
 4. **Quota stays account-wide.** `count_user_sessions` and `quota.used` count
    every app's sessions. The cap is the account's, so one app cannot make room
-   by not seeing the other's backups.
+   by not seeing the other's backups. *Superseded by
+   [ADR-033](ADR-033-licence-per-app-explicit-activation.md) (2026-10-29): each
+   app's licence has its own cap, so the count is the asking app's.*
 5. **One per-session route is gated: the restore manifest.**
    `GET /v1/sessions/{sid}/files` answers `404 session_not_found` when
    `session_app(session)` is not the asking app. It is the step that starts a

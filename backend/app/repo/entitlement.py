@@ -3,7 +3,7 @@
 import logging
 from datetime import timedelta
 
-from .. import errors
+from .. import apps, errors
 from ..licenses import (
     MODE_DEMO,
     as_utc,
@@ -55,19 +55,26 @@ _INVITE_RETRY = timedelta(minutes=15)
 _INVITE_BLOCKED_AT = "inviteBlockedAt"
 
 
-def _invite_retry_due(user: dict) -> bool:
+def _blocked_field(app: str) -> str:
+    """Where `app`'s failed invite claim is stamped: each app's licence has
+    its own invite (ADR-033), so each retries on its own clock."""
+    return apps.field(_INVITE_BLOCKED_AT, app)
+
+
+def _invite_retry_due(user: dict, app: str = apps.SEMPER) -> bool:
     """Whether a Demo account whose invite claim failed should try it again."""
-    blocked = as_utc(user.get(_INVITE_BLOCKED_AT))
-    if blocked is None or (user.get("mode") or MODE_DEMO) != MODE_DEMO:
+    blocked = as_utc(user.get(_blocked_field(app)))
+    mode = apps.licence_view(user, app).get("mode")
+    if blocked is None or (mode or MODE_DEMO) != MODE_DEMO:
         return False
     return _now() - blocked >= _INVITE_RETRY
 
 
-def _clear_invite_block(uid: str, user: dict) -> None:
-    if user.get(_INVITE_BLOCKED_AT) is None:
+def _clear_invite_block(uid: str, user: dict, app: str) -> None:
+    if user.get(_blocked_field(app)) is None:
         return
     _update_doc(db().collection("users").document(uid), {
-        _INVITE_BLOCKED_AT: _base.firestore.DELETE_FIELD,
+        _blocked_field(app): _base.firestore.DELETE_FIELD,
     })
 
 
@@ -108,16 +115,38 @@ def _claim_pending_invite(user: dict) -> tuple[dict, str]:
     uid = user.get("uid")
     if not uid:
         return user, ""
-    if user.get("licenseId") and not _invite_retry_due(user):
+    err = ""
+    for app in _CLAIM_ORDER:
+        user, err = _claim_app_invite(user, uid, app)
+        if err == _CONTENDED:
+            break
+    return user, err
+
+
+#: Each app's licence has its own invite (ADR-033). Semper's goes last: its
+#: slot is the one `ensure_entitlement` mints Demo into, so its answer is the
+#: one returned.
+_CLAIM_ORDER = tuple(a for a in apps.ALL if a != apps.SEMPER) + (apps.SEMPER,)
+
+
+def _claim_app_invite(user: dict, uid: str, app: str) -> tuple[dict, str]:
+    """`_claim_pending_invite` for `app`'s invite, in the same one-request
+    window for every app: before Semper's slot holds anything, a Demo key at
+    least, and while `app`'s holds nothing, or with that app's retry due. A
+    licence minted for an account that already exists reaches it at mint
+    (`mint._attach_to_existing_holder`), not through an invite."""
+    blocked_field = _blocked_field(app)
+    opened = not user.get("licenseId") and not apps.read_field(user, "licenseId", app)
+    if not opened and not _invite_retry_due(user, app):
         return user, ""
     if not _eligible_holder(user):
         return user, ""
     address = verified_address(user)
 
-    ref = _invite_ref(address)
+    ref = _invite_ref(address, app)
     snap = _get(ref)
     if not snap.exists:
-        _clear_invite_block(uid, user)
+        _clear_invite_block(uid, user, app)
         return user, ""
     license_id = ((snap.to_dict() or {}).get("licenseId") or "")
     lic = get_license(license_id) if license_id else None
@@ -125,11 +154,11 @@ def _claim_pending_invite(user: dict) -> tuple[dict, str]:
         # The licence was deleted out from under the invite. Drop it rather
         # than leaving a record that can never be redeemed.
         _delete_doc(ref)
-        _clear_invite_block(uid, user)
+        _clear_invite_block(uid, user, app)
         return user, ""
     if _is_revoked(lic):
         _delete_doc(ref)
-        _clear_invite_block(uid, user)
+        _clear_invite_block(uid, user, app)
         return user, ""
 
     if _license_past_grace(lic):
@@ -143,13 +172,13 @@ def _claim_pending_invite(user: dict) -> tuple[dict, str]:
     # device id — see revalidate_device_lock.
     elif _is_institution(lic):
         patch = _member_patch(license_id, lic)
-        if user.get(_INVITE_BLOCKED_AT) is not None:
-            patch[_INVITE_BLOCKED_AT] = _base.firestore.DELETE_FIELD
+        if user.get(blocked_field) is not None:
+            patch[blocked_field] = _base.firestore.DELETE_FIELD
         err = claim_seat(license_id, uid, address, "", patch, invite_ref=ref)
     else:
         patch = _member_patch(license_id, lic)
-        if user.get(_INVITE_BLOCKED_AT) is not None:
-            patch[_INVITE_BLOCKED_AT] = _base.firestore.DELETE_FIELD
+        if user.get(blocked_field) is not None:
+            patch[blocked_field] = _base.firestore.DELETE_FIELD
         err = claim_individual_license(license_id, uid, address, patch, invite_ref=ref)
     if err:
         # Leave the invite in place either way: seats exhausted or already
@@ -162,7 +191,7 @@ def _claim_pending_invite(user: dict) -> tuple[dict, str]:
         else:
             log.warning("invite claim failed uid=%s license=%s err=%s", uid, license_id, err)
             # Try again later, once the account holds Demo; see _INVITE_RETRY.
-            _update_doc(db().collection("users").document(uid), {_INVITE_BLOCKED_AT: _now()})
+            _update_doc(db().collection("users").document(uid), {blocked_field: _now()})
         # Answer with the account as stored, not with the caller's copy. The
         # copy was read before this request began, and the request that beat
         # us to the claim has already granted the entitlement; returning the
@@ -175,7 +204,7 @@ def _claim_pending_invite(user: dict) -> tuple[dict, str]:
             return user, err
         return {**user, **(stored.to_dict() or {}), "uid": uid}, err
     claimed = {**user, **patch, "uid": uid}
-    claimed.pop(_INVITE_BLOCKED_AT, None)
+    claimed.pop(blocked_field, None)
     return claimed, ""
 
 
