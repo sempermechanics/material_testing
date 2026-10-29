@@ -53,6 +53,23 @@ class _Lock(Enum):
     MISMATCH = "mismatch"
 
 
+def locked_device(user: dict, app: str = apps.SEMPER) -> str:
+    """The phone this account's licence (or its seat) is locked to for `app`,
+    or "" when none is: no licence, a revoked one, an empty lock, or a test
+    account's licence, which locks nothing (ADR-027). Two reads at most; for
+    registration, which must not retire the licensed phone to make room."""
+    license_id = user.get("licenseId")
+    if not license_id or test_account_of(user) is not None:
+        return ""
+    lic = _get(db().collection("licenses").document(license_id)).to_dict() or {}
+    if not lic or _is_revoked(lic):
+        return ""
+    if not _is_institution(lic):
+        return apps.read_field(lic, "deviceIdLock", app) or ""
+    seat = _get(_seat_ref(license_id, user.get("uid") or "")).to_dict() or {}
+    return apps.read_field(seat, "deviceIdLock", app) or ""
+
+
 def _device_lock_state(user: dict, device_id: str,
                        app: str = apps.SEMPER) -> tuple[_Lock, object | None]:
     """Judge `device_id` against this account's entitlement.

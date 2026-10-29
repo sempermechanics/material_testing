@@ -854,12 +854,14 @@ def test_a_retired_device_frees_its_place(world):
     _register("t-1", "and-phone-2")
 
 
-def test_a_real_account_still_refuses_a_second_phone(world):
+def test_a_real_account_holds_a_second_phone_too(world):
+    """Real accounts hold several phones since ADR-033, as test accounts
+    already did; their cap is `MAX_PHONES_PER_APP`, not `maxDevices`."""
     _real_user(world["store"], uid="real-1")
     _register("real-1", "and-phone-1")
-    with pytest.raises(errors.Refusal) as refused:
-        _register("real-1", "and-phone-2")
-    assert refused.value.code == errors.DEVICE_CONFLICT
+    _register("real-1", "and-phone-2")
+    devices = world["store"]._data["devices"]
+    assert devices["and-phone-1"]["status"] == devices["and-phone-2"]["status"] == "ACTIVE"
 
 
 def test_another_accounts_phone_is_still_refused(world):
@@ -871,7 +873,7 @@ def test_another_accounts_phone_is_still_refused(world):
     assert refused.value.code == errors.DEVICE_IN_USE
 
 
-def test_any_active_test_device_signs_and_only_a_real_accounts_bound_one(world):
+def test_any_active_device_signs_for_test_and_real_accounts(world):
     user = {**_test_user(world["store"], "t-1"), "activeDeviceId": "and-phone-2"}
     dev = {"uid": "t-1", "status": "ACTIVE", "app": "semper"}
     assert deps._device_is_bound(dev, user, "and-phone-1", "semper")
@@ -879,7 +881,7 @@ def test_any_active_test_device_signs_and_only_a_real_accounts_bound_one(world):
     assert not deps._device_is_bound({**dev, "uid": "other"}, user, "and-phone-1", "semper")
 
     real = {"uid": "real-1", "activeDeviceId": "and-phone-2"}
-    assert not deps._device_is_bound({**dev, "uid": "real-1"}, real, "and-phone-1", "semper")
+    assert deps._device_is_bound({**dev, "uid": "real-1"}, real, "and-phone-1", "semper")
     assert deps._device_is_bound({**dev, "uid": "real-1"}, real, "and-phone-2", "semper")
 
 
@@ -914,9 +916,9 @@ async def test_verified_device_accepts_a_second_test_phone(world, monkeypatch):
     ctx = await deps.verified_device(request, user, "and-phone-2", "n1", sig)
     assert ctx.device_id == "and-phone-2"
 
-    real = {**user, "testAccount": None}
+    world["store"]._data["devices"]["and-phone-2"]["status"] = "SUPERSEDED"
     with pytest.raises(HTTPException) as refused:
-        await deps.verified_device(request, real, "and-phone-2", "n1", sig)
+        await deps.verified_device(request, user, "and-phone-2", "n1", sig)
     assert refused.value.detail == errors.DEVICE_NOT_ACTIVE
 
 

@@ -2334,6 +2334,20 @@ it. Moving the live gateway to a new config is the `gateway` job in
 
 ### 20.10 Changing device
 
+**Since [ADR-033](../adr/ADR-033-licence-per-app-explicit-activation.md) step 2
+(2026-10-29), an account holds several registered phones per app**, up to
+`MAX_PHONES_PER_APP` (default 5; past it the oldest phone not holding the
+licence is retired as superseded). Registration no longer refuses a second
+phone with `device_conflict`; `activeDeviceId` names the latest. Any ACTIVE
+phone of the account signs (`deps._device_is_bound`); only the phone the licence
+lock names is licensed, and the others run as Demo. A clear signs out only the
+locked phone, and only when it is one of the account's registered phones; the
+account's other phones stay, and another phone registering no longer ends the
+released phone's hold. `scripts/retire_stale_devices.py` retires ACTIVE records
+older paths left behind, before that backend serves. What follows describes the
+lock clear, which still moves the licence between phones until ADR-033's
+explicit activation replaces it.
+
 Three people can legitimately need a licence moved to a different phone, and
 until now only one of them could do it. The table is the whole feature:
 
