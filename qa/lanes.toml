@@ -1,0 +1,108 @@
+# How a run is split. A lane is one subagent (or one person) with its own
+# worktree, its own devices and its own accounts; no two lanes share a device,
+# an emulator or a Gradle build directory. Re-split a run by editing this file
+# and running `python scripts/qa/qa.py plan` again. Field reference: qa/SCHEMA.md.
+
+schema = 1
+
+# ---------------------------------------------------------------------------
+# Lanes. A lane takes the active scenarios of its `suites` whose id is in one
+# of its `groups` (an id prefix such as "L2"), or listed in `scenarios`; then
+# `tags` (any of) and `exclude_tags` narrow that.
+# `devices` are device ids or `tag:<tag>` from environments.toml.
+# ---------------------------------------------------------------------------
+
+[[lane]]
+id = "A"
+title = "Semper on two emulators: sign-in, activate, holder deactivate, files, cross-cutting"
+devices = ["Pixel_5", "Semper_API30"]
+builds = ["semper-debug-staging"]
+backend = "staging"
+suites = ["licence-activation"]
+groups = ["L1", "L2", "L3", "L9", "L15"]
+exclude_tags = ["release-smoke"]
+
+[[lane]]
+id = "B"
+title = "Semper and Classroom side by side: per app, sync, offline"
+devices = ["Medium_Phone_2", "Pixel_10"]
+builds = ["semper-debug-staging", "classroom-debug-staging"]
+backend = "staging"
+suites = ["licence-activation"]
+groups = ["L6", "L10", "L11"]
+scenarios = ["L15.6"]
+
+[[lane]]
+id = "C"
+title = "Consoles in the in-app browser, with one emulator: IT, staff, upgrade, floating"
+devices = ["Semper_Smoke"]
+builds = ["semper-debug-staging"]
+backend = "staging"
+tools = ["in-app browser (staging console)"]
+suites = ["licence-activation"]
+groups = ["L4", "L5", "L7", "L8", "L14"]
+
+[[lane]]
+id = "D"
+title = "The real phone (one agent only): release smoke, arm64 passes, the 1036 APK"
+devices = ["g0q"]
+builds = ["semper-release-arm64", "semper-1036", "classroom-v1.4-beta.2"]
+backend = "staging"
+suites = ["licence-activation"]
+groups = ["L2", "L3", "L9", "L10", "L12"]
+scenarios = ["L15.7"]
+
+[[lane]]
+id = "E"
+title = "No phone: backend, console and migration tests, the L13 dry-run report"
+devices = []
+builds = []
+backend = "staging"
+suites = ["licence-activation"]
+groups = ["L13"]
+
+# ---------------------------------------------------------------------------
+# Human gates. A scenario that lists one in `human_gate` stops its lane at
+# that step: the lane asks, giving `ask` with the exact click or command, and
+# waits. These are the steps no agent takes.
+# ---------------------------------------------------------------------------
+
+[[gate]]
+id = "staff-step-up"
+who = "product owner"
+ask = "Staff action on the staging operator console (needs the staff step-up): name the account, the licence and the exact button."
+
+[[gate]]
+id = "it-step-up"
+who = "product owner"
+ask = "Sign in to the institution console as the QC IT account and pass its TOTP step-up; then the lane continues in that tab."
+
+[[gate]]
+id = "holder-sign-in"
+who = "product owner"
+ask = "Sign in to the staging account page as the named QC holder, and pass its step-up when the page asks."
+
+[[gate]]
+id = "create-qc-accounts"
+who = "product owner"
+ask = "Create the named QC test accounts and licences on the staging operator console, as qa/accounts.toml describes them."
+
+[[gate]]
+id = "deploy"
+who = "product owner"
+ask = "A deploy or a backend setting change (for example IMPLICIT_ACTIVATION). Agents never deploy."
+
+[[gate]]
+id = "firestore-write"
+who = "product owner"
+ask = "A direct write to Firestore, such as seeding a licence the pre-ADR-033 way. Staging shares production's database; agents never write to it."
+
+[[gate]]
+id = "migration-apply"
+who = "product owner"
+ask = "Run the migration with --apply (after the lane has shown the dry run). Agents never run --apply."
+
+[[gate]]
+id = "network-toggle"
+who = "anyone at the machine"
+ask = "Change the phone's network (offline, metered or unmetered) where adb cannot, for example Wi-Fi on the real phone."

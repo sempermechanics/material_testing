@@ -1,0 +1,1505 @@
+# Licence per app, explicit activation, device count, upgrade by issue
+# (ADR-033). One [[scenario]] per check; ids are L<group>.<n>, stable and
+# never reused. Retire a scenario with status = "retired" and a `note`; never
+# delete it. Add one by taking the next number in its group and raising that
+# group in [issued]. Field reference: qa/SCHEMA.md.
+
+schema = 1
+id = "licence-activation"
+title = "Licence per app, explicit activation, device count, upgrade by issue"
+prefix = "L"
+since = "ADR-033"
+
+# The highest number ever issued in each group. Every id up to it must still
+# be in this file (retired or not); a new id raises it by one.
+[issued]
+L1 = 6
+L2 = 12
+L3 = 6
+L4 = 8
+L5 = 7
+L6 = 7
+L7 = 7
+L8 = 5
+L9 = 7
+L10 = 8
+L11 = 2
+L12 = 4
+L13 = 5
+L14 = 7
+L15 = 7
+
+# ===========================================================================
+# L1 Sign-in and registration
+# ===========================================================================
+
+[[scenario]]
+id = "L1.1"
+title = "Second and third phones sign in and run as Demo"
+area = "registration"
+tags = ["holder", "semper", "demo"]
+accounts = ["qc-ind1"]
+needs = ["emulator"]
+human_gate = []
+steps = [
+  "Phone 1: sign in as qc-ind1 and tap Activate",
+  "Phone 2: sign in as qc-ind1",
+  "Phone 3: sign in as qc-ind1 (a clean reinstall registers a new phone; confirm it in Your phones)",
+]
+expected = "Phones 2 and 3 sign in without a device_conflict; Home shows Demo and 'Licensed on 1 of 1 phones'"
+automation = "planned:androidTest:StagingActivationDeviceTest#secondPhoneIsDemo"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L1.2"
+title = "The MAX_PHONES_PER_APP cap retires the oldest phone that is not activated"
+area = "registration"
+tags = ["holder", "semper", "cap"]
+accounts = ["qc-ind1"]
+needs = ["emulator", "backend"]
+human_gate = []
+steps = [
+  "Register phones until the account holds MAX_PHONES_PER_APP (5) for Semper, one of them activated",
+  "Register one more",
+]
+expected = "The new phone signs in; the oldest phone that is not activated is retired and must sign in again; the activated phone is untouched"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L1.3"
+title = "With every phone activated, the next sign-in says to deactivate a phone"
+area = "registration"
+tags = ["holder", "semper", "cap"]
+accounts = ["qc-ind2"]
+needs = ["emulator", "backend"]
+human_gate = ["staff-step-up"]
+steps = [
+  "Staff raise qc-ind2's Semper maxDevices to 5",
+  "Register and activate five phones",
+  "Sign in on a sixth",
+]
+expected = "The sixth phone is refused with the 'deactivate a phone' message, not auth_phone_linked_elsewhere"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L1.4"
+title = "device_in_use across accounts"
+area = "registration"
+tags = ["holder", "semper", "negative"]
+accounts = ["qc-ind1", "qc-ind2"]
+needs = ["emulator"]
+human_gate = []
+steps = [
+  "Sign in as qc-ind1 on a phone",
+  "Sign out and sign in as qc-ind2 on the same phone, same app",
+]
+expected = "device_in_use, with its own sentence; qc-ind1's activation is unchanged"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L1.5"
+title = "A phone released by staff or IT is held off for 24 h"
+area = "registration"
+tags = ["staff", "it", "semper", "hold"]
+accounts = ["qc-ind1"]
+needs = ["emulator", "web"]
+human_gate = ["staff-step-up"]
+steps = [
+  "Staff: Sign a lost phone out for qc-ind1's activated phone",
+  "On that phone, sign in again within 24 h",
+]
+expected = "The sign-in is refused with the hold message and the time it ends; a holder's own deactivate (L3.1) sets no hold"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L1.6"
+title = "A full QC account refuses a new phone"
+area = "registration"
+tags = ["staff", "semper", "test-account"]
+accounts = ["qc-ind1"]
+needs = ["emulator"]
+human_gate = []
+steps = [
+  "Sign in on as many phones as qc-ind1's 'Phones that may sign in' allows",
+  "Sign in on one more",
+]
+expected = "The extra phone is refused by the test account's registration cap, which is separate from the licence's maxDevices"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+# ===========================================================================
+# L2 Activate
+# ===========================================================================
+
+[[scenario]]
+id = "L2.1"
+title = "Activate from the Home card"
+area = "activate"
+tags = ["holder", "semper", "home"]
+accounts = ["qc-ind1"]
+needs = ["emulator"]
+human_gate = []
+steps = ["Fresh sign-in as qc-ind1 with no active phone", "Home: tap 'Activate this phone'"]
+expected = "Activated; the card becomes 'Licensed on 1 of 1 phones'"
+automation = "planned:androidTest:HomeActivationCardTest"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L2.2"
+title = "Activate from Settings"
+area = "activate"
+tags = ["holder", "semper", "settings"]
+accounts = ["qc-ind1"]
+needs = ["emulator"]
+human_gate = []
+steps = ["With no active phone, open Settings → account", "Tap Activate"]
+expected = "Activated; Settings shows the n-of-m line and 'Your phones'"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L2.3"
+title = "Activate from the limit screen"
+area = "activate"
+tags = ["holder", "semper", "demo"]
+accounts = ["qc-ind1"]
+needs = ["emulator"]
+human_gate = []
+steps = ["As Demo, reach SessionLimitActivity (or a LicenseLock gate)", "Tap Activate"]
+expected = "Activated; the screen closes and the blocked action can go ahead; no wording about buying or renewing"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L2.4"
+title = "Activate unlocks share, backup, restore and the cap without a restart"
+area = "activate"
+tags = ["holder", "semper", "unlock"]
+accounts = ["qc-demo"]
+needs = ["emulator"]
+human_gate = ["staff-step-up"]
+steps = [
+  "As Demo, note share, backup and restore are locked",
+  "Staff give qc-demo an individual Semper licence",
+  "Tap Activate; do not restart or Refresh",
+]
+expected = "Share, backup, restore and the higher analysis cap are enabled at once"
+automation = "planned:androidTest:ActivateUnlocksFeaturesTest"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L2.5"
+title = "'1 of 1' is shown after Activate"
+area = "activate"
+tags = ["holder", "semper", "home", "settings"]
+accounts = ["qc-ind1"]
+needs = ["emulator"]
+human_gate = []
+steps = ["Activate", "Look at Home and Settings"]
+expected = "Both say 1 of 1"
+automation = "planned:androidTest:HomeActivationCardTest"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L2.6"
+title = "A full count refuses with device_limit_reached and the list of phones"
+area = "activate"
+tags = ["holder", "semper", "negative"]
+accounts = ["qc-ind1"]
+needs = ["emulator"]
+human_gate = []
+steps = ["Phone 1 activated", "Phone 2: tap Activate"]
+expected = "device_limit_reached: 1/1, with the active phone named and a way to deactivate it"
+automation = "planned:androidTest:StagingActivationDeviceTest#limitReached"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L2.7"
+title = "Two phones race for the last slot"
+area = "activate"
+tags = ["holder", "semper", "race"]
+accounts = ["qc-ind1"]
+needs = ["emulator", "backend"]
+human_gate = []
+steps = ["No phone active", "Tap Activate on two phones as close together as possible"]
+expected = "One wins; the other gets a clean device_limit_reached; devicesActive is 1"
+automation = "planned:pytest:backend/tests/test_activations.py"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L2.8"
+title = "A double tap on Activate is idempotent"
+area = "activate"
+tags = ["holder", "semper"]
+accounts = ["qc-ind1"]
+needs = ["emulator"]
+human_gate = []
+steps = ["Tap Activate twice quickly"]
+expected = "One activation; no error; the count stays 1 of 1"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L2.9"
+title = "Activate offline gives the Offline outcome"
+area = "activate"
+tags = ["holder", "semper", "offline"]
+accounts = ["qc-ind1"]
+needs = ["emulator"]
+human_gate = []
+steps = ["Airplane mode on", "Tap Activate", "Airplane mode off, tap Activate again"]
+expected = "The offline message, nothing changed on the server; the retry activates"
+automation = "planned:unitTest:DeviceActivationTest"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L2.10"
+title = "Process death during Activate does no harm"
+area = "activate"
+tags = ["holder", "semper", "process-death"]
+accounts = ["qc-ind1"]
+needs = ["emulator"]
+human_gate = []
+steps = ["Tap Activate", "Immediately: adb shell am kill com.sempermechanics.semper (app in background)", "Reopen"]
+expected = "Either activated or not, never half; Home shows the server's state after the next refresh"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L2.11"
+title = "Rotation during Activate does no harm"
+area = "activate"
+tags = ["holder", "semper", "rotation"]
+accounts = ["qc-ind1"]
+needs = ["emulator"]
+human_gate = []
+steps = ["Tap Activate", "Rotate the phone while it runs"]
+expected = "One activation; the result is shown after the rotation"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L2.12"
+title = "Activate on a floating licence opens checkout"
+area = "activate"
+tags = ["floating", "semper"]
+accounts = ["qc-fl1"]
+needs = ["emulator"]
+human_gate = []
+steps = ["Sign in as qc-fl1", "Tap Activate"]
+expected = "SeatRequiredActivity (checkout) opens instead of an activation"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+# ===========================================================================
+# L3 Holder deactivate
+# ===========================================================================
+
+[[scenario]]
+id = "L3.1"
+title = "Deactivate this phone from Your phones"
+area = "deactivate"
+tags = ["holder", "semper", "phones-screen"]
+accounts = ["qc-ind1"]
+needs = ["emulator"]
+human_gate = []
+steps = ["Activated phone: Settings → Your phones", "Deactivate this phone"]
+expected = "The phone is Demo at once; the list shows 0 of 1; no hold is set"
+automation = "planned:androidTest:PhonesActivityTest#deactivateThisPhone"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L3.2"
+title = "Deactivate another phone from Your phones"
+area = "deactivate"
+tags = ["holder", "semper", "phones-screen"]
+accounts = ["qc-ind2"]
+needs = ["emulator"]
+human_gate = []
+steps = ["Two phones activated", "On phone 1: Your phones → Deactivate on phone 2"]
+expected = "Phone 2 drops from the list; phone 2 is Demo at its next refresh (L3.4)"
+automation = "planned:androidTest:PhonesActivityTest#deactivateOtherPhone"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L3.3"
+title = "Deactivate from the web account page, with step-up"
+area = "deactivate"
+tags = ["holder", "semper", "web"]
+accounts = ["qc-ind1"]
+needs = ["emulator", "web"]
+human_gate = ["holder-sign-in"]
+steps = ["Account page → Semper → Deactivate on the phone", "Pass the step-up"]
+expected = "The phone leaves the list; without the step-up nothing changes"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L3.4"
+title = "A deactivated phone is Demo at its next refresh, and can activate again"
+area = "deactivate"
+tags = ["holder", "semper"]
+accounts = ["qc-ind1"]
+needs = ["emulator"]
+human_gate = []
+steps = ["Deactivate the phone from elsewhere (L3.2 or L3.3)", "On it: Refresh", "Tap Activate"]
+expected = "Demo after the refresh; the slot is free; Activate succeeds"
+automation = "planned:androidTest:StagingActivationDeviceTest#deactivateThenActivate"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L3.5"
+title = "Holder deactivates and re-activates five times in a row"
+area = "deactivate"
+tags = ["holder", "no-cooldown", "semper"]
+accounts = ["qc-ind1"]
+needs = ["emulator"]
+human_gate = []
+steps = ["Your phones → Deactivate this phone", "Activate", "repeat 5×"]
+expected = "Every cycle succeeds; no cooldown message; slot count returns to 1 of 1"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L3.6"
+title = "Another member's phone in the same pool is invisible and answers 404"
+area = "deactivate"
+tags = ["holder", "institution", "scope", "negative"]
+accounts = ["qc-m1", "qc-m2"]
+needs = ["emulator", "backend"]
+human_gate = []
+steps = ["qc-m2 activates a phone", "As qc-m1: Your phones", "As qc-m1: DELETE /v1/me/devices/{qc-m2's device}"]
+expected = "qc-m2's phone is not listed; the delete answers 404 activation_not_found"
+automation = "planned:pytest:backend/tests/test_activation_scopes.py"
+status = "active"
+since = "ADR-033"
+
+# ===========================================================================
+# L4 IT scope
+# ===========================================================================
+
+[[scenario]]
+id = "L4.1"
+title = "IT deactivates a member's phone within the domain"
+area = "it"
+tags = ["it", "institution", "web"]
+accounts = ["qc-it", "qc-m1"]
+needs = ["emulator", "web"]
+human_gate = ["it-step-up"]
+steps = ["qc-m1 activates a phone", "Institution console → qc-m1 → Deactivate"]
+expected = "OK; qc-m1's phone is Demo at its next refresh"
+automation = "planned:pytest:backend/tests/test_activation_scopes.py"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L4.2"
+title = "IT cannot touch a member outside the domain"
+area = "it"
+tags = ["it", "institution", "scope", "negative"]
+accounts = ["qc-it", "qc-out"]
+needs = ["web", "backend"]
+human_gate = ["it-step-up"]
+steps = ["Staff seat qc-out on A; qc-out activates", "As qc-it: list and deactivate qc-out's phone"]
+expected = "Not listed; the deactivate answers 404"
+automation = "planned:pytest:backend/tests/test_activation_scopes.py"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L4.3"
+title = "IT cannot touch another institution"
+area = "it"
+tags = ["it", "institution", "scope", "negative"]
+accounts = ["qc-it", "qc-b1"]
+needs = ["web", "backend"]
+human_gate = ["it-step-up"]
+steps = ["qc-b1 activates on B", "As qc-it: GET and DELETE on B's licence devices"]
+expected = "404 on both"
+automation = "planned:pytest:backend/tests/test_activation_scopes.py"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L4.4"
+title = "IT cannot touch an individual licence"
+area = "it"
+tags = ["it", "scope", "negative"]
+accounts = ["qc-it", "qc-ind1"]
+needs = ["backend"]
+human_gate = ["it-step-up"]
+steps = ["As qc-it: GET and DELETE on qc-ind1's licence devices"]
+expected = "404 on both"
+automation = "planned:pytest:backend/tests/test_activation_scopes.py"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L4.5"
+title = "IT has no Activate and no Add"
+area = "it"
+tags = ["it", "institution", "web"]
+accounts = ["qc-it"]
+needs = ["web"]
+human_gate = ["it-step-up"]
+steps = ["Open the institution console's phones view"]
+expected = "Deactivate only; no Activate or Add control, and no route answers one for IT"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L4.6"
+title = "An IT deactivate releases the registration and starts the hold"
+area = "it"
+tags = ["it", "institution", "hold"]
+accounts = ["qc-it", "qc-m1"]
+needs = ["emulator", "web"]
+human_gate = ["it-step-up"]
+steps = ["IT deactivates qc-m1's phone", "On the phone: Refresh, then sign in again"]
+expected = "The phone is signed out and its sign-in is held for 24 h"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L4.7"
+title = "The pool header counts correctly"
+area = "it"
+tags = ["it", "institution", "web", "pool"]
+accounts = ["qc-it", "qc-m1", "qc-m2", "qc-m3"]
+needs = ["emulator", "web"]
+human_gate = ["it-step-up"]
+steps = ["Activate qc-m1, qc-m2, qc-m3 one at a time", "Watch the header after each", "Deactivate one"]
+expected = "1, 2, 3 of 3 activated, then 2 of 3; a fourth member phone gets device_limit_reached"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L4.8"
+title = "The institution console shows a section per app"
+area = "it"
+tags = ["it", "institution", "web", "per-app"]
+accounts = ["qc-it"]
+needs = ["web"]
+human_gate = ["it-step-up"]
+steps = ["Open the institution console"]
+expected = "Semper and Classroom phones are listed apart; A (Semper only) shows none under Classroom"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+# ===========================================================================
+# L5 Staff
+# ===========================================================================
+
+[[scenario]]
+id = "L5.1"
+title = "Staff deactivate any phone"
+area = "staff"
+tags = ["staff", "web"]
+accounts = ["qc-ind1", "qc-m1"]
+needs = ["web", "emulator"]
+human_gate = ["staff-step-up"]
+steps = ["Operator → licence → Phones → Deactivate, on an individual and on an institution licence"]
+expected = "Both deactivate; each phone is Demo at its next refresh"
+automation = "planned:pytest:backend/tests/test_activation_scopes.py"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L5.2"
+title = "Staff Add phone within maxDevices"
+area = "staff"
+tags = ["staff", "web"]
+accounts = ["qc-ind2"]
+needs = ["web", "emulator"]
+human_gate = ["staff-step-up"]
+steps = ["qc-ind2 has a registered phone that is not activated", "Operator → Add phone → pick it"]
+expected = "It activates; the count rises; Add is refused once the count is full"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L5.3"
+title = "Staff Add phone with override past maxDevices"
+area = "staff"
+tags = ["staff", "web", "override"]
+accounts = ["qc-ind1"]
+needs = ["web", "emulator"]
+human_gate = ["staff-step-up"]
+steps = ["qc-ind1 full at 1 of 1", "Operator → Add phone with override"]
+expected = "Activates as 2 of 1; the audit log records the override"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L5.4"
+title = "Lowering maxDevices below the active count is refused"
+area = "staff"
+tags = ["staff", "web", "negative"]
+accounts = ["qc-ind2"]
+needs = ["web"]
+human_gate = ["staff-step-up"]
+steps = ["Two phones active on qc-ind2", "Edit maxDevices to 1"]
+expected = "max_devices_below_active, with its own sentence; nothing changes"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L5.5"
+title = "Raising maxDevices lets another phone activate"
+area = "staff"
+tags = ["staff", "web"]
+accounts = ["qc-ind1"]
+needs = ["web", "emulator"]
+human_gate = ["staff-step-up"]
+steps = ["qc-ind1 full at 1 of 1", "Edit maxDevices to 2", "Phone 2: Activate"]
+expected = "Phone 2 activates; 2 of 2"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L5.6"
+title = "Revoke makes every phone on the licence Demo, and the files stay"
+area = "staff"
+tags = ["staff", "web", "files"]
+accounts = ["qc-ind2"]
+needs = ["web", "emulator"]
+human_gate = ["staff-step-up"]
+steps = ["Two phones active with local analyses; hash them (L9)", "Operator → Revoke", "Refresh both phones; hash again"]
+expected = "Both phones are Demo; every session folder is byte-identical"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L5.7"
+title = "Sign a lost phone out"
+area = "staff"
+tags = ["staff", "web", "hold"]
+accounts = ["qc-ind1"]
+needs = ["web", "emulator"]
+human_gate = ["staff-step-up"]
+steps = ["Operator → Sign a lost phone out (POST /v1/admin/device-releases) for qc-ind1's phone"]
+expected = "The phone is signed out at its next request and held off for 24 h"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+# ===========================================================================
+# L6 Per app
+# ===========================================================================
+
+[[scenario]]
+id = "L6.1"
+title = "A Semper-only licence leaves Classroom on the same phone as Demo"
+area = "per-app"
+tags = ["holder", "semper", "classroom", "per-app"]
+accounts = ["qc-ind1"]
+needs = ["emulator"]
+builds = ["semper-debug-staging", "classroom-debug-staging"]
+human_gate = []
+steps = ["Semper: sign in as qc-ind1, Activate", "Classroom, same phone: sign in as qc-ind1"]
+expected = "Semper licensed; Classroom is Demo with no Activate offer"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L6.2"
+title = "A Classroom licence activates on its own"
+area = "per-app"
+tags = ["holder", "classroom", "per-app"]
+accounts = ["qc-ind2"]
+needs = ["emulator"]
+builds = ["classroom-debug-staging"]
+human_gate = []
+steps = ["Classroom: sign in as qc-ind2, Activate"]
+expected = "Classroom licensed; Semper's count is unchanged"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L6.3"
+title = "Each app counts its own phones"
+area = "per-app"
+tags = ["holder", "semper", "classroom", "per-app"]
+accounts = ["qc-ind2"]
+needs = ["emulator"]
+builds = ["semper-debug-staging", "classroom-debug-staging"]
+human_gate = []
+steps = ["Activate both apps on two phones"]
+expected = "Semper 2 of 2 and Classroom 2 of 2, counted apart"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L6.4"
+title = "The analysis quota is per app"
+area = "per-app"
+tags = ["holder", "semper", "classroom", "quota"]
+accounts = ["qc-ind2"]
+needs = ["emulator"]
+builds = ["semper-debug-staging", "classroom-debug-staging"]
+human_gate = ["staff-step-up"]
+steps = ["Staff set a small analysis quota on qc-ind2's Semper licence", "Fill it in Semper", "Create an analysis in Classroom"]
+expected = "Semper is at its cap; Classroom still creates"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L6.5"
+title = "The Demo per-device cap is per app"
+area = "per-app"
+tags = ["demo", "semper", "classroom", "quota"]
+accounts = ["qc-demo"]
+needs = ["emulator"]
+builds = ["semper-debug-staging", "classroom-debug-staging"]
+human_gate = []
+steps = ["As qc-demo, reach the Demo cap in Semper", "Create in Classroom on the same phone"]
+expected = "Classroom still creates up to its own Demo cap"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L6.6"
+title = "One licence per person per app"
+area = "per-app"
+tags = ["staff", "web", "per-app", "negative"]
+accounts = ["qc-ind1"]
+needs = ["web"]
+human_gate = ["staff-step-up"]
+steps = ["Mint a second Semper licence for qc-ind1", "Mint a Classroom licence for qc-ind1"]
+expected = "The Semper mint is refused with email_already_licensed; the Classroom mint succeeds"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L6.7"
+title = "A claim code activates the right app"
+area = "per-app"
+tags = ["holder", "semper", "classroom", "claim"]
+accounts = ["qc-demo"]
+needs = ["emulator", "web"]
+builds = ["semper-debug-staging", "classroom-debug-staging"]
+human_gate = ["staff-step-up", "holder-sign-in"]
+steps = ["Staff mint a Classroom licence with a claim code", "qc-demo claims it on the account page", "Open both apps"]
+expected = "Classroom offers Activate; Semper stays Demo"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+# ===========================================================================
+# L7 Upgrade by issue
+# ===========================================================================
+
+[[scenario]]
+id = "L7.1"
+title = "An issued upgrade shows the 'New licence ready' card"
+area = "upgrade"
+tags = ["staff", "holder", "upgrade"]
+accounts = ["qc-upg"]
+needs = ["emulator", "web"]
+human_gate = ["staff-step-up"]
+steps = ["qc-upg activated", "Operator → Issue upgrade", "Phone: Refresh"]
+expected = "Home shows 'New licence ready'; Settings too"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L7.2"
+title = "The old licence works until Activate"
+area = "upgrade"
+tags = ["holder", "upgrade"]
+accounts = ["qc-upg"]
+needs = ["emulator"]
+human_gate = []
+steps = ["After L7.1, do not tap Activate", "Back up, share, restart, Refresh"]
+expected = "Everything still works on the old licence"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L7.3"
+title = "Activate on an upgrade revokes the old licence and binds this phone"
+area = "upgrade"
+tags = ["holder", "upgrade"]
+accounts = ["qc-upg"]
+needs = ["emulator", "backend"]
+human_gate = []
+steps = ["Tap Activate on the 'New licence ready' card", "Look at Settings and at another phone of the account"]
+expected = "Old licence revoked; new prefix and expiry shown; this phone active; other phones need Activate"
+automation = "planned:pytest:backend/tests/test_licence_upgrade.py"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L7.4"
+title = "Staff Apply now for a phone on an old build"
+area = "upgrade"
+tags = ["staff", "upgrade", "compat"]
+accounts = ["qc-upg"]
+needs = ["web", "emulator"]
+human_gate = ["staff-step-up"]
+steps = ["Issue an upgrade", "Operator → Apply now"]
+expected = "Old licence revoked, the new one bound to the holder's phone; the card clears"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L7.5"
+title = "Upgrade from individual to institution"
+area = "upgrade"
+tags = ["staff", "upgrade", "institution"]
+accounts = ["qc-upg"]
+needs = ["web", "emulator"]
+human_gate = ["staff-step-up"]
+steps = ["Issue an institution upgrade for qc-upg", "Tap Activate"]
+expected = "The holder is seated on the institution, the individual licence is revoked, this phone counts in the pool"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L7.6"
+title = "Revoking the pending licence clears the card"
+area = "upgrade"
+tags = ["staff", "upgrade"]
+accounts = ["qc-upg"]
+needs = ["web", "emulator"]
+human_gate = ["staff-step-up"]
+steps = ["Issue an upgrade", "Revoke the new licence before Activate", "Phone: Refresh"]
+expected = "The card is gone; the old licence still works"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L7.7"
+title = "An upgrade for a holder who never signed in moves the invite"
+area = "upgrade"
+tags = ["staff", "upgrade", "invite"]
+accounts = ["qc-upg2"]
+needs = ["web", "emulator"]
+human_gate = ["staff-step-up"]
+steps = ["Issue an upgrade for qc-upg2 (never signed in)", "Sign in as qc-upg2"]
+expected = "The invite points at the new licence; first sign-in offers Activate on it; the old one is gone"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+# ===========================================================================
+# L8 Floating
+# ===========================================================================
+
+[[scenario]]
+id = "L8.1"
+title = "Checkout gives a lease"
+area = "floating"
+tags = ["floating", "semper"]
+accounts = ["qc-fl1"]
+needs = ["emulator"]
+human_gate = []
+steps = ["Sign in as qc-fl1", "Activate → checkout"]
+expected = "A lease; the phone is licensed until it ends"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L8.2"
+title = "A second member gets no_floating_seat"
+area = "floating"
+tags = ["floating", "semper", "negative"]
+accounts = ["qc-fl1", "qc-fl2"]
+needs = ["emulator"]
+human_gate = []
+steps = ["qc-fl1 holds the lease", "qc-fl2: checkout"]
+expected = "no_floating_seat, with its own sentence"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L8.3"
+title = "An expired lease drops the phone to Demo"
+area = "floating"
+tags = ["floating", "semper"]
+accounts = ["qc-fl1"]
+needs = ["emulator"]
+human_gate = []
+steps = ["Let the lease expire", "Refresh"]
+expected = "Demo; local analyses stay"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L8.4"
+title = "A lease licenses only the phone that checked it out"
+area = "floating"
+tags = ["floating", "semper"]
+accounts = ["qc-fl1"]
+needs = ["emulator"]
+human_gate = []
+steps = ["qc-fl1 checks out on phone 1", "Sign in as qc-fl1 on phone 2"]
+expected = "Phone 2 is Demo; the lease shows phone 1's leaseDeviceId"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L8.5"
+title = "The lease is released on exit"
+area = "floating"
+tags = ["floating", "semper"]
+accounts = ["qc-fl1", "qc-fl2"]
+needs = ["emulator"]
+human_gate = []
+steps = ["qc-fl1 releases (exit)", "qc-fl2: checkout"]
+expected = "qc-fl2 gets the lease"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+# ===========================================================================
+# L9 Files and Demo <-> licensed. Hash every session folder before and after
+# each transition (debug build: adb shell run-as com.sempermechanics.semper
+# with sha256sum over the session folders; save both lists under evidence/).
+# On a release build compare Home's list and open each analysis instead.
+# ===========================================================================
+
+[[scenario]]
+id = "L9.1"
+title = "Activate leaves every session folder byte-identical"
+area = "files"
+tags = ["files", "semper"]
+accounts = ["qc-demo"]
+needs = ["emulator"]
+human_gate = ["staff-step-up"]
+steps = ["As Demo, create two analyses; hash", "Staff license qc-demo; Activate", "Hash again"]
+expected = "Identical hashes; both analyses open"
+automation = "planned:androidTest:LocalFilesSurviveLicenceChangeTest"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L9.2"
+title = "Deactivate leaves every session folder byte-identical"
+area = "files"
+tags = ["files", "semper"]
+accounts = ["qc-ind1"]
+needs = ["emulator"]
+human_gate = []
+steps = ["Hash", "Deactivate this phone", "Hash again"]
+expected = "Identical hashes"
+automation = "planned:androidTest:LocalFilesSurviveLicenceChangeTest"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L9.3"
+title = "Upgrade leaves every session folder byte-identical"
+area = "files"
+tags = ["files", "upgrade"]
+accounts = ["qc-upg"]
+needs = ["emulator"]
+human_gate = ["staff-step-up"]
+steps = ["Hash", "Issue an upgrade; Activate", "Hash again"]
+expected = "Identical hashes"
+automation = "planned:androidTest:LocalFilesSurviveLicenceChangeTest"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L9.4"
+title = "Revoke leaves every session folder byte-identical"
+area = "files"
+tags = ["files", "staff"]
+accounts = ["qc-ind1"]
+needs = ["emulator"]
+human_gate = ["staff-step-up"]
+steps = ["Hash", "Staff revoke; Refresh", "Hash again"]
+expected = "Identical hashes"
+automation = "planned:androidTest:LocalFilesSurviveLicenceChangeTest"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L9.5"
+title = "Expiry leaves every session folder byte-identical"
+area = "files"
+tags = ["files", "staff"]
+accounts = ["qc-ind1"]
+needs = ["emulator"]
+human_gate = ["staff-step-up"]
+steps = ["Hash", "Staff move the expiry into the past; Refresh", "Hash again"]
+expected = "Identical hashes"
+automation = "planned:androidTest:LocalFilesSurviveLicenceChangeTest"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L9.6"
+title = "Reaching Demo's cap leaves every session folder byte-identical"
+area = "files"
+tags = ["files", "demo"]
+accounts = ["qc-demo"]
+needs = ["emulator"]
+human_gate = []
+steps = ["Hash", "Create analyses until Demo's cap refuses one", "Hash the existing folders again"]
+expected = "The existing folders are identical"
+automation = "planned:androidTest:LocalFilesSurviveLicenceChangeTest"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L9.7"
+title = "Over Demo's cap, analyses stay readable and exportable"
+area = "files"
+tags = ["files", "demo"]
+accounts = ["qc-ind1"]
+needs = ["emulator"]
+human_gate = []
+steps = ["Licensed with more analyses than Demo's cap", "Deactivate", "Open each analysis, export one, try to create a new one"]
+expected = "Every analysis opens and exports; only creating a new one is capped"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+# ===========================================================================
+# L10 Sync across the holder's phones (same app, same account)
+# ===========================================================================
+
+[[scenario]]
+id = "L10.1"
+title = "An analysis backed up on A appears on B as Only in cloud"
+area = "sync"
+tags = ["sync", "holder", "semper"]
+accounts = ["qc-ind2"]
+needs = ["emulator"]
+human_gate = []
+steps = ["A and B activated; Sync from my other phones off on B", "A: create and back up an analysis", "B: Refresh Home"]
+expected = "B lists it as Only in cloud, with the Home card offering Restore"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L10.2"
+title = "Auto-sync on an unmetered network downloads by itself"
+area = "sync"
+tags = ["sync", "holder", "semper"]
+accounts = ["qc-ind2"]
+needs = ["emulator"]
+human_gate = []
+steps = ["B: Sync from my other phones on (default), unmetered network", "A: back up a new analysis", "Wait for B's periodic job"]
+expected = "B restores it without a tap"
+automation = "planned:unitTest:CrossPhoneSyncWorkerTest"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L10.3"
+title = "With auto-sync off nothing downloads"
+area = "sync"
+tags = ["sync", "holder", "semper"]
+accounts = ["qc-ind2"]
+needs = ["emulator"]
+human_gate = []
+steps = ["B: toggle off", "A: back up a new analysis", "Wait past B's job interval"]
+expected = "B shows Only in cloud and downloads nothing"
+automation = "planned:unitTest:CrossPhoneSyncWorkerTest"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L10.4"
+title = "On a metered network auto-sync waits"
+area = "sync"
+tags = ["sync", "holder", "semper", "network"]
+accounts = ["qc-ind2"]
+needs = ["emulator"]
+human_gate = []
+steps = ["B: metered network (emulator: adb shell cmd netpolicy, real phone: the network-toggle gate)", "A: back up a new analysis", "Switch B to unmetered"]
+expected = "Nothing downloads while metered; it downloads after the switch"
+automation = "planned:unitTest:CrossPhoneSyncWorkerTest"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L10.5"
+title = "A registered phone that is not activated cannot restore"
+area = "sync"
+tags = ["sync", "demo", "negative"]
+accounts = ["qc-ind2"]
+needs = ["emulator", "backend"]
+human_gate = []
+steps = ["C: sign in as qc-ind2 without Activate (both slots taken)", "Try Restore on a cloud analysis"]
+expected = "Refused with feature_not_licensed; nothing downloads"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L10.6"
+title = "A rename on A shows up on B"
+area = "sync"
+tags = ["sync", "holder", "semper"]
+accounts = ["qc-ind2"]
+needs = ["emulator"]
+human_gate = []
+steps = ["A: rename a backed-up analysis", "B: Refresh"]
+expected = "B shows the new name"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L10.7"
+title = "A cloud delete on A keeps B's local copy"
+area = "sync"
+tags = ["sync", "holder", "semper", "files"]
+accounts = ["qc-ind2"]
+needs = ["emulator"]
+human_gate = []
+steps = ["The analysis is local on both", "A: delete its cloud copy", "B: Refresh; open it"]
+expected = "B's local copy stays and opens"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L10.8"
+title = "Semper and Classroom analyses never cross apps"
+area = "sync"
+tags = ["sync", "per-app", "semper", "classroom"]
+accounts = ["qc-ind2"]
+needs = ["emulator"]
+builds = ["semper-debug-staging", "classroom-debug-staging"]
+human_gate = []
+steps = ["Back up one analysis from each app", "Refresh both apps on the other phone"]
+expected = "Each app lists only its own analyses"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+# ===========================================================================
+# L11 Offline
+# ===========================================================================
+
+[[scenario]]
+id = "L11.1"
+title = "A phone deactivated while offline keeps its last config until its next refresh"
+area = "offline"
+tags = ["offline", "holder", "semper"]
+accounts = ["qc-ind2"]
+needs = ["emulator"]
+human_gate = []
+steps = ["B offline", "A: deactivate B", "Use B offline; bring it online; Refresh"]
+expected = "B keeps working as licensed offline (expected, documented); Demo after the refresh"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L11.2"
+title = "The signed-token grace rows"
+area = "offline"
+tags = ["offline", "token"]
+accounts = ["qc-ind1"]
+needs = ["emulator"]
+human_gate = []
+steps = ["Run the ADR-023 grace checks against an activation change"]
+expected = "The offline grace honours the activation state"
+automation = "manual"
+status = "deferred"
+note = "Skipped until TD-215: no signed entitlement is issued yet."
+since = "ADR-033"
+
+# ===========================================================================
+# L12 Compatibility with installed builds
+# ===========================================================================
+
+[[scenario]]
+id = "L12.1"
+title = "Build 1036's first phone auto-activates on a licence with an app"
+area = "compat"
+tags = ["compat", "legacy", "semper"]
+accounts = ["qc-ind1"]
+needs = ["device", "backend"]
+builds = ["semper-1036"]
+human_gate = []
+steps = ["Install the 1036 APK", "Sign in as qc-ind1 with no active phone"]
+expected = "The phone is licensed without Activate; logs show event=activation stage=legacy"
+automation = "planned:pytest:backend/tests/test_legacy_auto_activate.py"
+status = "active"
+since = "ADR-033"
+note = "The 1036 APK has production's gateway baked in, so this row runs after the production deploy, not against staging."
+
+[[scenario]]
+id = "L12.2"
+title = "A second old-build phone is Demo"
+area = "compat"
+tags = ["compat", "legacy", "semper"]
+accounts = ["qc-ind1"]
+needs = ["device", "backend"]
+builds = ["semper-1036"]
+human_gate = []
+steps = ["After L12.1, a second phone on 1036 signs in as qc-ind1"]
+expected = "Demo; the first phone stays licensed"
+automation = "planned:pytest:backend/tests/test_legacy_auto_activate.py"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L12.3"
+title = "Old and new builds share one pool"
+area = "compat"
+tags = ["compat", "legacy", "semper"]
+accounts = ["qc-ind2"]
+needs = ["device", "emulator"]
+builds = ["semper-1036", "semper-debug-staging"]
+human_gate = []
+steps = ["1036 phone auto-activates", "A new-build phone taps Activate", "A third phone tries"]
+expected = "2 of 2 across both builds; the third gets device_limit_reached"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L12.4"
+title = "With IMPLICIT_ACTIVATION=off an old build never activated is Demo, and its data stays"
+area = "compat"
+tags = ["compat", "legacy", "semper", "files"]
+accounts = ["qc-ind1"]
+needs = ["device", "backend"]
+builds = ["semper-1036"]
+human_gate = ["deploy"]
+steps = ["Product owner sets IMPLICIT_ACTIVATION=off", "A 1036 phone that never activated signs in", "Open its analyses"]
+expected = "Demo; its local analyses open"
+automation = "planned:pytest:backend/tests/test_legacy_auto_activate.py"
+status = "active"
+since = "ADR-033"
+
+# ===========================================================================
+# L13 Migration rehearsal (QC domain only)
+# ===========================================================================
+
+[[scenario]]
+id = "L13.1"
+title = "Seed a QC licence the old way with both apps' phone locks"
+area = "migration"
+tags = ["migration", "setup"]
+accounts = ["qc-ind2"]
+needs = ["backend"]
+human_gate = ["firestore-write"]
+steps = ["Seed a licence with no app field and Semper and Classroom lock fields set"]
+expected = "Both apps licensed on their phones under today's lock model"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L13.2"
+title = "The dry run lists the split and writes nothing"
+area = "migration"
+tags = ["migration"]
+accounts = ["qc-ind2"]
+needs = ["backend"]
+human_gate = []
+steps = ["python backend/scripts/split_licences_per_app.py --only-domain qa.sempermechanics.com (dry run)"]
+expected = "The planned twin, seats, activations and mirrors are listed; no write"
+automation = "planned:pytest:backend/tests/test_script_split_licences_per_app.py"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L13.3"
+title = "--apply keeps both apps' phones licensed without Activate"
+area = "migration"
+tags = ["migration"]
+accounts = ["qc-ind2"]
+needs = ["backend"]
+human_gate = ["migration-apply"]
+steps = ["Product owner runs --apply --only-domain qa.sempermechanics.com", "Read each phone's /v1/config"]
+expected = "Both phones active on their app's licence; devicesActive matches"
+automation = "planned:pytest:backend/tests/test_script_split_licences_per_app.py"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L13.4"
+title = "The Classroom twin is visible in the console"
+area = "migration"
+tags = ["migration", "web"]
+accounts = ["qc-ind2"]
+needs = ["web"]
+human_gate = ["staff-step-up"]
+steps = ["Operator → search qc-ind2"]
+expected = "Two licences with app badges; the twin names splitFrom"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L13.5"
+title = "A re-run is a no-op"
+area = "migration"
+tags = ["migration"]
+accounts = ["qc-ind2"]
+needs = ["backend"]
+human_gate = []
+steps = ["Run the dry run again after --apply"]
+expected = "Nothing to do"
+automation = "planned:pytest:backend/tests/test_script_split_licences_per_app.py"
+status = "active"
+since = "ADR-033"
+
+# ===========================================================================
+# L14 Consoles
+# ===========================================================================
+
+[[scenario]]
+id = "L14.1"
+title = "Mint per app and for both"
+area = "console"
+tags = ["console", "staff", "web"]
+accounts = ["qc-demo"]
+needs = ["web"]
+human_gate = ["staff-step-up"]
+steps = ["Mint Semper, Classroom and both for QC addresses"]
+expected = "One licence per app, each badged; 'both' gives two"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L14.2"
+title = "The phones list and Add phone"
+area = "console"
+tags = ["console", "staff", "web"]
+accounts = ["qc-ind2"]
+needs = ["web"]
+human_gate = ["staff-step-up"]
+steps = ["Open a licence's Phones n/m", "Add phone"]
+expected = "Phones listed with model and dates; Add offers only registered phones that are not activated"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L14.3"
+title = "Issue upgrade from the console"
+area = "console"
+tags = ["console", "staff", "web", "upgrade"]
+accounts = ["qc-upg"]
+needs = ["web"]
+human_gate = ["staff-step-up"]
+steps = ["Licence row → Issue upgrade"]
+expected = "The new licence shows supersedes; the row has no To institution or New phone buttons"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L14.4"
+title = "The institution pool view"
+area = "console"
+tags = ["console", "it", "web", "pool"]
+accounts = ["qc-it"]
+needs = ["web"]
+human_gate = ["it-step-up"]
+steps = ["Open the institution console"]
+expected = "'x of N activated' header; members' phones with Deactivate; no Add"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L14.5"
+title = "The account page's two sections"
+area = "console"
+tags = ["console", "holder", "web"]
+accounts = ["qc-ind2"]
+needs = ["web"]
+human_gate = ["holder-sign-in"]
+steps = ["Open the account page"]
+expected = "Semper and Classroom sections, each listing only the holder's own phones; no cooldown text"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L14.6"
+title = "Every new refusal shows its own sentence"
+area = "console"
+tags = ["console", "web", "messages"]
+accounts = []
+needs = ["web"]
+human_gate = []
+steps = ["Trigger each new code from the consoles (device_limit_reached, max_devices_below_active, activation_not_found, ...)"]
+expected = "Each shows its sentence from messages.js, never the raw code"
+automation = ["check:scripts/check_console.py", "planned:node:firebase-hosting/tests/messages.test.mjs"]
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L14.7"
+title = "Keyboard and screen-reader checks on the new console parts"
+area = "console"
+tags = ["console", "web", "a11y"]
+accounts = ["qc-ind2"]
+needs = ["web"]
+human_gate = ["staff-step-up"]
+steps = ["Tab through Phones, Add phone, Issue upgrade, the pool and the account sections", "Read them with a screen reader"]
+expected = "Every control reachable and named; focus returns after each dialog"
+automation = ["node:firebase-hosting/tests/a11y-names.test.mjs", "manual"]
+status = "active"
+since = "ADR-033"
+
+# ===========================================================================
+# L15 Cross-cutting
+# ===========================================================================
+
+[[scenario]]
+id = "L15.1"
+title = "The upload kill switch pauses sync"
+area = "cross-cutting"
+tags = ["sync", "kill-switch", "staff"]
+accounts = ["qc-ind2"]
+needs = ["emulator"]
+human_gate = ["staff-step-up"]
+steps = ["Staff pause upload", "Back up on A; wait for B's sync", "Staff resume"]
+expected = "Uploads wait with feature_paused and retry; nothing is lost; sync resumes"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L15.2"
+title = "Network loss mid-call"
+area = "cross-cutting"
+tags = ["network", "semper"]
+accounts = ["qc-ind1"]
+needs = ["emulator"]
+human_gate = []
+steps = ["Cut the network during Activate, then during Deactivate"]
+expected = "A clear offline result; the server state is whole; a retry finishes"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L15.3"
+title = "TalkBack labels on Your phones"
+area = "cross-cutting"
+tags = ["a11y", "phones-screen"]
+accounts = ["qc-ind2"]
+needs = ["emulator"]
+human_gate = []
+steps = ["TalkBack on; walk Your phones and the Home cards"]
+expected = "Each row reads its model, state and action; Deactivate names its phone"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L15.4"
+title = "Dark mode"
+area = "cross-cutting"
+tags = ["dark-mode", "phones-screen"]
+accounts = ["qc-ind2"]
+needs = ["emulator"]
+human_gate = []
+steps = ["Dark theme; open Your phones, the Home cards and Settings"]
+expected = "Readable, no light-only colours"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L15.5"
+title = "Activate and Your phones on the API 30 floor"
+area = "cross-cutting"
+tags = ["api30", "semper"]
+accounts = ["qc-ind1"]
+needs = ["emulator"]
+devices = ["tag:api30"]
+human_gate = []
+steps = ["Run L2.1 and L3.1 on API 30"]
+expected = "Both pass"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L15.6"
+title = "Activate and Your phones on a 16k-page emulator"
+area = "cross-cutting"
+tags = ["16k", "semper"]
+accounts = ["qc-ind1"]
+needs = ["emulator"]
+devices = ["tag:16k"]
+human_gate = []
+steps = ["Run L2.1 and L3.1 on the 16k emulator"]
+expected = "Both pass; no native load failure"
+automation = "manual"
+status = "active"
+since = "ADR-033"
+
+[[scenario]]
+id = "L15.7"
+title = "Release build smoke on arm64"
+area = "cross-cutting"
+tags = ["release-smoke", "semper", "arm64"]
+accounts = ["qc-ind1"]
+needs = ["device"]
+builds = ["semper-release-arm64"]
+human_gate = []
+steps = ["Install the R8 arm64 release build", "Sign in, Activate, run one analysis, share it, Your phones"]
+expected = "Everything works; no R8-stripped class at runtime"
+automation = "manual"
+status = "active"
+since = "ADR-033"

@@ -1,0 +1,154 @@
+# Where QC runs: the phones, the builds installed on them, and the backends
+# they talk to. Field reference: qa/SCHEMA.md. Add a device or a build by
+# adding a table; lanes (qa/lanes.toml) name them by `id` or by `tag:<tag>`.
+
+schema = 1
+
+# ---------------------------------------------------------------------------
+# Devices. `kind` is "emulator" (an AVD on this machine) or "real" (a phone
+# on USB). Every install sets ANDROID_SERIAL first: a Gradle install task
+# without it installs on every attached device (2026-09-25).
+# ---------------------------------------------------------------------------
+
+[[device]]
+id = "Pixel_5"
+kind = "emulator"
+avd = "Pixel_5"
+api = "34"
+abi = "x86_64"
+page_size = "4k"
+tags = ["api34", "4k"]
+use = true
+note = "Default UI-check AVD; the TD-65 determinism re-run uses it too."
+
+[[device]]
+id = "Semper_API30"
+kind = "emulator"
+avd = "Semper_API30"
+api = "30"
+abi = "x86_64"
+page_size = "4k"
+tags = ["api30", "min-sdk", "4k"]
+use = true
+note = "The minSdk floor (30)."
+
+[[device]]
+id = "Medium_Phone_2"
+kind = "emulator"
+avd = "Medium_Phone_2"
+api = "31"
+abi = "x86_64"
+page_size = "4k"
+tags = ["api31", "4k"]
+use = true
+
+[[device]]
+id = "Pixel_10"
+kind = "emulator"
+avd = "Pixel_10"
+api = "36.1"
+abi = "x86_64"
+page_size = "16k"
+tags = ["api36", "16k"]
+use = true
+note = "16 KB pages: the release check fails a .so off 16 KB alignment, this runs it."
+
+[[device]]
+id = "Semper_Smoke"
+kind = "emulator"
+avd = "Semper_Smoke"
+api = "36.1"
+abi = "x86_64"
+page_size = "4k"
+tags = ["api36", "4k", "smoke"]
+use = true
+
+[[device]]
+id = "g0q"
+kind = "real"
+adb_device = "g0q"
+model = "Samsung Galaxy S22+"
+api = "36"
+abi = "arm64-v8a"
+page_size = "4k"
+tags = ["api36", "arm64", "real"]
+use = true
+note = "The one real phone for QC and benchmarks (2026-10-27). One agent at a time. Find its serial with `adb devices -l` (device:g0q)."
+
+[[device]]
+id = "Pixel_6"
+kind = "real"
+adb_device = "oriole"
+model = "Google Pixel 6"
+api = "36"
+abi = "arm64-v8a"
+page_size = "4k"
+tags = ["real", "arm64"]
+use = false
+note = "Not used for QC: it is the product owner's own phone. UI checks go on emulators (2026-10-08), real-device runs go on the g0q, and it is never `pm clear`ed."
+
+# ---------------------------------------------------------------------------
+# Builds. `recipe` is what a lane runs in its own worktree; `env` is set in
+# that shell only. local.properties points at production and is never edited
+# for QC: the staging URL comes from the environment.
+# ---------------------------------------------------------------------------
+
+[[build]]
+id = "semper-debug-staging"
+app = "semper"
+variant = "debug"
+abi = "x86_64"
+source = "this repository, a worktree per lane"
+recipe = "gradlew.bat :app:assembleDebug -PabiFilters=x86_64, then adb install -r app/build/outputs/apk/debug/app-debug.apk"
+env = { SEMPER_API_BASE_URL = "<the semper-gw-staging gateway URL; see docs/ops/ENVIRONMENTS.md>", SEMPER_DEV_AUTH_BYPASS = "false" }
+note = "SEMPER_DEV_AUTH_BYPASS=false, or the debug build signs in to a local-only account and never reaches staging."
+
+[[build]]
+id = "classroom-debug-staging"
+app = "semperclassroom"
+variant = "debug"
+abi = "x86_64"
+source = "a worktree of ..\\material_testing (the Semper Classroom fork), after the fork sync"
+recipe = "gradlew.bat :app:assembleDebug -PabiFilters=x86_64 in the fork's worktree, then adb install -r"
+env = { SEMPER_API_BASE_URL = "<the semper-gw-staging gateway URL>", SEMPER_DEV_AUTH_BYPASS = "false" }
+
+[[build]]
+id = "semper-release-arm64"
+app = "semper"
+variant = "release"
+abi = "arm64-v8a"
+source = "this repository"
+recipe = "gradlew.bat :app:assembleRelease -PabiFilters=arm64-v8a (R8 on), then adb install -r the signed APK"
+env = { SEMPER_API_BASE_URL = "<the semper-gw-staging gateway URL>" }
+note = "Release builds need an https SEMPER_API_BASE_URL and the release keystore; for the device pass only."
+
+[[build]]
+id = "semper-1036"
+app = "semper"
+variant = "release"
+abi = "arm64-v8a"
+source = "the released APK, Semper v1.2-beta.4 (versionCode 1036)"
+recipe = "adb install -r the v1.2-beta.4 release APK from GitHub Releases"
+note = "An installed build that sends no X-Activation header (legacy auto-activate). It talks to production's gateway, which it has baked in."
+
+[[build]]
+id = "classroom-v1.4-beta.2"
+app = "semperclassroom"
+variant = "release"
+abi = "arm64-v8a"
+source = "the released Semper Classroom APK v1.4-beta.2"
+recipe = "adb install -r the v1.4-beta.2 release APK from the fork's GitHub Releases"
+note = "An installed Classroom build without the X-Activation header."
+
+# ---------------------------------------------------------------------------
+# Backends. Staging shares production's Firestore, so every QC record lives
+# under qa.sempermechanics.com and is cleaned by test-account expiry and End.
+# ---------------------------------------------------------------------------
+
+[[backend]]
+id = "staging"
+service = "semper-api-staging"
+gateway = "semper-gw-staging"
+console = "the staging console"
+docs = "docs/ops/ENVIRONMENTS.md"
+note = "Shares production's Firestore project and database. Deploys and every Firestore step are the product owner's."
