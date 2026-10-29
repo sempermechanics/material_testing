@@ -14,6 +14,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.slider.Slider
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.report.VisualizationEngine
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -125,6 +126,75 @@ class ContrastTokensTest {
         assertBoundary("semantic_success", c(R.color.semantic_success), c(R.color.surface))
         assertBoundary("viewer_plot_muted", c(R.color.viewer_plot_muted), c(R.color.surface_muted))
         assertBoundary("warning icon", c(R.color.semantic_warning_ink), c(R.color.surface))
+    }
+
+    /** The style or colour an attribute of [context]'s theme points at. */
+    private fun themeRes(context: android.content.Context, attr: Int): Int {
+        val ta = context.obtainStyledAttributes(intArrayOf(attr))
+        val id = ta.getResourceId(0, 0)
+        ta.recycle()
+        return id
+    }
+
+    @Test
+    fun `alert dialog body text reads on the dialog`() {
+        // Readiness AE1-105: Material's medium-emphasis body was 4.25:1 on white.
+        val overlay = themeRes(themed, com.google.android.material.R.attr.materialAlertDialogTheme)
+        val dialog = ContextThemeWrapper(themed, overlay)
+        val bodyStyle = themeRes(dialog, com.google.android.material.R.attr.materialAlertDialogBodyTextStyle)
+        val ta = dialog.obtainStyledAttributes(bodyStyle, intArrayOf(android.R.attr.textColor))
+        val body = requireNotNull(ta.getColorStateList(0)).defaultColor
+        ta.recycle()
+        assertText("dialog body on surface", body, c(R.color.surface))
+    }
+
+    @Test
+    fun `an off switch's track reaches 3 to 1 on the page`() {
+        // Readiness AE1-106: the off track was 1.89:1 and the thumb 1.02:1 on surface_muted.
+        val style = themeRes(themed, androidx.appcompat.R.attr.switchStyle)
+        val ta = themed.obtainStyledAttributes(style, intArrayOf(androidx.appcompat.R.attr.trackTint))
+        val track = requireNotNull(ta.getColorStateList(0)) { "switchStyle sets no trackTint" }
+        ta.recycle()
+        val off = track.getColorForState(intArrayOf(android.R.attr.state_enabled), track.defaultColor)
+        assertBoundary("off switch track on surface_muted", off, c(R.color.surface_muted))
+        assertBoundary("off switch track on surface", off, c(R.color.surface))
+    }
+
+    @Test
+    @Config(qualifiers = "night")
+    fun `night field puck label reads over any image`() {
+        // Readiness AE1-114: the white label over the 22% frost fell to 2.4:1 over a bright heatmap.
+        val pill = requireNotNull(ContextCompat.getColorStateList(themed, R.color.field_pill_bg)).defaultColor
+        val ink = requireNotNull(ContextCompat.getColorStateList(themed, R.color.field_pill_text)).defaultColor
+        for ((name, image) in listOf("white" to 0xFFFFFFFF.toInt(), "mid grey" to 0xFF898989.toInt())) {
+            assertText("puck label over $name", ink, image, pill)
+        }
+        assertText("puck label over the canvas", ink, c(R.color.viewer_canvas), pill)
+    }
+
+    /** The fill [themed]'s default bottom sheets draw (bottomSheetDialogTheme, then bottomSheetStyle). */
+    private fun sheetFill(): Int {
+        val overlay = themeRes(themed, com.google.android.material.R.attr.bottomSheetDialogTheme)
+        val sheetTheme = ContextThemeWrapper(themed, overlay)
+        val style = themeRes(sheetTheme, com.google.android.material.R.attr.bottomSheetStyle)
+        val ta = sheetTheme.obtainStyledAttributes(style, intArrayOf(com.google.android.material.R.attr.backgroundTint))
+        val fill = requireNotNull(ta.getColorStateList(0)) { "the sheet style sets no backgroundTint" }.defaultColor
+        ta.recycle()
+        return fill
+    }
+
+    @Test
+    @Config(qualifiers = "night")
+    fun `night sheets are dark, so their status bar draws light icons`() {
+        // Readiness AE1-113: Material picks the sheet's status-bar icons from its fill's
+        // luminance; a white fill (force dark inverts it only on screen) gave black
+        // icons on the dark bar, 1.22:1.
+        assertTrue("night sheet fill is light", ColorUtils.calculateLuminance(sheetFill()) < 0.5)
+    }
+
+    @Test
+    fun `day sheets stay white`() {
+        assertEquals(c(R.color.surface), sheetFill())
     }
 
     @Test

@@ -1,0 +1,12 @@
+# Advisories the android-deps-osv job may pass, each with its reason and an
+# expiry: after ignoreUntil the job fails again. Remove an entry when the fix
+# lands; add one only with a reason a reviewer can check, in this form:
+#
+# [[IgnoredVulns]]
+# id = "GHSA-xxxx-xxxx-xxxx"
+# ignoreUntil = 2026-12-31T00:00:00Z
+# reason = "why it is not reachable here, and what fixes it"
+#
+# None today. The three Guava 31.1-android advisories (GHSA-xxph-c9ww-hj94,
+# GHSA-7g45-4rm6-3mm3, GHSA-5mg8-w23w-74h3) passed here until the constraint
+# to 33.7.2-android in app/build.gradle.kts (readiness TE5-105).

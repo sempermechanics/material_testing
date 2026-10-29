@@ -1,8 +1,11 @@
-@file:Suppress("TooManyFunctions")
+// The host's three callbacks, the query seam tests use, and the reopen after a
+// configuration change (readiness AE1-111) are the sheet's parameters.
+@file:Suppress("TooManyFunctions", "LongParameterList")
 
 package com.sempermechanics.semper.ui.common.media
 
 import android.net.Uri
+import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -18,6 +21,7 @@ import com.sempermechanics.semper.ui.common.CoachMarkController
 import com.sempermechanics.semper.ui.common.SerialJob
 import com.sempermechanics.semper.ui.common.auth.confirm
 import com.sempermechanics.semper.ui.common.dialog.CrispToast
+import com.sempermechanics.semper.ui.common.dialog.ReopenAfterRecreate
 import com.sempermechanics.semper.ui.common.dialog.inflateSheet
 import com.sempermechanics.semper.ui.common.onButtonChecked
 import kotlinx.coroutines.CoroutineDispatcher
@@ -37,7 +41,14 @@ class MediaPickerSheet private constructor(
     private val onPicked: (List<Uri>) -> Unit,
     /** Where the MediaStore query runs; tests pass an inline one so the grid fills as main idles. */
     private val queryDispatcher: CoroutineDispatcher,
+    /** Shows this sheet again, with its picks, after a configuration change (readiness AE1-111). */
+    kept: Kept?,
 ) {
+    /** A sheet a configuration change brings back: [reopen] saves it, [picks] were ticked when it closed. */
+    class Kept(val reopen: ReopenAfterRecreate, val picks: List<Uri> = emptyList())
+
+    private val reopen = kept?.reopen
+
     private val content = inflateSheet(activity, R.layout.sheet_media_picker)
     private val sheet = content.dialog
     private val views = SheetMediaPickerBinding.bind(content.view)
@@ -48,7 +59,7 @@ class MediaPickerSheet private constructor(
     private val list = views.listMedia
     private val pickScrim = views.mediaPickScrim
     private val coach = CoachMarkController(activity)
-    private val selected = linkedSetOf<Uri>()
+    private val selected = linkedSetOf<Uri>().apply { kept?.let { addAll(it.picks) } }
     private val includeVideo = mode == MediaSourceChooser.Mode.HOME_REFERENCE
     private val multi = mode == MediaSourceChooser.Mode.DEFORMED
 
@@ -98,6 +109,7 @@ class MediaPickerSheet private constructor(
         btnAllow.setOnClickListener { requestPermission() }
         btnUse.setOnClickListener { confirm() }
         sheet.setOnDismissListener {
+            reopen?.closed()
             reloadJob.cancel()
             list.removeCallbacks(unlockSelection)
             clearExpandWait()
@@ -117,6 +129,9 @@ class MediaPickerSheet private constructor(
             }
         }
         sheet.show()
+        reopen?.shown(sheet) {
+            Bundle().apply { putStringArrayList(SELECTED, ArrayList(selected.map { it.toString() })) }
+        }
     }
 
     fun onPermissionResult() {
@@ -341,8 +356,11 @@ class MediaPickerSheet private constructor(
         private const val REF_HINT_MS = 1000L
         private const val SCRIM_FADE_MS = 180L
         private const val GRID_COLUMNS = 3
+        private const val SELECTED = "selected"
 
-        @Suppress("LongParameterList") // queryDispatcher is a test seam
+        /** The picks a sheet held when [ReopenAfterRecreate] saved it. */
+        fun picksIn(state: Bundle): List<Uri> = state.getStringArrayList(SELECTED).orEmpty().map(Uri::parse)
+
         fun show(
             activity: AppCompatActivity,
             mode: MediaSourceChooser.Mode,
@@ -350,6 +368,7 @@ class MediaPickerSheet private constructor(
             onBrowseSaf: () -> Unit,
             onPicked: (List<Uri>) -> Unit,
             queryDispatcher: CoroutineDispatcher = Dispatchers.IO,
+            kept: Kept? = null,
         ): MediaPickerSheet = MediaPickerSheet(
             activity,
             mode,
@@ -357,6 +376,7 @@ class MediaPickerSheet private constructor(
             onBrowseSaf,
             onPicked,
             queryDispatcher,
+            kept,
         )
     }
 }

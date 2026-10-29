@@ -62,6 +62,12 @@ def test_sends_actionable_mail_to_support(configured, sent):
     assert payload["to"] == ["support@sempermechanics.com"]
     assert "new@example.com" in payload["subject"]
     assert "uid-1" in payload["text"]
+    assert payload["subject"] == "semper access request — new@example.com"
+    assert payload["text"].startswith("A new semper account is waiting for approval.")
+    # The queue's one name on both desks (readiness AE3-117).
+    assert "Settings → Access requests in the app" in payload["text"]
+    assert "operator console → Access requests" in payload["text"]
+    assert "Semper" not in payload["subject"] + payload["text"]
     assert kwargs["headers"]["Idempotency-Key"] == "access-request:uid-1"
     assert kwargs["timeout"] == notify._TIMEOUT_S
 
@@ -149,7 +155,15 @@ def test_a_new_device_mails_its_holder(security_mail, sent, caplog):
     payload = kwargs["json"]
     assert payload["to"] == ["holder@uni.edu"]
     assert payload["from"] == "Semper security <security@sempermechanics.com>"
-    assert "Pixel 8" in payload["text"] and "Semper" in payload["subject"]
+    assert "Pixel 8" in payload["text"]
+    # One word for it to the holder, the app's: phone (readiness AE3-101); the
+    # product name lower-case (ADDENDUM-4); the id keeps the app's "Device ID".
+    assert payload["subject"] == "New phone on your semper account"
+    assert payload["text"].startswith("A new phone was signed in to your semper account.")
+    assert "Phone: Pixel 8\n" in payload["text"] and "Device ID: phone-1\n" in payload["text"]
+    assert "so the phone can be removed" in payload["text"]
+    assert "device" not in payload["text"].replace("Device ID", "").lower()
+    assert "Semper" not in payload["subject"] + payload["text"]
     assert kwargs["headers"]["Idempotency-Key"] == "device-registered:uid-1:phone-1"
     # TD-242: no address in the logs.
     assert "holder@uni.edu" not in caplog.text
@@ -164,7 +178,7 @@ def test_the_same_device_mails_once_and_another_device_again(security_mail, sent
 
     assert [kw["headers"]["Idempotency-Key"] for _, kw in sent] == [
         "device-registered:uid-1:phone-1", "device-registered:uid-1:phone-2"]
-    assert "Semper Classroom" in sent[1][1]["json"]["subject"]
+    assert sent[1][1]["json"]["subject"] == "New phone on your semper Classroom account"
 
 
 def test_the_device_mail_names_the_old_short_name_as_semper_classroom(security_mail, sent):
@@ -172,7 +186,7 @@ def test_the_device_mail_names_the_old_short_name_as_semper_classroom(security_m
     notify.device_registered("uid-1", "holder@uni.edu", "phone-3", "materialtesting")
     notify.flush_for_tests()
 
-    assert "Semper Classroom" in sent[0][1]["json"]["subject"]
+    assert sent[0][1]["json"]["subject"] == "New phone on your semper Classroom account"
 
 
 def test_the_device_mail_has_its_own_dedup_from_the_access_request(security_mail, sent):

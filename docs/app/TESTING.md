@@ -345,8 +345,8 @@ Three suites are gated on coverage, each two points under what it measured:
 
 | Suite | Measured (2026-10-08) | Floor | Where |
 |---|---|---|---|
-| App JVM (Kover, lines) | 80.51 % (2026-10-22) | 78 | `app/build.gradle.kts` `kover.verify` |
-| App JVM (Kover, branches) | 62.69 % (2026-10-22) | 60 | same |
+| App JVM (Kover, lines) | 82.33 % (2026-10-28) | 80 | `app/build.gradle.kts` `kover.verify` |
+| App JVM (Kover, branches) | 63.55 % (2026-10-28) | 61 | same |
 | Backend (pytest-cov, lines) | 95.47 % | 93 | `.github/actions/backend-gate/action.yml` |
 | Backend + Firestore emulator tier | 95.54 % | 93 | `ci.yml` tier 4, `--cov-append` |
 | Console JS (`scripts/console_coverage.mjs`, lines merged by file) | 98.30 % | 96 | `ci.yml` `console-pages` |

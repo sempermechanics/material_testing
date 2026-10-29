@@ -426,7 +426,7 @@ test("an account with no factor must enrol TOTP in the page before anything else
   const user = signIn(new FakeUser({ email: "it@example.edu" }));
   const done = auth.ensureDashboardMfa();
   await settle();
-  assert.equal($("status").textContent, "Enrol an authenticator app to open any Semper dashboard.");
+  assert.equal($("status").textContent, "Enrol an authenticator app to open any semper dashboard.");
   assert.equal(fake.callsTo("reauthenticateWithRedirect").length, 0, "a fresh sign-in enrols without a step-up");
 
   const card = await enrolCard();
@@ -435,6 +435,8 @@ test("an account with no factor must enrol TOTP in the page before anything else
   assert.match(card.querySelector(".qr").innerHTML, /^<svg/);
   assert.equal(card.querySelector(".key").textContent, "TESTSECRETBASE32");
   assert.equal(card.querySelector(".account").textContent, "it@example.edu");
+  // ADDENDUM-4: the authenticator entry is named "semper", issuer too.
+  assert.match(card.textContent.replace(/\s+/g, " "), /Issuer: semper · Time-based/);
   const input = card.querySelector("input");
   assert.ok(input.focused);
 

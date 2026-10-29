@@ -37,8 +37,9 @@ object LicenseErrors {
         return when {
             ApiErrors.hasCode(detail, ApiErrors.FEATURE_NOT_LICENSED) ->
                 context.getString(R.string.download_not_licensed)
+            // The download's own paused sentence, not the restore one (readiness AE3-108).
             ApiErrors.hasCode(detail, ApiErrors.FEATURE_PAUSED) ->
-                context.getString(R.string.restore_paused)
+                context.getString(R.string.download_paused)
             ApiErrors.hasCode(detail, ApiErrors.LICENSE_DEVICE_MISMATCH) ->
                 context.getString(R.string.restore_device_mismatch)
             ApiErrors.hasCode(detail, ApiErrors.DRIVE_FILE_GONE) ->

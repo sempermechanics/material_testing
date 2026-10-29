@@ -194,9 +194,13 @@ jobs:
           # INDIC_API_BASE_URL is the var's name before the rename; drop it once
           # SEMPER_API_BASE_URL is set in every environment.
           SEMPER_API_BASE_URL: ${{ vars.SEMPER_API_BASE_URL || vars.INDIC_API_BASE_URL }}
-          # CertificatePinner pins for the API host (comma-separated sha256/...=).
-          # Empty means system trust only; check_release_apk.py warns on it.
-          SEMPER_API_CERT_PINS: ${{ secrets.SEMPER_API_CERT_PINS }}
+          # CertificatePinner pins for the API host (comma-separated sha256/...=):
+          # the SPKI pins of the Google Trust Services roots GTS Root R1-R4
+          # (Admin decision 2026-10-28; values and rotation in RELEASING.md).
+          # Empty would mean system trust only, so the release gate below runs
+          # check_release_apk.py --require-pins and fails without them (TE1-001).
+          # Public values, so a variable; a secret of the same name still works.
+          SEMPER_API_CERT_PINS: ${{ vars.SEMPER_API_CERT_PINS || secrets.SEMPER_API_CERT_PINS }}
           # Public keys the app verifies signed entitlements with (public, so a var).
           SEMPER_ENTITLEMENT_PUBKEYS: ${{ vars.SEMPER_ENTITLEMENT_PUBKEYS }}
           # Releases sit above every CI run number ever used as a versionCode
@@ -245,7 +249,8 @@ jobs:
       # debug provider, no cleartext, minSdk as app/build.gradle.kts says, the
       # consent defaults (collection off, no AD_ID permission), an R8 mapping
       # that renames app classes (readiness A1.5; MASWE-0067 / MASWE-0089).
-      # Warns, without failing, when no certificate pin was compiled in.
+      # Certificate pins (TE1-001): fails when no sha256/ pin was compiled in,
+      # i.e. SEMPER_API_CERT_PINS was empty (CI tier 5 only warns).
       # Entitlement keys (TE4-001): a warning while TD-215 is open. Once the
       # signing key is live SEMPER_ENTITLEMENT_PUBKEYS is set, and from then a
       # release that compiled none fails here; SEMPER_REQUIRE_ENTITLEMENT_PINS
@@ -272,6 +277,7 @@ jobs:
             --aapt2 "$BUILD_TOOLS/aapt2" \
             --mapping app/build/outputs/mapping/release/mapping.txt \
             --signer-sha256 "$SIGNER" \
+            --require-pins \
             ${EXPECTED_SIGNER:+--expected-signer-sha256 "$EXPECTED_SIGNER"} \
             ${REQUIRE_ENTITLEMENT_PINS:+--require-entitlement-pins}
 

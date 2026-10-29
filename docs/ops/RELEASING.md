@@ -58,8 +58,9 @@ Check the R8 mapping reached Crashlytics (the release build uploads it); the wor
    run, if it is the head). The Release workflow enforces it: its `verify-ci`
    job (`scripts/check_release_ci.py`) fails unless the latest check run of every
    CI job on the commit passed, not skipped (secret scan, legal and console
-   pages, console accessibility, engine pin, tiers 1, 3, 4 and 5, Firestore
-   rules, the sanitized engine host tests, `CI OK`).
+   pages, console accessibility, console Lighthouse, engine pin, tiers 1, 3, 4
+   and 5, Firestore rules, the sanitized engine host tests, the Android dependency scan,
+   semgrep, `CI OK`).
 3. **Tag and push** the commit you intend to release:
 
    ```bash
@@ -192,6 +193,49 @@ neither environment set any lever, and `APP_CHECK_MODE` was a repository variabl
 which an environment value overrides. [INCIDENT_RESPONSE.md](INCIDENT_RESPONSE.md)
 uses the same words.
 
+**A lever deploy is a full deploy.** `deploy-backend.yml` has no lever-only
+path: its `deploy` job needs `test` (`.github/workflows/deploy-backend.yml:77-89`),
+which runs the backend gate, whose `pip-audit --strict` has no override
+(`.github/actions/backend-gate/action.yml:37-38`); and it builds the commit it is
+dispatched on and promotes it `--to-latest` (`deploy-backend.yml:465`). So a new advisory in
+`backend/requirements.lock` blocks every lever flip until the lock is regenerated
+and merged (on 2026-10-28 msgpack 1.2.1 did, readiness TE6-101), and a flip also
+ships every backend commit on `main` that is not yet live. When either is true,
+or the flip cannot wait, use the emergency lever below.
+
+**Emergency lever (no code change).** The same three steps as an env change
+after a revision rollback (below, step 2): put the lever on the **serving**
+revision's image with no traffic, then move traffic to the new revision by name.
+
+```bash
+GC="--region asia-south1 --project indicvision-dic-app"
+SERVING=$(gcloud run services describe semper-api $GC --format='value(status.traffic[0].revisionName)')
+IMAGE=$(gcloud run revisions describe "$SERVING" $GC --format='value(spec.containers[0].image)')
+gcloud run services update semper-api $GC --image "$IMAGE" \
+  --update-env-vars 'KILL_SWITCHES=backup restore upload' --no-traffic
+gcloud run services update-traffic semper-api $GC --to-revisions=<new>=100
+```
+
+Check first that `status.traffic` has one entry at 100 % (a split names more than
+one revision). Quote the value whole (it is space-separated; gcloud splits
+pairs on commas only); the version gate is `MIN_SUPPORTED_VERSION_CODE=<code>`.
+Then **set the lever variable** (scope above), or the next deploy
+undoes it. The service stays pinned by name until the next `deploy-backend.yml`
+run, which returns it to `--to-latest`. Who: someone with `run.services.update`
+on the project, under the incident's owner; the production approval of the
+workflow path is skipped, so record the command and the reason in the incident.
+
+**How long a flip takes, and how to see it hold.** Through `deploy-backend.yml`:
+about 4.5–5 min of pipeline (the staging drill runs 39752109438 and 39755073181:
+`test` 1.5 min, `deploy` 2.4 min, `gateway` 0.4 min), plus the product owner's
+approval on `production` ([ENVIRONMENTS.md](ENVIRONMENTS.md)). The emergency
+lever: about a minute for the new revision. Either way, installs that read
+`/v1/config` see it on their next read, up to 5 min later
+(`RECONCILE_MIN_INTERVAL_MS`, below); the backend refuses the `KILL_SWITCHES`
+routes from the first request the new revision serves. Verify with
+`curl -s <api>/v1/config` (its `killSwitches` list, `backend/app/routers/account.py:178`)
+and `event="feature_paused"` in the logs.
+
 **After a revision rollback.** `update-traffic --to-revisions=<previous>=100`
 pins traffic to that revision by name, and every lever above then has a trap:
 
@@ -276,8 +320,9 @@ JVM unit tests, and backend pytest overlap instead of stacking:
   runs (`gh api …/commits/<sha>/check-runs`, `checks: read`) and
   [`scripts/check_release_ci.py`](../../scripts/check_release_ci.py) requires the
   latest run of each CI job to have **passed**: the secret scan, legal pages,
-  console pages, console accessibility, the engine pin, tiers 1, 3, 4 and 5, Firestore rules, the
-  sanitized engine host tests and `CI OK`. A path-filtered push run skips tiers 3
+  console pages, console accessibility, console Lighthouse, the engine pin, tiers 1, 3, 4 and 5, Firestore rules, the
+  sanitized engine host tests, the Android dependency scan (OSV-Scanner),
+  semgrep and `CI OK`. A path-filtered push run skips tiers 3
   and 5 (and the engine host tests with them), so it is not enough: run CI with `full_ci` first
   (checklist step 2).
 
@@ -329,8 +374,9 @@ fails.
    `mapping.txt` is missing, empty, or renames no `com.sempermechanics.semper`
    class (an identity mapping, as `-dontobfuscate` writes; `--mapping` is
    required). It
-   **warns** when no `sha256/…` pin is compiled in, i.e. the
-   `SEMPER_API_CERT_PINS` secret was empty. It also **warns** when no
+   **fails** (`--require-pins`, TE1-001) when no `sha256/…` pin is compiled in,
+   i.e. `SEMPER_API_CERT_PINS` was empty ([Certificate pins](#certificate-pins-semper_api_cert_pins)
+   below); CI tier 5 only warns. It **warns** when no
    entitlement key (`kid:<P-256 SPKI>`) is compiled in, i.e.
    `SEMPER_ENTITLEMENT_PUBKEYS` was empty: the build then ignores signed tokens
    and trusts its cached licence with no offline bound (ADR-023, TD-215). The
@@ -396,16 +442,61 @@ Creates the **GitHub Release** with the APK and the AAB attached, gated on the
 | `KEY_ALIAS` | Signing key alias |
 | `KEY_PASSWORD` | Key password |
 | `STORE_PASSWORD` | Keystore password |
-| `SEMPER_API_CERT_PINS` | Optional. Comma-separated `sha256/…=` CertificatePinner pins for the API host, passed to Gradle as env. Empty ships system trust only, and the APK inspection warns |
 
 ### Required variables (repo or `release` environment)
 
 | Variable | Description |
 |----------|-------------|
 | `SEMPER_API_BASE_URL` | HTTPS base URL of the API Gateway (preferred) or Cloud Run service |
+| `SEMPER_API_CERT_PINS` | Required: the four GTS root pins, comma-separated ([Certificate pins](#certificate-pins-semper_api_cert_pins)), passed to Gradle as env. Public, so a variable; a secret of the same name also works. Empty fails the release (`--require-pins`) |
 | `SEMPER_ENTITLEMENT_PUBKEYS` | Public key(s) the app verifies signed entitlements with, passed to Gradle as env. Public material, so a variable, not a secret. Set, it also makes the APK inspection require an entitlement key in the build (step 5) |
 | `SEMPER_REQUIRE_ENTITLEMENT_PINS` | Optional, `true` once TD-215 is live: the APK inspection fails a release with no entitlement key compiled in, whatever `SEMPER_ENTITLEMENT_PUBKEYS` holds |
 | `SEMPER_RELEASE_CERT_SHA256` | Optional here (the workflow defaults to the release certificate of every release so far, step 5); set only to rotate the signing key deliberately. A fork must set it to its own release certificate |
+
+### Certificate pins (`SEMPER_API_CERT_PINS`)
+
+The release gate (`check_release_apk.py --require-pins`) fails a release APK
+that compiles no pin (TE1-001); CI tier 5 only warns. By the Admin decision of
+2026-10-28 the pins are the SPKI hashes of the four Google Trust Services
+roots: one serves the API today, the other three are backups.
+
+| Root | Pin | Cert SHA-256 | Valid to |
+|---|---|---|---|
+| GTS Root R1 | `sha256/hxqRlPTu1bMS/0DITB1SSu0vd4u/8l8TjPgfaAp63Gc=` | d947432a…57a7f4cf | 2036-06-22 |
+| GTS Root R2 | `sha256/Vfd95BwDeSQo+NUYxVEEIlvkOlWY2SalKK1lPhzOx78=` | 8d25cd97…841c7ea8 | 2036-06-22 |
+| GTS Root R3 | `sha256/QXnt2YHvdHR3tJYmQIr0Paosp6t/nggsEGD4QJZ3Q0g=` | 34d8a73e…010a6f48 | 2036-06-22 |
+| GTS Root R4 | `sha256/mEflZT5enoR1FuXLgYYGqnVEoZvmf9c2bVBpiOjYQ0c=` | 349dfa40…031b3c7d | 2036-06-22 |
+
+Provenance: the DER files `https://i.pki.goog/r1.crt` … `r4.crt` (listed at
+pki.goog/repository). Each pin is
+`openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64`,
+cross-checked with Python `cryptography`, on 2026-10-28. That day the gateway
+(`semper-gw-86wx7pp1.an.gateway.dev`) served `*.gateway.dev` → WE2 → GTS Root
+R4, the last cross-signed by GlobalSign Root CA until 2028-01-28. The
+cross-sign has the same key, so the R4 pin matches either way: OkHttp checks
+the pins against the chain Android verified, trust anchor included.
+
+The value to set:
+
+```text
+sha256/hxqRlPTu1bMS/0DITB1SSu0vd4u/8l8TjPgfaAp63Gc=,sha256/Vfd95BwDeSQo+NUYxVEEIlvkOlWY2SalKK1lPhzOx78=,sha256/QXnt2YHvdHR3tJYmQIr0Paosp6t/nggsEGD4QJZ3Q0g=,sha256/mEflZT5enoR1FuXLgYYGqnVEoZvmf9c2bVBpiOjYQ0c=
+```
+
+Set it as an environment variable (the `SEMPER_API_CERT_PINS` repository or
+`release`-environment variable, which `release.yml` reads; a secret of that
+name also works) or in `local.properties` for a local build, not `-P`: the
+build reads only the environment and `local.properties`, so a `-P` value is
+ignored and the gate fails. Check a build with `check_release_apk.py
+--require-pins` (`cert-pins PASS 4 sha256/ pin(s) compiled in`).
+
+Rotation: the pins outlive leaf and intermediate rotation (WE2 and its
+successors), not a change of root. The GTS roots expire in 2036. Adding or
+removing a root, or moving the API off Google Trust Services (a custom domain
+with another CA), needs a release carrying the new pin set that users have
+installed **before** the server chain changes: an installed app keeps its
+compiled pins, and a chain they do not match fails every API call with
+`SSLPeerUnverifiedException`. Re-check the live chain with
+`openssl s_client -showcerts` before any change.
 
 ### Backend staging / production
 
@@ -458,6 +549,14 @@ Dependabot rebasing that PR. A `Backend lock` check also runs on any PR touching
 file: when the committed lock is stale it fails and attaches the regenerated file
 as the `requirements-lock` artifact, so the fix is a download rather than a
 toolchain install.
+
+**A transitive pin with an advisory.** pip-audit (the backend gate) fails on a
+package `requirements.txt` does not name, and re-running the lock keeps its pin.
+Dispatch `Backend lock` on a PR branch with the optional `upgrade_packages` input,
+space-separated package names (e.g. `msgpack`): each becomes `pip-compile
+--upgrade-package <name>`, and a value that is not a package name is refused
+(`.github/workflows/backend-lock.yml`, "Compile the lock"). Re-run the PR's checks
+afterwards, as above. It was added for msgpack 1.2.1 → 1.2.4 (readiness TE5-101).
 
 ### Local gate before triggering release
 

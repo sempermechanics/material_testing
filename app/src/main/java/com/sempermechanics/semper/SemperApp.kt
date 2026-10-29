@@ -12,6 +12,7 @@ import com.sempermechanics.semper.data.account.SeatHeartbeat
 import com.sempermechanics.semper.data.account.entitlement.EntitlementStore
 import com.sempermechanics.semper.data.policy.ManagedConfigReader
 import com.sempermechanics.semper.data.prefs.AppSettings
+import com.sempermechanics.semper.data.prefs.PrefFiles
 import com.sempermechanics.semper.data.session.CacheJanitor
 import com.sempermechanics.semper.data.session.StorageBudget
 import com.sempermechanics.semper.diagnostics.CrashReportingTree
@@ -43,14 +44,20 @@ class SemperApp : Application() {
             Timber.plant(CrashReportingTree(this))
         }
         installAppCheck()
+        // The first screens' preference files load on IO, not at their first
+        // read on the main thread (readiness TE1-104), and so does the managed
+        // configuration the viewer's share check reads first (TE1-105).
+        appScope.launch { PrefFiles.warm(this@SemperApp) }
+        appScope.launch { ManagedConfigReader.warm(this@SemperApp) }
         // One count of started screens: an upload may open the limit screen
         // only while one is up; the managed configuration is re-read whenever
         // the app comes to the front, and an entitlement token past its
         // refreshAfter asks /v1/config for a fresh one then (TD-264).
         AppForeground.install(
             this,
-            ManagedConfigReader.foregroundListener(this),
+            ManagedConfigReader.foregroundListener(this, appScope),
             LicenseConfigWorker.foregroundCheck(this, appScope),
+            LauncherIcon.foregroundListener(this),
         )
         AppSettings.migrate(this)
         // Manifest disables Crashlytics/Analytics collection, so a fresh install
@@ -77,7 +84,10 @@ class SemperApp : Application() {
         LauncherIcon.sync(this)
     }
 
-    /** A dark-theme change while this process lives swaps the launcher icon now. */
+    /**
+     * A dark-theme change while this process lives swaps the launcher icon
+     * now, unless a task still names the old one.
+     */
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         LauncherIcon.sync(this, LauncherIcon.isNight(newConfig))

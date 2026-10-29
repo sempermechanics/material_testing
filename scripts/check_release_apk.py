@@ -32,8 +32,10 @@ Checks (FAIL exits 1; WARN is reported and does not fail):
                     and at least one class of the app's namespace maps to a
                     new name (evidence R8 obfuscated; -dontobfuscate writes
                     `a -> a`)
-  cert-pins         WARN when no `sha256/<base64>` pin string is in the dex,
-                    i.e. SEMPER_API_CERT_PINS (BuildConfig) was empty at build
+  cert-pins         WARN (FAIL with --require-pins, as the release workflow
+                    passes) when no `sha256/<base64>` pin string is in the dex,
+                    i.e. SEMPER_API_CERT_PINS (BuildConfig) was empty at build:
+                    the API host then trusts any CA in the system store (TE1-001)
   entitlement-pins  WARN (FAIL with --require-entitlement-pins) when no
                     `kid:<P-256 SPKI base64>` entitlement key is in the dex,
                     i.e. SEMPER_ENTITLEMENT_PUBKEYS was empty at build: the
@@ -55,7 +57,7 @@ apksigner). Standard library only.
 Usage:
   python3 scripts/check_release_apk.py APP.apk --mapping mapping.txt
       [--gradle app/build.gradle.kts] [--debug-src app/src/debug] [--aapt2 PATH]
-      [--require-entitlement-pins] [--signer-sha256 HEX [--expected-signer-sha256 HEX]]
+      [--require-pins] [--require-entitlement-pins] [--signer-sha256 HEX [--expected-signer-sha256 HEX]]
 """
 
 from __future__ import annotations
@@ -400,7 +402,7 @@ def kept_in(class_map: dict[str, str], name: str) -> bool:
 
 def evaluate(facts: ApkFacts, *, expected_min_sdk: int | None, debug_names: set[str],
              mapping: Path | None, expected_target_sdk: int | None = None,
-             app_package: str | None = None,
+             app_package: str | None = None, require_pins: bool = False,
              require_entitlement_pins: bool = False, signer_sha256: str | None = None,
              expected_signer_sha256: str | None = None) -> list[Result]:
     results: list[Result] = []
@@ -563,12 +565,12 @@ def evaluate(facts: ApkFacts, *, expected_min_sdk: int | None, debug_names: set[
                                   f"{renamed} of {len(mine)} {scope}class(es) renamed; "
                                   f"{len(class_map)} class mappings"))
 
-    # cert pins
+    # cert pins (TE1-001): FAIL in the release workflow, WARN elsewhere (CI tier 5).
     pins = sorted({m.group(0).decode() for data in facts.dex.values() for m in PIN_RE.finditer(data)})
     if pins:
         results.append(Result("cert-pins", "PASS", f"{len(pins)} sha256/ pin(s) compiled in"))
     else:
-        results.append(Result("cert-pins", "WARN",
+        results.append(Result("cert-pins", "FAIL" if require_pins else "WARN",
                               "no sha256/ pin in the dex: SEMPER_API_CERT_PINS was empty at build "
                               "(system trust store only)"))
 
@@ -703,6 +705,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--gradle", type=Path, default=REPO / "app" / "build.gradle.kts")
     ap.add_argument("--debug-src", type=Path, default=REPO / "app" / "src" / "debug")
     ap.add_argument("--aapt2", help="path to aapt2 (default: $AAPT2, PATH, newest build-tools)")
+    ap.add_argument("--require-pins", action="store_true",
+                    help="cert-pins FAILs instead of WARNs when no sha256/ pin is compiled in (release builds)")
     ap.add_argument("--require-entitlement-pins", action="store_true",
                     help="entitlement-pins FAILs instead of WARNs when no key is compiled in (once TD-215 is live)")
     ap.add_argument("--signer-sha256", help="the APK signer's certificate SHA-256 (apksigner --print-certs)")
@@ -722,6 +726,7 @@ def main(argv: list[str] | None = None) -> int:
         debug_names=debug_classes(args.debug_src, gradle_namespace(gradle_text)),
         mapping=args.mapping,
         app_package=gradle_namespace(gradle_text),
+        require_pins=args.require_pins,
         require_entitlement_pins=args.require_entitlement_pins,
         signer_sha256=args.signer_sha256,
         expected_signer_sha256=args.expected_signer_sha256,

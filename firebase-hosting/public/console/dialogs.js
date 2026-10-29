@@ -121,6 +121,21 @@ export function restoreFocus(opener) {
 }
 
 /**
+ * For a button that disables itself while its work runs: a disabled button
+ * drops focus to <body>, and a screen reader's place with it (AE2-109).
+ * Call before disabling; the function returned, called once the button is
+ * usable again, gives focus back if the button had it and nothing has
+ * taken it since.
+ */
+export function holdFocus(button) {
+  const had = document.activeElement === button;
+  return () => {
+    const now = document.activeElement;
+    if (had && !button.disabled && (!now || now === document.body)) button.focus();
+  };
+}
+
+/**
  * Ask for one line of text in the page. Resolves the trimmed answer ("" if
  * left blank), or null on Cancel. `label` names the box (default: `title`).
  */
@@ -171,6 +186,25 @@ function describeBy(feedback, ...controls) {
 }
 
 /**
+ * Make a second-factor card a dialog as `pageCard`'s are (AE2-108): an
+ * alertdialog named by its heading, and Escape calls `cancel`, as its Cancel
+ * button would.
+ */
+function asDialog(card, cancel) {
+  const heading = card.querySelector("h2");
+  cards += 1;
+  heading.id = `card-title-${cards}`;
+  card.setAttribute("role", "alertdialog");
+  card.setAttribute("aria-labelledby", heading.id);
+  card.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (e.preventDefault) e.preventDefault();
+    if (e.stopPropagation) e.stopPropagation();
+    cancel();
+  });
+}
+
+/**
  * The authenticator-code card: a code box, Confirm and Cancel under the
  * status line, and after a rejected code a Try again button.
  *
@@ -182,14 +216,15 @@ function describeBy(feedback, ...controls) {
  *
  * `next()` resolves the trimmed code, or null on Cancel. `rejected()` says the
  * code was not accepted and resolves true on Try again (the box cleared for a
- * fresh code), false on Cancel. `close()` removes the card.
+ * fresh code), false on Cancel. Escape answers as Cancel. `close()` removes
+ * the card.
  */
 export function codeCard() {
   const card = document.createElement("section");
   card.className = "card code";
   card.innerHTML = `
     <h2>Enter your authenticator code</h2>
-    <p class="muted">The 6-digit code your authenticator app shows for Semper DIC.</p>
+    <p class="muted">The 6-digit code your authenticator app shows for semper.</p>
     <div class="row">
       <input inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" aria-label="Authenticator code"
              placeholder="6-digit code" size="12" />
@@ -227,6 +262,7 @@ export function codeCard() {
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") confirm(); });
   retryBtn.addEventListener("click", () => answer(true));
   card.querySelector(".cancel").addEventListener("click", () => answer(onCancel));
+  asDialog(card, () => answer(onCancel));
 
   return {
     next() {
@@ -242,7 +278,7 @@ export function codeCard() {
     },
     rejected() {
       feedback.textContent = "That code was not accepted. Codes change every 30 " +
-        "seconds: wait for a fresh one, from the Semper DIC entry for this account.";
+        "seconds: wait for a fresh one, from the semper entry for this account.";
       confirmBtn.hidden = true;
       retryBtn.hidden = false;
       retryBtn.focus();
@@ -259,7 +295,8 @@ export function codeCard() {
  * The enrolment card: a QR code to scan, the key for anyone who cannot, and
  * the code box. Built here rather than in each page's HTML because every
  * console needs it and the account page is the only one with a place of its
- * own for it. Resolves once Firebase accepts a code; rejects ERR_CANCELLED.
+ * own for it. Resolves once Firebase accepts a code; rejects ERR_CANCELLED
+ * on Cancel or Escape.
  *
  * The secret and the account go in as text nodes — never through innerHTML —
  * and the SVG is the library's own output for a URI we built, so the one
@@ -279,7 +316,7 @@ export function enrolInPage(enrolment, account, qrSvg) {
       <summary>Can't scan? Enter the key by hand</summary>
       <p class="mono key"></p>
       <p class="muted">Account: <span class="mono account"></span> · Issuer:
-        Semper DIC · Time-based, 6 digits, 30 seconds</p>
+        semper · Time-based, 6 digits, 30 seconds</p>
     </details>
     <div class="row">
       <input inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" aria-label="Authenticator code"
@@ -324,7 +361,8 @@ export function enrolInPage(enrolment, account, qrSvg) {
     };
     card.querySelector(".confirm").addEventListener("click", confirm);
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") confirm(); });
-    card.querySelector(".cancel").addEventListener("click", () =>
-      done(reject, new Error(ERR_CANCELLED)));
+    const cancel = () => done(reject, new Error(ERR_CANCELLED));
+    card.querySelector(".cancel").addEventListener("click", cancel);
+    asDialog(card, cancel);
   });
 }

@@ -5,7 +5,7 @@
  * fetch limits to find out whether a seat is held. The analyses come from
  * `/v1/sessions`, which carries the quota alongside the page.
  */
-import { requireSignIn } from "../auth.js";
+import { requireSignIn, sessionOver } from "../auth.js";
 import { api, apiBlob, saveBlob } from "../api.js";
 import { confirmInPage } from "../dialogs.js";
 import { setStatus, markFirstData, whileWaiting } from "../status.js";
@@ -73,6 +73,9 @@ async function loadAccount() {
     markFirstData();
     mountSwitcher("account", { me, licenses: administered });
   } catch (e) {
+    // Signed out, by this read or the analyses' sent alongside: the line that
+    // says to sign in again stays (AE2-105).
+    if (sessionOver()) return accountError;
     accountError = `Could not read your account: ${refusalText(e)}`;
     setStatus(accountError, true);
     // The placeholders would otherwise read as still loading.
@@ -97,7 +100,7 @@ function renderLicence() {
   const lapsed = Date.parse(licence.graceEndsAt || licence.expiresAt || "") <= Date.now();
 
   const pills = [
-    `<span class="pill ${licensed ? "ok" : "off"}">${licensed ? "licensed" : "demo"}</span>`,
+    `<span class="pill ${licensed ? "ok" : "off"}">${licensed ? ACCOUNT.modes.licensed : ACCOUNT.modes.demo}</span>`,
   ];
   if (held) {
     if (licence.kind) pills.push(`<span class="pill">${esc(licence.kind)}</span>`);
@@ -173,19 +176,19 @@ function explain(licensed, floating, holdsSeat, held, lapsed) {
   if (!licensed && held && lapsed) {
     return `Your licence ended on ${day(licence.expiresAt)} and its after-expiry ` +
            "grace is over, so this account is on Demo. Your saved work is " +
-           "untouched. Ask your Semper contact or your institution's IT to renew it.";
+           "untouched. Ask your institution's IT or semper support to renew it.";
   }
   // Only a seat you still hold on a live licence is waiting on a colleague.
   // A seat on hold or removed reads as demo too, and was told to wait for a
   // seat that was never coming.
   if (!licensed && held && floating) {
     return "Every seat on your institution's licence is in use just now. " +
-           "Your saved work is untouched, and Semper becomes licensed again " +
+           "Your saved work is untouched, and semper becomes Licensed again " +
            "on this account as soon as a colleague finishes.";
   }
   if (!licensed) {
     return "You are on Demo. Analyses are capped and cloud backup is off. " +
-           "Ask your Semper contact or your institution's IT for a licence. Most " +
+           "Ask your institution's IT or semper support for a licence. Most " +
            "attach to this address by themselves; if you were given a claim " +
            "code, redeem it below.";
   }
@@ -206,7 +209,7 @@ $("release").addEventListener("click", async () => {
   if (!(await confirmInPage({
     title: "Give up your seat",
     message: "Give up your seat? Your saved work stays exactly as it is, and you " +
-      "take another seat the next time you use Semper — if one is free.",
+      "take another seat the next time you use semper — if one is free.",
     confirm: "Give up my seat",
   }))) return;
   setStatus("Returning your seat…");
@@ -227,10 +230,10 @@ function releaseError(e) {
   });
 }
 
-$("unbind").addEventListener("click", () => unbind("", "Semper"));
+$("unbind").addEventListener("click", () => unbind("", "semper"));
 // Semper Classroom's old short name: a backend from before ADR-030 knows only
 // it, and every backend since reads it as Semper Classroom (TD-330).
-$("unbindMt").addEventListener("click", () => unbind("materialtesting", "Semper Classroom"));
+$("unbindMt").addEventListener("click", () => unbind("materialtesting", "semper Classroom"));
 
 /**
  * Move one app's device. A browser cannot send `X-App-Id`, so the app is
@@ -241,7 +244,7 @@ async function unbind(app, name) {
     title: `Move ${name}`,
     message: `Move ${name} to another phone?\n\n` +
       `Nothing is deleted and nothing is cancelled. ${name} stops being ` +
-      "licensed on your current phone, and attaches to the next phone you " +
+      "Licensed on your current phone, and attaches to the next phone you " +
       "sign in on. Your analyses come with you once it has.",
     confirm: "Move",
   }))) return;
@@ -273,12 +276,12 @@ function unbindError(e) {
       // Local date and time, as the success message gives it: the cooldown
       // ends at the instant of the last move, not at a day boundary.
       (rest ? `, so you can move it yourself again after ${when(rest)}` : "") +
-      ". Ask your IT contact or Semper support if you need to move it now.",
+      ". Ask your institution's IT or semper support if you need to move it now.",
     mfa_required:
       "Set up two-factor authentication first — moving a licence needs it.",
     no_license: "There is no licence on this account to move.",
-    seat_not_found: "Your seat is no longer on that licence — ask your IT contact.",
-    license_not_found: "That licence no longer exists — ask your Semper contact.",
+    seat_not_found: "Your seat is no longer on that licence — ask your institution's IT.",
+    license_not_found: "That licence no longer exists — ask semper support.",
   }, (text) => `Could not move your licence: ${text}`);
 }
 
@@ -303,7 +306,8 @@ async function loadSessions({ reset }) {
     // `app=all` the backend would list only Semper's (ADR-014).
     const page = nextToken ? `&page_token=${encodeURIComponent(nextToken)}` : "";
     const data = await whileWaiting(api(`/v1/sessions?app=all${page}`), "Loading your analyses…");
-    if (ticket !== sessionsLoad) return;
+    // The account read may have ended the session meanwhile: its line stays.
+    if (ticket !== sessionsLoad || sessionOver()) return;
     sessions = sessions.concat(data.sessions || []);
     nextToken = (data.page || {}).nextPageToken || "";
     $("more").hidden = !nextToken;
@@ -312,7 +316,7 @@ async function loadSessions({ reset }) {
     renderSessions();
     setStatus(accountError, Boolean(accountError));
   } catch (e) {
-    if (ticket !== sessionsLoad) return;
+    if (ticket !== sessionsLoad || sessionOver()) return;
     const message = `Could not list your analyses: ${refusalText(e)}`;
     setStatus(message, true);
     if (!sessions.length) $("rows").innerHTML = retryRow(6, message);

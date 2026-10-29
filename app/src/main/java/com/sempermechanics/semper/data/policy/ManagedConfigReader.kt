@@ -7,8 +7,12 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.RestrictionsManager
 import android.os.Bundle
+import androidx.annotation.VisibleForTesting
+import androidx.annotation.WorkerThread
 import androidx.core.content.ContextCompat
 import com.sempermechanics.semper.data.AppForeground
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import timber.log.Timber
 
 /**
@@ -34,6 +38,23 @@ object ManagedConfigReader {
     /** The managed configuration, read once and kept until it changes. */
     fun current(context: Context): ManagedConfig = cached ?: refresh(context)
 
+    /**
+     * Reads the configuration once, if nothing has, from [Application.onCreate]
+     * on IO: otherwise the process's first [current] made the read on the main
+     * thread when the viewer was the first screen to ask (its share check;
+     * readiness TE1-105 re-verify, 18 ms on API 30).
+     */
+    @WorkerThread
+    fun warm(context: Context) {
+        if (cached == null) refresh(context)
+    }
+
+    /** Drops the cached configuration, so a test starts with none read. */
+    @VisibleForTesting
+    internal fun forgetForTest() {
+        cached = null
+    }
+
     /** Read the restrictions again. Never throws: an unreadable policy is no policy. */
     fun refresh(context: Context): ManagedConfig {
         val config = runCatching { read(context.applicationContext) }
@@ -47,9 +68,13 @@ object ManagedConfigReader {
     /**
      * For [AppForeground.install], from [Application.onCreate]: listen for
      * changes while any screen of the app is started, and read the
-     * restrictions again each time the first one starts.
+     * restrictions again on [scope] each time the first one starts: the read
+     * is a binder call that reads disk in system_server, which ran on the main
+     * thread on every return to the app (readiness TE1-105). Until it lands,
+     * [current] returns the configuration read last.
      */
-    fun foregroundListener(app: Application): AppForeground.Listener = ForegroundListener(app)
+    fun foregroundListener(app: Application, scope: CoroutineScope): AppForeground.Listener =
+        ForegroundListener(app, scope)
 
     private fun read(context: Context): ManagedConfig {
         val bundle = context.getSystemService(RestrictionsManager::class.java)?.applicationRestrictions
@@ -61,7 +86,10 @@ object ManagedConfigReader {
     private fun Bundle.value(key: String): Any? = get(key)
 
     /** Registers [receiver] when the first screen starts, and drops it when the last one stops. */
-    private class ForegroundListener(private val app: Application) : AppForeground.Listener {
+    private class ForegroundListener(
+        private val app: Application,
+        private val scope: CoroutineScope,
+    ) : AppForeground.Listener {
         override fun onForeground() {
             ContextCompat.registerReceiver(
                 app,
@@ -69,7 +97,7 @@ object ManagedConfigReader {
                 IntentFilter(Intent.ACTION_APPLICATION_RESTRICTIONS_CHANGED),
                 ContextCompat.RECEIVER_NOT_EXPORTED,
             )
-            ManagedConfigReader.refresh(app)
+            scope.launch { ManagedConfigReader.refresh(app) }
         }
 
         override fun onBackground() {

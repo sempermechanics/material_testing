@@ -4,3 +4,4 @@ pytest-asyncio==1.4.0
 pytest-cov==7.1.0
 httpx==0.28.1
 ruff==0.16.9
+schemathesis==4.31.1

@@ -114,7 +114,7 @@
                 app:chipBackgroundColor="@color/chip_toggle_bg_dark"
                 app:chipStrokeColor="@color/surface_outline"
                 app:chipStrokeWidth="1dp"
-                app:ensureMinTouchTargetSize="false" />
+                app:ensureMinTouchTargetSize="true" />
 
             <com.google.android.material.button.MaterialButtonToggleGroup
                 android:id="@+id/rgCropErase"

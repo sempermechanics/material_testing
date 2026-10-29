@@ -507,26 +507,33 @@ _CREATE_BODY = (b'{"specimen":"s","files":[{"name":"a.zip","role":"bundle","byte
                 + b"a" * 64 + b'"}]}')
 
 
-@pytest.mark.parametrize("method,template,body", [
-    ("GET", "/v1/me", b""),
-    ("GET", "/v1/config", b""),
-    ("GET", "/v1/sessions", b""),
-    ("POST", "/v1/sessions", _CREATE_BODY),
-    ("GET", "/v1/files/{file_id}/content", b""),
-    ("DELETE", "/v1/sessions/{sid}", b""),
-    ("GET", "/v1/sessions/{sid}/bundle", b""),
-    ("GET", "/v1/admin/users", b""),
-    ("POST", "/v1/admin/users/{uid}/approve", b""),
-    ("GET", "/v1/institutions/licenses/{license_id}/seats", b""),
-], ids=lambda v: v if isinstance(v, str) and v.startswith("/") else None)
-async def test_a_suspended_account_is_refused_on_every_tier(suspended, client, method,
-                                                             template, body):
-    """One route per tier: USER, DEVICE, USER_STEPUP, ADMIN, ADMIN_STEPUP,
-    INSTITUTION_STEPUP. 403 not_approved, and nothing changed."""
-    assert EXPECTED[(method, template)] in {USER, DEVICE, USER_STEPUP, ADMIN, ADMIN_STEPUP,
-                                            INSTITUTION_STEPUP}
-    path = template.format(file_id="f-own", sid="s-own", uid=SUSPENDED_UID,
-                           license_id=_SUSPENDED_INSTITUTION)
+#: Tiers a SUSPENDED account cannot reach by construction: the probes take no
+#: account, a Cloud Task carries no ID token, and the erasure check reads no
+#: profile on purpose (TD-206).
+_NOT_AN_ACCOUNT_TIER = {NONE, TASK, TOKEN_ONLY}
+#: Every route of every account tier, from the table, so a new route or a new
+#: tier is swept by being listed there (readiness TE3-103: the hand list of ten
+#: left ADMIN_STEPUP_FRESH and PUT /v1/me/consents without a SUSPENDED request).
+SUSPENDED_SWEEP = sorted(k for k, tier in EXPECTED.items() if tier not in _NOT_AN_ACCOUNT_TIER)
+#: A body where the route reads one, so a refusal is not a validation error.
+_SUSPENDED_BODIES = {("POST", "/v1/sessions"): _CREATE_BODY}
+_SUSPENDED_PATH = {"file_id": "f-own", "sid": "s-own", "uid": SUSPENDED_UID,
+                   "license_id": _SUSPENDED_INSTITUTION, "invite_key": "k", "device_id": "d"}
+
+
+def test_the_suspended_sweep_covers_every_account_tier():
+    assert {EXPECTED[k] for k in SUSPENDED_SWEEP} == set(EXPECTED.values()) - _NOT_AN_ACCOUNT_TIER
+    assert {ADMIN_STEPUP_FRESH, ANY_STATUS} <= {EXPECTED[k] for k in SUSPENDED_SWEEP}
+    assert ("PUT", "/v1/me/consents") in SUSPENDED_SWEEP
+
+
+@pytest.mark.parametrize("method,template", SUSPENDED_SWEEP, ids=lambda v: v)
+async def test_a_suspended_account_is_refused_on_every_tier(suspended, client, method, template):
+    """Every route of every account tier (USER, DEVICE, USER_STEPUP, ANY_STATUS,
+    ADMIN, ADMIN_STEPUP, ADMIN_STEPUP_FRESH, INSTITUTION_STEPUP). 403
+    not_approved, and nothing changed."""
+    body = _SUSPENDED_BODIES.get((method, template), b"")
+    path = re.sub(r"\{(\w+)\}", lambda m: _SUSPENDED_PATH[m.group(1)], template)
     before = copy.deepcopy(suspended._data)
     r = await client.request(method, path, headers=suspended.signed(method, path, body),
                              content=body)

@@ -104,12 +104,12 @@
              A 20dp glyph in a 40dp target. -->
         <ImageView
             android:id="@+id/sessionState"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="@dimen/min_touch_target"
+            android:layout_height="@dimen/min_touch_target"
             android:layout_marginStart="@dimen/space_4"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/sync_state_not_backed_up"
-            android:padding="10dp"
+            android:padding="14dp"
             android:src="@drawable/ic_cloud_off"
             app:tint="@color/text_secondary" />
     </LinearLayout>

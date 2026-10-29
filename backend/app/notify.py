@@ -198,25 +198,28 @@ def access_request(uid: str, email, display_name, provider) -> None:
     a clean 403 when mail is down.
     """
     text = (
-        "A new Semper account is waiting for approval.\n\n"
+        "A new semper account is waiting for approval.\n\n"
         f"Account: {email or '(no email)'}\n"
         f"Name: {display_name or '(none)'}\n"
         f"Sign-in: {provider or '(unknown)'}\n"
         f"User id: {uid}\n\n"
-        "To approve, open Settings -> Access requests in the app, or call:\n"
+        "To approve, open Settings → Access requests in the app, or the operator "
+        "console → Access requests, or call:\n"
         f"  POST /v1/admin/users/{uid}/approve\n"
     )
     _enqueue(_Job(
         sender=settings.NOTIFY_FROM,
         to=settings.SUPPORT_EMAIL,
-        subject=f"Semper access request — {email or uid}",
+        subject=f"semper access request — {email or uid}",
         text=text,
         idempotency_key=f"access-request:{uid}",
     ))
 
 
-#: How the device mail names the app the device registered for.
-_APP_NAMES = {apps.SEMPER: "Semper", apps.SEMPER_CLASSROOM: "Semper Classroom"}
+#: How the new-phone mail names the app the phone registered for. The
+#: product name is lower-case "semper" wherever a person reads it, the
+#: Classroom app "semper Classroom" (ADDENDUM-4).
+_APP_NAMES = {apps.SEMPER: "semper", apps.SEMPER_CLASSROOM: "semper Classroom"}
 
 
 def device_registered(uid: str, address: str, device_id: str, app: str, *,
@@ -230,21 +233,23 @@ def device_registered(uid: str, address: str, device_id: str, app: str, *,
     """
     if not address:
         return
-    name = _APP_NAMES.get(apps.canonical(app), "Semper")
+    name = _APP_NAMES.get(apps.canonical(app), "semper")
+    # "Phone", the word the app and the account page use; the id keeps the
+    # app's own label, "Device ID" (readiness AE3-101).
     text = (
-        f"A new device was registered to your {name} account.\n\n"
-        f"Device: {model or '(model not reported)'}\n"
-        f"Device id: {device_id}\n"
+        f"A new phone was signed in to your {name} account.\n\n"
+        f"Phone: {model or '(model not reported)'}\n"
+        f"Device ID: {device_id}\n"
         f"When: {time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())}\n\n"
         "If this was you, there is nothing to do.\n\n"
         "If it was not, someone may have signed in as you: change your password "
         "or secure your Google account, then contact "
-        f"{settings.SUPPORT_EMAIL} so the device can be removed.\n"
+        f"{settings.SUPPORT_EMAIL} so the phone can be removed.\n"
     )
     _enqueue(_Job(
         sender=settings.NOTIFY_SECURITY_FROM,
         to=address,
-        subject=f"New device on your {name} account",
+        subject=f"New phone on your {name} account",
         text=text,
         idempotency_key=f"device-registered:{uid}:{device_id}",
     ))

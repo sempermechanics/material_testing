@@ -138,7 +138,7 @@ test("an assigned licence counts seats taken and the invites apart", async () =>
   assert.equal(summary(),
     "SEMP-UNI1 one seat each redeemed 3 of 10 seats taken. 2 more are invited and take a seat " +
     "when they first sign in, if one is free.");
-  assert.match($("rosterHelp").textContent, /^Everyone here is licensed\./);
+  assert.match($("rosterHelp").textContent, /^Everyone here is Licensed./);
 });
 
 test("a floating licence counts seats in use against the roster", async () => {
@@ -174,7 +174,7 @@ test("each member row offers only what applies to that seat", async () => {
   assert.equal($("rows").querySelectorAll('[data-uid="u3"]').length, 0, "nothing to act on for a removed member");
 });
 
-test("a seat bound only on Semper Classroom offers New phone, read from the old field", async () => {
+test("a seat bound only on semper Classroom offers New phone, read from the old field", async () => {
   // Every backend writes the old field (ADR-030, TD-330): a seat this one
   // bound holds both, one not yet migrated only the old. A new field alone was
   // left behind by a backend from before the rename that cleared the old: stale.
@@ -185,8 +185,8 @@ test("a seat bound only on Semper Classroom offers New phone, read from the old 
     { uid: "u3", email: "cy@uni.edu", status: "active", deviceIdLockSemperClassroom: "stale-device-7" },
   ] } });
   assert.deepEqual(rows(), [
-    ["ana@uni.edu", "active", "—", "Semper Classroom sc-device-…", "New phone Pause Remove"],
-    ["ben@uni.edu", "active", "—", "Semper Classroom mt-device-…", "New phone Pause Remove"],
+    ["ana@uni.edu", "active", "—", "semper Classroom sc-device-…", "New phone Pause Remove"],
+    ["ben@uni.edu", "active", "—", "semper Classroom mt-device-…", "New phone Pause Remove"],
     ["cy@uni.edu", "active", "—", "not yet", "Pause Remove"],
   ]);
 });
@@ -347,7 +347,10 @@ test("Remove asks first, naming the member; declining sends nothing", async () =
 test("New phone asks first, naming the member; declining sends nothing", async () => {
   await act("clear", "u1", undefined, false);
   assert.deepEqual(sent(/PATCH/), []);
-  assert.match(confirms.asked[0], /^Unbind ana@uni\.edu from the phone it is on\?/);
+  assert.match(confirms.asked[0], /^Free ana@uni\.edu for a new phone\?/);
+  // One name for the action (AE3-106): the button, the card and its confirm.
+  assert.equal(confirms.cards[0].querySelector("h2").textContent, "New phone for ana@uni.edu");
+  assert.equal(confirms.cards[0].querySelector(".confirm").textContent, "New phone");
 });
 
 test("each row's buttons name the member they act on", async () => {
@@ -444,7 +447,7 @@ test("a blank address adds nobody", async () => {
 test("a refused add is explained, and an unknown refusal keeps its code", async () => {
   const cases = [
     ["claim_contended", "Busy just now — try again."],
-    ["member_already_licensed", "x@uni.edu already has a Semper licence of their own. Ask Semper support to move them onto this one."],
+    ["member_already_licensed", "x@uni.edu already has a semper licence of their own. Ask semper support to move them onto this one."],
     ["invite_exists", "x@uni.edu is already promised a place on a different licence."],
     ["license_seats_exhausted", "This licence has no seats left."],
     ["odd", "Could not add x@uni.edu: odd"],
@@ -485,4 +488,25 @@ test("a roster longer than one page is read to the end", async () => {
   assert.deepEqual(sent(/seats/), [`GET ${SEATS}`, `GET ${SEATS}?page_token=u1`]);
   assert.deepEqual(rows().map((r) => r[0]),
     ["ana@uni.edu", "ben@uni.edu", "cy@uni.edu", "dee@uni.edu", "eve@uni.edu"]);
+});
+
+// TE3-102 (ADDENDUM-2): IT may add only addresses on the licence's domain;
+// the backend answers anything else 422 member_off_domain.
+test("an address off the licence's domain is refused in words that name the domain", async () => {
+  await open({
+    roster: { ...assigned, license: { ...assigned.license, domainLock: "uni.edu" } },
+    routes: { [`POST ${SEATS}`]: () => json(422, { detail: "member_off_domain" }) },
+  });
+  $("addEmail").value = "x@gmail.com";
+  $("add").click();
+  await settle();
+  assert.deepEqual(status(), [
+    "x@gmail.com is outside this licence's domain (uni.edu). Only addresses on it can be added.", "muted err"]);
+  assert.equal($("addEmail").value, "x@gmail.com", "the address stays to be corrected");
+
+  reset();
+  await add("x@gmail.com", () => json(422, { detail: "member_off_domain" }));
+  assert.deepEqual(status(), [
+    "x@gmail.com is outside this licence's domain. Only addresses on it can be added.", "muted err"],
+    "no domain on the roster's answer: the sentence without it");
 });

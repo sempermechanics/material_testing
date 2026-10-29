@@ -65,11 +65,11 @@ Conventions:
   running", not Cancel, because Cancel is what the user just pressed.
   `Dialogs.confirm` has fixed button labels.
 - **Dialogs with their own view or behaviour:** the rename field
-  (`ui/home/SessionSelectionController.kt:220`), the custom colour scale
+  (`ui/home/SessionSelectionController.kt:300`), the custom colour scale
   (`ui/viewer/ViewerScaleController.kt:83`), list pickers
-  (`ui/analysis/sweep/SweepFramePicker.kt:51`, `ui/home/CloudBackupsCard.kt:76`),
+  (`ui/analysis/sweep/SweepFramePicker.kt:50`, `ui/home/CloudBackupsCard.kt:76`),
   the non-cancellable beta notice and deletion progress
-  (`ui/home/FirstRunPrompts.kt:48`, `ui/settings/SettingsYourDataSection.kt:251`).
+  (`ui/home/FirstRunPrompts.kt:50`, `ui/settings/SettingsYourDataSection.kt:251`).
 - **The wizard's batch and sweep jobs** keep their own `Job` fields
   (`ui/analysis/wizard/RunChannels.kt:53-54`): they run on the native
   dispatcher, and `SerialJob` is main-thread only.

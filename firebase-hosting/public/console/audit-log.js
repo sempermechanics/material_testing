@@ -6,6 +6,7 @@
  * `base()` names the tier.
  */
 import { api, apiBlob, saveBlob } from "./api.js";
+import { holdFocus } from "./dialogs.js";
 import { explain } from "./messages.js";
 import { esc, when, auditQuery, localDayRange } from "./util.js";
 
@@ -67,6 +68,7 @@ export function wireAuditLog({ rows, since, until, show, more, csv, json, base, 
     const root = base();
     if (!root) return;
     const mine = ++ticket;
+    const refocus = holdFocus(append ? more : show);
     show.disabled = true;
     more.disabled = true;
     report("Loading the audit log…");
@@ -88,6 +90,7 @@ export function wireAuditLog({ rows, since, until, show, more, csv, json, base, 
       if (mine === ticket) {
         show.disabled = false;
         more.disabled = false;
+        refocus();
       }
     }
   }
@@ -95,6 +98,7 @@ export function wireAuditLog({ rows, since, until, show, more, csv, json, base, 
   async function exportAs(format, button) {
     const root = base();
     if (!root) return;
+    const refocus = holdFocus(button);
     button.disabled = true;
     report("Exporting the audit log…");
     try {
@@ -117,6 +121,7 @@ export function wireAuditLog({ rows, since, until, show, more, csv, json, base, 
       report(explain(e, ERRORS, (text) => `Could not export: ${text}`), true);
     } finally {
       button.disabled = false;
+      refocus();
     }
   }
 

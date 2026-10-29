@@ -1,6 +1,6 @@
 # ADR-019: The app is `com.sempermechanics.semper`; "indic" leaves the code
 
-**Status:** Accepted, released (Semper `v1.2-beta.4`, Material Testing `v1.4-beta.2`, 2026-10-17)
+**Status:** Accepted, released (Semper `v1.2-beta.4`, Material Testing `v1.4-beta.2`, 2026-10-17). Amended 2026-10-28: the user-facing name is "semper" (below)
 **Date:** 2026-10-03
 **Deciders:** app owner
 
@@ -76,3 +76,20 @@ first install. The app is in testing and not on Play, so no store listing moves.
   lose sign-in, settings and the device key.
 - The fallbacks (engine forwarders, old ids in `apps.py` and `assetlinks.json`,
   `INDIC_*` keys) are removed once no build sends the old ids: TD-176.
+
+## Amendment (2026-10-28): the user-facing name is "semper"
+
+**Decided by:** the Admin, in the 2026-10-28 readiness run (rubric
+[ADDENDUM-4](../ops/readiness/RUBRIC_ADDENDA.md), verbatim: "evrything, issuer
+too. but its "semper" not "Semper"" and "Everywhere user-facing").
+
+The product name is lower-case **semper** on every user-facing surface: the app
+name and launcher label, app strings, the consoles (the authenticator issuer
+included), emails, the PDF report and the user docs (`docs/OPERATING_MANUAL.md`,
+`docs/app/FAQ.md`), headings and sentence starts included. The legal pages are
+excluded while counsel holds them. Nothing above changes: ids, packages, code
+identifiers (`SemperApi*`, `SEMPER_*`, `SemperNativeLib`), the GitHub org and the
+domain keep their spelling, and this record's own text and the earlier ADRs
+keep the name as they were written. The same run fixed the tier names "Demo"
+and "Licensed" (ADDENDUM-3). The fork's product is written "semper Classroom":
+only the brand word is lower-case (Admin, 2026-10-28).

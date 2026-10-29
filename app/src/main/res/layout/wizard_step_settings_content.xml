@@ -198,12 +198,13 @@
 
                 <EditText
                     android:id="@+id/etSubsetValue"
+                    style="@style/Widget.Semper.InlineValue"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="@dimen/space_8"
                     android:layout_marginEnd="4dp"
                     android:background="@android:color/transparent"
-                    android:gravity="end"
+                    android:gravity="end|center_vertical"
                     android:hint="@string/subset_size"
                     android:imeOptions="actionDone"
                     android:importantForAutofill="no"
@@ -303,11 +304,12 @@
 
                 <EditText
                     android:id="@+id/etStepValue"
+                    style="@style/Widget.Semper.InlineValue"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:background="@android:color/transparent"
                     android:contentDescription="@string/step_size_density"
-                    android:gravity="end"
+                    android:gravity="end|center_vertical"
                     android:imeOptions="actionDone"
                     android:importantForAutofill="no"
                     android:inputType="number"
@@ -390,12 +392,13 @@
 
                 <EditText
                     android:id="@+id/etStrainValue"
+                    style="@style/Widget.Semper.InlineValue"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="@dimen/space_8"
                     android:layout_marginEnd="4dp"
                     android:background="@android:color/transparent"
-                    android:gravity="end"
+                    android:gravity="end|center_vertical"
                     android:hint="@string/strain_window"
                     android:imeOptions="actionDone"
                     android:importantForAutofill="no"
@@ -496,11 +499,12 @@
 
                     <EditText
                         android:id="@+id/etOverlapValue"
+                        style="@style/Widget.Semper.InlineValue"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:background="@android:color/transparent"
                         android:contentDescription="@string/subset_overlap"
-                        android:gravity="end"
+                        android:gravity="end|center_vertical"
                         android:imeOptions="actionDone"
                         android:importantForAutofill="no"
                         android:inputType="numberDecimal"
@@ -612,7 +616,11 @@
                 android:visibility="gone"
                 tools:visibility="visible">
 
+                <!-- When the name would wrap here the field leaves this row for a
+                     line of its own under it, and the gap keeps the i at the row's
+                     end (SweepFramePicker.fitField, readiness AE1-108). -->
                 <LinearLayout
+                    android:id="@+id/sweepFrameRow"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="@dimen/space_12"
@@ -651,15 +659,20 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:cursorVisible="false"
-                            android:ellipsize="middle"
                             android:focusable="false"
                             android:hint="@string/sweep_frame"
                             android:importantForAutofill="no"
                             android:inputType="none"
-                            android:maxLines="1"
                             android:textSize="14sp"
                             tools:text="steel_23.tif" />
                     </com.google.android.material.textfield.TextInputLayout>
+
+                    <Space
+                        android:id="@+id/sweepFrameRowGap"
+                        android:layout_width="0dp"
+                        android:layout_height="0dp"
+                        android:layout_weight="1"
+                        android:visibility="gone" />
 
                     <!-- Which frame to pick (sweep_frame_hint). -->
                     <ImageButton

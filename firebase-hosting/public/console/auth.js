@@ -138,15 +138,19 @@ function sessionEndedError() {
   return Object.assign(new Error("invalid_token"), { code: "invalid_token", status: 401 });
 }
 
-/**
- * Sign the page out because the remembered sign-in is over, and return the
- * error to throw: the page's status line then says to sign in again, with
- * Sign in on screen instead of a Sign out that hides a dead session.
- */
+// Sign the page out because the remembered sign-in is over, and return the error to throw: the status
+// line says to sign in again and the dashboard hides, whoever called, until the next sign-in (AE2-105).
+let ended = false;
+/** Whether `endSession` ran since the last sign-in: a later answer must not show the dashboard. */
+export const sessionOver = () => ended;
 export async function endSession() {
+  ended = true;
   try {
     await signOut(auth);
   } catch (_) { /* already out: Firebase drops a session it cannot refresh */ }
+  const app = document.getElementById("app");
+  if (app) app.hidden = true;
+  setStatus(SESSION_ENDED_TEXT, true);
   return sessionEndedError();
 }
 
@@ -354,7 +358,7 @@ export async function ensureDashboardMfa() {
   if (await sessionHasSecondFactor(user)) return;
   await user.reload();
   if (!hasSecondFactor(user)) {
-    setStatus("Enrol an authenticator app to open any Semper dashboard.");
+    setStatus("Enrol an authenticator app to open any semper dashboard.");
     // The QR library is needed once per account, here, so it is fetched
     // here rather than on every page load. If it cannot be fetched the card
     // shows the key to type instead.
@@ -397,7 +401,7 @@ export async function beginTotpEnrolment(accountLabel) {
   const secret = await TotpMultiFactorGenerator.generateSecret(session);
   return {
     secret: secret.secretKey,
-    qrUrl: secret.generateQrCodeUrl(accountLabel || user.email, "Semper DIC"),
+    qrUrl: secret.generateQrCodeUrl(accountLabel || user.email, "semper"),
     finish: (code) =>
       multiFactor(user).enroll(
         TotpMultiFactorGenerator.assertionForEnrollment(secret, code),
@@ -462,8 +466,7 @@ export function requireSignIn(onReady, { showApp = true } = {}) {
         return unfinished("cancelled");
       }
       if (sessionEnded(e)) {
-        await endSession();
-        setStatus(SESSION_ENDED_TEXT, true);
+        await endSession(); // which says so on the status line
       } else {
         setStatus(challengeExpired(e)
           ? "That sign-in timed out before a code was accepted. Sign in again."
@@ -474,13 +477,10 @@ export function requireSignIn(onReady, { showApp = true } = {}) {
 
   const signedOut = document.getElementById("signedOut");
 
-  // The page is started once per signed-in account. The return leg of a
-  // re-authentication fires this listener twice — once for the user restored
-  // from storage, again when `resolveChallenge` makes the re-authenticated
-  // object current — and both calls wait on the same redirect, so without
-  // this the page loaded twice and both copies were handed the same `resume`:
-  // two revoke confirmations, and the second load wiping whatever the first
-  // reported.
+  // The page is started once per signed-in account. The return leg of a re-authentication fires
+  // this listener twice — for the user restored from storage, again when `resolveChallenge` makes
+  // the re-authenticated object current — and both wait on the same redirect, so without this the
+  // page loaded twice with the same `resume`: two revoke confirmations, the second load wiping the first's.
   let readyUid = null;
   let resumeHanded = false;
   onAuthStateChanged(auth, async () => {
@@ -503,6 +503,7 @@ export function requireSignIn(onReady, { showApp = true } = {}) {
     }
     if (user.uid === readyUid) return;
     readyUid = user.uid;
+    ended = false;
     // Whatever was stashed is handed over once, on the first ready state.
     const resume = resumeHanded ? null : stashed;
     resumeHanded = true;
@@ -527,8 +528,7 @@ export function requireSignIn(onReady, { showApp = true } = {}) {
       }
       // A remembered sign-in Firebase can no longer renew: Sign in, not Sign out.
       if (sessionEnded(e)) {
-        await endSession();
-        setStatus(SESSION_ENDED_TEXT, true);
+        await endSession(); // which says so on the status line
         return;
       }
       setStatus(`Could not open the dashboard: ${authErrorText(e)}.`, true);

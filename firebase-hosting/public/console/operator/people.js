@@ -17,21 +17,21 @@ export async function clearLicenceDevice(id) {
   // change: the licence binds to whichever device signs in next, so
   // nothing is re-issued and nothing is typed at the customer's end.
   if (!(await confirmInPage({
-    title: `Unbind ${labelOf(id)}`,
-    message: `Unbind ${labelOf(id)} from the phone it is on?\n\n` +
+    title: `New phone for ${labelOf(id)}`,
+    message: `Free ${labelOf(id)} for a new phone?\n\n` +
       "The next phone they sign in on takes it. Their entitlement and " +
       "their analyses are untouched — this is not a revoke.",
-    confirm: "Unbind",
+    confirm: "New phone",
   }))) return;
   try {
     const out = await api(`/v1/admin/licenses/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify({ clearDeviceLock: true }),
     });
-    setStatus(`${labelOf(id)} unbound — the next phone to sign in takes it.`);
+    setStatus(`${labelOf(id)} is free for a new phone — the next phone to sign in takes it.`);
     showLicence(out);
   } catch (e) {
-    setStatus(explain(e, {}, (text) => `Could not unbind: ${text}`), true);
+    setStatus(explain(e, {}, (text) => `Could not free it for a new phone: ${text}`), true);
   }
 }
 
@@ -54,7 +54,7 @@ export async function showDeviceHistory(id) {
         (app ? ` (${APP_NAMES[app] || app})` : "") +
         (prev ? `  left ${prev}` : "") +
         (released && released !== prev ? `  signed out ${released}` : "") +
-        (prevMt ? `  left ${prevMt} (Semper Classroom)` : "") +
+        (prevMt ? `  left ${prevMt} (semper Classroom)` : "") +
         (next ? `  → ${next}` : "");
     });
     // One move a line: the card keeps single line breaks.
@@ -117,7 +117,7 @@ export async function loadUsers(started) {
 }
 
 /**
- * The number beside Approvals in the desk's section index: how many accounts
+ * The number beside Access requests in the desk's section index: how many accounts
  * wait, so a queue below the licence table is seen without scrolling to it.
  * Hidden when nobody waits; "50+" when the read stopped at its page.
  */
@@ -151,7 +151,7 @@ $("releasePhone").addEventListener("click", async () => {
     const classroom = classroomField(out, "releasedDeviceId");
     const released = [
       out.releasedDeviceId,
-      classroom && `${classroom} (Semper Classroom)`,
+      classroom && `${classroom} (semper Classroom)`,
     ].filter(Boolean);
     setStatus(released.length
       ? `Released ${released.join(" and ")} for ${out.email || email}; the new phone can sign in.`
@@ -159,7 +159,7 @@ $("releasePhone").addEventListener("click", async () => {
     $("releaseEmail").value = "";
   } catch (e) {
     setStatus(`Could not release: ${explain(e, {
-      license_device_clear_required: "That account is licensed: use New phone on its licence.",
+      license_device_clear_required: "That account is Licensed: use New phone on its licence.",
     })}`, true);
   } finally {
     btn.disabled = false;

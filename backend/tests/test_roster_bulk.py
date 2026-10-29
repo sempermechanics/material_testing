@@ -193,7 +193,8 @@ async def test_a_refused_row_is_reported_and_the_others_still_land(it, client):
     full = _mint("uni-a.edu", IT_EMAIL, max_seats=1)
     for uid in ("one", "two"):
         _account(it, uid, f"{uid}@uni-a.edu")
-    # Holds a seat at another institution: one licence per person.
+    # Holds a seat at another institution, on its domain: off this licence's
+    # domain, so refused before anything about the person is read (TE3-102).
     _account(it, "elsewhere", "x@uni-b.edu")
     attempt_add(repo.add_institution_member, it.b, "x@uni-b.edu")
 
@@ -203,7 +204,7 @@ async def test_a_refused_row_is_reported_and_the_others_still_land(it, client):
     assert [(x["outcome"], x["error"]) for x in r.json()["results"]] == [
         ("seated", ""),
         ("refused", "license_seats_exhausted"),
-        ("refused", "member_already_licensed"),
+        ("refused", "member_off_domain"),
     ]
     assert list(it._data[f"licenses/{full}/seats"]) == ["one"]
     assert r.json()["counts"]["refused"] == 2

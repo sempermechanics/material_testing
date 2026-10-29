@@ -101,7 +101,8 @@ class SettingsUsedSheetTest {
                 host.getString(R.string.settings_used_strain_window) to "7-point window · VSG 25 px",
                 host.getString(R.string.settings_used_strain_method) to "VSG",
                 host.getString(R.string.param_reference) to "First image",
-                host.getString(R.string.settings_used_roi) to "16 × 16 at (0, 0)",
+                // Units on the ROI too, as on the image size (readiness AE1-112).
+                host.getString(R.string.settings_used_roi) to "16 × 16 px at (0, 0) px",
                 host.getString(R.string.settings_used_image_size) to "16 × 16 px",
                 // No record_manifest.json beside these frames (ADR-028).
                 host.getString(R.string.settings_used_integrity) to "Not recorded",
@@ -302,5 +303,12 @@ class SettingsUsedSheetTest {
             val end = legend.getSpanEnd(swatches[i])
             assertEquals(" $label", text.substring(end, end + label.length + 1))
         }
+    }
+
+    @Test
+    fun `the probe reading names its coordinates' unit`() {
+        // Readiness AE1-112: '(924, 572)' had no unit beside 'U: 0.49980 px'.
+        val text = viewer().getString(R.string.probe_reading_fmt, "U", "0.49980", "px", 924, 572)
+        assertEquals("U: 0.49980 px\n(924, 572) px", text)
     }
 }

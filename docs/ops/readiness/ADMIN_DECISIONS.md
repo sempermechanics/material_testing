@@ -118,3 +118,60 @@ Not asked at this checkpoint: NEEDS_ADMIN items wait on owner decisions or Admin
 NEEDS_DEVICE items:
 - TE1-003 → TD-344.
 - TE2-003: the arm64 smoke.
+
+## Run 2026-10-28
+
+### Scope (asked after Phase 0, 2026-10-28)
+
+| Question | Answer (verbatim) |
+|---|---|
+| Which repositories should this readiness run cover? | "semperdic-app only (Recommended)" |
+| Which assessment lanes should Phase 1 run? | "All lanes (Recommended)" |
+| May the read-only GCP posture script run, and against which projects? | "Yes, last run's projects" — `--app-project indicvision-dic-app --auth-project indicvision-dic-app-auth --api-sa indic-api@indicvision-dic-app.iam.gserviceaccount.com --backup-bucket indicvision-dic-app-firestore-backups` |
+
+### During Phase 1 (2026-10-28)
+
+| Question | Answer (verbatim) |
+|---|---|
+| May I delete /sdcard/shot.png on the Semper_API30 emulator (a 2026-10-22 screenshot showing a test account's password)? | "Yes, delete it (Recommended)" — deleted by the lead; `ls` and MediaStore no longer list it. Closes A17 of the 2026-10-24 run. Rotating that test account's password stays the Admin's call. |
+| (lead) Delete `semperdic-app/posture_20261024.log` (A18) | Approved with the plan below; deleted 2026-10-28 (git-ignored file; a copy of its rows is in the session scratchpad as evidence) |
+
+### Scope of the fix round (asked while planning, 2026-10-28)
+
+The Admin, on the pending list: "leaving legal items as pending, let's plan to complete
+everything else". The plan was approved as written. Legal items left pending: TE5-003,
+TE5-004, TE5-103, AE3-113, AE2-103, TD-36, TD-277, TD-317, every `docs/legal/` change; the
+hosted `/privacy` and `/terms` stay at `b940cc29`.
+
+| Question | Answer (verbatim) |
+|---|---|
+| TE3-102: institution IT can seat any verified Demo account from any domain, and the add/import replies reveal whether an address is already licensed or invited elsewhere. How should IT adds work? | "Enforce domain lock (Recommended)" |
+| TE2-101: phones (arm64) use fused multiply-add in one OpenCV routine; every CI-tested build (x86_64) does not. How should it be handled? | "Document + arm64 check (Recommended)" |
+| TE2-003 (arm64 solver smoke) and TE1-003 (install-over from v1.2-beta.4, versionCode 1036) need a real arm64 phone and the 1036 APK. The only one attached is the Galaxy S22+ benchmark phone. May I use it? | "Yes, use the S22+" |
+| Which missing check tools may be added as dev/CI dependencies? | "Schemathesis (TE3-007), Lighthouse (AE2-110), Android dependency scan (TE5-105), semgrep (TE5-105)" |
+| AE3-003 / TD-340 / TD-341: what should the two tiers be called in the app, console and backend? (Terms wording stays with counsel.) | "Demo / Licensed (Recommended)" |
+| AE3-110: the console says "Semper DIC" in tab titles, landing pages and the staff authenticator entry, against ADR-019's "Semper". Rename what? | "evrything, issuer too. but its "semper" not "Semper"" |
+| The brand is lowercase "semper". Where should that apply? | "Everywhere user-facing" |
+| TE1-001 / TD-318: release builds ship no certificate pin. Which pin set should release builds require? | "Google Trust Services roots (Recommended)" |
+| TE2-002 and TE2-004 need changes in the engine repository, a new engine tag and a pin bump. Include them? | "Yes, separate engine PRs" |
+
+### During Phase 4 (2026-10-28)
+
+| Question | Answer (verbatim) |
+|---|---|
+| The fork's app is named "Semper Classroom" in some console and app text. Under the lower-case brand rule, how should it read? | "semper Classroom (Recommended)" |
+| On the operator desk, the Demo analysis cap now reads "Demo limit (25)". Keep that or shorten it? | "Demo limit (25) (Recommended)" |
+| Engine PRs #27/#28 add tests only. But a new tag from engine main also brings 4 commits that change solver output in edge cases. How should the app's engine pin move? | "Keep v0.6.1 for now (Recommended)" — TE2-002 and TE2-004 are fixed in the engine repository (semper-dic-engine#27, #28, to merge into engine `main`); the app stays pinned at v0.6.1 for this release. Adopting the next engine tag is its own ORACLE-CHANGE with DICe / steel_24 re-validation (TD row) |
+
+### Checkpoint 2: acceptance (2026-10-29)
+
+The pack showed, for each of the 72 "fix now" findings: its commits, files and line counts, the
+guarding test and its fail-then-pass or mutation evidence, its re-verify round (R1 to R4), the gate
+results on `d011d96ef`, and the before and after screens.
+
+| Question | Answer (verbatim) |
+|---|---|
+| Accept the 67 independently verified fixes, plus TE2-003 on the S22+ evidence (arm64 smoke 12/12 twice)? | "Accept all (Recommended)" |
+| AE1-111: Home's other dialogs and the Re-run picker sheet still close on rotation or a font-size change. What should happen to them? | "Rework round 3 (Recommended)" |
+| TE3-102 held invites add a new kind of doc (licenseInvites/held_{licenseId}_{hash}) to an existing Firestore collection. Accept that schema addition? | "Accept (Recommended)" |
+| Which tracked remainders do you accept as owner calls (TD-355 shortcut, TD-356 migrate, TD-360 no a11y tool)? | No preference given. All three stay open as owner decisions in REPORT §4; none is accepted |

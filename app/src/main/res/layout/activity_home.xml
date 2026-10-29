@@ -176,8 +176,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="12dp"
-                android:minWidth="0dp"
-                android:minHeight="0dp"
+                android:minWidth="@dimen/min_touch_target"
+                android:minHeight="@dimen/min_touch_target"
                 android:text="@string/selection_select_all"
                 android:textColor="@color/text_primary"
                 android:textSize="14sp" />

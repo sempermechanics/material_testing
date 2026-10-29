@@ -167,7 +167,7 @@ object PdfReportGenerator {
     }
 
     /**
-     * Page 1 of a report: session metadata, the parameters it was solved with,
+     * Page 1 of a report: the analysis metadata, the parameters it was solved with,
      * the ROI, and the reference/deformed pair it was solved from.
      *
      * @param frameCount total frames, shown only in an all-frames report
@@ -181,23 +181,23 @@ object PdfReportGenerator {
         layout.newPage()
         layout.drawTitle(title)
 
-        layout.drawSectionHeader("Session Details")
-        layout.drawKeyValue("Specimen / Target:", data.specimenName)
-        layout.drawKeyValue("Date Generated:", data.analysisDate)
-        layout.drawKeyValue("Session ID:", data.sessionId)
+        layout.drawSectionHeader("Analysis details")
+        layout.drawKeyValue("Specimen / target:", data.specimenName)
+        layout.drawKeyValue("Date generated:", data.analysisDate)
+        layout.drawKeyValue("Analysis ID:", data.sessionId)
         frameCount?.let { layout.drawKeyValue("Frames:", it.toString()) }
-        data.appBuild?.let { layout.drawKeyValue("App Build:", it) }
-        data.recordFingerprint?.let { layout.drawKeyValue("Record Fingerprint:", it) }
+        data.appBuild?.let { layout.drawKeyValue("App build:", it) }
+        data.recordFingerprint?.let { layout.drawKeyValue("Record fingerprint:", it) }
         layout.advanceY(40f)
 
-        layout.drawSectionHeader("Algorithm Parameters")
-        layout.drawKeyValue("Subset Size:", "${data.subsetSize} px")
-        layout.drawKeyValue("Step Size:", "${data.stepSize} px")
-        layout.drawKeyValue("Strain Method:", data.strainMethod)
+        layout.drawSectionHeader("Algorithm parameters")
+        layout.drawKeyValue("Subset size:", "${data.subsetSize} px")
+        layout.drawKeyValue("Step size:", "${data.stepSize} px")
+        layout.drawKeyValue("Strain method:", data.strainMethod)
         // strainWindow is the VSG in px; sessions since the window was entered in points also get the count.
         val windowPoints = SweepStudy.windowPointsFor(data.strainWindow, data.stepSize)
         layout.drawKeyValue(
-            "Strain Window:",
+            "Strain window:",
             if (windowPoints != null) {
                 "$windowPoints-point window (VSG ${data.strainWindow} px)"
             } else {
@@ -206,12 +206,12 @@ object PdfReportGenerator {
         )
         layout.advanceY(40f)
 
-        layout.drawSectionHeader("Analysis Region (ROI)")
+        layout.drawSectionHeader("Analysis region (ROI)")
         layout.drawKeyValue("Origin (X, Y):", "(${data.roi.x}, ${data.roi.y})")
         layout.drawKeyValue("Dimensions:", "${data.roi.w} x ${data.roi.h} px")
         layout.advanceY(40f)
 
-        layout.drawSectionHeader("Analyzed Images")
+        layout.drawSectionHeader("Analysed images")
         layout.drawInputVerificationCard(
             data.referenceImage,
             data.referenceImageName,
@@ -230,7 +230,7 @@ object PdfReportGenerator {
             layout.newPage()
             fieldsChunk.forEach { field -> layout.drawFieldBlock(field, FIELD_BLOCK_HEIGHT) }
             if (fieldsChunk.size == 1) {
-                layout.drawDiagnosticBlock("ZNSSD Correlation Quality", data.znssdHeatmap, FIELD_BLOCK_HEIGHT)
+                layout.drawDiagnosticBlock("ZNSSD correlation quality", data.znssdHeatmap, FIELD_BLOCK_HEIGHT)
             }
         }
     }

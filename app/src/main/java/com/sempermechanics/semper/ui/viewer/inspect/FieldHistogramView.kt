@@ -44,6 +44,9 @@ class FieldHistogramView @JvmOverloads constructor(
     }
     private val barRect = RectF()
 
+    /** The plot area, from [framePlot]. */
+    private val plot = RectF()
+
     init {
         isClickable = true
     }
@@ -71,12 +74,11 @@ class FieldHistogramView @JvmOverloads constructor(
         axisPaint.color = muted
         textPaint.color = muted
 
-        val left = dp(PAD_LEFT_DP)
-        val right = width - dp(PAD_RIGHT_DP)
-        // A row above the plot for the y axis's title ("points").
-        val top = dp(PAD_TOP_DP) + textPaint.textSize
-        val bottom = height - dp(PAD_BOTTOM_DP)
-        if (right <= left || bottom <= top) return
+        if (!framePlot(hist, width, height)) return
+        val left = plot.left
+        val right = plot.right
+        val top = plot.top
+        val bottom = plot.bottom
 
         val k = hist.binCount
         val innerW = right - left
@@ -106,14 +108,54 @@ class FieldHistogramView @JvmOverloads constructor(
         )
 
         textPaint.textAlign = Paint.Align.LEFT
-        canvas.drawText(context.getString(R.string.viewer_histogram_y_axis), 0f, textPaint.textSize, textPaint)
+        val yAxis = context.getString(R.string.viewer_histogram_y_axis)
+        canvas.drawText(yAxis, 0f, -textPaint.fontMetrics.ascent, textPaint)
 
-        val baseline = bottom + textPaint.textSize + tickGap
+        val baseline = bottom + tickGap - textPaint.fontMetrics.ascent
         canvas.drawText(ReportBuilder.formatMetric(hist.min), left, baseline, textPaint)
         textPaint.textAlign = Paint.Align.RIGHT
         val maxLabel = "${ReportBuilder.formatMetric(hist.max)} $unit"
         canvas.drawText(maxLabel, right, baseline, textPaint)
     }
+
+    /**
+     * Wraps the plot: a fixed plot height plus gutters that fit the text, so a
+     * large font scale makes the view taller instead of clipping its labels
+     * (readiness AE1-104).
+     */
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val fm = textPaint.fontMetrics
+        val wanted = (topGutter(fm) + dp(PLOT_HEIGHT_DP) + bottomGutter(fm)).toInt() + paddingTop + paddingBottom
+        setMeasuredDimension(
+            getDefaultSize(suggestedMinimumWidth, widthMeasureSpec),
+            resolveSize(wanted, heightMeasureSpec),
+        )
+    }
+
+    /**
+     * Sets [plot] for a [w] x [h] view from the measured labels: the left gutter
+     * fits the widest y tick, the top one the y title above half a tick label,
+     * the bottom one a row of x labels. False when no plot area is left.
+     */
+    private fun framePlot(hist: FieldHistogram, w: Int, h: Int): Boolean {
+        val fm = textPaint.fontMetrics
+        val peak = hist.counts.maxOrNull() ?: 0
+        val widestTick = maxOf(textPaint.measureText("0"), textPaint.measureText(peak.toString()))
+        val left = maxOf(dp(PAD_LEFT_DP), widestTick + dp(TICK_GAP_DP) * 2)
+        plot.set(left, topGutter(fm), w - dp(PAD_RIGHT_DP), h - bottomGutter(fm))
+        return plot.right > plot.left && plot.bottom > plot.top
+    }
+
+    /** The y title's row, a gap, then the part of the top tick label above its anchor. */
+    private fun topGutter(fm: Paint.FontMetrics): Float =
+        maxOf(
+            dp(PAD_TOP_DP) + textPaint.textSize,
+            fm.descent - fm.ascent + dp(TICK_GAP_DP) + (-fm.ascent - textPaint.textSize * TICK_BASELINE),
+        )
+
+    /** A gap and one row of x labels, ascent to descent. */
+    private fun bottomGutter(fm: Paint.FontMetrics): Float =
+        maxOf(dp(PAD_BOTTOM_DP), dp(TICK_GAP_DP) + fm.descent - fm.ascent)
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (histogram == null) return super.onTouchEvent(event)
@@ -135,9 +177,9 @@ class FieldHistogramView @JvmOverloads constructor(
 
     private fun selectAt(x: Float) {
         val hist = histogram ?: return
-        val left = dp(PAD_LEFT_DP)
-        val right = width - dp(PAD_RIGHT_DP)
-        if (right <= left) return
+        if (!framePlot(hist, width, height)) return
+        val left = plot.left
+        val right = plot.right
         val rel = ((x - left) / (right - left)).coerceIn(0f, LAST_BIN_EDGE)
         val index = (rel * hist.binCount).toInt().coerceIn(0, hist.binCount - 1)
         selectedBin = index
@@ -152,6 +194,9 @@ class FieldHistogramView @JvmOverloads constructor(
         private const val PAD_BOTTOM_DP = 20f
         private const val TICK_GAP_DP = 4f
         private const val TICK_BASELINE = 0.33f
+
+        /** The bars' height; the gutters around it grow with the text. */
+        private const val PLOT_HEIGHT_DP = 108f
 
         /** Just short of the right edge, so a touch there selects the last bin. */
         private const val LAST_BIN_EDGE = 0.9999f

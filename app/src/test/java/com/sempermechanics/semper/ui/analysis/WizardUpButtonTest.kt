@@ -7,6 +7,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.prefs.WizardDraft
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisCancel
+import com.sempermechanics.semper.ui.analysis.wizard.WizardStep
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -57,5 +58,21 @@ class WizardUpButtonTest {
         val title = (0 until toolbar.childCount).map(toolbar::getChildAt).filterIsInstance<TextView>()
             .first { it.text == toolbar.title }
         assertEquals(2, title.maxLines)
+    }
+
+    /**
+     * A font-scale or density change rebuilds the wizard on its step; the title
+     * went back to 'New analysis' while the dots still showed step 2 (readiness
+     * AE1-109): the inset setup set it after the step had.
+     */
+    @Test
+    fun `the step's title survives a rebuild`() {
+        val controller = Robolectric.buildActivity(StaticAnalysisActivity::class.java).also { built = it }.setup()
+        controller.get().goToStep(WizardStep.SETTINGS, animate = false)
+        assertEquals(app.getString(R.string.parameters), controller.get().findViewById<Toolbar>(R.id.toolbar).title)
+
+        controller.recreate()
+
+        assertEquals(app.getString(R.string.parameters), controller.get().findViewById<Toolbar>(R.id.toolbar).title)
     }
 }

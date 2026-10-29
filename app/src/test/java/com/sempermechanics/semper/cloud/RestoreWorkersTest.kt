@@ -283,7 +283,7 @@ class RestoreWorkersTest {
         val result = runDownload({ _, _, _, _ -> throw ApiException(503, body) })
 
         assertEquals(body, failureReason(result))
-        assertEquals(context.getString(R.string.restore_paused), LicenseErrors.downloadMessage(context, body))
+        assertEquals(context.getString(R.string.download_paused), LicenseErrors.downloadMessage(context, body))
     }
 
     @Test

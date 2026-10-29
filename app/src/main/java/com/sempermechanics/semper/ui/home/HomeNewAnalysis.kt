@@ -14,7 +14,7 @@ import com.sempermechanics.semper.ui.analysis.StaticAnalysisActivity
 import com.sempermechanics.semper.ui.analysis.rerun.PickedReference
 import com.sempermechanics.semper.ui.analysis.rerun.RerunSource
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisNavHelper
-import com.sempermechanics.semper.ui.common.dialog.Dialogs
+import com.sempermechanics.semper.ui.common.dialog.ReopenAfterRecreate
 import com.sempermechanics.semper.ui.common.media.MediaPickerSheet
 import com.sempermechanics.semper.ui.common.media.MediaSourceChooser
 import kotlinx.coroutines.CoroutineDispatcher
@@ -50,6 +50,9 @@ internal class HomeNewAnalysis(
         }
 
     private var mediaPicker: MediaPickerSheet? = null
+
+    /** The source chooser comes back after a rotation or theme switch (readiness AE1-111). */
+    private val reopenChooser = ReopenAfterRecreate(activity, "home.sourceChooser")
 
     /** An older analysis's Re-run: its reference picked again. Registers launchers, so built with the screen. */
     private val rerunReference = RerunReferencePicker(activity, onPicked = ::openRerun)
@@ -105,11 +108,8 @@ internal class HomeNewAnalysis(
         activity.lifecycleScope.launch {
             val source = withContext(Dispatchers.IO) { RerunSource.of(record) }
             when {
-                source == RerunSource.MISSING -> Dialogs.info(
-                    activity,
-                    R.string.rerun_unavailable_title,
-                    R.string.rerun_photos_missing_body,
-                )
+                // Said again if a configuration change rebuilds Home (readiness AE1-111).
+                source == RerunSource.MISSING -> rerunReference.unavailable(R.string.rerun_photos_missing_body)
                 !mayStart() -> Unit
                 source == RerunSource.NEEDS_REFERENCE -> rerunReference.ask(record)
                 else -> openRerun(record, null)
@@ -128,6 +128,11 @@ internal class HomeNewAnalysis(
         activity.startActivity(intent)
     }
 
+    /** Shows the source chooser again when the screen this one replaces had it open; call after `super.onCreate`. */
+    fun reopenAfterRecreate() {
+        if (reopenChooser.restored() != null) showSourceChooser()
+    }
+
     /** In-sheet Images gallery; Files opens SAF for Drive / storage / DNG. */
     private fun showSourceChooser() {
         mediaPicker = MediaSourceChooser.show(
@@ -140,6 +145,7 @@ internal class HomeNewAnalysis(
             },
             onBrowseSaf = { pickDocument.launch(arrayOf("image/*", "video/*")) },
             onPicked = { uris -> routePickedMedia(uris.firstOrNull()) },
+            kept = MediaPickerSheet.Kept(reopenChooser),
         )
     }
 

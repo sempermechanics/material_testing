@@ -1,0 +1,8 @@
+// CI only (android-deps-osv): lets `--write-locks` record the configurations a
+// build resolves, so OSV-Scanner can read the resolved graph from
+// <project>/gradle.lockfile. The build scripts lock nothing themselves.
+allprojects {
+    dependencyLocking {
+        lockAllConfigurations()
+    }
+}
