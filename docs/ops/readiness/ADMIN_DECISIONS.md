@@ -162,3 +162,16 @@ hosted `/privacy` and `/terms` stay at `b940cc29`.
 | The fork's app is named "Semper Classroom" in some console and app text. Under the lower-case brand rule, how should it read? | "semper Classroom (Recommended)" |
 | On the operator desk, the Demo analysis cap now reads "Demo limit (25)". Keep that or shorten it? | "Demo limit (25) (Recommended)" |
 | Engine PRs #27/#28 add tests only. But a new tag from engine main also brings 4 commits that change solver output in edge cases. How should the app's engine pin move? | "Keep v0.6.1 for now (Recommended)" — TE2-002 and TE2-004 are fixed in the engine repository (semper-dic-engine#27, #28, to merge into engine `main`); the app stays pinned at v0.6.1 for this release. Adopting the next engine tag is its own ORACLE-CHANGE with DICe / steel_24 re-validation (TD row) |
+
+### Checkpoint 2: acceptance (2026-10-29)
+
+The pack showed, for each of the 72 "fix now" findings: its commits, files and line counts, the
+guarding test and its fail-then-pass or mutation evidence, its re-verify round (R1 to R4), the gate
+results on `d011d96ef`, and the before and after screens.
+
+| Question | Answer (verbatim) |
+|---|---|
+| Accept the 67 independently verified fixes, plus TE2-003 on the S22+ evidence (arm64 smoke 12/12 twice)? | "Accept all (Recommended)" |
+| AE1-111: Home's other dialogs and the Re-run picker sheet still close on rotation or a font-size change. What should happen to them? | "Rework round 3 (Recommended)" |
+| TE3-102 held invites add a new kind of doc (licenseInvites/held_{licenseId}_{hash}) to an existing Firestore collection. Accept that schema addition? | "Accept (Recommended)" |
+| Which tracked remainders do you accept as owner calls (TD-355 shortcut, TD-356 migrate, TD-360 no a11y tool)? | No preference given. All three stay open as owner decisions in REPORT §4; none is accepted |
