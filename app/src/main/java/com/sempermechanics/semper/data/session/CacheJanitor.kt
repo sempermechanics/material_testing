@@ -85,13 +85,17 @@ object CacheJanitor {
 
     /**
      * Full sweep for app start, where no import, analysis or share can be in
-     * flight. A committed import found here is orphaned unless a live
-     * [WizardDraft] still lists it — a wizard the system will restore after a
-     * process death (ADR-005). A draft past its age limit goes first.
+     * flight. It also removes the session folders runs the last process died
+     * in left behind ([SessionStore.reclaimDeadRuns]). A committed import
+     * found here is orphaned unless a live [WizardDraft] still lists it — a
+     * wizard the system will restore after a process death (ADR-005). A draft past its age limit goes first.
      */
     fun sweepOnStartup(context: Context): Long {
+        val startedAt = System.currentTimeMillis()
         val keepImport = WizardDraft.reclaimIfStale(context.filesDir)
-        return sweep(context.cacheDir, SweepMode.STARTUP, keepImport)
+        // A run the last process died in left its session folder unindexed (TE1-101).
+        val deadRuns = SessionStore.reclaimDeadRuns(context, startedAt)
+        return deadRuns + sweep(context.cacheDir, SweepMode.STARTUP, keepImport)
     }
 
     /**

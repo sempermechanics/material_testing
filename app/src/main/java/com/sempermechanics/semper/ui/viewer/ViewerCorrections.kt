@@ -7,6 +7,8 @@ import com.sempermechanics.semper.data.mechanical.CurveCorrection
 import com.sempermechanics.semper.data.mechanical.LabSession
 import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.data.session.SessionStore
+import com.sempermechanics.semper.data.session.setCurveCorrection
+import com.sempermechanics.semper.data.session.setDeflectionCorrection
 import com.sempermechanics.semper.report.BeamDeflection
 import com.sempermechanics.semper.report.StressStrain
 

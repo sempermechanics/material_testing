@@ -83,12 +83,12 @@ const ACTIONS = {
 const ASK = {
   clear: (who) => ({
     title: `New phone for ${who}`,
-    message: `Unbind ${who} from the phone it is on?
+    message: `Free ${who} for a new phone?
 
 ` +
       "The next phone they sign in on takes the seat. Their seat and their " +
       "saved analyses are untouched.",
-    confirm: "Unbind",
+    confirm: "New phone",
   }),
   remove: (who) => ({
     title: `Remove ${who}`,
@@ -144,6 +144,7 @@ const ACT_ERRORS = {
  */
 export function wireRoster({
   rows, email, add, base, report, reload, retry = reload, filter = null, count = null, head = null,
+  domain = () => "",
 }) {
   let all = [];
   let shown = PAGE_ROWS;
@@ -218,10 +219,13 @@ Nobody has claimed it yet.`,
     } catch (e) {
       report(explain(e, {
         invite_exists: `${address} is already promised a place on a different licence.`,
-        // One licence per person. Which licence is not the roster's to say;
-        // Semper support can move them.
-        member_already_licensed: `${address} already has a Semper licence of their own. ` +
-          "Ask Semper support to move them onto this one.",
+        // IT may add only addresses on the licence's domain (TE3-102).
+        member_off_domain: `${address} is outside this licence's domain` +
+          `${domain() ? ` (${domain()})` : ""}. Only addresses on it can be added.`,
+        // One licence per person, told to staff only since TE3-102 (IT gets a
+        // pending invite instead); semper support can move them.
+        member_already_licensed: `${address} already has a semper licence of their own. ` +
+          "Ask semper support to move them onto this one.",
         license_seats_exhausted: "This licence has no seats left.",
         license_seat_disabled: "That seat is paused — resume it instead.",
       }, (text) => `Could not add ${address}: ${text}`), true);

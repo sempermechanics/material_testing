@@ -24,8 +24,13 @@ object TestTypeSheet {
     /**
      * @param onExamples when given, a row under the tests opens the bundled
      *   example sets instead (ADR-031); without it the row stays hidden.
+     * @return the sheet, shown, for a host that keeps it across a configuration change.
      */
-    fun show(activity: AppCompatActivity, onExamples: (() -> Unit)? = null, onPicked: (TestType) -> Unit) {
+    fun show(
+        activity: AppCompatActivity,
+        onExamples: (() -> Unit)? = null,
+        onPicked: (TestType) -> Unit,
+    ): BottomSheetDialog {
         val sheet = BottomSheetDialog(activity)
         val root = activity.layoutInflater.inflate(R.layout.sheet_test_type, null)
         sheet.setContentView(root)
@@ -45,6 +50,7 @@ object TestTypeSheet {
             }
         }
         sheet.show()
+        return sheet
     }
 
     /** Each row of the sheet, top to bottom, with the test it picks. */

@@ -1,6 +1,7 @@
 // Run: node --test "firebase-hosting/tests/*.test.mjs"
 // One word per concept in what the consoles say (AE3): backup, not sync;
-// phone, not device, to an account holder; Demo as the plan's name; the two
+// phone, not device, to an account holder; Demo as the plan's name, always
+// with its capital (ADDENDUM-3); the product as "semper" (ADDENDUM-4); the two
 // grace clocks named apart; a seat you have, paused and resumed, removed (not
 // revoked); one label for giving a seat back; "your institution's IT".
 import { test } from "node:test";
@@ -102,6 +103,11 @@ function copyText(path, source) {
   return path.endsWith(".js") ? stringLiterals(source) : visibleText(path, source);
 }
 
+/** `copyText` less a script's one-word literals: a word alone there is a value, not a sentence. */
+function phrases(path, source) {
+  return copyText(path, source).filter((snippet) => path.endsWith(".html") || /\s/.test(snippet));
+}
+
 const RULES = [
   // AE3-001: the cloud feature is backup (a function named sync is code).
   [/\bsync(?:s|ed|ing)?\b(?!\()/i, "back up / backup, not sync", () => true],
@@ -112,8 +118,32 @@ const RULES = [
   // names keep "device".
   [/\bdevices?\b/i, "phone, not device, on the IT roster and the operator desk",
     (name) => !name.startsWith("account/"), copyText],
-  // AE3-003: the plan is Demo: on Demo, not on the demo.
-  [/\b(?:on|to) the demo\b/i, "on Demo, not on the demo", () => true],
+  // AE3-003 / AE3-105, ADDENDUM-3: the free tier is Demo, with its capital,
+  // wherever a sentence names it ("on Demo", "drops to Demo"). A one-word
+  // literal is a value compared in code (`mode === "demo"`), not copy.
+  [/\bdemo\b/, "Demo, capital D (ADDENDUM-3)", () => true, phrases],
+  // ADDENDUM-3: the paid tier is Licensed, with its capital, wherever a
+  // sentence puts someone on it ("still Licensed", "a Licensed key").
+  [/\blicensed\b/, "Licensed, capital L (ADDENDUM-3)", () => true, phrases],
+  // AE3-104: the Demo analysis cap is the Demo limit; "allowance" is only the
+  // offline window.
+  [/\bdemo allowance\b/i, "the Demo limit (allowance is the offline window)", () => true],
+  // AE3-110, ADDENDUM-4: the product is "semper", lower-case even at the
+  // start of a sentence or a title, and so is the authenticator issuer.
+  // Identifiers (`deviceIdLockSemperClassroom`) and the company, Semper
+  // Mechanics, are not the product name.
+  [/\bSemper\b(?! Mechanics)/, "semper, lower-case (ADDENDUM-4)", () => true, copyText],
+  // AE3-106: freeing a licence or seat for another phone is New phone; it
+  // had a second name, Unbind, in the same dialog.
+  [/\bun(?:bind|bound)\b/i, "New phone, not unbind", () => true, phrases],
+  // AE3-108: a kill switch is "paused right now", as the app says it.
+  [/\btemporarily unavailable\b|\bswitched off for maintenance\b/i, "paused right now", () => true],
+  // AE3-109: what a mint shows once is the claim code the holder's page asks
+  // for (the "Licence key" box that confirms a revoke keeps its name).
+  [/\bkey below\b|\bredeems? the key\b|\bCopy this key\b/i, "the claim code", () => true],
+  // AE3-117: the staff approval queue is Access requests, as the app and the
+  // support mail call it.
+  [/\bApprovals\b|\bawaiting approval\b/, "Access requests", () => true],
   // AE3-005: two clocks, two names.
   [/\bgrace period\b/i, "after-expiry grace / offline allowance, not grace period", () => true],
   // AE3-006: have a seat; Pause / Resume; Remove; one release label.
@@ -122,6 +152,10 @@ const RULES = [
   [/\bRevoke the seat\b|\bRevoked, /, "Remove, for a seat", () => true],
   // AE3-008: the institution's IT; British spelling.
   [/\bIT department\b|\borganization\b|\bInitializ/, "your institution's IT; British spelling", () => true],
+  // AE3-107: an account holder's two helpers are "your institution's IT"
+  // and "semper support" (the operator desk's form still has IT contacts).
+  [/\bIT contacts?\b/, "your institution's IT, to an account holder", (name) => name.startsWith("account/")],
+  [/\bsemper\s+contact\b|\ban\s+admin\b/i, "semper support / your institution's IT", () => true],
 ];
 
 test("the consoles use one word per concept", () => {

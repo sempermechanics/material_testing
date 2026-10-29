@@ -105,6 +105,7 @@ router.include_router(
     roster_router(Tier(
         reader=institution_admin_stepup, writer=institution_admin_stepup,
         bucket=rate_limit.institution_bucket, actor=repo.ACTOR_IT, audit="INSTITUTION",
+        institution_it=True,
     )),
     prefix="/v1/institutions/licenses/{license_id}",
 )

@@ -25,7 +25,7 @@ record that replaced it.
 | [016](ADR-016-work-that-outlives-the-activity.md) | Work that must outlive the Activity: ViewModel, an app-lifetime run, `NonCancellable` cleanup, or WorkManager | Accepted, built; amended 2026-10-19 (a lint or detekt check for rule 1 proposed) | — |
 | [017](ADR-017-viewbinding-and-ui-kit.md) | ViewBinding for every screen, and one `ui/common` helper per UI job | Accepted, built | — |
 | [018](ADR-018-error-convention.md) | One typed outcome per failure domain; cancellation is never a failure | Accepted, built | TD-77, TD-169 |
-| [019](ADR-019-sempermechanics-app-id.md) | The app is `com.sempermechanics.semper`; "indic" leaves the code, and the engine submodule is `engine/` | Accepted, released 2026-10-17 | TD-174 |
+| [019](ADR-019-sempermechanics-app-id.md) | The app is `com.sempermechanics.semper`; "indic" leaves the code, and the engine submodule is `engine/`; amended 2026-10-28: the user-facing name is lower-case "semper" (here "semper Classroom") | Accepted, released 2026-10-17; amended 2026-10-28 (Admin) | TD-174 |
 | [020](ADR-020-backend-refusal-model.md) | Backend refusals are one exception (`errors.Refusal`) with one status table (`errors.STATUS`) | Accepted, built | TD-179, TD-180 |
 | [021](ADR-021-retire-firestore-repo-facade.md) | Retire the `firestore_repo` facade; `app.repo` is a plain package and tests patch through `repo_view.patch` | Accepted, built | TD-181 |
 | [022](ADR-022-semper-ui-plus-lab-tests.md) | Material Testing is Semper's UI plus two test choices; a fork change to a shared screen is gated on the test | Accepted, built | — |

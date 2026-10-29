@@ -147,6 +147,34 @@ class EntitlementClockTest {
         )
     }
 
+    /**
+     * The documented limit (ADR-023 Trade-offs, readiness TE4-102): across a
+     * power-off, offline grace counts powered-on time. A phone that checks in,
+     * runs a day, is switched off for 30 days and boots with its wall clock set
+     * back to the high-water mark is not caught as a rollback, and its grace
+     * runs on from 1 day of uptime, not 31 calendar days; it still ends once
+     * the phone has been on for the grace. Casual-tamper scope, by decision; a
+     * change to this is a deliberate one.
+     */
+    @Test
+    fun `across a power-off with the clock held at its high-water mark grace counts powered-on time`() {
+        val until = TestTokens.IAT + PRODUCTION_GRACE_DAYS * DAY_S
+        val dayOn = EntitlementClock.evaluate(synced, at(DAY_MS), until, until).first
+        // Off for 30 days; the new boot's wall clock reads the high-water mark, not today.
+        val booted = { uptime: Long -> at(DAY_MS, elapsedMs = uptime, boot = BOOT + 1) }
+
+        val (afterBoot, verdict) = EntitlementClock.evaluate(dayOn, booted(10 * MINUTE_MS), until, until)
+        assertEquals(within, verdict)
+        assertFalse("not caught as a rollback", afterBoot.rolledBack)
+        assertEquals(DAY_MS + 10 * MINUTE_MS, afterBoot.elapsedSinceServerMs)
+
+        // Powered-on time alone ends it: 13 more days on is still within, 13 d + 1 h is not.
+        val stillOn = at(DAY_MS, elapsedMs = 13 * DAY_MS - HOUR_MS, boot = BOOT + 1)
+        assertEquals(within, EntitlementClock.evaluate(afterBoot, stillOn, until, until).second)
+        val pastGrace = at(DAY_MS, elapsedMs = 13 * DAY_MS + HOUR_MS, boot = BOOT + 1)
+        assertEquals(ended(GraceEnd.EXPIRED), EntitlementClock.evaluate(afterBoot, pastGrace, until, until).second)
+    }
+
     @Test
     fun `a reboot is detected by elapsed time when the boot count is unknown`() {
         val state = step(synced, at(DAY_MS, boot = DeviceTime.UNKNOWN_BOOT))
@@ -220,7 +248,11 @@ class EntitlementClockTest {
         const val ELAPSED_AT_SYNC = 5 * HOUR_MS
         const val BOOT = 7
 
-        /** The backend's licence grace (`licenseGraceDays`), and so a real token's lifetime. */
+        /**
+         * The backend's offline grace, `ENTITLEMENT_OFFLINE_GRACE_DAYS` (backend/app/config.py,
+         * default 14), which is a real token's lifetime (entitlement_token.py); not the licence's
+         * after-expiry grace, `LICENSE_GRACE_DAYS` (readiness TE4-103). Change the two together.
+         */
         const val PRODUCTION_GRACE_DAYS = 14L
         const val INSIDE_MS = 13 * DAY_MS + 23 * HOUR_MS
         const val OUTSIDE_MS = PRODUCTION_GRACE_DAYS * DAY_MS + MINUTE_MS

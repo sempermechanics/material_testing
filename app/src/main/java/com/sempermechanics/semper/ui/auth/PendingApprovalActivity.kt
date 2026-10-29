@@ -57,7 +57,7 @@ class PendingApprovalActivity : AppCompatActivity() {
     /** Opens the user's email app pre-filled to support so they can request access. */
     private fun requestAccessByEmail() {
         val email = authRepo.cachedEmail() ?: getString(R.string.pending_unknown_account)
-        val body = "I'd like access to Semper Classroom.\n\n" +
+        val body = "I'd like access to semper Classroom.\n\n" +
             SupportMail.contextLines(account = email, deviceId = DeviceKeys.deviceId(this))
         SupportMail.open(
             this,

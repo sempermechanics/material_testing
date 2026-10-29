@@ -448,6 +448,76 @@ def test_entitlement_pins_fail_when_required(apk):
     assert res["entitlement-pins"].status == "PASS"
 
 
+# SPKI pins of the Google Trust Services roots R1-R4 (Admin decision 2026-10-28,
+# TE1-001), from the DER certificates at https://i.pki.goog/r{1..4}.crt.
+_GTS_ROOT_PINS = (
+    "sha256/hxqRlPTu1bMS/0DITB1SSu0vd4u/8l8TjPgfaAp63Gc=",
+    "sha256/Vfd95BwDeSQo+NUYxVEEIlvkOlWY2SalKK1lPhzOx78=",
+    "sha256/QXnt2YHvdHR3tJYmQIr0Paosp6t/nggsEGD4QJZ3Q0g=",
+    "sha256/mEflZT5enoR1FuXLgYYGqnVEoZvmf9c2bVBpiOjYQ0c=",
+)
+
+
+def test_cert_pins_warn_unless_required(apk):
+    """TE1-001: a release built with SEMPER_API_CERT_PINS empty trusts any CA
+    in the system store for the API host. WARN without --require-pins (CI
+    tier 5), FAIL with it (the release workflow)."""
+    res = _by_check(apk.evaluate(_facts(apk, dex=_dex_with("no pin here")), expected_min_sdk=30,
+                                 debug_names=_DEBUG, mapping=None))
+    assert res["cert-pins"].status == "WARN"
+    assert "SEMPER_API_CERT_PINS" in res["cert-pins"].detail
+    res = _by_check(apk.evaluate(_facts(apk, dex=_dex_with("no pin here")), expected_min_sdk=30,
+                                 debug_names=_DEBUG, mapping=None, require_pins=True))
+    assert res["cert-pins"].status == "FAIL"
+    assert "SEMPER_API_CERT_PINS" in res["cert-pins"].detail
+    res = _by_check(apk.evaluate(_facts(apk, dex=_dex_with(",".join(_GTS_ROOT_PINS))), expected_min_sdk=30,
+                                 debug_names=_DEBUG, mapping=None, require_pins=True))
+    assert res["cert-pins"].status == "PASS"
+    assert res["cert-pins"].detail.startswith("4 sha256/ pin(s)")
+
+
+def _main_args(apk, tmp_path, monkeypatch, dex):
+    """main() with gather() replaced, so it runs without aapt2 (and on Windows)."""
+    monkeypatch.setattr(apk, "find_aapt2", lambda explicit: "aapt2")
+    monkeypatch.setattr(apk, "gather", lambda path, aapt2: _facts(apk, dex=dex))
+    app = tmp_path / "app-release.apk"
+    app.write_bytes(b"PK")
+    return [str(app), "--gradle", str(_gradle(tmp_path, 30)), "--debug-src", str(_REPO / "app" / "src" / "debug"),
+            "--mapping", str(_mapping(tmp_path, _OBFUSCATED))]
+
+
+def test_main_require_pins_fails_a_release_without_them(apk, tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    args = _main_args(apk, tmp_path, monkeypatch, _dex_with("no pin here"))
+    assert apk.main(args) == 0
+    assert "::warning title=Release APK cert-pins::" in capsys.readouterr().out
+    assert apk.main([*args, "--require-pins"]) == 1
+    captured = capsys.readouterr()
+    assert "::error title=Release APK cert-pins::" in captured.out
+    assert "1 check(s) failed" in captured.err
+
+
+def test_main_require_pins_passes_a_release_with_them(apk, tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    args = _main_args(apk, tmp_path, monkeypatch, _dex_with(",".join(_GTS_ROOT_PINS)))
+    assert apk.main([*args, "--require-pins"]) == 0
+    out = capsys.readouterr().out
+    assert "Release APK cert-pins" not in out
+    assert "4 sha256/ pin(s) compiled in" in out
+
+
+def test_release_workflow_requires_cert_pins():
+    """TE1-001: the release gate fails without pins, unconditionally (Admin
+    decision 2026-10-28); the build reads them from SEMPER_API_CERT_PINS."""
+    workflow = (_REPO / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    step = workflow[workflow.index("- name: Inspect release APK hardening"):]
+    step = step[:step.index("\n      - ")]
+    assert "\n            --require-pins \\\n" in step
+    build = workflow[workflow.index("- name: Build signed release APK and bundle"):]
+    build = build[:build.index("\n      - ")]
+    assert "SEMPER_API_CERT_PINS: ${{" in build
+
+
 def test_release_workflow_requires_entitlement_pins_only_once_the_key_is_live():
     """The flag is passed from repo variables, never unconditionally, so no
     release fails while TD-10 is open (Admin decision 2026-10-24)."""

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Licences · Semper DIC</title>
+  <title>Licences · semper</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&amp;family=Plus+Jakarta+Sans:wght@600;700;800&amp;display=swap" rel="stylesheet" />
@@ -62,14 +62,17 @@
     <!-- Outside #app: enrolment, step-up and sign-in errors report here while
          the dashboard is still hidden. A live region, so each step of a load
          is read out; it says it is checking the sign-in until auth.js knows. -->
-    <p id="status" class="muted" role="status" aria-live="polite" data-pending>Checking your sign-in…</p>
+    <div class="status-bar">
+      <p id="status" class="muted" role="status" aria-live="polite" data-pending>Checking your sign-in…</p>
+      <button id="statusClose" type="button" class="status-close" aria-label="Dismiss this message" title="Dismiss">×</button>
+    </div>
 
     <!-- The whole desk is for Semper staff; everyone else sees this and
          nothing of the desk (operator.js decides from /v1/me). -->
     <section class="card" id="notOperator" hidden>
       <h2>Not an operator account</h2>
       <p class="muted">
-        The operator desk is for Semper staff.
+        The operator desk is for semper staff.
         <span id="notOperatorWho" class="mono"></span> can open:
       </p>
       <p><a href="../account/">Your account</a> &middot; <a href="../institution/">Institution seats</a></p>
@@ -82,7 +85,7 @@
            somebody else's wait. Plain anchors: no script needed to jump. -->
       <nav class="desk-nav" aria-label="Desk sections">
         <a href="#licencesCard">Licences</a>
-        <a href="#approvalsCard">Approvals <span id="pendingCount" class="count" hidden></span></a>
+        <a href="#approvalsCard">Access requests <span id="pendingCount" class="count" hidden></span></a>
         <a href="#testAccountsCard">Test accounts</a>
         <a href="#demoPhoneCard">Demo phones</a>
         <a href="#deletedCard">Recently deleted</a>
@@ -147,10 +150,10 @@
                may keep in the cloud. It was labelled "Analysis cap" and, being
                the only number on an individual licence, got read as "1 licence". -->
           <label>Cloud analyses per person <span class="muted">(usually empty)</span>
-            <input id="maxAnalyses" type="number" min="1" placeholder="licensed default" />
+            <input id="maxAnalyses" type="number" min="1" placeholder="Licensed default" />
             <span class="hint">
-              Only for a plan sold with a limit. Empty gives the licensed default;
-              a limit below the demo allowance is refused.
+              Only for a plan sold with a limit. Empty gives the Licensed default;
+              a limit below the Demo limit is refused.
             </span>
           </label>
           <label class="wide">Note <span class="muted">(who it is for, PO number)</span>
@@ -164,9 +167,10 @@
 
         <!-- The key is shown once and never again: only its hash is stored. -->
         <div id="mintedBox" class="note" hidden>
-          <strong>Copy this key now.</strong> It is shown once — only a hash is
-          stored, so it cannot be recovered, only replaced. Keep it for support
-          recovery; the customer does not need it, and should not be sent it.
+          <strong>Copy this claim code now.</strong> It is shown once — only a
+          hash is stored, so it cannot be recovered, only replaced. Keep it for
+          support recovery (the person could redeem it on their account page);
+          the customer does not need it, and should not be sent it.
           <p class="mono key" id="mintedKey"></p>
           <button id="copyKey" class="secondary">Copy</button>
         </div>
@@ -242,7 +246,7 @@
               <input id="editSupport" type="date" />
             </label>
             <label>Cloud analyses per person
-              <input id="editCap" type="number" min="1" placeholder="licensed default" />
+              <input id="editCap" type="number" min="1" placeholder="Licensed default" />
             </label>
           </div>
           <div id="editInstitution" class="grid" hidden>
@@ -299,8 +303,9 @@
             </label>
           </div>
           <div id="convertedBox" class="note" hidden>
-            <strong>Copy this key now.</strong> It is shown once. Members on the
-            domain can redeem it, or IT adds them from the roster.
+            <strong>Copy this claim code now.</strong> It is shown once. Members
+            on the domain can redeem it on their account page, or IT adds them
+            from the roster.
             <p class="mono key" id="convertedKey"></p>
           </div>
           <p id="convertHint" class="muted"></p>
@@ -437,7 +442,7 @@
       <div class="desk-pair">
         <section class="card" id="approvalsCard">
           <div class="card-head">
-            <h2>Accounts awaiting approval</h2>
+            <h2>Access requests</h2>
             <span class="spacer"></span>
             <button id="reloadUsers" class="secondary">Refresh</button>
           </div>
@@ -458,7 +463,7 @@
           <p class="muted">
             When a Demo account asks to move to a new phone. Its old phone is signed
             out and held off for 24 hours; the new one can then sign in. For a
-            licensed account use <b>New phone</b> on the licence instead.
+            Licensed account use <b>New phone</b> on the licence instead.
           </p>
           <div class="row toolbar">
             <input id="releaseEmail" type="email" placeholder="person@lab.org" aria-label="Demo account's email" />
@@ -472,20 +477,31 @@
            address on a test domain, a generated password shown once,
            pre-approved and licensed, on up to N phones, and an end date.
            Every change is held to the revoke window's fresh sign-in.
-           The create form is folded away: the list is what most visits want,
-           and five open fields stood between the heading and it. -->
+           Show list sits at the right of the heading, where every card on the
+           desk keeps what it does to its whole list, and the list opens right
+           under it (test-accounts.js reads it afresh on each Show). The create
+           form is a fold below: a form opened in place, not the card's list. -->
       <section class="card" id="testAccountsCard">
         <div class="card-head">
           <h2>Test accounts</h2>
           <span class="spacer"></span>
-          <button id="loadTestAccounts" class="secondary">Show</button>
+          <button id="loadTestAccounts" class="secondary disclose" aria-controls="testAccountsWrap" aria-expanded="false">Show list</button>
         </div>
         <p class="muted">
           For QC staff and CI only, never a customer. The address must be on one
-          of the server's test domains. The account is approved and licensed at
+          of the server's test domains. The account is approved and Licensed at
           once, may be signed in on several phones, and is ended — suspended and
           its data erased — when its days run out. Its audit rows are kept.
         </p>
+        <div class="wrap" id="testAccountsWrap" hidden>
+          <table class="test-accounts">
+            <thead>
+              <tr><th>Account</th><th>Purpose</th><th>Ends</th><th>Phones</th>
+                <th>Status</th><th>Note</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr>
+            </thead>
+            <tbody id="testAccountRows"></tbody>
+          </table>
+        </div>
         <details class="fold" id="taCreateBox">
           <summary>Create a test account</summary>
           <div class="grid">
@@ -512,15 +528,6 @@
             <button id="taCreate">Create test account</button>
           </div>
         </details>
-        <div class="wrap" id="testAccountsWrap" hidden>
-          <table class="test-accounts">
-            <thead>
-              <tr><th>Account</th><th>Purpose</th><th>Ends</th><th>Phones</th>
-                <th>Status</th><th>Note</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr>
-            </thead>
-            <tbody id="testAccountRows"></tbody>
-          </table>
-        </div>
       </section>
 
       <!-- The password of a test account just created or reset. Shown once:
@@ -547,13 +554,14 @@
         <div class="card-head">
           <h2>Recently deleted</h2>
           <span class="spacer"></span>
-          <button id="loadDeleted" class="secondary">Show</button>
+          <button id="loadDeleted" class="secondary disclose" aria-controls="deletedWrap" aria-expanded="false">Show list</button>
         </div>
         <p class="muted">
           A deleted licence is held for 30 days, then purged for good. Restore
           puts it and its holders back — except anyone who has taken another
           licence since.
         </p>
+        <!-- Read afresh on each Show (lifecycle.js). -->
         <div class="wrap" id="deletedWrap" hidden>
           <table>
             <thead>
@@ -567,7 +575,7 @@
     </div>
 
     <p id="signedOut" class="muted">
-      Sign in with a Semper staff account to manage licences.
+      Sign in with a semper staff account to manage licences.
     </p>
   </main>
   <footer>

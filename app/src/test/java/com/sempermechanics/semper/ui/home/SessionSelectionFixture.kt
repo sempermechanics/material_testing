@@ -45,7 +45,7 @@ abstract class SessionSelectionFixture {
     protected lateinit var activity: AppCompatActivity
     protected lateinit var controller: SessionSelectionController
     protected lateinit var adapter: SessionListAdapter
-    private val homeViewModel by lazy { ViewModelProvider(activity)[HomeViewModel::class.java] }
+    protected val homeViewModel by lazy { ViewModelProvider(activity)[HomeViewModel::class.java] }
 
     protected lateinit var topBar: View
     protected lateinit var selectionBar: View
@@ -66,6 +66,7 @@ abstract class SessionSelectionFixture {
     protected val announced = mutableListOf<Pair<UUID, Int>>()
     protected val restored = mutableListOf<List<String>>()
     protected val reruns = mutableListOf<String>()
+    protected val renames = mutableListOf<Pair<String, String>>()
     protected var restoreAllowed = true
 
     @Before
@@ -99,6 +100,11 @@ abstract class SessionSelectionFixture {
             onRefresh = { refreshes++ },
             // As Home wires it: the erase runs in the view model, its outcome comes back here.
             onEraseLocally = { records, deviceOnly -> homeViewModel.eraseLocally(records, deviceOnly) },
+            // As Home wires it: the rename runs in the view model, its outcome comes back here.
+            onRename = { record, newName ->
+                renames += record.id to newName
+                homeViewModel.rename(record.id, newName)
+            },
             onDeviceOnlyDeleted = { deviceOnlyDeletes++ },
             restoreEnabled = { restoreAllowed },
             onRestore = { records -> restored += records.map { it.id } },
@@ -112,6 +118,9 @@ abstract class SessionSelectionFixture {
         controller.bindBarActions(btnClose = close, btnDelete = delete)
         activity.lifecycleScope.launch {
             homeViewModel.eraseOutcomes.collect { controller.showEraseOutcome(it) }
+        }
+        activity.lifecycleScope.launch {
+            homeViewModel.renameOutcomes.collect { controller.showRenameOutcome(it) }
         }
     }
 

@@ -11,6 +11,7 @@ import android.view.Window
 import android.view.WindowManager
 import android.widget.EditText
 import android.widget.ImageView
+import android.widget.LinearLayout
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.graphics.drawable.toDrawable
 import androidx.core.view.isVisible
@@ -65,6 +66,9 @@ internal class SweepFramePicker(
     /** The frame the field shows; the dialog opens on it. */
     private var picked = 0
 
+    /** The picked frame's full name, as the field shows it. */
+    private var label = ""
+
     /** The frame the thumbnail shows or is decoding. */
     private var thumbPath: String? = null
 
@@ -79,6 +83,15 @@ internal class SweepFramePicker(
         field = activity.findViewById(R.id.tilSweepFrame)
         name = activity.findViewById(R.id.ddSweepFrame)
         thumb = activity.findViewById(R.id.imgSweepFrame)
+        // Display only (a tap opens the dialog). The whole name shows: it
+        // wraps rather than being cut, and once it needs more than one line
+        // beside the thumbnail, the "23 / 40" and the i, the field takes a line
+        // of its own under them, where the name has the page's width. Cut to
+        // fit there it read 'sp…g' at font scale 2.0 (readiness AE1-108).
+        name.keyListener = null
+        name.isSingleLine = false
+        name.maxLines = Int.MAX_VALUE
+        name.viewTreeObserver.addOnPreDrawListener { fitField() }
         name.setOnClickListener { openDialog(picked) }
         field.setEndIconOnClickListener { openDialog(picked) }
         thumb.setOnClickListener { showOverlay() }
@@ -95,7 +108,8 @@ internal class SweepFramePicker(
             return
         }
         picked = index.coerceIn(0, count - 1)
-        name.setText(frameLabel(picked))
+        label = frameLabel(picked)
+        name.setText(label)
         field.suffixText = activity.getString(R.string.sweep_frame_count_fmt, picked + 1, count)
         showThumb(viewModel.defFilePaths.getOrNull(picked))
     }
@@ -110,10 +124,10 @@ internal class SweepFramePicker(
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         val content = SweepFrameOverlayBinding.inflate(LayoutInflater.from(activity))
         content.imgSweepFrameOverlay.setImageDrawable(image)
-        content.imgSweepFrameOverlay.contentDescription = name.text
+        content.imgSweepFrameOverlay.contentDescription = label
         content.tvSweepFrameOverlay.text = activity.getString(
             R.string.sweep_frame_overlay_caption_fmt,
-            name.text,
+            label,
             activity.getString(R.string.sweep_frame_position_fmt, picked + 1, frameCount),
         )
         content.root.setOnClickListener { dialog.dismiss() }
@@ -126,6 +140,24 @@ internal class SweepFramePicker(
             clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
         }
         dialog.show()
+    }
+
+    /**
+     * Moves the field out of the thumbnail's row onto a full-width line under
+     * it once the name wraps there. True when nothing moved; false asks for
+     * another pass. It stays moved: a shorter name later does not move it back.
+     */
+    private fun fitField(): Boolean {
+        val row = field.parent as? ViewGroup
+        val column = block as? ViewGroup
+        val wraps = (name.layout?.lineCount ?: 0) > 1
+        if (row?.id != R.id.sweepFrameRow || column == null || !wraps) return true
+        row.removeView(field)
+        activity.findViewById<View>(R.id.sweepFrameRowGap).isVisible = true
+        val params = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        params.topMargin = column.dp(OWN_LINE_GAP_DP).toInt()
+        column.addView(field, column.indexOfChild(row) + 1, params)
+        return false
     }
 
     /** Decodes the frame at [path] into the thumbnail; a result for a frame no longer picked is dropped. */
@@ -268,6 +300,9 @@ internal class SweepFramePicker(
         /** A frame row in the pick dialog: vertical padding and touch-target height. */
         const val FRAME_ROW_PADDING_DP = 8f
         const val FRAME_ROW_MIN_HEIGHT_DP = 48f
+
+        /** Between the thumbnail's row and the field's own line under it. */
+        const val OWN_LINE_GAP_DP = 8f
 
         /** ASCII digits, so the field round-trips through toIntOrNull() in any locale. */
         fun frameNumberText(oneBased: Int): String = String.format(Locale.US, "%d", oneBased)

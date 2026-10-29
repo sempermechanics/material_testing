@@ -15,6 +15,7 @@
     android:layout_marginTop="14dp"
     android:background="?attr/selectableItemBackground"
     android:gravity="center_vertical"
+    android:minHeight="@dimen/min_touch_target"
     android:orientation="horizontal"
     android:paddingVertical="4dp">
 

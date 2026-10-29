@@ -6,12 +6,16 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.view.ViewCompat
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.databinding.ViewSettingsSectionHeaderBinding
 import com.sempermechanics.semper.ui.settings.SettingsActivity
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -131,17 +135,31 @@ class SettingsSectionHeaderTest {
             val chevron = header.findViewById<ImageView>(R.id.imgSectionChevron)
             val body = activity.findViewById<View>(section.second)
             val name = activity.getString(section.first)
+            val collapsed = activity.getString(R.string.a11y_collapsed)
+            val expanded = activity.getString(R.string.a11y_expanded)
             assertFalse("$name starts closed", body.isShown)
             assertEquals(name, 0f, chevron.rotation)
+            // TalkBack hears the state, not only the chevron's turn (readiness AE1-107).
+            assertEquals(name, collapsed, ViewCompat.getStateDescription(header))
+            assertTrue(name, header.hasA11yAction(AccessibilityActionCompat.ACTION_EXPAND.id))
 
             header.performClick()
             assertEquals(name, View.VISIBLE, body.visibility)
             assertEquals(name, 180f, chevron.rotation)
+            assertEquals(name, expanded, ViewCompat.getStateDescription(header))
+            assertTrue(name, header.hasA11yAction(AccessibilityActionCompat.ACTION_COLLAPSE.id))
 
             header.performClick()
             assertEquals(name, View.GONE, body.visibility)
             assertEquals(name, 0f, chevron.rotation)
+            assertEquals(name, collapsed, ViewCompat.getStateDescription(header))
         }
+    }
+
+    private fun View.hasA11yAction(id: Int): Boolean {
+        val info = AccessibilityNodeInfoCompat.obtain()
+        ViewCompat.onInitializeAccessibilityNodeInfo(this, info)
+        return info.actionList.any { it.id == id }
     }
 
     @Test

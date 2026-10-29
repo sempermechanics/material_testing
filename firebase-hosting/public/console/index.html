@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- This page is also served at a rewritten address (see firebase.json), where the browser's own base would be the site root and every relative path here — the stylesheet, auth.js, the links onward — would resolve one directory too high. Naming the base makes both addresses behave identically. -->
   <base href="/console/" />
-  <title>Sign in · Semper DIC</title>
+  <title>Sign in · semper</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&amp;family=Plus+Jakarta+Sans:wght@600;700;800&amp;display=swap" rel="stylesheet" />
@@ -47,7 +47,10 @@
     <!-- Outside #app: enrolment, step-up and sign-in errors report here while
          the dashboard is still hidden. A live region, so each step of a load
          is read out; it says it is checking the sign-in until auth.js knows. -->
-    <p id="status" class="muted" role="status" aria-live="polite" data-pending>Checking your sign-in…</p>
+    <div class="status-bar">
+      <p id="status" class="muted" role="status" aria-live="polite" data-pending>Checking your sign-in…</p>
+      <button id="statusClose" type="button" class="status-close" aria-label="Dismiss this message" title="Dismiss">×</button>
+    </div>
     <div id="app" hidden>
       <!-- Shown only when the account can open more than one dashboard, or
            when we could not establish which it should be. -->

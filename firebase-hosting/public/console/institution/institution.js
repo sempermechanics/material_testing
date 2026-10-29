@@ -1,7 +1,7 @@
-import { requireSignIn } from "../auth.js";
+import { requireSignIn, sessionOver } from "../auth.js";
 import { api } from "../api.js";
 import { setStatus, markFirstData, whileWaiting } from "../status.js";
-import { esc, day, licenceStatePill, placeholderRows, retryRow } from "../util.js";
+import { esc, day, licenceStatePill, placeholderRows, retryRow, sessionEnded } from "../util.js";
 import { explain } from "../messages.js";
 import { fetchRoster, wireRoster } from "../roster.js";
 import { mountSwitcher } from "../switcher.js";
@@ -11,6 +11,7 @@ import { wireAuditLog } from "../audit-log.js";
 let licenseId = "";
 let shownId = null; // the licence the import results and audit log are for
 let keyPrefix = ""; // the open licence's, for file names
+let domainLock = ""; // the open licence's domain: IT may add only addresses on it
 let members = new Map(); // uid → address, from the last roster read
 
 const $ = (id) => document.getElementById(id);
@@ -22,14 +23,14 @@ const fileName = () => (keyPrefix || licenseId).replace(/[^\w.-]+/g, "_");
 
 const renderRows = wireRoster({
   rows: $("rows"), email: $("addEmail"), add: $("add"), base, report: setStatus, reload: load,
-  filter: $("rowFilter"), count: $("rowCount"), head: $("rosterHead"),
+  filter: $("rowFilter"), count: $("rowCount"), head: $("rosterHead"), domain: () => domainLock,
 });
 
 wireExport({ button: $("exportRoster"), base, name: fileName, report: setStatus });
 const clearImport = wireImport({
   text: $("importText"), file: $("importFile"), preview: $("importPreview"),
   submit: $("importSubmit"), summary: $("importSummary"), results: $("importResults"),
-  rows: $("importRows"), base, report: setStatus, reload: load,
+  rows: $("importRows"), base, report: setStatus, reload: load, domain: () => domainLock,
 });
 const resetAudit = wireAuditLog({
   rows: $("auditRows"), since: $("auditSince"), until: $("auditUntil"), show: $("auditLoad"),
@@ -66,8 +67,15 @@ async function administersSomething(user) {
   try {
     licenses = (await whileWaiting(api("/v1/institutions/licenses"), "Checking your access…"))
       .licenses || [];
+    // The roster's read, sent alongside, may have ended the session first:
+    // its line stays, and nothing shows the dashboard again (AE2-105).
+    if (sessionOver()) return false;
     setStatus("");
   } catch (e) {
+    // Signed out (api.js ended the session and said so), by this read or by
+    // the roster's sent alongside: whatever this one failed with, the line
+    // that says to sign in again stays and nothing more is shown (AE2-105).
+    if (sessionEnded(e) || sessionOver()) return false;
     if (e.code !== "email_not_verified") {
       setStatus(`Could not list your institution licences: ${explain(e)}`, true);
       return true;
@@ -118,6 +126,7 @@ async function load(started) {
     // Another licence: nothing of the last one's may stay on screen under it.
     shownId = licenseId;
     keyPrefix = "";
+    domainLock = "";
     members = new Map();
     $("tiles").innerHTML = "";
     clearImport();
@@ -133,14 +142,16 @@ async function load(started) {
   $("load").disabled = true;
   try {
     const data = await whileWaiting(started || fetchRoster(base()), "Loading the roster…");
-    if (ticket !== rosterLoad) return;
+    // Another read (an export, a Remove) may have ended the session while
+    // this one was out: its line stays, and no counts are read (AE2-105).
+    if (ticket !== rosterLoad || sessionOver()) return;
     render(data);
     markFirstData();
     setStatus("");
     // The counts come after the roster, and again after every change to it.
     loadTiles($("tiles"), base(), () => ticket === rosterLoad);
   } catch (e) {
-    if (ticket !== rosterLoad) return;
+    if (ticket !== rosterLoad || sessionOver()) return;
     $("summary").innerHTML = "";
     if (e.code !== "license_not_found") {
       $("rows").innerHTML = retryRow(5, `Could not load: ${explain(e)}`);
@@ -196,10 +207,10 @@ function render(data) {
     </p>`;
 
   $("rosterHelp").textContent = floating
-    ? "Everyone here may use Semper, but only the number of seats above at " +
+    ? "Everyone here may use semper, but only the number of seats above at " +
       "the same time. Someone without a seat keeps their saved work and " +
       "gets one as soon as a colleague finishes."
-    : "Everyone here is licensed. Removing someone frees their seat for " +
+    : "Everyone here is Licensed. Removing someone frees their seat for " +
       "another member.";
 
   // Invites belong in the same list: to whoever manages the roster this
@@ -208,6 +219,7 @@ function render(data) {
   renderRows(data.seats, data.invites);
   $("rosterCard").hidden = false;
   keyPrefix = lic.keyPrefix || "";
+  domainLock = lic.domainLock || "";
   // The audit log names members by address, as the roster does.
   members = new Map(data.seats.filter((s) => s.email).map((s) => [s.uid, s.email]));
   $("importCard").hidden = false;

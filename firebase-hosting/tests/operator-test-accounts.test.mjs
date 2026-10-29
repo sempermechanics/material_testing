@@ -99,7 +99,7 @@ test("a QC account is created with the form's values and its password is shown o
   assert.equal($("taPassword").textContent, ISSUED);
   assert.equal($("taPasswordEmail").textContent, "new@test.example");
   assert.deepEqual(status(), [
-    `Test account new@test.example created (QC): approved and licensed, ends ${day(ENDS)}, ` +
+    `Test account new@test.example created (QC): approved and Licensed, ends ${day(ENDS)}, ` +
     "on up to 3 phones at once. Copy its password now.", "muted"]);
   assert.ok(!$("status").textContent.includes(ISSUED));
   assert.deepEqual([$("taEmail").value, $("taNote").value], ["", ""], "ready for the next one");
@@ -132,7 +132,7 @@ test("a CI account may run without an end; QC always has one", async () => {
   await create();
   assert.deepEqual(createBody(), { email: "new@test.example", purpose: "ci", days: null, maxDevices: 1 },
     "blank days is sent as null: no expiry");
-  assert.match(status()[0], /created \(CI\): approved and licensed, never ends, on up to 1 phone at once/);
+  assert.match(status()[0], /created \(CI\): approved and Licensed, never ends, on up to 1 phone at once/);
 
   $("taPurpose").value = "qc";
   $("taPurpose").dispatch("change");
@@ -169,9 +169,9 @@ test("each refusal of a create is said, and no dialog opens", async () => {
       "Test accounts are switched off on this server, or that address is not on one of its " +
       "test domains (TEST_ACCOUNT_DOMAINS)."],
     [() => json(409, { detail: "email_in_use" }),
-      "That address already has a Semper account or sign-in. A test account needs an address nobody has used."],
+      "That address already has a semper account or sign-in. A test account needs an address nobody has used."],
     [() => json(403, { detail: "mfa_required" }), "Set up two-factor authentication first."],
-    [() => json(403, { detail: "not_admin" }), "That account is not a Semper operator."],
+    [() => json(403, { detail: "not_admin" }), "That account is not a semper operator."],
     [() => json(422, { detail: [{ msg: "Value error, days must be at most 90", loc: ["body"] }] }),
       "Could not create new@test.example: days must be at most 90"],
     [offline, "Could not create new@test.example: The server could not be reached — check your connection and try again."],
@@ -251,7 +251,8 @@ test("a return leg declined, malformed, or without a fresh sign-in sends nothing
 
 test("the list shows purpose, end, phones, status and note, and a row per account", async () => {
   await showList([QC, CI, { ...QC, uid: "uid-old", email: "old@test.example", status: "ended", note: "<b>x</b>" }]);
-  assert.equal($("loadTestAccounts").textContent, "Refresh");
+  assert.equal($("loadTestAccounts").textContent, "Hide list");
+  assert.equal($("loadTestAccounts").getAttribute("aria-expanded"), "true");
   assert.deepEqual(accountRows(), [
     ["qc-1@test.example", "QC", day(ENDS), "1 of 3", "active", "QC rack", "Extend New password End now"],
     ["ci@test.example", "CI", "Never", "0 of 10", "active", "—", "Extend New password End now"],
@@ -288,12 +289,38 @@ test("a late list answer is not drawn over a newer one", async () => {
   } });
   $("loadTestAccounts").click();
   await settle();
-  $("loadTestAccounts").disabled = false;
+  // Fold it while the first read is out, then open it again: a second read.
+  $("loadTestAccounts").click();
   $("loadTestAccounts").click();
   await settle();
   first.resolve(json(200, { accounts: [QC] }));
   await settle();
   assert.deepEqual(accountRows().map((r) => r[0]), ["ci@test.example"]);
+});
+
+test("Show list and Hide list take turns, and every Show reads the list afresh", async () => {
+  await showList([QC]);
+  $("loadTestAccounts").click();
+  assert.equal($("testAccountsWrap").hidden, true, "Hide list puts it away");
+  assert.equal($("loadTestAccounts").textContent, "Show list");
+  assert.equal($("loadTestAccounts").getAttribute("aria-expanded"), "false");
+  assert.equal(sent(/test-accounts/).length, 1, "and reads nothing");
+  $("loadTestAccounts").click();
+  await settle();
+  assert.equal($("testAccountsWrap").hidden, false);
+  assert.equal($("loadTestAccounts").textContent, "Hide list");
+  assert.equal(sent(/test-accounts/).length, 2, "Show list reads it again");
+});
+
+test("Show list sits at the right of the card heading, and the list opens above the create form", async () => {
+  await openDesk();
+  const toggle = $("loadTestAccounts");
+  assert.ok(toggle.closest(".card-head"), "in the heading row, with the desk's other list actions");
+  assert.equal(toggle.tagName, "BUTTON");
+  assert.equal(toggle.getAttribute("aria-controls"), "testAccountsWrap");
+  const order = $("testAccountsCard").children.map((c) => c.id).filter(Boolean);
+  assert.ok(order.indexOf("testAccountsWrap") < order.indexOf("taCreateBox"),
+    "the list opens right under the heading that controls it");
 });
 
 /* ------------------------------------------------------------- actions */
@@ -332,7 +359,7 @@ test("Extend without a new end in the answer, refused, out of range or cancelled
   prompts.answer("7");
   rowButton("extend", QC.uid).click();
   await settle();
-  assert.deepEqual(status(), ["Could not extend qc-1@test.example: No Semper account has that address.", "muted err"]);
+  assert.deepEqual(status(), ["Could not extend qc-1@test.example: No semper account has that address.", "muted err"]);
 });
 
 test("New password confirms, then shows the new one once", async () => {
@@ -427,7 +454,7 @@ test("the list shows each active phone with its own Release", async () => {
   await showList([PHONES, CI]);
   // Model and app, the id under them (or the id alone, without a model), Release.
   assert.deepEqual(accountRows()[0].slice(3, 4), [
-    "2 of 3 Pixel 6 Semper and-phone-1 Release and-phone-<2> Semper Classroom Release"]);
+    "2 of 3 Pixel 6 semper and-phone-1 Release and-phone-<2> semper Classroom Release"]);
   assert.deepEqual(accountRows()[1].slice(3, 4), ["0 of 10"], "no phones, no buttons");
   const phones = $("testAccountRows").querySelectorAll("li");
   assert.equal(phones.length, 2, "one line per phone");
@@ -440,12 +467,51 @@ test("the list shows each active phone with its own Release", async () => {
   assert.equal(rowButton("extend", QC.uid).className, "secondary");
 });
 
-test("a phone registered before ADR-030 is labelled Semper Classroom too", async () => {
+const phonesFold = (uid) => $("testAccountRows").querySelector(`details[data-ta-phones="${uid}"]`);
+
+test("each row's buttons and its phone count name the account they act on", async () => {
+  await showList([PHONES, CI]);
+  const label = (kind, uid) => rowButton(kind, uid).getAttribute("aria-label");
+  assert.deepEqual([label("extend", QC.uid), label("password", QC.uid), label("end", QC.uid)],
+    ["Extend qc-1@test.example", "New password for qc-1@test.example", "End now: qc-1@test.example"]);
+  assert.equal(label("end", CI.uid), "End now: ci@test.example", "every row its own (the visible words first: WCAG 2.5.3)");
+  assert.equal(phonesFold(QC.uid).querySelector("summary").getAttribute("aria-label"),
+    "2 of 3 phones for qc-1@test.example");
+});
+
+test("an account's phones fold under their count, folded at first", async () => {
+  await showList([PHONES, CI]);
+  const fold = phonesFold(QC.uid);
+  assert.ok(fold, "the phones sit in a fold");
+  assert.equal(fold.open, false, "a row is one line until its phones are asked for");
+  assert.equal(fold.querySelector("summary").textContent.trim(), "2 of 3", "the count is the fold's label");
+  assert.equal(fold.querySelectorAll("li").length, 2, "every phone, with its Release, is inside it");
+  assert.equal(phonesFold(CI.uid), null, "no phones, no fold: the count alone");
+});
+
+test("phones unfolded stay unfolded when the list is read again", async () => {
+  await showList([PHONES, CI], { [`POST ${RELEASE}`]: () => json(200, {}) });
+  phonesFold(QC.uid).querySelector("summary").click();
+  // The list is read again (a Release does this): still unfolded.
+  $("loadTestAccounts").click();
+  $("loadTestAccounts").click();
+  await settle();
+  assert.equal(phonesFold(QC.uid).open, true);
+  // Folded again, it stays folded.
+  phonesFold(QC.uid).open = true;
+  phonesFold(QC.uid).querySelector("summary").click();
+  $("loadTestAccounts").click();
+  $("loadTestAccounts").click();
+  await settle();
+  assert.equal(phonesFold(QC.uid).open, false);
+});
+
+test("a phone registered before ADR-030 is labelled semper Classroom too", async () => {
   // devices/{id}.app is never rewritten, so it may still say materialtesting.
   await showList([{ ...QC, activeDevices: 1, devices: [
     { deviceId: "old-phone", app: "materialtesting", model: "Pixel 5", registeredAt: null },
   ] }]);
-  assert.deepEqual(accountRows()[0].slice(3, 4), ["1 of 3 Pixel 5 Semper Classroom old-phone Release"]);
+  assert.deepEqual(accountRows()[0].slice(3, 4), ["1 of 3 Pixel 5 semper Classroom old-phone Release"]);
 });
 
 test("Release confirms, sends, says so and reads the list again", async () => {
@@ -548,4 +614,15 @@ test("Copy puts the password on the clipboard, or says to copy it by hand", asyn
     if (had) Object.defineProperty(navigator, "clipboard", had);
     else delete navigator.clipboard;
   }
+});
+
+// AE2-105: Show list answered 401 invalid_token. The page signed out and
+// hid the desk, with the reason only in a row of the hidden list.
+test("an expired sign-in on Show list says so on the status line", async () => {
+  await openDesk({ routes: { [LIST]: () => json(401, { detail: "invalid_token" }) } });
+  $("loadTestAccounts").click();
+  await settle();
+  assert.deepEqual(status(), ["Your sign-in has expired. Sign in again.", "muted err"]);
+  assert.equal($("app").hidden, true);
+  assert.equal($("signIn").hidden, false);
 });

@@ -48,22 +48,26 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
      JOSE raw `r‖s`, 64 bytes, not DER (`entitlement_token.py:123-132`);
    - claims `iss` = `semper-api`, `sub` (uid), `app`, `dev` (device id), `dkt`
      (base64url SHA-256 of the device key's DER SubjectPublicKeyInfo,
-     `:102-111`), `mode`, `features` {`share`, `backup`, `maxAnalyses`}, `lic`,
+     `:110-119`), `mode`, `features` {`share`, `backup`, `maxAnalyses`}, `lic`,
      `iat`, `refreshAfter` = `iat` + 24 h, `graceUntil`, `exp` = `graceUntil`
-     (`:210-242`);
+     (`build_claims`, `:218-250`);
    - `graceUntil` is `iat` + `ENTITLEMENT_OFFLINE_GRACE_DAYS` (default 14,
      `backend/app/config.py:306`), capped for a licensed account at the
      licence's end plus its own grace (`licenseGraceEndsAt`) and, on a floating
-     seat, at the lease's end (`leaseExpiresAt`) (`entitlement_token.py:201-215`);
+     seat, at the lease's end (`leaseExpiresAt`) (`grace_until`, `entitlement_token.py:201-216`).
+     The default 14 is pinned by
+     `test_the_offline_grace_and_the_licence_grace_default_to_14_days`
+     (`backend/tests/test_release_gate_and_events.py`), which also tells it from
+     `LICENSE_GRACE_DAYS_DEFAULT`, the licence's own grace past expiry, also 14;
    - `lic` is the licence id only while `mode` is `licensed`; a demo token
-     carries `lic: null` and an uncapped grace (`:237`);
+     carries `lic: null` and an uncapped grace (`:245`);
    - `mode` and `features` are read from the same resolved config the plain
      `/v1/config` JSON returns, so the token never grants more than the answer it
-     rides in (`backend/app/routers/account.py:145-189`).
+     rides in (`app_config`, `backend/app/routers/account.py:157-189`).
 3. **Delivery.** `GET /v1/config` adds `entitlement` when the service holds a
    key, the caller sent `X-Device-Id`, and that device is an active device of
    this account with a registered key (`entitlement_token.py:277-310`). Anything
-   else omits the field and fails nothing (`routers/account.py:175-189`). After
+   else omits the field and fails nothing (`routers/account.py:182-206`). After
    each floating-seat checkout or heartbeat the app fetches `/v1/config` again,
    so the token follows the lease; when that fetch fails it queues the one-off
    refresh, unique work `license-config-now`, expedited and retried with backoff
@@ -96,8 +100,10 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
    then time
    (`EntitlementClock.evaluate`, `EntitlementClock.kt:140`):
    - effective time is the later of "last server time + wall-clock movement" and
-     "last server time + accumulated `elapsedRealtime`", so neither a wrong clock
-     nor a reboot is rewarded;
+     "last server time + accumulated `elapsedRealtime`", so a wall clock set back
+     while the phone runs gains nothing. Across a power-off only the wall clock
+     can count the time the phone was off: see Trade-offs for the one case it
+     does not (readiness TE4-102);
    - a wall clock more than 10 minutes behind the highest seen
      (`ROLLBACK_TOLERANCE_MS`, `:89`) ends grace until the next server time;
    - the token and clock state are stored together, sealed with an HMAC under a
@@ -159,9 +165,18 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
   truth for seats and a third party on the licence path for what remains: one
   signing function of about 300 lines.
 - **Identity Platform multi-tenancy, one tenant per customer.** Rejected for
-  now. Semper's tenant is the institution licence: its `adminEmails` and
-  `domainLock` scope every IT route (`backend/app/routers/institutions.py:35-55`),
-  and cross-institution access answers 404. Tenants would split one account
+  now. Semper's tenant is the institution licence: its `adminEmails` scope
+  every IT route (`institution_admin_context`, `backend/app/routers/institutions.py:36-57`),
+  and cross-institution access answers 404. Its `domainLock` scopes whom IT may
+  add (since 2026-10-28, readiness TE3-102, ADDENDUM-2): a single add or an
+  import row off the domain is 422 `member_off_domain`, decided before the
+  person is looked up, and an address another licence holds or promises is
+  answered as an unknown one, a pending invite that is held and never claimed
+  (`add_institution_member`, `hold_institution_invite`;
+  `backend/app/repo/institution_admin.py`, `backend/app/repo/invites.py`), so
+  IT's replies say nothing about other licences. Semper staff, on the same
+  roster routes under `/v1/admin`, may add an external collaborator off the
+  domain and are told `member_already_licensed`. Tenants would split one account
   across pools and change every sign-in path for no gain until a customer needs
   its own IdP; per-institution SSO is FI-17.
 - **App Check replay protection on an activation function**
@@ -190,6 +205,23 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
   an unverifiable token gives the same result as no token: the cached config,
   bounded by the server at the next online request.
 - The private key is in the service's memory (TD-30).
+- **Offline grace is 14 days of powered-on time for a user who sets the clock
+  back across power-offs** (readiness TE4-102, 2026-10-28). `elapsedRealtime`
+  restarts at boot, so a reboot counts the time since boot
+  (`EntitlementClock.advance`, `EntitlementClock.kt:119-131`), and the
+  rollback rule fires only when the wall clock is more than 10 minutes behind
+  the highest seen (`:123`). A user who powers off and, before the next boot,
+  sets the wall clock to about where it stood (the high-water mark) is
+  credited with neither the time the phone was off nor a rollback: check in,
+  run 1 day, power off 30 days, set the clock back to day 1, and the token
+  still reads as within grace after 31 calendar days. The KDoc says so
+  (`EntitlementClock.kt:78-80`). This is within decision 6's scope (casual
+  clock changes made useless, not a rooted or determined user), and the
+  server's controls stand: `exp`, and revocation at the next check-in. Not
+  pinned by an app test yet (an `EntitlementClockTest` case, app stream).
+  Hardening, once a key is live (TD-10): a shorter
+  `ENTITLEMENT_OFFLINE_GRACE_DAYS`, or ending grace on a boot whose wall clock
+  has not passed the previous boot's last reading.
 
 ## Consequences
 

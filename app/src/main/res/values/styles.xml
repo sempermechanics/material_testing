@@ -168,6 +168,37 @@
     </style>
 
     <!-- Segmented button group (replaces radio groups) -->
+    <!-- A tappable line of text (a link, "Cancel", "Forgot password?"): a
+         48dp-tall row around the text, centred, with a ripple (readiness AE1-102). -->
+    <style name="Widget.Semper.TextLink">
+        <item name="android:minHeight">@dimen/min_touch_target</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:background">?attr/selectableItemBackground</item>
+    </style>
+
+    <!-- A number typed in line with its label (the wizard's subset, step, strain
+         window; the viewer's frame number): a borderless field that is still a
+         48 x 48 dp target. Set its gravity with center_vertical (readiness AE1-102). -->
+    <style name="Widget.Semper.InlineValue">
+        <item name="android:minHeight">@dimen/min_touch_target</item>
+        <item name="android:minWidth">@dimen/min_touch_target</item>
+    </style>
+
+    <!-- An off switch keeps a 3:1 track (readiness AE1-106). -->
+    <style name="Widget.Semper.Switch" parent="Widget.MaterialComponents.CompoundButton.Switch">
+        <item name="trackTint">@color/switch_track</item>
+    </style>
+
+    <!-- Alert dialogs: the body in text_secondary (5.5:1 on white) instead of
+         Material's medium-emphasis on-surface, 4.25:1 (readiness AE1-105). -->
+    <style name="ThemeOverlay.Semper.AlertDialog" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog">
+        <item name="materialAlertDialogBodyTextStyle">@style/MaterialAlertDialog.Semper.Body.Text</item>
+    </style>
+
+    <style name="MaterialAlertDialog.Semper.Body.Text" parent="MaterialAlertDialog.MaterialComponents.Body.Text">
+        <item name="android:textColor">@color/text_secondary</item>
+    </style>
+
     <style name="Widget.Semper.SegmentedButton" parent="Widget.MaterialComponents.Button.OutlinedButton">
         <item name="android:textAllCaps">false</item>
         <item name="strokeColor">@color/outline_strong</item>
@@ -240,6 +271,16 @@
     <style name="ShapeAppearance.Semper.ViewerPeek" parent="ShapeAppearance.MaterialComponents.LargeComponent">
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">22dp</item>
+    </style>
+
+    <!-- The app's bottom sheets (media picker, Share, Send to): sheet_surface, so a
+         sheet at the top of the screen at night gets light status-bar icons. -->
+    <style name="Widget.Semper.BottomSheet" parent="Widget.MaterialComponents.BottomSheet.Modal">
+        <item name="backgroundTint">@color/sheet_surface</item>
+    </style>
+
+    <style name="ThemeOverlay.Semper.BottomSheetDialog" parent="ThemeOverlay.MaterialComponents.BottomSheetDialog">
+        <item name="bottomSheetStyle">@style/Widget.Semper.BottomSheet</item>
     </style>
 
     <style name="Widget.Semper.ViewerPeekSheet" parent="Widget.MaterialComponents.BottomSheet.Modal">

@@ -110,7 +110,7 @@ def feature_not_licensed_detail() -> str:
     colon, as for the quota code. A function rather than another constant so
     test_error_codes keeps treating every constant here as a bare code.
     """
-    return f"{FEATURE_NOT_LICENSED}: Restore isn't available in demo mode."
+    return f"{FEATURE_NOT_LICENSED}: Restore isn't available on Demo."
 
 
 LICENSE_NOT_FOUND = "license_not_found"
@@ -200,9 +200,17 @@ INVITE_EXISTS = "invite_exists"
 # `already_licensed` — a key typed in the app.
 # `member_already_licensed` — institution IT adding someone to a roster. No
 #   id: IT has no business learning which other licence a person holds.
+#   Semper staff only since 2026-10-28: institution IT is given the answer an
+#   unknown address gets instead, a held invite (repo/invites.py,
+#   ADDENDUM-2), so its roster is no oracle on other licences.
 EMAIL_ALREADY_LICENSED = "email_already_licensed"
 ALREADY_LICENSED = "already_licensed"
 MEMBER_ALREADY_LICENSED = "member_already_licensed"
+#: 422 to institution IT adding an address that is not on the licence's
+#: `domainLock` (single add and each import row). Decided from the address
+#: and the licence alone, before anything about the person is read. Semper
+#: staff may still add an external collaborator.
+MEMBER_OFF_DOMAIN = "member_off_domain"
 #: Not a refusal: a staff mint's `claimError` when the address already holds a
 #: live licence, so the new one is minted but not attached (repo/mint.py).
 HOLDER_ALREADY_LICENSED = "holder_already_licensed"
@@ -360,6 +368,7 @@ STATUS: dict[str, int] = {
     DELETED_LICENSE_PURGED: 410,
     # A licence edit or conversion that is not allowed as asked.
     CONVERT_DOMAIN_MISMATCH: 422,
+    MEMBER_OFF_DOMAIN: 422,
     EXPIRY_IN_PAST: 422,
     EXPIRY_BEFORE_CURRENT: 422,
     LICENSE_PERPETUAL: 422,

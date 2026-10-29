@@ -51,7 +51,19 @@ def _invite_ref(email: str):
     return db().collection(_INVITES).document(invite_id(email))
 
 
+def _held_ref(license_id: str, email: str):
+    """A held invite: IT's add of an address another licence holds or
+    promises (`hold_institution_invite`). Its own document in `licenseInvites`,
+    never at the address's claim key, so the sign-in claim never reads it and
+    the other licence's promise is untouched."""
+    return db().collection(_INVITES).document(f"held_{license_id}_{invite_id(email)}")
+
+
 def _invite_public(doc_id: str, inv: dict) -> dict:
+    if inv.get("held"):
+        # Listed under the id an ordinary invite of this address has, so
+        # nothing in a roster tells a held invite from a pending one.
+        doc_id = invite_id(inv.get("email") or "")
     return {
         "id": doc_id,
         "email": inv.get("email") or "",
@@ -84,7 +96,58 @@ def invite_institution_member(
     err, invite = _write_invite(license_id, email, invited_by_uid)
     if err:
         raise Refusal(err)
+    _drop_held_invite(license_id, email)
     return invite
+
+
+def hold_institution_invite(license_id: str, email: str, invited_by_uid: str) -> dict:
+    """Institution IT's answer for an address another licence holds or
+    promises: what an unknown address gets, a pending invite on this roster
+    (ADDENDUM-2, readiness TE3-102). Returns the invite, or raises `Refusal`
+    exactly as `invite_institution_member` would.
+
+    Telling IT `member_already_licensed` made the roster an oracle: one
+    guessed address at a time, IT learned who another institution had seated
+    or invited. The held invite looks the same in the add reply, the roster
+    listing, the import and the audit rows IT can read. It is never claimed
+    (`claim_pending_invite` reads only the address's own key) and counts for
+    nothing in `licence_held_by`, so it cannot move the person off the
+    licence they have. IT withdraws it like any invite; adding the address
+    again once it is free seats or invites it for real and drops this.
+    """
+    lic = get_license(license_id)
+    if not lic or not _is_institution(lic):
+        raise Refusal(errors.LICENSE_NOT_FOUND)
+    if _is_revoked(lic):
+        raise Refusal(errors.LICENSE_REVOKED)
+    address = normalize_email(email)
+    if not address:
+        raise Refusal(errors.INVALID_EMAIL)
+    own = _get(_invite_ref(address))
+    if own.exists and ((own.to_dict() or {}).get("licenseId") or "") == license_id:
+        return _invite_public(own.id, own.to_dict() or {})
+    ref = _held_ref(license_id, address)
+    snap = _get(ref)
+    if snap.exists:
+        return _invite_public(ref.id, snap.to_dict() or {})
+    data = {
+        "email": address,
+        "licenseId": license_id,
+        "invitedByUid": invited_by_uid,
+        "held": True,
+        "createdAt": _base.firestore.SERVER_TIMESTAMP,
+        "schemaVersion": SCHEMA_VERSION,
+    }
+    _set_doc(ref, data)
+    return _invite_public(ref.id, _get(ref).to_dict() or data)
+
+
+def _drop_held_invite(license_id: str, email: str) -> None:
+    """Remove this roster's held invite for the address, if any: it has just
+    been seated or invited for real."""
+    ref = _held_ref(license_id, email)
+    if _get(ref).exists:
+        _delete_doc(ref)
 
 
 def _invite_is_stale(license_id: str) -> bool:
@@ -192,9 +255,12 @@ def revoke_institution_invite(license_id: str, invite_key: str) -> bool:
     """
     ref = db().collection(_INVITES).document(invite_key)
     snap = _get(ref)
-    if not snap.exists:
-        return False
-    if ((snap.to_dict() or {}).get("licenseId") or "") != license_id:
+    if not snap.exists or ((snap.to_dict() or {}).get("licenseId") or "") != license_id:
+        # A held invite is listed under the address's own key, which may be
+        # another licence's promise; this roster's entry is beside it.
+        ref = db().collection(_INVITES).document(f"held_{license_id}_{invite_key}")
+        snap = _get(ref)
+    if not snap.exists or ((snap.to_dict() or {}).get("licenseId") or "") != license_id:
         return False
     _delete_doc(ref)
     return True

@@ -38,6 +38,8 @@ permissions:
 # actions/checkout's submodule clones, fetches it from the GitHub mirror instead.
 # The gitlink pins the commit (Eigen 5.0.1, bc3b3987 at engine f072da0), so
 # the source is identical; a mirror without that commit fails the checkout.
+# checkout-submodules caches Eigen's git directory by that pin, so a run that
+# restores it fetches Eigen from neither.
 env:
   GIT_CONFIG_COUNT: "1"
   GIT_CONFIG_KEY_0: url.https://github.com/eigen-mirror/eigen.git.insteadOf
@@ -98,6 +100,10 @@ jobs:
     # the previous main on a push). A deliberate downgrade carries the PR label
     # `engine-downgrade`; labels are read at run time, so re-run the job after
     # adding one. Treeless clone of the public engine repo; seconds.
+    # TE2-102: it also reads the engine repo's CI (gh api, read-only) and
+    # fails unless the latest completed ci.yml run on the pinned commit has a
+    # green `Host tests` job, the unsanitized run where the numeric goldens
+    # compare (engine-host-sanitized below skips them).
     permissions:
       contents: read
       pull-requests: read
@@ -250,6 +256,36 @@ jobs:
             firebase-hosting/test-results/
           retention-days: 7
 
+  console-lighthouse:
+    name: Console Lighthouse
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Lighthouse over the console and hosted pages in Playwright's Chromium,
+    # against the same stub API and fake Firebase SDK as console-a11y (readiness
+    # AE2-110); `npm run lighthouse` holds the pages and the score floors.
+    # Lighthouse needs Node 22.19 or later, which '22' resolves to. About 4 min.
+    # The report uploads on every run, pass or fail.
+    defaults:
+      run:
+        working-directory: firebase-hosting
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: firebase-hosting/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npm run lighthouse
+      - name: Upload the Lighthouse report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: console-lighthouse-report
+          path: firebase-hosting/lighthouse-report/
+          retention-days: 7
+
   # ===================================================================
   # Path filters — same rules on PR and push. Prove only what the diff
   # can break. Full matrix: the weekly schedule, the `full-ci` label or
@@ -272,6 +308,7 @@ jobs:
       release_build: ${{ steps.flags.outputs.release_build }}
       benchmark_ci: ${{ steps.flags.outputs.benchmark_ci }}
       engine_host: ${{ steps.flags.outputs.engine_host }}
+      sast: ${{ steps.flags.outputs.sast }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -389,6 +426,12 @@ jobs:
               - 'benchmark/gates.json'
               # The launch smoke of the minified build runs in the same job.
               - 'scripts/launch_smoke.py'
+            # The code semgrep reads (TE5-105): the backend app, the console
+            # pages' JS and the app's main Kotlin.
+            sast:
+              - 'backend/app/**'
+              - 'firebase-hosting/public/**'
+              - 'app/src/main/java/**'
 
       - name: Resolve tier flags
         id: flags
@@ -402,6 +445,7 @@ jobs:
           FILTER_ANDROID_TEST: ${{ steps.filter.outputs.android_test }}
           FILTER_PACKAGING: ${{ steps.filter.outputs.packaging }}
           FILTER_HOT_PATH: ${{ steps.filter.outputs.hot_path }}
+          FILTER_SAST: ${{ steps.filter.outputs.sast }}
           EVENT_NAME: ${{ github.event_name }}
           REF: ${{ github.ref }}
           HEAD_REF: ${{ github.head_ref }}
@@ -420,6 +464,7 @@ jobs:
           emulator=false        # Tier 3
           release_build=false   # Tier 5
           benchmark=false
+          sast=false            # semgrep
 
           # The weekly schedule, the full-ci label or dispatch full_ci → full
           # matrix. So is a push whose base is unknown (no diff to filter).
@@ -440,6 +485,7 @@ jobs:
 
           if [ "$full" = "true" ]; then
             app=true; backend=true; rules=true; emulator=true; release_build=true
+            sast=true
           elif [ "$EVENT_NAME" = "pull_request" ] && [[ "${HEAD_REF:-}" == dependabot/* ]]; then
             # Dependabot cheap path: never Tier 3/5; ecosystem picks one light tier.
             case "$HEAD_REF" in
@@ -463,6 +509,7 @@ jobs:
             fi
             if [ "$FILTER_BACKEND" = "true" ]; then backend=true; fi
             if [ "$FILTER_RULES" = "true" ]; then rules=true; fi
+            if [ "$FILTER_SAST" = "true" ]; then sast=true; fi
             # Editing ci.yml used to be gates-only because this filter was
             # collected and never read. Run the light app + backend tiers so a
             # workflow change cannot skip every real job.
@@ -470,6 +517,7 @@ jobs:
               app=true
               backend=true
               rules=true
+              sast=true
             fi
             # An engine bump or a JNI change is proven on the emulator and in
             # the arm64 release build before it merges. These flags were
@@ -501,6 +549,7 @@ jobs:
               app=true
               backend=true
               rules=true
+              sast=true
             fi
           fi
 
@@ -518,8 +567,9 @@ jobs:
             echo "release_build=$release_build"
             echo "benchmark_ci=$benchmark"
             echo "engine_host=$engine_host"
+            echo "sast=$sast"
           } >> "$GITHUB_OUTPUT"
-          echo "Resolved: event=$EVENT_NAME full=$full app=$app backend=$backend rules=$rules emulator=$emulator release_build=$release_build benchmark_ci=$benchmark engine_host=$engine_host"
+          echo "Resolved: event=$EVENT_NAME full=$full app=$app backend=$backend rules=$rules emulator=$emulator release_build=$release_build benchmark_ci=$benchmark engine_host=$engine_host sast=$sast"
 
   # ===================================================================
   # Engine host suite, sanitized — TE2-004. The engine repo's CI runs it on
@@ -544,8 +594,10 @@ jobs:
       CCACHE_COMPILERCHECK: content
     steps:
       - uses: actions/checkout@v7
-        with:
-          submodules: recursive
+
+      # Submodules after checkout: Eigen from cache, every fetch retried.
+      - uses: ./.github/actions/checkout-submodules
+
       # libopencv-dev or the full-field pipeline is silently left out of the
       # build (the engine CI's note); DIC_REQUIRE_OPENCV makes that a failure.
       - name: Install OpenCV + ccache
@@ -682,7 +734,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Submodules after checkout: Eigen from cache, fetches retried (GitLab outages).
+      # Submodules after checkout: Eigen from cache, every fetch retried.
       - uses: ./.github/actions/checkout-submodules
 
       - uses: ./.github/actions/setup-android-build
@@ -769,6 +821,13 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v7
+
+      # test_openapi_breaking.py diffs the OpenAPI snapshot against origin/main
+      # and skips when that ref is absent, which a depth-1 checkout leaves it
+      # (TE3-105). One commit of main is all it reads.
+      - name: Fetch main for the OpenAPI breaking-change check
+        working-directory: .
+        run: git fetch --no-tags --depth=1 origin +refs/heads/main:refs/remotes/origin/main
 
       - uses: ./.github/actions/backend-gate
 
@@ -932,7 +991,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Submodules after checkout: Eigen from cache, fetches retried (GitLab outages).
+      # Submodules after checkout: Eigen from cache, every fetch retried.
       - uses: ./.github/actions/checkout-submodules
 
       - uses: ./.github/actions/setup-android-build
@@ -1056,7 +1115,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Submodules after checkout: Eigen from cache, fetches retried (GitLab outages).
+      # Submodules after checkout: Eigen from cache, every fetch retried.
       - uses: ./.github/actions/checkout-submodules
 
       - uses: ./.github/actions/setup-android-build
@@ -1139,7 +1198,12 @@ jobs:
       #   an R8 build before a user does.
       # - Macrobenchmarks: on a PR a dry run (one pass each, androidx.benchmark
       #   dryRunMode), since their emulator numbers are not gated; the full
-      #   iterations run on dispatch and with the `benchmark` label.
+      #   iterations run on dispatch and with the `benchmark` label. The smoke's
+      #   install is removed first: this Gradle run packages the app again, and
+      #   its install over the smoke's failed on the signature, which the
+      #   connected task logged and still called BUILD SUCCESSFUL with no test
+      #   run (semperdic-app's TD-349). So ci_test_report.py --require-tests fails the step
+      #   unless the run left a test case and no failing one.
       # - The micro smoke run only when there is no A/B (dispatch): on a PR the
       #   A/B's rounds run the same class twice from this build. It is a debug
       #   build on an emulator, hence DEBUGGABLE in its suppress list: its
@@ -1170,7 +1234,9 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
           script: |
             python3 scripts/launch_smoke.py app/build/outputs/apk/benchmark/app-benchmark.apk --package "$APP_ID" --out launch-smoke
+            "$ANDROID_HOME/platform-tools/adb" uninstall "$APP_ID" || true
             ./gradlew :benchmark:connectedBenchmarkAndroidTest -PabiFilters=x86_64 -PnativeCompilerLauncher=ccache --console=plain -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED $MACRO_DRY_RUN
+            python3 scripts/ci_test_report.py --require-tests benchmark/build/outputs/androidTest-results
             [ -d "$RUNNER_TEMP/micro-ab/A" ] || ./gradlew :app:installDebug :app:installDebugAndroidTest -PabiFilters=x86_64 -PnativeCompilerLauncher=ccache --console=plain
             [ -d "$RUNNER_TEMP/micro-ab/A" ] || "$ANDROID_HOME/platform-tools/adb" shell am instrument -w -e class com.sempermechanics.semper.benchmark.HotPathMicroBenchmark -e androidx.benchmark.suppressErrors EMULATOR,DEBUGGABLE,LOW-BATTERY,UNLOCKED,ACTIVITY-MISSING,NOT-AOT-COMPILED "$APP_ID.test/androidx.test.runner.AndroidJUnitRunner" | tee micro-instrument.txt
             mkdir -p app/build/outputs/connected_android_test_additional_output
@@ -1229,6 +1295,52 @@ jobs:
           if-no-files-found: warn
 
   # ===================================================================
+  # Dependency and code scans — TE5-105 (Admin approved OSV-Scanner and
+  # semgrep, 2026-10-28). The backend's lock is pip-audited in Tier 4 and
+  # the console's npm graph has no runtime dependencies; these cover the
+  # Android graph and first-party source.
+  # ===================================================================
+  android-deps-osv:
+    name: Android dependencies (OSV-Scanner)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: changes
+    # Every app change (a Gradle bump is one), every main push and the
+    # weekly run, which is what catches an advisory published against an
+    # unchanged graph.
+    if: needs.changes.outputs.app == 'true'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-android-build
+
+      - uses: ./.github/actions/android-deps-osv
+
+  semgrep:
+    name: SAST (semgrep)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: changes
+    if: needs.changes.outputs.sast == 'true'
+    # The image is pinned by digest (semgrep 1.180.0). The p/ rule packs come
+    # from the semgrep registry at run time and are not versioned, so a rule
+    # added there can fail a PR that did not change the code it flags: triage
+    # it like any finding. --error fails the job on a finding; metrics off.
+    container:
+      image: semgrep/semgrep:1.180.0@sha256:529ee8a277ec8adc5b534d7c74eea0a47e9de21d62852b6ba7ac6ba9566845c3
+    steps:
+      - uses: actions/checkout@v7
+
+      # No rule is off. A false positive gets a `nosemgrep: <rule id>` comment
+      # with its reason on the line it flags (e.g. Digests.kt's MD5, Drive's
+      # md5Checksum format; the backend's log lines that name a token).
+      - name: Scan the backend, the console JS and the app's Kotlin
+        run: >
+          semgrep scan --error --metrics=off --disable-version-check
+          --config p/python --config p/javascript --config p/kotlin
+          backend/app firebase-hosting/public app/src/main/java
+
+  # ===================================================================
   # ci-ok — single required status check
   # ===================================================================
   ci-ok:
@@ -1242,6 +1354,7 @@ jobs:
       - legal-pages
       - console-pages
       - console-a11y
+      - console-lighthouse
       - changes
       - tier1-static
       - tier1-app-fast
@@ -1251,6 +1364,8 @@ jobs:
       - tier5-signed-release
       - tier-benchmark
       - engine-host-sanitized
+      - android-deps-osv
+      - semgrep
     steps:
       - name: Check all tiers
         run: |
@@ -1260,6 +1375,7 @@ jobs:
             "${{ needs.legal-pages.result }}" \
             "${{ needs.console-pages.result }}" \
             "${{ needs.console-a11y.result }}" \
+            "${{ needs.console-lighthouse.result }}" \
             "${{ needs.changes.result }}" \
             "${{ needs.tier1-static.result }}" \
             "${{ needs.tier1-app-fast.result }}" \
@@ -1268,7 +1384,9 @@ jobs:
             "${{ needs.firestore-rules.result }}" \
             "${{ needs.tier5-signed-release.result }}" \
             "${{ needs.tier-benchmark.result }}" \
-            "${{ needs.engine-host-sanitized.result }}"; do
+            "${{ needs.engine-host-sanitized.result }}" \
+            "${{ needs.android-deps-osv.result }}" \
+            "${{ needs.semgrep.result }}"; do
             case "$result" in
               success|skipped) ;;
               *) echo "FAILED: $result"; exit 1 ;;

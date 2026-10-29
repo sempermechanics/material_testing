@@ -311,7 +311,9 @@ An emulator's absolute times say nothing (its speed moves from runner to runner)
 on a PR `tier-benchmark` judges the hot paths by their change against the PR's base.
 It builds the base (A) and the PR (B) as debug app + androidTest APKs, in the one
 checkout, then `scripts/micro_ab.py` runs `HotPathMicroBenchmark` from each on the
-same emulator in A B B A order, so drift hits both builds equally. For each
+same emulator in A B B A order, so drift hits both builds equally. Each build's
+folder carries its `applicationId` in `app-id.txt`, so a PR that changes the id (as
+ADR-019 did) runs each round under its own build's id. For each
 benchmark it pools every `timeNs` run of a build (50 a round) and fails the job if
 B's median is more than `microAbMargin` (15 %, `benchmark/gates.json`) over A's.
 The log shows both medians, the change and both allocation counts; the rounds are
@@ -352,10 +354,17 @@ class) writes `com.sempermechanics.semper.benchmark-deviceState.json` next to th
 results: per test, the thermal status, battery temperature and level, charger,
 free memory and swap, at its start and end. A result whose test ran above
 `state.maxThermalStatus` (0) or off the charger (`state.requirePlugged`) prints
-`GATE not gated …` with the reason and does not count as a breach. A result with
-no state file (an APK from before the rule) is gated as before and says so. The
-three cold-start cases run 15 iterations, not 5: one run's starts spread
-404–478 ms, so a 5-start median moved with one or two slow ones.
+`GATE not gated …` with the reason and does not count as a breach. A result with no
+state file (an APK from before the rule) is gated as before and says so. The three
+cold-start cases run `StartupBenchmark.COLD_START_ITERATIONS` = 15 iterations, not 5:
+one run's starts spread 404–478 ms, so a 5-start median moved with one or two slow ones.
+
+To add a phone, run both suites on the charger, at thermal status 0, with known app
+data, and add its codename under `devices` with those medians and the state in its
+`label`. Run one macro class per `am instrument` call and pull its
+`*benchmarkData.json` and `*deviceState.json` before the next, since each call
+overwrites both ([../perf/samsung-g0q-baseline.md](../perf/samsung-g0q-baseline.md)
+has the loop).
 
 **When a startup gate trips**, compare with the reference build on the same
 phone before calling it a regression:
@@ -417,8 +426,8 @@ Three suites are gated on coverage, each two points under what it measured:
 
 | Suite | Measured (2026-10-08) | Floor | Where |
 |---|---|---|---|
-| App JVM (Kover, lines) | 77.51 % (2026-10-26, with the example data; Semper 80.51 % on 2026-10-22) | 75 (Semper 78) | `app/build.gradle.kts` `kover.verify` |
-| App JVM (Kover, branches) | 61.61 % (2026-10-26, with the example data; Semper 62.69 % on 2026-10-22) | 59 (Semper 60) | same |
+| App JVM (Kover, lines) | 79.49 % (2026-10-29, the sync of semperdic-app `b1c15346`, with the example data; Semper 82.33 % on 2026-10-28) | 77 (Semper 80) | `app/build.gradle.kts` `kover.verify` |
+| App JVM (Kover, branches) | 62.56 % (2026-10-29, as above; Semper 63.55 % on 2026-10-28) | 60 (Semper 61) | same |
 | Backend (pytest-cov, lines) | 95.47 % | 93 | `.github/actions/backend-gate/action.yml` |
 | Backend + Firestore emulator tier | 95.54 % | 93 | `ci.yml` tier 4, `--cov-append` |
 | Console JS (`scripts/console_coverage.mjs`, lines merged by file) | 98.30 % | 96 | `ci.yml` `console-pages` |

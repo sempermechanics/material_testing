@@ -65,7 +65,8 @@
 
             <EditText
                 android:id="@+id/etSubsetMinValue"
-                android:layout_width="46dp"
+                style="@style/Widget.Semper.InlineValue"
+                android:layout_width="@dimen/min_touch_target"
                 android:layout_height="wrap_content"
                 android:background="@android:color/transparent"
                 android:gravity="center"
@@ -93,7 +94,8 @@
 
             <EditText
                 android:id="@+id/etSubsetMaxValue"
-                android:layout_width="46dp"
+                style="@style/Widget.Semper.InlineValue"
+                android:layout_width="@dimen/min_touch_target"
                 android:layout_height="wrap_content"
                 android:background="@android:color/transparent"
                 android:gravity="center"
@@ -166,7 +168,8 @@
 
                 <EditText
                     android:id="@+id/etStrainWinMinValue"
-                    android:layout_width="46dp"
+                    style="@style/Widget.Semper.InlineValue"
+                    android:layout_width="@dimen/min_touch_target"
                     android:layout_height="wrap_content"
                     android:background="@android:color/transparent"
                     android:gravity="center"
@@ -194,7 +197,8 @@
 
                 <EditText
                     android:id="@+id/etStrainWinMaxValue"
-                    android:layout_width="46dp"
+                    style="@style/Widget.Semper.InlineValue"
+                    android:layout_width="@dimen/min_touch_target"
                     android:layout_height="wrap_content"
                     android:background="@android:color/transparent"
                     android:gravity="center"

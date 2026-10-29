@@ -37,8 +37,8 @@ def _analysis_cap(value: Optional[int]) -> Optional[int]:
     """
     if value is not None and value < settings.DEMO_MAX_ANALYSES:
         raise ValueError(
-            f"maxAnalyses must be at least {settings.DEMO_MAX_ANALYSES} (the demo "
-            "allowance); leave it out for the licensed default"
+            f"maxAnalyses must be at least {settings.DEMO_MAX_ANALYSES} (the Demo "
+            "allowance); leave it out for the Licensed default"
         )
     return value
 

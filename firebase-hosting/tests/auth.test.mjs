@@ -18,6 +18,9 @@ const AFTER_REAUTH = "semper.afterReauth";
 const RESUME = "semper.resume";
 
 beforeEach(reset);
+
+/** The pinned bar round the status line, which cards go after. */
+const statusBar = () => $("status").closest(".status-bar");
 afterEach(settle);
 
 function signIn(user) {
@@ -236,7 +239,7 @@ test("the authenticator code is asked for in a card under the status line, gone 
   await auth.stepUp({ password: "pw" });
   const [card] = codes.cards;
   assert.equal(codes.asked, 1);
-  assert.equal(card.anchor, $("status"));
+  assert.equal(card.anchor, statusBar(), "after the status bar, not pinned inside it");
   assert.equal(card.position, "afterend");
   assert.equal(card.querySelector("h2").textContent, "Enter your authenticator code");
   assert.equal(card.querySelector("input").focused, true, "the box has focus");
@@ -423,15 +426,17 @@ test("an account with no factor must enrol TOTP in the page before anything else
   const user = signIn(new FakeUser({ email: "it@example.edu" }));
   const done = auth.ensureDashboardMfa();
   await settle();
-  assert.equal($("status").textContent, "Enrol an authenticator app to open any Semper dashboard.");
+  assert.equal($("status").textContent, "Enrol an authenticator app to open any semper dashboard.");
   assert.equal(fake.callsTo("reauthenticateWithRedirect").length, 0, "a fresh sign-in enrols without a step-up");
 
   const card = await enrolCard();
-  assert.equal(card.anchor, $("status"));
+  assert.equal(card.anchor, statusBar(), "after the status bar, not pinned inside it");
   assert.equal(card.position, "afterend");
   assert.match(card.querySelector(".qr").innerHTML, /^<svg/);
   assert.equal(card.querySelector(".key").textContent, "TESTSECRETBASE32");
   assert.equal(card.querySelector(".account").textContent, "it@example.edu");
+  // ADDENDUM-4: the authenticator entry is named "semper", issuer too.
+  assert.match(card.textContent.replace(/\s+/g, " "), /Issuer: semper · Time-based/);
   const input = card.querySelector("input");
   assert.ok(input.focused);
 
@@ -553,6 +558,55 @@ test("stepUpFresh asks in its own words, and is a no-op on a fresh sign-in", asy
   assert.deepEqual(JSON.parse(storage.getItem(RESUME)), resume);
 });
 
+test("stepUpFresh steps up on Google's clock when this computer's runs slow", async () => {
+  // Signed in 100 s ago; this computer's clock is a minute slow. By its own
+  // clock the sign-in was 40 s old, so the step-up was skipped, and the
+  // backend (120 s, on its own clock) refused the change straight after.
+  signIn(readyUser({ authAgeSeconds: 100, clockSkewSeconds: 60 }));
+  assert.ok(await stillPending(auth.stepUpFresh({ action: "testAccountEnd", uid: "u1" },
+    "end this test account")));
+  assert.equal(fake.callsTo("reauthenticateWithRedirect").length, 1);
+});
+
+test("stepUpFresh trusts a fresh sign-in when this computer's clock runs fast", async () => {
+  // Signed in 30 s ago, the clock five minutes fast: by its own clock every
+  // change went back to Google, however recently the code was accepted.
+  signIn(readyUser({ authAgeSeconds: 30, clockSkewSeconds: -300 }));
+  await auth.stepUpFresh({ action: "testAccountEnd", uid: "u1" }, "end this test account");
+  assert.equal(fake.callsTo("reauthenticateWithRedirect").length, 0);
+  assert.deepEqual(fake.callsTo("getIdTokenResult"), [["uid-1", true]], "a freshly minted token");
+});
+
+test("stepUpFresh on a remembered sign-in that cannot be renewed signs out, asking nothing", async () => {
+  signIn(readyUser({ authAgeSeconds: 7200, refreshError: "auth/user-token-expired" }));
+  const e = await rejection(auth.stepUpFresh({ action: "testAccountEnd", uid: "u1" },
+    "end this test account"));
+  assert.equal(e.code, "invalid_token");
+  assert.equal(fake.callsTo("signOut").length, 1);
+  assert.equal(fake.callsTo("reauthenticateWithRedirect").length, 0, "no trip to Google for it");
+  assert.equal(prompts.asked.length, 0, "and no password asked for");
+});
+
+test("a backend invalid_token signs the page out and is not retried", async () => {
+  signIn(readyUser());
+  net.reply(json(401, { detail: "invalid_token" }));
+  const e = await rejection(auth.api("/v1/admin/licenses", { method: "POST" }));
+  assert.ok(e instanceof auth.ApiError);
+  assert.deepEqual([e.code, e.status], ["invalid_token", 401]);
+  assert.equal(net.requests.length, 1);
+  assert.equal(fake.callsTo("signOut").length, 1);
+  assert.equal(fake.auth.currentUser, null);
+});
+
+test("a token Firebase can no longer refresh is invalid_token, and nothing is sent", async () => {
+  signIn(readyUser({ tokenStale: true, refreshError: "auth/user-token-expired" }));
+  const e = await rejection(auth.api("/v1/admin/licenses", { method: "POST" }));
+  assert.ok(e instanceof auth.ApiError);
+  assert.equal(e.code, "invalid_token");
+  assert.equal(net.requests.length, 0);
+  assert.equal(fake.callsTo("signOut").length, 1);
+});
+
 /* ------------------------------------------------------ confirmByTyping */
 
 test("confirmByTyping accepts only the exact label", async () => {
@@ -568,7 +622,7 @@ test("the ask card sits under the status line, its text never markup, and goes o
   prompts.answer("SEMP-4K2P");
   assert.equal(await auth.confirmByTyping("SEMP-4K2P", "revoke it", { title: "Revoke <b>SEMP-4K2P</b>" }), true);
   const [card] = prompts.cards;
-  assert.equal(card.anchor, $("status"));
+  assert.equal(card.anchor, statusBar(), "after the status bar, not pinned inside it");
   assert.equal(card.querySelector("h2").textContent, "Revoke <b>SEMP-4K2P</b>", "the title went in as text");
   assert.equal(card.querySelector("h2").querySelectorAll("b").length, 0);
   assert.equal(card.querySelector("input").focused, true);
@@ -584,7 +638,7 @@ test("a confirm card answers yes or no, its text never markup, and goes once ans
   assert.equal(await auth.confirmInPage({ title: "Revoke X", message: "Again?", confirm: "Revoke" }), false);
   assert.deepEqual(confirms.asked, ["Sure?\n\nReally?", "Again?"]);
   const [first, second] = confirms.cards;
-  assert.equal(first.anchor, $("status"));
+  assert.equal(first.anchor, statusBar());
   assert.equal(first.querySelector("h2").textContent, "Revoke <b>X</b>", "the title went in as text");
   assert.equal(first.querySelector("h2").querySelectorAll("b").length, 0);
   assert.equal(first.querySelector("input"), null, "a yes / no card has no box");

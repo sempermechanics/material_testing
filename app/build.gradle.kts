@@ -432,6 +432,15 @@ aboutLibraries {
 }
 
 dependencies {
+    constraints {
+        // Guava arrives only through play-services-measurement 24.0.0 (Firebase
+        // Analytics) at 31.1-android, which OSV-Scanner flags for
+        // GHSA-xxph-c9ww-hj94, GHSA-7g45-4rm6-3mm3 and GHSA-5mg8-w23w-74h3
+        // (readiness TE5-105). Raise it to a fixed release.
+        implementation("com.google.guava:guava:33.7.2-android") {
+            because("GHSA-xxph-c9ww-hj94, GHSA-7g45-4rm6-3mm3, GHSA-5mg8-w23w-74h3 in guava 31.1-android")
+        }
+    }
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
@@ -532,7 +541,9 @@ kover {
             // unrelated PRs while a real drop does. Every PR that adds tests
             // re-measures (`koverXmlReport`, the totals in
             // build/reports/kover/report.xml) and raises both to measured − 2;
-            // never lower them. Semper Classroom, 2026-10-26 (the sync of
+            // never lower them. semper Classroom, 2026-10-29 (the sync of
+            // semperdic-app b1c15346): lines 79.49 %, branches 62.56 %, so 77 / 60
+            // (Semper's are 80 / 61). 2026-10-26 (the sync of
             // semperdic-app 25334af1 and the rename): lines 77.10 %, branches
             // 61.70 %, so 75 / 59 here (with the example data, ADR-031: 77.51 / 61.61,
             // still 75 / 59); the lab code is less covered than
@@ -546,10 +557,10 @@ kover {
             // measure, not lost coverage). The line floor once sat at 49 while
             // coverage climbed past 75, so a 26-point drop would have passed.
             rule("Line coverage") {
-                minBound(75)
+                minBound(77)
             }
             rule("Branch coverage") {
-                minBound(59, kotlinx.kover.gradle.plugin.dsl.CoverageUnit.BRANCH)
+                minBound(60, kotlinx.kover.gradle.plugin.dsl.CoverageUnit.BRANCH)
             }
         }
     }

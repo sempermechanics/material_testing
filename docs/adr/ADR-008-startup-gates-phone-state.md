@@ -75,8 +75,9 @@ signed with the same debug key, and it restores the installed APK at the end.
   the limit. Check it with `startup_ab.py` before a code search.
 - `gates.json` carries `state` and `abMargin`. Adding a phone means taking its
   references under the same state rules.
-- A test with no reference in `gates.json` is not gated. On Semper's Pixel 6 that is
-  the startup cold and warm start and the wizard cold start (TD-154).
+- A test with no reference in `gates.json` is not gated. On the Galaxy S22+ that is
+  only `scrub150FramesWithPhotos` (report-only by choice); on the Pixel 6 it is also the
+  startup cold and warm start and the wizard cold start, which never stayed at status 0.
 - Lowering `COLD_START_ITERATIONS` back to 5 reopens TD-6.
 
 ## Action items

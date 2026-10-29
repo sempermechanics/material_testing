@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { test, reset, settle, page, prompts, confirms, codes, alerts, loadAuth, FakeElement } from "./harness.mjs";
 
 const { askInPage, confirmInPage, tellInPage, codeCard, enrolInPage } = await loadAuth();
+const { holdFocus } = await import("../public/console/dialogs.js");
 
 /** A button in the page that opens a card, focused as a click would leave it. */
 function trigger() {
@@ -131,4 +132,58 @@ test("a rejected code is announced, and the box and Try again point at why", asy
   assert.notEqual(said.id, feedback.id);
   enrolCard.querySelector(".cancel").click();
   await enrol.catch(() => {});
+});
+
+// AE2-108: the authenticator-code and enrolment cards are prompts like the
+// others, so they are announced and dismissed the same way.
+test("the code card is an alertdialog named by its heading, and Escape answers it as Cancel", async () => {
+  reset();
+  codes.generation += 1; // the test presses the keys itself
+  const card = codeCard();
+  const el = page.inserted.at(-1);
+  assert.equal(el.getAttribute("role"), "alertdialog");
+  assert.equal(byId(el.getAttribute("aria-labelledby")).textContent, "Enter your authenticator code");
+  const code = card.next();
+  el.dispatch("keydown", { key: "Escape" });
+  assert.equal(await code, null, "a code asked for: Escape is Cancel");
+  const again = card.rejected();
+  el.dispatch("keydown", { key: "Enter" });
+  el.dispatch("keydown", { key: "Escape" });
+  assert.equal(await again, false, "Try again offered: Escape is Cancel");
+  card.close();
+});
+
+test("the enrolment card is an alertdialog named by its heading, and Escape cancels it", async () => {
+  reset();
+  const enrol = enrolInPage({ qrUrl: "otpauth://x", secret: "S", finish: async () => {} }, "a@b.test", null);
+  const el = page.inserted.find((e) => e.className === "card enrol");
+  assert.equal(el.getAttribute("role"), "alertdialog");
+  assert.equal(byId(el.getAttribute("aria-labelledby")).textContent, "Set up two-factor authentication");
+  el.dispatch("keydown", { key: "Escape" });
+  await assert.rejects(enrol, { message: "console_cancelled" });
+  assert.equal(el.removed, true);
+});
+
+// AE2-109: a button that disables itself while it works gets focus back after.
+test("holdFocus gives focus back to a button the browser dropped it from, and only then", async () => {
+  reset();
+  const button = trigger();
+  let refocus = holdFocus(button);
+  button.disabled = true;
+  page.body.focus(); // what a browser does when the focused button is disabled
+  refocus();
+  assert.equal(document.activeElement, page.body, "not while it is still disabled");
+  button.disabled = false;
+  refocus();
+  assert.equal(document.activeElement, button);
+
+  refocus = holdFocus(button);
+  const other = trigger(); // the person moved on meanwhile
+  refocus();
+  assert.equal(document.activeElement, other, "focus someone moved is left where it is");
+
+  refocus = holdFocus(button); // it did not have focus to begin with
+  page.body.focus();
+  refocus();
+  assert.equal(document.activeElement, page.body);
 });

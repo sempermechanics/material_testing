@@ -5,7 +5,7 @@ test data of the Digital Image Correlation Engine (DICe), Sandia National
 Laboratories. `oht_cfrp_ref.tiff` is the first load step and `oht_cfrp_def.tiff` the next one.
 The images are 400 × 1040 px, 8-bit.
 
-**In Semper Classroom:** + → *Try an example* (or Settings → Help → Example data) → this set. **Try it** opens a new 2D DIC analysis with both images in; **Save to phone** copies this folder to `Download/Semper examples/`.
+**In semper Classroom:** + → *Try an example* (or Settings → Help → Example data) → this set. **Try it** opens a new 2D DIC analysis with both images in; **Save to phone** copies this folder to `Download/semper examples/`.
 
 Credit: [CREDIT.txt](CREDIT.txt). Licence: BSD-3-Clause, full text in [LICENSE.DICe](LICENSE.DICe), which has to travel with these files.
 

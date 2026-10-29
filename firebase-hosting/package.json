@@ -1,15 +1,17 @@
 {
   "name": "semper-console-tests",
   "private": true,
-  "description": "Browser accessibility check for the consoles (tests/a11y): axe-core on each page in Chromium, against a stub API. Dev only; nothing here is deployed (Hosting serves public/).",
+  "description": "Browser accessibility checks for the consoles, against a stub API: axe-core on each page in Chromium (tests/a11y) and Lighthouse's Accessibility and Best Practices scores (tests/lighthouse). Dev only; nothing here is deployed (Hosting serves public/).",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "test:a11y": "playwright test --config tests/a11y/playwright.config.mjs"
+    "test:a11y": "playwright test --config tests/a11y/playwright.config.mjs",
+    "lighthouse": "node tests/lighthouse/run.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
-    "@playwright/test": "1.64.1"
+    "@playwright/test": "1.64.1",
+    "lighthouse": "13.5.0"
   }
 }

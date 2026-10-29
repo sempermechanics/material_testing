@@ -93,7 +93,7 @@ test("a live licence shows its kind, key, end date, and may be moved", async () 
     mode: "licensed", held: true, kind: "individual", prefix: "SEMP-4K2P", expiresAt,
   } });
   assert.deepEqual(pills(), [
-    ["licensed", "pill ok"], ["individual", "pill"], ["SEMP-4K2P", "pill mono"],
+    ["Licensed", "pill ok"], ["individual", "pill"], ["SEMP-4K2P", "pill mono"],
     [`ends ${day(expiresAt)}`, "pill"],
   ]);
   assert.equal($("explain").textContent, "Your licence is active on this account.");
@@ -103,7 +103,7 @@ test("a live licence shows its kind, key, end date, and may be moved", async () 
 
 test("a Demo key shows only 'demo', and there is nothing to move", async () => {
   await open({ license: { mode: "demo", held: false, kind: "individual", prefix: "SEMP-DEMO" } });
-  assert.deepEqual(pills(), [["demo", "pill off"]]);
+  assert.deepEqual(pills(), [["Demo", "pill off"]]);
   assert.match($("explain").textContent, /^You are on Demo\. Analyses are capped/);
   assert.equal($("unbind").hidden, true);
   assert.equal($("release").hidden, true);
@@ -111,7 +111,7 @@ test("a Demo key shows only 'demo', and there is nothing to move", async () => {
 
 test("a perpetual licence says it has no end date", async () => {
   await open({ license: { mode: "licensed", held: true, duration: "perpetual" } });
-  assert.deepEqual(pills(), [["licensed", "pill ok"], ["no end date", "pill"]]);
+  assert.deepEqual(pills(), [["Licensed", "pill ok"], ["no end date", "pill"]]);
 });
 
 test("a licence past its grace reads expired, and the account is on the demo", async () => {
@@ -119,7 +119,7 @@ test("a licence past its grace reads expired, and the account is on the demo", a
   await open({ license: {
     mode: "demo", held: true, kind: "individual", expiresAt, graceEndsAt: iso(-10 * DAY),
   } });
-  assert.deepEqual(pills(), [["demo", "pill off"], ["individual", "pill"], [`expired ${day(expiresAt)}`, "pill off"]]);
+  assert.deepEqual(pills(), [["Demo", "pill off"], ["individual", "pill"], [`expired ${day(expiresAt)}`, "pill off"]]);
   // Plain text, not a RegExp: day() ends "(UTC)".
   const ended = `Your licence ended on ${day(expiresAt)} and its after-expiry grace is over`;
   assert.ok($("explain").textContent.startsWith(ended), $("explain").textContent);
@@ -130,7 +130,7 @@ test("a licence in its grace period reads ended, and says when access ends", asy
   const expiresAt = iso(-2 * DAY);
   const graceEndsAt = iso(12 * DAY);
   await open({ license: { mode: "licensed", held: true, inGrace: true, expiresAt, graceEndsAt } });
-  assert.deepEqual(pills(), [["licensed", "pill ok"], [`ended ${day(expiresAt)}`, "pill warn"]]);
+  assert.deepEqual(pills(), [["Licensed", "pill ok"], [`ended ${day(expiresAt)}`, "pill warn"]]);
   const ends = `full access ends ${day(graceEndsAt)} unless it is renewed`;
   assert.ok($("explain").textContent.includes(ends), $("explain").textContent);
 });
@@ -152,7 +152,7 @@ test("no shared seat free: told to wait for a colleague, nothing to give back", 
 
 test("a backend without `held` counts a licensed account as holding its licence", async () => {
   await open({ license: { mode: "licensed", kind: "individual" } });
-  assert.deepEqual(pills(), [["licensed", "pill ok"], ["individual", "pill"]]);
+  assert.deepEqual(pills(), [["Licensed", "pill ok"], ["individual", "pill"]]);
   assert.equal($("unbind").hidden, false);
 });
 
@@ -189,7 +189,7 @@ const facts = () => {
   const values = $("facts").querySelectorAll("dd").map((el) => el.textContent);
   return terms.map((term, i) => [term, values[i]]);
 };
-const OFFLINE = "On a phone, licensed features keep working offline until the offline allowance " +
+const OFFLINE = "On a phone, Licensed features keep working offline until the offline allowance " +
   "runs out; then the app falls back to Demo limits until it reconnects. Analyses you already have " +
   "stay available either way.";
 
@@ -255,7 +255,7 @@ test("the delete card says it is done in the app and removes the sign-in for bot
   await open({ license: { mode: "demo", held: false } });
   const said = $("deleteAccount").textContent;
   assert.match(said, /Settings → Your data → Delete account/);
-  assert.match(said, /removes the sign-in itself for both apps, Semper and Semper Classroom/);
+  assert.match(said, /removes the sign-in itself for both apps, semper and semper Classroom/);
   assert.match(said, /cannot be undone/);
 });
 
@@ -312,11 +312,11 @@ test("each analysis row says what is stored, not what was declared", async () =>
     { sessionId: "s5", specimen: "<img src=x>", status: "WEIRD" },
   ] } });
   assert.deepEqual(rowTexts(), [
-    ["Steel A s1", "Semper", "saved", "4", "1.5 MB", "Download"],
-    ["Steel B s2", "Semper", "uploading", "3 of 10", "2.0 MB when done", "Download"],
-    ["local-3 s3", "Semper", "failed", "0 of 2", "—", "Download"],
-    ["Nothing yet s4", "Semper", "uploading", "0 of 0", "—", "Download"],
-    ["<img src=x> s5", "Semper", "WEIRD", "0 of 0", "—", "Download"],
+    ["Steel A s1", "semper", "saved", "4", "1.5 MB", "Download"],
+    ["Steel B s2", "semper", "uploading", "3 of 10", "2.0 MB when done", "Download"],
+    ["local-3 s3", "semper", "failed", "0 of 2", "—", "Download"],
+    ["Nothing yet s4", "semper", "uploading", "0 of 0", "—", "Download"],
+    ["<img src=x> s5", "semper", "WEIRD", "0 of 0", "—", "Download"],
   ]);
   assert.equal($("rows").querySelectorAll("img").length, 0, "a specimen name is text, never markup");
   const buttons = $("rows").querySelectorAll("button");
@@ -336,7 +336,7 @@ test("every app's analyses are listed, each with the app that backed it up", asy
     { sessionId: "s4", specimen: "Next D", app: "<b>future</b>", status: "COMPLETED", completedCount: 1 },
   ] } });
   assert.deepEqual(sent(/sessions/), ["GET /v1/sessions?app=all"]);
-  assert.deepEqual(rowTexts().map((r) => r[1]), ["Semper", "Semper Classroom", "Semper Classroom", "Semper", "<b>future</b>"]);
+  assert.deepEqual(rowTexts().map((r) => r[1]), ["semper", "semper Classroom", "semper Classroom", "semper", "<b>future</b>"]);
   assert.equal($("rows").querySelectorAll("b").length, 0, "an unknown app name is text, never markup");
 });
 
@@ -412,6 +412,34 @@ test("a failed analyses list is reported", async () => {
   assert.deepEqual(status(), ["Could not list your analyses: unavailable", "muted err"]);
 });
 
+// AE2-105, rework 2: one of the page's two reads answered 401 and signed the
+// page out; the other answered after (200, 503, or no network) and wrote its
+// own line over the one that says to sign in again.
+for (const [how, ending, late, answer] of [
+  ["the analyses answering 200 after /v1/me's 401", "GET /v1/me", "GET /v1/sessions",
+    (held) => held.resolve(json(200, { sessions: [], quota: { used: 0, max: 25 } }))],
+  ["the analyses answering 503 after /v1/me's 401", "GET /v1/me", "GET /v1/sessions",
+    (held) => held.resolve(json(503, { detail: "unavailable" }))],
+  ["/v1/me answering 503 after the analyses' 401", "GET /v1/sessions", "GET /v1/me",
+    (held) => held.resolve(json(503, { detail: "unavailable" }))],
+  ["/v1/me failing with no network after the analyses' 401", "GET /v1/sessions", "GET /v1/me",
+    (held) => held.fail(new TypeError("Failed to fetch"))],
+]) {
+  test(`${how} keeps the session-ended line`, async () => {
+    let fail;
+    const held = deferred();
+    const promise = new Promise((resolve, reject) => { held.promise.then(resolve); fail = reject; });
+    held.fail = fail;
+    await open({ routes: { [ending]: () => json(401, { detail: "invalid_token" }), [late]: () => promise } });
+    await settle();
+    answer(held);
+    await settle();
+    assert.deepEqual(status(), ["Your sign-in has expired. Sign in again.", "muted err"]);
+    assert.equal($("app").hidden, true);
+    assert.equal($("signIn").hidden, false);
+  });
+}
+
 /* ------------------------------------------------------------- release */
 
 async function openHoldingSeat(extraRoutes = {}) {
@@ -467,11 +495,11 @@ test("moving the licence asks first and says when it can be moved again", async 
   await unbind(json(200, { nextChangeAllowedAt: next }));
   assert.deepEqual(sent(/unbind/), ["POST /v1/licenses/unbind"]);
   assert.equal($("status").textContent,
-    "Done. Sign in on the new phone, open Semper once so the licence attaches, and then " +
+    "Done. Sign in on the new phone, open semper once so the licence attaches, and then " +
     `restore your analyses. You can do this again after ${when(next)}.`);
 });
 
-test("Semper Classroom moves on its own, named in the query", async () => {
+test("semper Classroom moves on its own, named in the query", async () => {
   // Each app holds its own device (ADR-010). A browser cannot send X-App-Id,
   // so the page names the app; Semper's button still names none. Semper
   // Classroom is named by its old short name: a backend from before ADR-030
@@ -486,7 +514,7 @@ test("Semper Classroom moves on its own, named in the query", async () => {
   await settle();
   assert.deepEqual(sent(/unbind/), ["POST /v1/licenses/unbind?app=materialtesting"]);
   assert.equal($("status").textContent,
-    "Done. Sign in on the new phone, open Semper Classroom once so the licence attaches, " +
+    "Done. Sign in on the new phone, open semper Classroom once so the licence attaches, " +
     "and then restore your analyses.");
 });
 
@@ -495,7 +523,7 @@ test("a move inside the cooldown names the instant it ends", async () => {
   await unbind(json(409, { detail: `device_change_too_soon: ${until}` }));
   assert.deepEqual(status(), [
     `You have moved this licence recently, so you can move it yourself again after ${when(until)}. ` +
-    "Ask your IT contact or Semper support if you need to move it now.",
+    "Ask your institution's IT or semper support if you need to move it now.",
     "muted err",
   ]);
 });
@@ -503,7 +531,7 @@ test("a move inside the cooldown names the instant it ends", async () => {
 test("the other move refusals read as sentences, and an unknown one keeps its code", async () => {
   await unbind(json(409, { detail: "device_change_too_soon" }));
   assert.equal($("status").textContent,
-    "You have moved this licence recently. Ask your IT contact or Semper support if you need to move it now.");
+    "You have moved this licence recently. Ask your institution's IT or semper support if you need to move it now.");
   reset();
   await unbind(json(403, { detail: "mfa_required" }));
   assert.equal($("status").textContent, "Set up two-factor authentication first — moving a licence needs it.");

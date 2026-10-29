@@ -2,6 +2,7 @@ package com.sempermechanics.semper.ui.home
 
 import android.app.Application
 import android.net.Uri
+import android.os.Bundle
 import android.os.Looper
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
@@ -16,6 +17,7 @@ import com.sempermechanics.semper.fixtures.sessionRecord
 import com.sempermechanics.semper.ui.analysis.frames.DecodedReference
 import com.sempermechanics.semper.ui.analysis.rerun.PickedReference
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -28,6 +30,7 @@ import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowDialog
 import java.io.File
@@ -166,6 +169,153 @@ class RerunReferencePickerTest {
         idle()
 
         assertEquals(record.id, started.single().first.id)
+        again.close()
+    }
+
+    // ── A configuration change (readiness AE1-111) ─────────────────────────
+
+    /** A screen with its own picker, built from [state] when it replaces one; [decode] is its photo read. */
+    private fun screen(
+        state: Bundle? = null,
+        decode: suspend (Uri) -> Pair<String, DecodedReference>? = { "ref.jpg" to fits() },
+    ): Pair<ActivityController<AppCompatActivity>, RerunReferencePicker> {
+        val built = Robolectric.buildActivity(AppCompatActivity::class.java)
+        built.get().setTheme(R.style.Theme_Semper)
+        val picker = RerunReferencePicker(
+            built.get(),
+            onPicked = { r, p -> started += r to p },
+            decode = decode,
+            io = Dispatchers.Main.immediate,
+        )
+        if (state == null) built.setup() else built.setup(state)
+        idle()
+        return built to picker
+    }
+
+    private fun fits() = DecodedReference(bytes, ImageSize(64, 48), null)
+
+    /** What [built] saved, as a rotation saves it, then the screen destroyed. */
+    private fun recreate(built: ActivityController<AppCompatActivity>): Bundle {
+        val state = Bundle().also { built.saveInstanceState(it) }
+        built.pause().stop().destroy()
+        idle()
+        return state
+    }
+
+    private fun alertsOn(screen: AppCompatActivity) = ShadowDialog.getShownDialogs()
+        .filterIsInstance<AlertDialog>()
+        .filter { it.isShowing && it.context.findActivity() === screen }
+
+    private fun sheetsOn(screen: AppCompatActivity) = ShadowDialog.getShownDialogs()
+        .filter { it.isShowing && it.context.findActivity() === screen }
+        .filter { it.findViewById<TextView>(R.id.tvMediaTitle)?.text == screen.getString(R.string.reference_image) }
+
+    private fun android.content.Context.findActivity(): AppCompatActivity? {
+        var c: android.content.Context? = this
+        while (c is android.content.ContextWrapper) {
+            if (c is AppCompatActivity) return c
+            c = c.baseContext
+        }
+        return null
+    }
+
+    @Test
+    fun `Pick its reference photo is asked again on the rebuilt screen, for the same analysis`() {
+        val record = record()
+        val (first, picker) = screen()
+        picker.ask(record)
+        idle()
+
+        val (again, _) = screen(recreate(first))
+
+        val ask = alertsOn(again.get()).single()
+        assertEquals(activity.getString(R.string.rerun_pick_reference_title), ask.title())
+        assertEquals(activity.getString(R.string.rerun_pick_reference_body), ask.body())
+        assertTrue("the old screen's question is closed", alertsOn(first.get()).isEmpty())
+        ask.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        idle()
+        assertEquals("Choose a photo opens the reference sheet", 1, sheetsOn(again.get()).size)
+        again.close()
+    }
+
+    @Test
+    fun `the reference sheet is open again, and a photo picked from it re-runs the same analysis`() {
+        val record = record()
+        val (first, picker) = screen()
+        picker.ask(record)
+        idle()
+        alertsOn(first.get()).single().getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        idle()
+        assertEquals(1, sheetsOn(first.get()).size)
+
+        val (again, rebuilt) = screen(recreate(first))
+
+        assertEquals("one sheet, not two", 1, sheetsOn(again.get()).size)
+        assertTrue("the old screen's sheet is closed", sheetsOn(first.get()).isEmpty())
+        rebuilt.check(uri)
+        idle()
+        assertEquals(record.id, started.single().first.id)
+        again.close()
+    }
+
+    @Test
+    fun `a photo still being checked is checked again on the rebuilt screen`() {
+        val record = record()
+        val (first, picker) = screen(decode = { awaitCancellation() })
+        picker.ask(record)
+        idle()
+        alertsOn(first.get()).forEach { it.dismiss() }
+        picker.check(uri)
+        idle()
+        val waitTitle = activity.getString(R.string.rerun_checking_photo)
+        assertTrue("the wait is up", alertsOn(first.get()).any { it.title() == waitTitle })
+
+        val (again, _) = screen(recreate(first))
+
+        assertEquals(record.id, started.single().first.id)
+        assertTrue("the old screen's wait is closed", alertsOn(first.get()).isEmpty())
+        again.close()
+    }
+
+    @Test
+    fun `a photo of the wrong size is answered again on the rebuilt screen, with both sizes`() {
+        val record = record()
+        val (first, picker) = screen(decode = { "wide.jpg" to DecodedReference(bytes, ImageSize(48, 64), null) })
+        picker.ask(record)
+        idle()
+        alertsOn(first.get()).forEach { it.dismiss() }
+        picker.check(uri)
+        idle()
+
+        val (again, _) = screen(recreate(first))
+
+        val retry = alertsOn(again.get()).single()
+        assertEquals("This photo is 48 × 64; the analysis used 64 × 48.", retry.body())
+        assertEquals(
+            activity.getString(R.string.rerun_choose_another_photo),
+            retry.getButton(AlertDialog.BUTTON_POSITIVE).text.toString(),
+        )
+        retry.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        idle()
+        assertEquals("Choose another photo opens the reference sheet", 1, sheetsOn(again.get()).size)
+        again.close()
+    }
+
+    @Test
+    fun `Can't re-run is said again on the rebuilt screen, with its reason`() {
+        val (first, picker) = screen()
+        // An analysis deleted while its reference was being picked.
+        picker.ask(sessionRecord(id = "deleted", imgW = 64, imgH = 48))
+        idle()
+        alertsOn(first.get()).forEach { it.dismiss() }
+        picker.check(uri)
+        idle()
+
+        val (again, _) = screen(recreate(first))
+
+        val notice = alertsOn(again.get()).single()
+        assertEquals(activity.getString(R.string.rerun_unavailable_title), notice.title())
+        assertEquals(activity.getString(R.string.rerun_photos_missing_body), notice.body())
         again.close()
     }
 }

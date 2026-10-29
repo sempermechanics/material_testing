@@ -48,7 +48,7 @@ export class FakeElement {
     this.parentNode = null;
     this.listeners = {};
     this.html = "";
-    this.open = false;
+    this.open = "open" in attributes; // a <details open> drawn by a page
     this.focused = false;
     this.removed = false;
   }
@@ -150,11 +150,12 @@ export class FakeElement {
     return ev;
   }
 
-  /** A user's click: nothing on a disabled control, else bubbles to the root. */
+  /** A user's click: nothing on a disabled control, else bubbles to the root, then the document. */
   click() {
     if (this.disabled) return;
     const ev = { type: "click", target: this, preventDefault() {} };
     for (let e = this; e instanceof FakeElement; e = e.parentNode) e.dispatch("click", ev);
+    for (const listener of document.listeners.click || []) listener(ev);
   }
 
   /** Focus moves here; `document.activeElement` is the last element focused. */
@@ -274,6 +275,12 @@ export const document = {
   querySelector: (selector) => page.root.querySelector(selector),
   querySelectorAll: (selector) => page.root.querySelectorAll(selector),
   createElement: (tag) => new FakeElement(tag),
+  // A module's listener on the document outlives every page mounted after
+  // it, as it would in a browser tab; clicks reach it after the elements.
+  listeners: {},
+  addEventListener(type, listener) {
+    (this.listeners[type] ||= []).push(listener);
+  },
   get body() {
     return page.body;
   },

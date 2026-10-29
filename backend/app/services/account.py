@@ -37,7 +37,8 @@ def export_header(uid: str) -> dict:
         "artifactDownload": {
             "endpoint": "/v1/files/{fileId}/content",
             "note": "Images, .dat results, CSVs and reports are downloadable per file "
-                    "using the fileId values above, or via the app's Restore screen.",
+                    "using the fileId values above, or restore them in the app: "
+                    "Settings → Analyses data management.",
         },
     }
 

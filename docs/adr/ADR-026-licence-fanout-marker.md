@@ -1,6 +1,6 @@
 # ADR-026: A licence-wide fan-out is recorded on the licence and finished by a Cloud Task
 
-**Status:** Accepted, built on #457 (2026-10-19), not merged or deployed; the task rides the provisioning queue (`TASKS_QUEUE`)
+**Status:** Accepted, built on #457, merged 2026-10-20 and deployed 2026-10-22 from `b940cc29` ([CHANGELOG](../ops/CHANGELOG.md)); the task rides the provisioning queue (`TASKS_QUEUE`)
 **Date:** 2026-10-19
 **Deciders:** backend owner
 **Register:** TD-231

@@ -21,7 +21,7 @@ const SEAT_PROSE = {
   moved_on: "The account is on a different licence now. Occupies a seat here; entitles nobody.",
   demoted: "The account points here but is on Demo. Occupies a seat; entitles nobody.",
   still_licensed:
-    "The removal did not land — this account is still licensed. " +
+    "The removal did not land — this account is still Licensed. " +
     "Remove the seat again to repair it.",
   no_checkin_since_revoke:
     "Removed, but this account has not been back since. The phone may " +
@@ -34,6 +34,10 @@ const REVOKED_PROSE = {
   moved_on: "Removed, and the account is on a different licence now.",
   no_account: "Removed, and there is no account behind the seat.",
 };
+
+// A seat's status in the console's words (AE3-006): Pause and Remove, not
+// the stored disabled / revoked (AE3-111, semperdic-app's TD-323).
+const SEAT_WORDS = { disabled: "paused", revoked: "removed" };
 
 const SEAT_PILL = {
   active: "ok",
@@ -126,7 +130,7 @@ function verifiedRow(s) {
   return `
     <tr>
       <td>${esc(s.email || s.uid)}</td>
-      <td><span class="pill ${pill}">${esc(s.status)}</span></td>
+      <td><span class="pill ${pill}">${esc(SEAT_WORDS[s.status] || s.status)}</span></td>
       <td>${esc(prose)}</td>
       <td class="muted">${seen}</td>
     </tr>`;

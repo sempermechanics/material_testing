@@ -10,9 +10,7 @@ import androidx.annotation.VisibleForTesting
 import androidx.annotation.WorkerThread
 import com.sempermechanics.semper.data.cloud.SessionMetadataDoc
 import com.sempermechanics.semper.data.cloud.SessionMetadataSync
-import com.sempermechanics.semper.data.mechanical.CurveCorrection
 import com.sempermechanics.semper.data.net.AccountCache
-import com.sempermechanics.semper.report.BeamDeflection
 import com.sempermechanics.semper.util.AtomicFiles
 import com.sempermechanics.semper.util.writeVia
 import kotlinx.coroutines.Dispatchers
@@ -213,39 +211,6 @@ object SessionStore {
     }
 
     /**
-     * Saves the tensile curve's scale and bias from Results. Like [rename] it
-     * leaves the sync state alone. A session with a cloud copy, or one on its
-     * way, is marked [SessionRecord.metadataStale] when the correction
-     * changes, so [SessionMetadataSync] re-sends its metadata.json (TD-151).
-     */
-    @WorkerThread
-    fun setCurveCorrection(context: Context, id: String, correction: CurveCorrection) = update(context, id) {
-        val changed = it.curveCorrection != correction
-        it.copy(
-            curveCorrection = correction,
-            metadataStale = it.metadataStale || (changed && it.hasCloudCopy),
-            updatedAt = System.currentTimeMillis(),
-        )
-    }
-
-    /**
-     * Bending's deflection scale and bias, set in the viewer's Results. Like
-     * [rename] it leaves the sync state alone. A session with a cloud copy, or
-     * one on its way, is marked [SessionRecord.metadataStale] when the
-     * correction changes, so [SessionMetadataSync] re-sends its metadata.json.
-     */
-    @WorkerThread
-    fun setDeflectionCorrection(context: Context, id: String, correction: BeamDeflection.Correction) =
-        update(context, id) {
-            val changed = it.geometry.deflectionCorrection != correction
-            it.copy(
-                geometry = it.geometry.withCorrection(correction),
-                metadataStale = it.metadataStale || (changed && it.hasCloudCopy),
-                updatedAt = System.currentTimeMillis(),
-            )
-        }
-
-    /**
      * The backend now holds metadata built from [sent]. Clears
      * [SessionRecord.metadataStale] only if what the metadata carries and can
      * change after a backup ([haveSameMetadataInputs]) is still [sent]'s, so a
@@ -343,6 +308,36 @@ object SessionStore {
         val dir = File(record.sessionDir)
         if (!dir.isDirectory) return@synchronized
         LocalArtifacts.droppedIn(dir).forEach { child -> child.deleteRecursively() }
+    }
+
+    /**
+     * Deletes the folders runs the process died in left behind (readiness
+     * TE1-101): a folder under the sessions root that no index row names,
+     * that holds a `run_staging/` and no record manifest, and that nothing has
+     * written since [startedAtMs] (a run started in this process is live).
+     * Nothing is deleted while the index does not parse. Returns the bytes freed.
+     */
+    @WorkerThread
+    fun reclaimDeadRuns(context: Context, startedAtMs: Long): Long = synchronized(lock) {
+        val rows = readRows(context) ?: return@synchronized 0L
+        val named = rows.flatMap { listOf(it.id, File(it.sessionDir).name) }.toSet()
+        root(context).listFiles().orEmpty()
+            .filter { dir ->
+                dir.isDirectory &&
+                    dir.name !in named &&
+                    SessionPaths.runStaging(dir).isDirectory &&
+                    !SessionLayout(dir).recordManifest.exists() &&
+                    dir.walkTopDown().all { it.lastModified() < startedAtMs }
+            }
+            .sumOf { dir ->
+                val bytes = CacheJanitor.sizeOf(dir)
+                if (dir.deleteRecursively()) {
+                    Timber.i("Reclaimed %d bytes a killed run left in %s", bytes, dir.name)
+                    bytes
+                } else {
+                    0L
+                }
+            }
     }
 
     /**

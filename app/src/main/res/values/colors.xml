@@ -22,6 +22,9 @@
 
     <!-- Neutrals / surfaces -->
     <color name="surface">#FFFFFF</color>
+    <!-- Default bottom sheets' fill; dark at night (values-night) because Material
+         chooses the sheet's status-bar icons from it (readiness AE1-113). -->
+    <color name="sheet_surface">@color/surface</color>
     <color name="surface_muted">#F4F9FC</color>        <!-- app background (blue-tinted white) -->
     <color name="surface_outline">#D6E4EC</color>      <!-- card strokes, dividers -->
 

@@ -289,7 +289,7 @@ data**, **Licence**, **Try it** and **Save to phone**.
 | [ ] 3c.7 | **Concrete** → Try it → taps → Compute | "Stopped early" after frame 2 |
 | [ ] 3c.8 | **Carbon-fibre plate** → Try it → Compute | 2D DIC, no load card, ROI drawn; V around −0.6 px |
 | [ ] 3c.9 | With the frame limit at 10 (§4.25), Try it on Steel | "Too many frames for this account"; the wizard does not open |
-| [ ] 3c.10 | **Save to phone** on any set | A progress dialog, then "Saved to your phone" naming `Download/Semper examples/<set>/`; Files shows the photos, the log, README.md, CREDIT.txt (and LICENSE.DICe for the DICe sets) |
+| [ ] 3c.10 | **Save to phone** on any set | A progress dialog, then "Saved to your phone" naming `Download/semper examples/<set>/`; Files shows the photos, the log, README.md, CREDIT.txt (and LICENSE.DICe for the DICe sets) |
 | [ ] 3c.11 | Save the same set again | It finishes at once; nothing is duplicated |
 | [ ] 3c.12 | Cancel a save part-way | The dialog closes; no half-written file is left in the folder |
 | [ ] 3c.13 | Tap **Credits & licences** at the top | §4.26d |

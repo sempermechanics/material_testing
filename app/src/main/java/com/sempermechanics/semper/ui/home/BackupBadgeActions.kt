@@ -2,6 +2,7 @@ package com.sempermechanics.semper.ui.home
 
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.os.bundleOf
 import androidx.lifecycle.lifecycleScope
 import androidx.work.WorkManager
 import com.sempermechanics.semper.R
@@ -14,6 +15,7 @@ import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.ui.common.dialog.Dialogs
 import com.sempermechanics.semper.ui.common.dialog.Feedback
+import com.sempermechanics.semper.ui.common.dialog.ReopenAfterRecreate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -22,12 +24,23 @@ import kotlinx.coroutines.withContext
  * A tap on a Home row's sync badge: retry a failed or pending backup, back
  * up a phone-only analysis when cloud backup is on, or else go to Settings
  * ([openSettings]), where backup is turned on.
+ *
+ * Built in `onCreate`, after `super.onCreate`: a failed backup's question that
+ * the screen this one replaces had open is asked again, with its reason
+ * (readiness AE1-111).
  */
 internal class BackupBadgeActions(
     private val activity: AppCompatActivity,
     private val adapter: SessionListAdapter,
     private val openSettings: () -> Unit,
 ) {
+    private val reopenFailed = ReopenAfterRecreate(activity, "home.failedBackup")
+
+    init {
+        reopenFailed.restored()?.let { state ->
+            askRetry(state.getString(ROW_ID).orEmpty(), state.getString(REASON).orEmpty())
+        }
+    }
 
     /** Retry a failed/pending upload, or back up a local-only session when cloud is on. */
     fun retryOrBackup(record: SessionRecord) {
@@ -36,9 +49,9 @@ internal class BackupBadgeActions(
             // offering a deliberate retry, instead of silently re-queuing a doomed
             // upload every tap.
             SessionRecord.SyncState.FAILED -> showFailedBackupDialog(record)
-            SessionRecord.SyncState.PENDING -> enqueueBackup(record, R.string.cloud_retry_backup)
+            SessionRecord.SyncState.PENDING -> enqueueBackup(record.id, R.string.cloud_retry_backup)
             SessionRecord.SyncState.LOCAL_ONLY -> if (AppSettings.saveToCloudEnabled(activity)) {
-                enqueueBackup(record, R.string.cloud_backup_now)
+                enqueueBackup(record.id, R.string.cloud_backup_now)
             } else {
                 openSettings()
             }
@@ -46,7 +59,7 @@ internal class BackupBadgeActions(
         }
     }
 
-    private fun enqueueBackup(record: SessionRecord, @StringRes toastRes: Int) {
+    private fun enqueueBackup(localId: String, @StringRes toastRes: Int) {
         if (!SemperApi.get(activity).enabled) {
             Feedback.toast(activity, R.string.cloud_backup_no_backend, long = true)
             return
@@ -56,9 +69,9 @@ internal class BackupBadgeActions(
         // to land before the worker is queued, or an upload that finishes first
         // would have its SYNCED stamp overwritten by this one.
         activity.lifecycleScope.launch {
-            SessionStore.setSyncStateOnIo(activity, record.id, SessionRecord.SyncState.PENDING)
-            CloudSync.enqueueUpload(activity, record.id)
-            adapter.rebindRow(record.id)
+            SessionStore.setSyncStateOnIo(activity, localId, SessionRecord.SyncState.PENDING)
+            CloudSync.enqueueUpload(activity, localId)
+            adapter.rebindRow(localId)
             Feedback.toast(activity, toastRes)
         }
     }
@@ -66,13 +79,19 @@ internal class BackupBadgeActions(
     private fun showFailedBackupDialog(record: SessionRecord) {
         activity.lifecycleScope.launch {
             val reason = withContext(Dispatchers.IO) { lastUploadFailureReason(record.id) }
-            Dialogs.confirm(
-                activity,
-                activity.getText(R.string.cloud_backup_failed_title),
-                reason ?: activity.getString(R.string.cloud_backup_failed_generic),
-                R.string.cloud_backup_retry_action,
-            ) { enqueueBackup(record, R.string.cloud_retry_backup) }
+            askRetry(record.id, reason ?: activity.getString(R.string.cloud_backup_failed_generic))
         }
+    }
+
+    /** "Backup failed", with [reason], offering a retry of row [localId]. */
+    private fun askRetry(localId: String, reason: String) {
+        val dialog = Dialogs.confirm(
+            activity,
+            activity.getText(R.string.cloud_backup_failed_title),
+            reason,
+            R.string.cloud_backup_retry_action,
+        ) { enqueueBackup(localId, R.string.cloud_retry_backup) }
+        reopenFailed.keep(dialog) { bundleOf(ROW_ID to localId, REASON to reason) }
     }
 
     /** The reason attached to the last terminal upload failure for [localId], if still retained. */
@@ -85,3 +104,6 @@ internal class BackupBadgeActions(
             ?.reason
     }.getOrNull()
 }
+
+private const val ROW_ID = "rowId"
+private const val REASON = "reason"

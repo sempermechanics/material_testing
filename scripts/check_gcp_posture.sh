@@ -28,7 +28,10 @@
 #
 # Options: --region (default asia-south1), --services "semper-api semper-api-staging",
 # --backup-bucket NAME (the FIRESTORE_BACKUP_BUCKET repo variable, no gs://).
-# Exit 1 when any line is FAIL, else 0.
+# Every item prints its line whether or not it could be read (28 for two
+# projects and two services). Exit 1 when any line is FAIL; else 4 when any
+# line is UNKNOWN (the run is incomplete, not a pass: an expired login reads
+# nothing); else 0. 2 is a usage error, 3 a refused gcloud call.
 set -euo pipefail
 
 APP_PROJECT=""
@@ -64,6 +67,7 @@ WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 FAILS=0
 UNKNOWNS=0
+ITEMS=0
 
 # gc ARGS...: gcloud, read-only commands only. Output to stdout; on failure the
 # first stderr line is left in $WORK/err. The call must START with one of the
@@ -88,6 +92,7 @@ why() { head -c 200 "$WORK/err" | tr '\n' ' '; }
 report() {
   local id=$1 status=$2 scope=$3 detail=$4
   printf '%-22s %-8s %-28s %s\n' "$id" "$status" "$scope" "$detail"
+  ITEMS=$((ITEMS + 1))
   case "$status" in
     FAIL) FAILS=$((FAILS + 1)) ;;
     UNKNOWN) UNKNOWNS=$((UNKNOWNS + 1)) ;;
@@ -132,13 +137,15 @@ py() {
 printf '%-22s %-8s %-28s %s\n' "item" "status" "scope" "detail"
 printf '%-22s %-8s %-28s %s\n' "----" "------" "-----" "------"
 
-# number PROJECT: the project number read below, or empty.
+# number PROJECT: the project number read below, or empty. no_number PROJECT:
+# why it is empty, for the items that need it (2.1-tag, 2.6-budget).
 number() { cat "$WORK/number-$1" 2>/dev/null || true; }
+no_number() { echo "skipped: project number unknown ($(cat "$WORK/number-err-$1" 2>/dev/null || echo "not read"))"; }
 for p in "$APP_PROJECT" "$AUTH_PROJECT"; do
   if gc projects describe "$p" --format=json >"$WORK/proj.json"; then
     py "$WORK/proj.json" 'print(d.get("projectNumber",""))' >"$WORK/number-$p"
   else
-    report "2.1-project" UNKNOWN "$p" "projects describe failed: $(why)"
+    echo "projects describe failed: $(why)" >"$WORK/number-err-$p"
   fi
 done
 
@@ -153,7 +160,10 @@ print(("PASS|%d lien(s) block project deletion" % len(dels)) if dels else "FAIL|
     report "2.1-lien" UNKNOWN "$p" "liens list failed: $(why)"
   fi
 
-  if [ -n "$(number "$p")" ] && gc resource-manager tags bindings list \
+  if [ -z "$(number "$p")" ]; then
+    # Not `why`: no call was made here, so $WORK/err is the previous call's.
+    report "2.1-tag" UNKNOWN "$p" "$(no_number "$p")"
+  elif gc resource-manager tags bindings list \
       --parent="//cloudresourcemanager.googleapis.com/projects/$(number "$p")" --effective \
       --format=json >"$WORK/tags.json"; then
     IFS='|' read -r st detail < <(py "$WORK/tags.json" '
@@ -180,7 +190,9 @@ print("PASS|owner granted through %d group(s)" % len(groups) if groups and not u
       "FAIL|owner granted to users directly: %s" % ", ".join(users) if users else "FAIL|no owner group")')
     report "2.1-groups" "$st" "$p" "$detail"
   else
-    report "2.1-owners" UNKNOWN "$p" "get-iam-policy failed: $(why)"
+    err=$(why)
+    report "2.1-owners" UNKNOWN "$p" "get-iam-policy failed: $err"
+    report "2.1-groups" UNKNOWN "$p" "get-iam-policy failed: $err"
   fi
 done
 
@@ -230,7 +242,9 @@ print("PASS|federated providers on: %s (check each is in use)" % (", ".join(on) 
     report "2.5-idp-providers" UNKNOWN "$AUTH_PROJECT" "defaultSupportedIdpConfigs GET failed: $(why)"
   fi
 else
-  report "2.5-auth-providers" UNKNOWN "$AUTH_PROJECT" "no access token: $(why)"
+  err=$(why)
+  report "2.5-auth-providers" UNKNOWN "$AUTH_PROJECT" "no access token: $err"
+  report "2.5-idp-providers" UNKNOWN "$AUTH_PROJECT" "no access token: $err"
 fi
 
 # --- 2.6 budgets -------------------------------------------------------------
@@ -242,6 +256,12 @@ for p in "$APP_PROJECT" "$AUTH_PROJECT"; do
   account=$(py "$WORK/billing.json" 'print((d.get("billingAccountName") or "").rsplit("/",1)[-1] if d.get("billingEnabled") else "")')
   if [ -z "$account" ]; then
     report "2.6-budget" FAIL "$p" "billing is not enabled"
+    continue
+  fi
+  if [ -z "$(number "$p")" ]; then
+    # A budget names projects by number; without it a filtered budget
+    # cannot be matched, and "no budget" would be a guess.
+    report "2.6-budget" UNKNOWN "$p" "$(no_number "$p")"
     continue
   fi
   if gc billing budgets list --billing-account="$account" --format=json >"$WORK/budgets.json"; then
@@ -261,7 +281,10 @@ done
 # --- Cloud Run services: 2.6 cap, 3.1, 3.4, 3.5 -----------------------------
 for s in $SERVICES; do
   if ! gc run services describe "$s" --region "$REGION" --project "$APP_PROJECT" --format=json >"$WORK/run.json"; then
-    report "3.1-app-check" UNKNOWN "$s" "run services describe failed: $(why)"
+    err=$(why)
+    for id in 2.6-max-instances 3.1-app-check 3.4-check-revoked 3.5-entitlement-key; do
+      report "$id" UNKNOWN "$s" "run services describe failed: $err"
+    done
     continue
   fi
   while IFS='|' read -r id st detail; do
@@ -298,7 +321,9 @@ v=d.get("deleteProtectionState","")
 print(("PASS|" if v=="DELETE_PROTECTION_ENABLED" else "FAIL|") + (v or "unset"))')
   report "2.7-delete-protection" "$st" "$APP_PROJECT" "$detail"
 else
-  report "2.7-pitr" UNKNOWN "$APP_PROJECT" "firestore databases describe failed: $(why)"
+  err=$(why)
+  report "2.7-pitr" UNKNOWN "$APP_PROJECT" "firestore databases describe failed: $err"
+  report "2.7-delete-protection" UNKNOWN "$APP_PROJECT" "firestore databases describe failed: $err"
 fi
 # Backups: a daily managed schedule, or the daily export workflow's exports
 # (scripts/firestore-export.sh writes gs://BUCKET/firestore/PROJECT/STAMP/).
@@ -399,7 +424,16 @@ print(("FAIL|no DATA_READ+DATA_WRITE for: " + ", ".join(missing)) if missing els
 done
 
 echo
-echo "FAIL: $FAILS  UNKNOWN: $UNKNOWNS"
+echo "FAIL: $FAILS  UNKNOWN: $UNKNOWNS  (of $ITEMS)"
 if [ "$FAILS" -gt 0 ]; then
   exit 1
+fi
+if [ "$UNKNOWNS" -gt 0 ]; then
+  if [ "$UNKNOWNS" -eq "$ITEMS" ]; then
+    echo "INCOMPLETE: nothing could be read (gcloud login, permissions or APIs); this is not a pass" >&2
+    echo "nothing could be read: not a pass"
+  else
+    echo "INCOMPLETE: $UNKNOWNS item(s) could not be read; this is not a pass" >&2
+  fi
+  exit 4
 fi

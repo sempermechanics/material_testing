@@ -32,9 +32,17 @@ import java.util.concurrent.TimeUnit
  * the wizard's side, `WizardDraftBinding`.
  */
 @Suppress("TooManyFunctions") // one write and one read per draft part
-class WizardDraft(private val dir: File) {
+class WizardDraft private constructor(dirOnFirstUse: Lazy<File>) {
 
-    constructor(context: Context) : this(dirIn(context.filesDir))
+    constructor(dir: File) : this(lazyOf(dir))
+
+    /**
+     * Resolves `filesDir` at the first read or write, on [io], not here: the
+     * wizard builds its draft on the main thread in onCreate (readiness TE1-103).
+     */
+    constructor(context: Context) : this(lazy { dirIn(context.filesDir) })
+
+    private val dir: File by dirOnFirstUse
 
     @WorkerThread
     fun writeReference(bytes: ByteArray?) = write(REFERENCE, bytes)

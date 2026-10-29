@@ -58,6 +58,9 @@ class Tier:
     actor: str
     #: Audit action prefix: `INSTITUTION` or `ADMIN`.
     audit: str
+    #: The licence's own IT: adds only on its `domainLock`, and an address
+    #: another licence holds is answered as an unknown one (ADDENDUM-2).
+    institution_it: bool = False
 
 
 #: The largest roster page. A listing used to be the whole roster in one
@@ -118,6 +121,7 @@ def roster_router(tier: Tier) -> APIRouter:
         through here, so the two cannot disagree about who may be added."""
         seat, invite = repo.add_institution_member(
             license_id, email, invited_by_uid=admin.user["uid"],
+            institution_it=tier.institution_it,
         )
         audit.record(
             admin.user["uid"],
@@ -165,6 +169,12 @@ def roster_router(tier: Tier) -> APIRouter:
 
         On an assigned license a seat entitles them immediately. On a floating
         one it makes them eligible; they check out a lease when they work.
+
+        Institution IT may add only addresses on the licence's `domainLock`
+        (422 `member_off_domain`), and an address another licence holds or
+        promises is answered as one with no account: a pending invite, which
+        is not claimed while that other licence holds them. Semper staff may
+        add any address and are told `member_already_licensed`.
         """
         seat, invite = add_member(admin, license_id, body.email)
         return {"licenseId": license_id, "seat": seat, "invite": invite}

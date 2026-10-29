@@ -8,7 +8,7 @@
  * the message: it follows a sentence as "(ref: <code>)", for support, so
  * nothing is ever silently swallowed and nobody is shown only a code.
  */
-import { errorDetail } from "./util.js";
+import { authErrorText, errorDetail } from "./util.js";
 
 /** Sentences any page may show for a code it has none of its own for. */
 export const COMMON = {
@@ -20,7 +20,11 @@ export const COMMON = {
   claim_contended: "Busy just now — try again.",
   mfa_required: "Set up two-factor authentication first.",
   reauth_required: "Sign in again, then repeat that.",
-  not_admin: "That account is not a Semper operator.",
+  // 401: the ID token itself was refused, or the remembered sign-in can no
+  // longer be refreshed. api.js signs the page out for either, so Sign in is
+  // on screen beside this.
+  invalid_token: "Your sign-in has expired. Sign in again, then repeat that.",
+  not_admin: "That account is not a semper operator.",
   email_not_verified: "Verify your email address first.",
 };
 
@@ -33,13 +37,13 @@ export const COMMON = {
  */
 export const REASONS = {
   // Platform refusals any route can give (backend/app/main.py, deps.py).
-  internal_error: "Something went wrong on the server. Try again; if it keeps happening, tell Semper support.",
+  internal_error: "Something went wrong on the server. Try again; if it keeps happening, tell semper support.",
   firestore_unreachable: "The server could not reach its database just now. Try again in a moment.",
-  feature_paused: "That is switched off for maintenance just now. Try again later.",
+  feature_paused: "That is paused right now. Try again later.",
   request_too_large: "That is too large to send in one go.",
   // Route refusals no page has words of its own for.
   empty_patch: "Nothing changed.",
-  user_not_found: "No Semper account has that address.",
+  user_not_found: "No semper account has that address.",
   invite_not_found: "That invitation is no longer open: it was withdrawn or claimed. Reload to see the roster.",
   // No answer at all: fetch rejected (offline, DNS, the connection dropped).
   network: "The server could not be reached — check your connection and try again.",
@@ -63,6 +67,9 @@ const BARE_CODE = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/;
 function reason(error, code, text) {
   if (REASONS[code]) return REASONS[code];
   if (error instanceof TypeError) return REASONS.network;
+  // A step-up's own failure (a code that came too late, a refused password).
+  // Its message is Firebase's "Firebase: Error (auth/…)." and no sentence.
+  if (/^auth\//.test(code)) return authErrorText(error);
   const gateway = /^http_(\d{3})$/.exec(code);
   if (gateway && GATEWAY[gateway[1]]) return GATEWAY[gateway[1]];
   // A code nobody wrote a sentence for: words, with the code kept for support.
@@ -109,15 +116,15 @@ export const ACCOUNT = {
   // Shown whenever a licence is attached: a phone checks its licence with
   // the server, but does not need to on every launch.
   offline:
-    "On a phone, licensed features keep working offline until the offline " +
+    "On a phone, Licensed features keep working offline until the offline " +
     "allowance runs out; then the app falls back to Demo limits until it " +
     "reconnects. Analyses you already have stay available either way.",
   // Deleting needs the phone's device signature, so it is done in the app.
   // One account signs in to both apps, so the sign-in goes for both.
   deleteAccount:
-    "Delete your account from the app on your phone — in Semper, Settings → " +
+    "Delete your account from the app on your phone — in semper, Settings → " +
     "Your data → Delete account. It erases every analysis and cloud backup, " +
-    "and removes the sign-in itself for both apps, Semper and Semper " +
+    "and removes the sign-in itself for both apps, semper and semper " +
     "Classroom, since they share one account. It cannot be undone: signing " +
     "in again with the same address starts a new, empty account.",
   // The "Redeem a claim code" card (account/claim.js), shown only while no
@@ -152,7 +159,7 @@ export const ACCOUNT = {
         "IT to free or add one.",
       seatDisabled: "Your institution has paused your seat. Ask your institution's IT to " +
         "resume it.",
-      deviceInUse: "Your phone is registered to another Semper account. Sign in with that " +
+      deviceInUse: "Your phone is registered to another semper account. Sign in with that " +
         "account, or email support@sempermechanics.com to release the phone.",
       busy: "The server was busy and the claim code was not used. Try again in a moment.",
       rateLimited: "Too many attempts. Wait a few minutes and try again.",

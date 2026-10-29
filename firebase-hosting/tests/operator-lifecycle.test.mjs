@@ -46,7 +46,7 @@ test("deleting a revoked licence does not say it is revoked first; an institutio
   assert.deepEqual(confirms.asked, [
     "Delete SEMP-REV1?\n\nIt leaves this list and is held under Recently deleted for 30 days, then purged. " +
     "Nobody's saved analyses are touched.",
-    "Delete SEMP-UNI1?\n\nIt is revoked first: every one of the 4 people on its roster drops to demo immediately. " +
+    "Delete SEMP-UNI1?\n\nIt is revoked first: every one of the 4 people on its roster drops to Demo immediately. " +
     "It leaves this list and is held under Recently deleted for 30 days, then purged. Nobody's saved analyses are touched.",
   ]);
   assert.equal(prompts.asked.length, 0, "declining the confirmation asks for no key");
@@ -121,7 +121,7 @@ test("with Show revoked ticked, a revoked row stays, offering only Delete, and n
   confirms.answer(true);
   prompts.answer("SEMP-IND1");
   await click(rowButton("revoke", IND.id));
-  assert.deepEqual(status(), ["SEMP-IND1 revoked — its holder is on demo from their next request.", "muted"]);
+  assert.deepEqual(status(), ["SEMP-IND1 revoked — its holder is on Demo from their next request.", "muted"]);
   assert.deepEqual(rows().map((r) => [r[0], r[6], r[8]]), [["SEMP-IND1", "revoked", "Delete"], ["SEMP-UNI1", "redeemed",
     "Edit Roster More Verify Phone history Revoke Delete"]]);
 });
@@ -177,16 +177,38 @@ test("Recently deleted is read only when asked, and says what each licence was a
   await openDesk({ routes: { [DELETED]: deletedPages(GONE) } });
   assert.equal($("deletedWrap").hidden, true);
   assert.deepEqual(sent(/deleted/), [], "nothing read on load");
+  assert.ok($("loadDeleted").closest(".card-head"), "Show list sits in the card's heading row");
   await click($("loadDeleted"));
   assert.equal($("deletedWrap").hidden, false);
-  assert.equal($("loadDeleted").textContent, "Refresh");
+  assert.equal($("loadDeleted").textContent, "Hide list");
+  assert.equal($("loadDeleted").getAttribute("aria-expanded"), "true");
   assert.deepEqual(deletedRows(), [
     ["SEMP-DEL1", "individual", "a@b.org", "redeemed", day(DELETED_AT), "12 days", "Restore"],
     ["lic-delete", "institution", "uni.edu", "revoked", day(DELETED_AT), "1 day", "Restore"],
     ["SEMP-DEL3", "individual", "—", "—", day(DELETED_AT), "due", ""],
   ]);
   await click($("loadDeleted"));
-  assert.deepEqual(sent(/deleted/), [DELETED, DELETED], "Refresh reads it again");
+  assert.equal($("deletedWrap").hidden, true, "Hide list puts it away");
+  assert.equal($("loadDeleted").textContent, "Show list");
+  assert.equal($("loadDeleted").getAttribute("aria-expanded"), "false");
+  assert.deepEqual(sent(/deleted/), [DELETED], "and reads nothing");
+  await click($("loadDeleted"));
+  assert.equal($("deletedWrap").hidden, false);
+  assert.deepEqual(sent(/deleted/), [DELETED, DELETED], "every Show reads it afresh");
+});
+
+test("a delete with Recently deleted hidden does not show or read it", async () => {
+  await openDesk({ routes: {
+    [DELETED]: deletedPages([]),
+    [DELETE(IND)]: () => json(200, { purgeAt: at(30) }),
+  } });
+  await click($("loadDeleted"));
+  await click($("loadDeleted"));
+  confirms.answer(true);
+  prompts.answer("SEMP-IND1");
+  await click(rowButton("delete", IND.id));
+  assert.deepEqual(sent(/deleted|DELETE/), [DELETED, DELETE(IND)]);
+  assert.equal($("deletedWrap").hidden, true);
 });
 
 test("an empty or unreadable deleted list says so", async () => {

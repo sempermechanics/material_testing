@@ -72,12 +72,16 @@
         <activity
             android:name=".ui.auth.SplashActivity"
             android:exported="true"
+            android:relinquishTaskIdentity="true"
             android:theme="@style/Theme.Semper.Splash" />
 
         <!-- Two launcher entries for SplashActivity: the light icon and the
              jet-black one. Launchers never swap an icon's -night resources on a
              dark-mode change, so LauncherIcon enables the entry that matches
-             the system theme and disables the other. -->
+             the system theme and disables the other. Disabling the alias a
+             task was started from removes that task (readiness AE1-101), so
+             SplashActivity relinquishes the task's identity to the screen it
+             routes to, and LauncherIcon waits while a task still names it. -->
         <activity-alias
             android:name=".LauncherLight"
             android:enabled="true"

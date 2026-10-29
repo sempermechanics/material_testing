@@ -134,7 +134,7 @@ class ExamplesActivityTest {
         val set = requireNotNull(ExampleCatalog.find(app.assets, "dice_translation"))
         assertEquals(set.files, sink.names)
         val body = (ShadowDialog.getLatestDialog() as AlertDialog).findViewById<TextView>(android.R.id.message)!!.text
-        assertTrue(body.toString(), "Download/Semper examples/DICe translation/" in body)
+        assertTrue(body.toString(), "Download/semper examples/DICe translation/" in body)
     }
 
     /** Records the names written; everything succeeds. */

@@ -1,14 +1,14 @@
 name: Check out the engine submodules
 description: >
   Initialise `engine` and its nested submodules (Eigen, OpenCV) after a plain
-  `actions/checkout`, without needing gitlab.com to be up. Eigen is the one
-  submodule hosted on GitLab; on 2026-10-26 GitLab refused GitHub's runners
-  "due to load" for over an hour and every `submodules: recursive` checkout
-  failed (Tier 5 and Benchmarks on #148 and #150, Tier 5 on main at f25ebd01).
-  Eigen's git directory is cached by its pinned commit, so a run whose pin is
-  cached never contacts GitLab; every fetch that is still needed is retried
-  with backoff (retry.sh). Every fetch is one commit deep, as
-  `actions/checkout` fetched them with `submodules: recursive`.
+  `actions/checkout`. Eigen's `.gitmodules` URL is gitlab.com, which refused
+  GitHub's runners "due to load" for hours on 2026-10-26; the workflows'
+  `GIT_CONFIG_*` env already sends it to a GitHub mirror (TD-274). Eigen's git
+  directory is also cached by its pinned commit, so a run whose pin is cached
+  fetches it from neither host, and every fetch still needed is retried with
+  backoff (retry.sh). Ported from the material_testing fork (its #152), which
+  shares `engine`. Every fetch is one commit deep, as `actions/checkout`
+  fetched them with `submodules: recursive`.
 
 runs:
   using: composite

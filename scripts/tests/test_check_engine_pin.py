@@ -4,12 +4,15 @@ than its previous pin).
 
 Each test builds an engine repository (commits and v* tags) and a superproject
 whose commits carry an `engine` gitlink, under a temporary directory, and runs
-the check with `--engine-git` on that engine. Stdlib only (and git):
+the check with `--engine-git` on that engine. The engine-CI golden check
+(TE2-102) reads its runs from `--engine-ci-json`, never the network; the pin
+tests pass `--no-engine-ci`. Stdlib only (and git):
 `python -m unittest discover -s scripts/tests`.
 """
 from __future__ import annotations
 
 import importlib.util
+import json
 import re
 import subprocess
 import sys
@@ -25,7 +28,10 @@ _spec.loader.exec_module(pin)
 
 
 def _git(repo: Path, *args: str) -> str:
-    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True).stdout.strip()
+    # git from PATH on a temporary repository the test made; fixed arguments.
+    proc = subprocess.run(["git", "-C", str(repo), *args],  # noqa: S603, S607
+                          capture_output=True, text=True, check=True)
+    return proc.stdout.strip()
 
 
 def _init(repo: Path) -> None:
@@ -71,9 +77,15 @@ class _Repos(unittest.TestCase):
         _git(self.app, "commit", "-q", "-m", f"engine {sha[:7]}")
         return _git(self.app, "rev-parse", "HEAD")
 
-    def check(self, *extra: str) -> tuple[int, str]:
-        proc = subprocess.run([sys.executable, str(_SCRIPT), "--repo", str(self.app),
-                               "--engine-git", str(self.engine), *extra],
+    def check(self, *extra: str, runs: list[dict] | None = None) -> tuple[int, str]:
+        """Run the check; [runs] is the engine CI it reads, else it skips that check."""
+        ci = ["--no-engine-ci"]
+        if runs is not None:
+            path = Path(self._tmp.name) / "engine-ci.json"
+            path.write_text(json.dumps(runs), encoding="utf-8")
+            ci = ["--engine-ci-json", str(path)]
+        proc = subprocess.run([sys.executable, str(_SCRIPT), "--repo", str(self.app),  # noqa: S603 - this interpreter, the script under test
+                               "--engine-git", str(self.engine), *ci, *extra],
                               capture_output=True, text=True, check=False)
         return proc.returncode, proc.stdout + proc.stderr
 
@@ -135,6 +147,61 @@ class PinTest(_Repos):
         self.assertIn("no engine gitlink", out)
 
 
+def _run(run_id: int, host_tests: str | None = "success", *, status: str = "completed",
+         path: str = ".github/workflows/ci.yml") -> dict:
+    jobs = [{"name": "Sanitized (tsan)", "conclusion": "success"}]
+    if host_tests is not None:
+        jobs.append({"name": "Host tests", "conclusion": host_tests})
+    return {"id": run_id, "path": path, "status": status, "jobs": jobs}
+
+
+class EngineCiTest(_Repos):
+    """TE2-102: the numeric goldens skip under this repo's sanitized rerun, so the
+    pin needs the engine CI's unsanitized `Host tests` job green on its commit."""
+
+    def test_a_green_host_tests_job_passes(self):
+        self.pin_engine(self.v061)
+        code, out = self.check(runs=[_run(7)])
+        self.assertEqual(code, 0, out)
+        self.assertIn("engine CI run 7", out)
+        self.assertIn("'Host tests' passed", out)
+
+    def test_the_latest_completed_run_decides(self):
+        self.pin_engine(self.v061)
+        code, out = self.check(runs=[_run(7), _run(9, "failure")])
+        self.assertEqual(code, 1, out)
+        self.assertIn("concluded failure", out)
+        # A run still in progress is not the latest completed one.
+        code, out = self.check(runs=[_run(7), _run(9, None, status="in_progress")])
+        self.assertEqual(code, 0, out)
+        # Another workflow's runs (the wheels) do not count.
+        code, out = self.check(runs=[_run(7, "failure"), _run(9, path=".github/workflows/wheels.yml")])
+        self.assertEqual(code, 1, out)
+
+    def test_no_run_or_no_host_tests_job_fails(self):
+        self.pin_engine(self.v061)
+        code, out = self.check(runs=[])
+        self.assertEqual(code, 1, out)
+        self.assertIn("no completed engine CI run", out)
+        code, out = self.check(runs=[_run(7, None)])
+        self.assertEqual(code, 1, out)
+        self.assertIn("has no 'Host tests' job", out)
+
+    def test_a_green_engine_ci_does_not_excuse_an_untagged_pin(self):
+        self.pin_engine(self.untagged)
+        code, out = self.check(runs=[_run(7)])
+        self.assertEqual(code, 1, out)
+        self.assertIn("not a tagged engine release", out)
+
+    def test_github_slug(self):
+        for url in ("https://github.com/sempermechanics/semper-dic-engine.git",
+                    "https://github.com/sempermechanics/semper-dic-engine",
+                    "git@github.com:sempermechanics/semper-dic-engine.git"):
+            self.assertEqual(pin.github_slug(url), "sempermechanics/semper-dic-engine")
+        with self.assertRaises(pin.CheckError):
+            pin.github_slug("https://gitlab.com/libeigen/eigen.git")
+
+
 class WorkflowTest(unittest.TestCase):
     def test_ci_runs_the_check_and_ci_ok_needs_it(self):
         ci = (_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
@@ -143,6 +210,9 @@ class WorkflowTest(unittest.TestCase):
         self.assertIn("fetch-depth: 2", job)
         self.assertIn("scripts/check_engine_pin.py", job)
         self.assertIn("engine-downgrade", job)
+        # The engine CI golden check reads GitHub, so CI keeps it on and has a token.
+        self.assertNotIn("--no-engine-ci", job)
+        self.assertIn("GH_TOKEN: ${{ github.token }}", job)
         ci_ok = ci[ci.index("\n  ci-ok:"):]
         self.assertIn("      - engine-pin\n", ci_ok)
         self.assertIn("${{ needs.engine-pin.result }}", ci_ok)
@@ -164,7 +234,8 @@ class EngineHostJobTest(unittest.TestCase):
         job = _job(self.ci, "engine-host-sanitized")
         self.assertIn("needs: changes", job)
         self.assertIn("if: needs.changes.outputs.engine_host == 'true'", job)
-        self.assertIn("submodules: recursive", job)
+        # Engine, Eigen and OpenCV, through the cached, retried checkout.
+        self.assertIn("uses: ./.github/actions/checkout-submodules", job)
         self.assertIn("libopencv-dev", job)
         self.assertIn("working-directory: engine", job)
         for flag in ("-S tests", "-DDIC_REQUIRE_OPENCV=ON", "-DDIC_SANITIZER=address,undefined",

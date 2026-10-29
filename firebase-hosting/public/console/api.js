@@ -3,8 +3,8 @@
  * refusal as an `ApiError` the page branches on by code.
  */
 import { API_BASE_URL } from "./config.js";
-import { signedInUser, stepUp } from "./auth.js";
-import { errorDetail } from "./util.js";
+import { endSession, signedInUser, stepUp } from "./auth.js";
+import { errorDetail, sessionEnded } from "./util.js";
 
 /**
  * A refusal from the Semper API.
@@ -56,6 +56,12 @@ async function failureDetail(resp) {
  * retried, because that response means "prove it again", not "you may not".
  * Exactly once: a second failure is a real refusal, and retrying forever
  * would trap someone in a loop. Anything else refused throws an `ApiError`.
+ *
+ * A sign-in that is over — the backend refuses the token (401
+ * `invalid_token`), or Firebase can no longer refresh the one this browser
+ * remembered — signs the page out and throws `invalid_token`, whose sentence
+ * says to sign in again. Re-authenticating cannot rescue it, and the page used
+ * to show the Firebase code while still offering Sign out.
  */
 async function request(path, options, read, { allowStepUp = true, json = true } = {}) {
   const send = async () => {
@@ -75,13 +81,17 @@ async function request(path, options, read, { allowStepUp = true, json = true } 
   };
 
   try {
-    return await send();
-  } catch (e) {
-    if (e.code === "reauth_required" && allowStepUp) {
+    try {
+      return await send();
+    } catch (e) {
+      if (e.code !== "reauth_required" || !allowStepUp) throw e;
       await stepUp();
-      return send();
+      return await send();
     }
-    throw e;
+  } catch (e) {
+    if (!sessionEnded(e)) throw e;
+    await endSession();
+    throw e instanceof ApiError ? e : new ApiError(401, "invalid_token");
   }
 }
 

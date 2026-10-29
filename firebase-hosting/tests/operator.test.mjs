@@ -115,6 +115,43 @@ test("the desk's reads go out with the role check, and show only once it says st
   assert.equal($("switch").hidden, false);
 });
 
+// AE2-105, rework: a desk read answered 401 and signed the page out before
+// the role check said staff; the desk must not then be shown behind Sign in.
+test("a role check answered after the session ended does not bring the desk back", async () => {
+  const role = deferred();
+  await open({ routes: { "GET /v1/me": () => role.promise, [LIST]: () => json(401, { detail: "invalid_token" }) } });
+  await settle();
+  role.resolve(json(200, { role: "admin" }));
+  await settle();
+  assert.equal($("app").hidden, true, "the desk stays hidden");
+  assert.equal($("signIn").hidden, false);
+  assert.equal(status()[0].startsWith("Your sign-in has expired."), true, status()[0]);
+});
+
+// AE2-105, rework 2: the same, but the role check failed (503, or no
+// network) after the session ended. Its catch wrote "Could not check whether
+// … is an operator" over the line that says to sign in again.
+for (const [how, answer] of [
+  ["a 503", (role) => role.resolve(json(503, { detail: "service_unavailable" }))],
+  ["a network error", (role) => role.reject(new TypeError("Failed to fetch"))],
+]) {
+  test(`a role check failing with ${how} after the session ended keeps the session-ended line`, async () => {
+    let reject;
+    const role = deferred();
+    const held = new Promise((resolve, no) => { role.promise.then(resolve); reject = no; });
+    role.reject = reject;
+    await open({ routes: { "GET /v1/me": () => held, [LIST]: () => json(401, { detail: "invalid_token" }) } });
+    await settle();
+    const ended = status();
+    assert.equal(ended[0], "Your sign-in has expired. Sign in again.");
+    answer(role);
+    await settle();
+    assert.equal($("app").hidden, true, "the desk stays hidden");
+    assert.equal($("signIn").hidden, false);
+    assert.deepEqual(status(), ended);
+  });
+}
+
 test("a toggle changed while the role check is pending gets the list it asks for", async () => {
   const role = deferred();
   const revoked = { ...IND, id: "lic-rev", keyPrefix: "SEMP-REV1", status: "revoked" };
@@ -253,16 +290,16 @@ test("each licence row says what it is and offers only what applies", async () =
   await open();
   assert.equal($("mfaPill").textContent, "2FA on");
   assert.deepEqual(rows(), [
-    ["SEMP-IND1", "individual", "licensed", "—", `until ${day(IND.expiresAt)} +14d`, "50", "redeemed",
+    ["SEMP-IND1", "individual", "Licensed", "—", `until ${day(IND.expiresAt)} +14d`, "50", "redeemed",
       "pat@lab.org", "Edit More New phone To institution Phone history Revoke Delete"],
-    ["SEMP-UNI1", "institution · shared", "licensed", "1/5 in use · 4 on roster", "perpetual", "default",
+    ["SEMP-UNI1", "institution · shared", "Licensed", "1/5 in use · 4 on roster", "perpetual", "default",
       "redeemed", "uni.edu", "Edit Roster More Verify Phone history Revoke Delete"],
   ]);
   assert.equal($("licencePaging").textContent, "2 licence(s) (revoked and Demo hidden).");
   assert.equal($("loadMore").hidden, true);
 });
 
-test("Demo keys are fetched only when asked for, show the demo allowance, and are never deleted", async () => {
+test("Demo keys are fetched only when asked for, show the Demo limit, and are never deleted", async () => {
   await open({
     routes: { "GET /v1/admin/licenses?limit=50&include_demo=true&include_revoked=false":
       () => json(200, { licenses: [IND, DEMO], page: {}, demoMaxAnalyses: 25 }) },
@@ -273,14 +310,14 @@ test("Demo keys are fetched only when asked for, show the demo allowance, and ar
   assert.deepEqual(sent(/admin\/licenses/).at(-1),
     "GET /v1/admin/licenses?limit=50&include_demo=true&include_revoked=false");
   const demo = rows().find((r) => r[0] === "SEMP-DEMO");
-  assert.equal(demo[5], "demo (25)");
+  assert.equal(demo[5], "Demo limit (25)");
   assert.equal(demo[8], "Edit More New phone Phone history Revoke", "no convert, no delete for a system Demo key");
   assert.equal($("licencePaging").textContent, "2 licence(s) (revoked hidden).");
-  // What "demo (25)" means is text under the table, not a hover-only title
+  // What "Demo limit (25)" means is text under the table, not a hover-only title
   // (AE2-011): keyboard and touch reach it, and a screen reader reads it.
   assert.equal($("licenceRows").querySelectorAll("[title]").length, 0);
   assert.equal($("demoNote").hidden, false);
-  assert.equal($("demoNote").textContent, "Demo keys use the demo allowance of 25; issue a licensed key to raise it.");
+  assert.equal($("demoNote").textContent, "Demo keys use the Demo limit (25); issue a Licensed key to raise it.");
   $("showDemo").checked = false;
   $("showDemo").dispatch("change");
   await settle();
@@ -360,14 +397,14 @@ test("revoke asks who is affected, then for the typed key; either refusal sends 
   confirms.answer(false);
   rowButton("revoke", UNI.id).click();
   await settle();
-  assert.match(confirms.asked[0], /^Revoking SEMP-UNI1 drops every one of the 4 people on its roster to demo/);
+  assert.match(confirms.asked[0], /^Revoking SEMP-UNI1 drops every one of the 4 people on its roster to Demo/);
   assert.equal(prompts.asked.length, 0);
 
   confirms.answer(true);
   prompts.answer("semp-ind1");
   rowButton("revoke", IND.id).click();
   await settle();
-  assert.match(confirms.asked[1], /^Revoking SEMP-IND1 drops the person holding it to demo/);
+  assert.match(confirms.asked[1], /^Revoking SEMP-IND1 drops the person holding it to Demo/);
   assert.equal(prompts.asked[0], "This cannot be undone.\n\nType SEMP-IND1 to revoke this licence:");
   assert.deepEqual(status(), ["Revoke cancelled — the key did not match.", "muted"]);
   assert.deepEqual(sent(/[/]revoke$/), []);
@@ -383,7 +420,7 @@ test("a confirmed revoke inside the fresh window is sent, and the row leaves the
   assert.equal(fake.callsTo("reauthenticateWithRedirect").length, 0, "a fresh sign-in needs no step-up");
   assert.deepEqual(labels(), ["SEMP-UNI1"]);
   assert.deepEqual(status(), [
-    "SEMP-IND1 revoked — its holder is on demo from their next request. Tick “Show revoked” to see it.", "muted",
+    "SEMP-IND1 revoked — its holder is on Demo from their next request. Tick “Show revoked” to see it.", "muted",
   ]);
 });
 
@@ -511,7 +548,7 @@ test("delete asks, then the typed key; a wrong key sends nothing", async () => {
   prompts.answer("SEMP-IND");
   rowButton("delete", IND.id).click();
   await settle();
-  assert.match(confirms.asked[0], /^Delete SEMP-IND1\?\n\nIt is revoked first: the person holding it drops to demo/);
+  assert.match(confirms.asked[0], /^Delete SEMP-IND1\?\n\nIt is revoked first: the person holding it drops to Demo/);
   assert.equal(prompts.asked[0], "Type SEMP-IND1 to delete this licence:");
   assert.deepEqual(status(), ["Delete cancelled — the key did not match.", "muted"]);
   assert.deepEqual(sent(/DELETE/), []);
@@ -646,7 +683,7 @@ test("clearing the cap sends clearMaxAnalyses; a Demo key's cap cannot be edited
   await settle();
   rowButton("edit", DEMO.id).click();
   assert.equal($("editCap").disabled, true);
-  assert.equal($("editCap").title, "Demo keys use the demo allowance of 25; issue a licensed key to raise it.");
+  assert.equal($("editCap").title, "Demo keys use the Demo limit (25); issue a Licensed key to raise it.");
 });
 
 /** The desk with Demo keys shown, and Edit open on `demo`. */
@@ -733,7 +770,7 @@ test("New phone asks, then clears the lock and says the next device takes it", a
   rowButton("device", IND.id).click();
   await settle();
   assert.deepEqual(JSON.parse(net.requests.find((r) => r.method === "PATCH").body), { clearDeviceLock: true });
-  assert.deepEqual(status(), ["SEMP-IND1 unbound — the next phone to sign in takes it.", "muted"]);
+  assert.deepEqual(status(), ["SEMP-IND1 is free for a new phone — the next phone to sign in takes it.", "muted"]);
 });
 
 test("Device history is shown in the page, one move a line", async () => {
@@ -753,11 +790,11 @@ test("Device history is shown in the page, one move a line", async () => {
   // included; one the page does not know is shown as it is.
   assert.deepEqual(alerts, [
     "Phone history for SEMP-IND1\n\n" +
-    `${when("2026-10-07T11:25Z")}  bind  by u1 (Semper Classroom)  → dev-4\n` +
-    `${when("2026-10-07T11:24Z")}  bind  by u1 (Semper Classroom)  → dev-3\n` +
-    `${when("2026-10-07T11:23Z")}  bind  by u1 (Semper)  → dev-2\n` +
+    `${when("2026-10-07T11:25Z")}  bind  by u1 (semper Classroom)  → dev-4\n` +
+    `${when("2026-10-07T11:24Z")}  bind  by u1 (semper Classroom)  → dev-3\n` +
+    `${when("2026-10-07T11:23Z")}  bind  by u1 (semper)  → dev-2\n` +
     `${when("2026-10-07T11:22Z")}  bind  by u1 (other)  → dev-5\n` +
-    `${when("2026-10-07T11:21Z")}  clear  by staff  left dev-1  left dev-0 (Semper Classroom)`,
+    `${when("2026-10-07T11:21Z")}  clear  by staff  left dev-1  left dev-0 (semper Classroom)`,
   ]);
   assert.equal(confirms.cards[0].removed, true);
 });
