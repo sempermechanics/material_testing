@@ -200,6 +200,13 @@ The product owner's decisions (2026-10-29):
       `backend/tests/test_script_split_licences_per_app.py`, the emulator tier).
 - [ ] Run the split (owner): dry run, the QC rehearsal, then `--apply`, once the
       step-5 backend serves all traffic.
-- [ ] App and consoles; fork sync.
+- [x] App (Semper): `X-Activation: explicit` (`AppIdHeader`), Activate / list /
+      Deactivate (`PhonesApi`, `data/account/phones/DeviceActivation.kt`), the
+      Your phones screen (`ui/phones/`), Home's card, Settings' row, the limit
+      screen's Activate, and the config's `activation` and `pendingLicence` kept
+      by `AppRemoteConfig`. Activate stores the config it answers, so the
+      licence's features open at once; no licence change touches a local analysis.
+- [ ] App: sync across the holder's phones (a Settings switch and a worker).
+- [ ] Consoles; fork sync.
 - [ ] Set `IMPLICIT_ACTIVATION=off` once adoption allows, then remove the legacy
       paths (TD-363).

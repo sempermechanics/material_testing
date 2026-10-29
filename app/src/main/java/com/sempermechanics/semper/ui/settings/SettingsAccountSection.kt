@@ -9,6 +9,7 @@ import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.DeviceKeys
 import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.net.AccountCache
+import com.sempermechanics.semper.data.net.ActivationDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.databinding.ViewSettingsScrollContentBinding
 import com.sempermechanics.semper.ui.admin.AdminActivity
@@ -16,12 +17,15 @@ import com.sempermechanics.semper.ui.common.dialog.Feedback
 import com.sempermechanics.semper.ui.common.setBusy
 import com.sempermechanics.semper.ui.home.HomeLicenseNotice
 import com.sempermechanics.semper.ui.limit.LicenseRefresh
+import com.sempermechanics.semper.ui.phones.PhonesActivity
+import com.sempermechanics.semper.ui.phones.PhonesView
 import kotlinx.coroutines.launch
 import java.util.Locale
 
 /**
  * Account identity row: email, device id, licence prefix, whether this is a
- * QC or CI test account, Refresh licence, and the admin entry point.
+ * QC or CI test account, the licence's phones, Refresh licence, and the admin
+ * entry point.
  */
 class SettingsAccountSection(
     private val activity: SettingsActivity,
@@ -50,11 +54,32 @@ class SettingsAccountSection(
             text = testAccount.orEmpty()
         }
 
+        wirePhones()
         views.btnRefreshLicense.setOnClickListener { refreshLicense() }
 
         views.btnAdmin.apply {
             isVisible = AccountCache.isAdmin(activity)
             setOnClickListener { activity.startActivity(Intent(activity, AdminActivity::class.java)) }
+        }
+    }
+
+    /**
+     * The licence's phones (ADR-033): its count, and Your phones, where this
+     * phone is activated and the others deactivated. Shown while the account
+     * holds a licence for this app that counts phones, or a new one waits;
+     * not for Demo, nor a floating seat, which is checked out instead.
+     */
+    private fun wirePhones() {
+        val activation = AppRemoteConfig.activation(activity)
+        val upgrade = AppRemoteConfig.pendingLicence(activity) != null
+        val count = PhonesView.count(activation.devicesActive, activation.maxDevices, activation.pool)
+        views.tvAccountPhones.apply {
+            isVisible = count != null && activation.state != ActivationDto.STATE_FLOATING
+            text = count?.text(activity).orEmpty()
+        }
+        views.btnAccountPhones.apply {
+            isVisible = upgrade || activation.isActive || activation.canActivate
+            setOnClickListener { PhonesActivity.open(activity) }
         }
     }
 

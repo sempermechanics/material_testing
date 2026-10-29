@@ -304,7 +304,7 @@ class AuthRepositoryTest {
 
         val lost = repo.refreshStatus().exceptionOrNull()
 
-        assertTrue(lost!!.message!!, lost.message!!.startsWith("This phone is already linked"))
+        assertTrue(lost!!.message!!, lost.message!!.startsWith("This phone is linked to another account"))
         // The handset is a "phone" in user copy (readiness AE3-002).
         assertFalse(lost.message!!, Regex("""\bdevice\b""").containsMatchIn(lost.message!!))
     }

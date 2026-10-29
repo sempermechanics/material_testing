@@ -65,6 +65,15 @@
             android:layout_marginTop="20dp"
             android:text="@string/limit_recheck" />
 
+        <!-- The account's licence is there, and this phone is not on it (ADR-033). -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnLimitActivate"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/phones_activate"
+            android:visibility="gone" />
+
         <!-- For an account that expects a seat or a licence (LicenseRefresh). -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnRefreshLicense"
