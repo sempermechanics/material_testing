@@ -98,7 +98,8 @@ object CloudBackupListing {
         prefs(context).edit { put(CloudListing.HIDDEN, hiddenIds(context) + cloudIds) }
     }
 
-    private fun hiddenIds(context: Context): Set<String> = prefs(context)[CloudListing.HIDDEN]
+    /** Cloud ids hidden from Home's card ([hide]); the sync from other phones skips them too. */
+    fun hiddenIds(context: Context): Set<String> = prefs(context)[CloudListing.HIDDEN]
 
     private fun prefs(context: Context) = privatePrefs(context, CloudListing.NAME)
 }

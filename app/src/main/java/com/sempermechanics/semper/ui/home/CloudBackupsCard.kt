@@ -13,9 +13,7 @@ import androidx.core.view.isVisible
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.cloud.CloudBackupListing
-import com.sempermechanics.semper.data.cloud.restore.CloudRestore
 import com.sempermechanics.semper.data.cloud.restore.RestoreStart
-import com.sempermechanics.semper.data.net.CloudSessionDto
 import com.sempermechanics.semper.ui.common.ByteSize
 import com.sempermechanics.semper.ui.common.SerialJob
 import com.sempermechanics.semper.ui.common.dialog.ReopenAfterRecreate
@@ -126,12 +124,7 @@ internal class CloudBackupsCard(
         )
 
         /** Restore into the backup's own local id, as Settings does, so a later restore fills the same row. */
-        fun target(context: Context, backup: CloudBackupListing.Backup) = RestoreStart.Target(
-            cloudSessionId = backup.cloudId,
-            targetLocalId = CloudRestore.targetLocalId(
-                CloudSessionDto(sessionId = backup.cloudId, localSessionId = backup.localId),
-            ),
-            name = nameOf(context, backup),
-        )
+        fun target(context: Context, backup: CloudBackupListing.Backup) =
+            RestoreStart.targetFor(backup.cloudId, backup.localId, nameOf(context, backup))
     }
 }
