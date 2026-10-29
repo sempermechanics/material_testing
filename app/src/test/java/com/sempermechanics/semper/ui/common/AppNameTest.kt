@@ -69,6 +69,12 @@ class AppNameTest {
     }
 
     @Test
+    fun `the free tier is Demo in this app's text too, plurals included`() {
+        val tier = Regex("""\bdemo\b|\b(on|to) the [Dd]emo\b|\b[Dd]emo mode\b""")
+        assertEquals(emptyList<String>(), texts.filter { tier.containsMatchIn(it) })
+    }
+
+    @Test
     fun `the example sets name the app and their folder in lower case`() {
         assertTrue("no example README found", readmes.isNotEmpty())
         val capital = Regex("""\bSemper\b(?! Mechanics\b)""")
