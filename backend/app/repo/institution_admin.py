@@ -122,7 +122,8 @@ def add_institution_member(license_id: str, email: str, invited_by_uid: str = ""
     # One licence per person: someone who holds, or is promised, a different
     # live licence is refused rather than moved onto this roster. Their own
     # seat on this licence is excluded, so re-adding a member stays a no-op.
-    held_by = licence_held_by(email, user=user or {}, exclude_id=license_id)
+    held_by = licence_held_by(email, user=user or {}, exclude_id=license_id,
+                              app=lic.get("app"))
     if held_by and institution_it:
         log.info("roster add held: licence=%s already held by licence=%s", license_id, held_by)
         return None, hold_institution_invite(license_id, email, invited_by_uid)
@@ -150,7 +151,7 @@ def add_institution_member(license_id: str, email: str, invited_by_uid: str = ""
                      _member_patch(license_id, lic))
     if err:
         raise Refusal(_public_claim_error(err))
-    _drop_held_invite(license_id, email)
+    _drop_held_invite(license_id, email, apps.licence_slot(lic))
     return institution_seat(license_id, uid), None
 
 

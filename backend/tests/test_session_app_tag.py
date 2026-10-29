@@ -162,11 +162,25 @@ async def test_an_unknown_header_is_refused(mixed, client):
     assert r.json()["detail"] == "unknown_app"
 
 
-async def test_the_quota_stays_account_wide(mixed, client):
-    """The cap is the account's: every app's sessions count, whichever app asks."""
-    for headers in ({}, MT_HEADER):
-        r = await client.get("/v1/sessions", headers=headers)
-        assert r.json()["quota"]["used"] == 4
+@pytest.mark.parametrize("headers, used", [({}, 2), (MT_HEADER, 2)])
+async def test_the_quota_is_the_asking_apps(mixed, client, headers, used):
+    """Each app's licence has its own cap (ADR-033): Semper counts its tagged
+    and untagged sessions, Semper Classroom its own, whichever app is listed."""
+    r = await client.get("/v1/sessions", headers=headers)
+    assert r.json()["quota"]["used"] == used
+    r = await client.get("/v1/sessions?app=all", headers=headers)
+    assert r.json()["quota"]["used"] == used
+
+
+def test_a_session_under_classrooms_old_name_counts_for_classroom(mixed):
+    """A Classroom session under either name it is stored by (ADR-030)
+    counts for Classroom and not for Semper."""
+    mixed._data["sessions"]["f-old-name"] = {
+        **_session(MT), "app": apps.LEGACY_MATERIAL_TESTING}
+    mixed._data["sessions"]["g-new-name"] = {**_session(MT), "app": apps.SEMPER_CLASSROOM}
+    assert repo.count_user_sessions(DEV_UID, MT) == 4
+    assert repo.count_user_sessions(DEV_UID, apps.SEMPER) == 2
+    assert repo.count_user_sessions(DEV_UID) == 6
 
 
 @pytest.mark.parametrize("headers, want", [

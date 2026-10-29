@@ -283,6 +283,29 @@ def licence_app(user: dict | None, app: str = SEMPER) -> str:
     return SEMPER
 
 
+def licence_slot(lic: dict | None) -> str:
+    """The app whose user-mirror fields hold `lic` (ADR-033): the app the
+    licence names, or Semper's unsuffixed fields for a licence from before the
+    split, which holds for every app. Every writer of a holder's licence
+    fields and every "does this account still hold it" guard goes through
+    this, so a Semper Classroom licence lands in, and is read from, Semper
+    Classroom's fields."""
+    named = (lic or {}).get("app")
+    return canonical(named) if named else SEMPER
+
+
+def slot_holding(user: dict | None, license_id: str) -> str | None:
+    """The app whose mirror on `user` points at `license_id`, or None when
+    none does: the guard a licence-wide write (a revoke, a terms edit, a seat
+    hold) uses before touching a holder who may have moved on."""
+    if not license_id:
+        return None
+    for app in ALL:
+        if read_field(user, "licenseId", app) == license_id:
+            return app
+    return None
+
+
 def spread(name: str, values: dict[str, str]) -> dict[str, str]:
     """`{app: value}` as the per-app fields a response or audit record carries,
     every app present: `{"releasedDeviceId": ..., "releasedDeviceIdSemperClassroom": ...}`.

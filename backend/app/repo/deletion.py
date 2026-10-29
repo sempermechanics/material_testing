@@ -21,7 +21,7 @@ issued another.
 """
 from datetime import timedelta
 
-from .. import errors
+from .. import apps, errors
 from ..errors import Refusal
 from ..licenses import (
     MODE_DEMO,
@@ -135,7 +135,8 @@ def delete_license(license_id: str, admin_uid: str) -> dict:
     revoke_license(license_id, admin_uid)
     holders = [lic.get("redeemedByUid") or ""] + [(s.to_dict() or {}).get("uid") or s.id for s in seats]
     detach = {**_demo_drop_patch(), **{f: _base.firestore.DELETE_FIELD for f in _USER_LICENCE_FIELDS}}
-    _update_refs([(user_ref, detach) for user_ref in _users_on_license(holders, license_id)])
+    _update_refs([(user_ref, apps.licence_patch(detach, slot))
+                  for user_ref, slot in _users_on_license(holders, license_id)])
 
     _delete_refs([s.reference for s in seats])
     _delete_doc(ref)
@@ -185,7 +186,7 @@ def restore_license(license_id: str, admin_uid: str) -> dict:
     def _free(uid: str) -> bool:
         user = _load_user(uid) if uid else None
         return bool(user) and not licence_held_by(user.get("email") or "", user=user,
-                                                  exclude_id=license_id)
+                                                  app=lic.get("app"), exclude_id=license_id)
 
     if institution:
         on_roster = 0
@@ -222,9 +223,9 @@ def restore_license(license_id: str, admin_uid: str) -> dict:
     _drop_superseded_demos(back, license_id)
     address = normalize_email(lic.get("emailLock"))
     if live and not institution and lic["status"] == "unused" and address \
-            and not licence_held_by(address, exclude_id=license_id):
+            and not licence_held_by(address, app=lic.get("app"), exclude_id=license_id):
         # Still waiting for its first sign-in: promise it to the address again.
-        _write_invite(license_id, address, admin_uid)
+        _write_invite(license_id, address, admin_uid, app=apps.licence_slot(lic))
 
     _delete_refs([d.reference for d in seat_docs])
     _delete_doc(tomb_ref)

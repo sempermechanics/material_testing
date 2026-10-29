@@ -137,10 +137,14 @@ QUERY_SHAPES: dict[str, list[Shape]] = {
         _q("files", ("uid", "=="), order=(("sessionId", ASC),)),
     ],
     "app/repo/sessions.py::iter_user_sessions": [_q("sessions", ("uid", "=="))],
+    # Per app (ADR-033): one app's sessions by each name it is stored under.
     "app/repo/sessions.py::count_user_sessions": [
         _q("sessions", ("uid", "==")),
-        _q("sessions", ("uid", "=="), ("status", "=="), note="equality only: merged"),
+        _q("sessions", ("uid", "=="), ("app", "=="), note="equality only: merged"),
     ],
+    # Its stored-only half, narrowing any of the queries above, all of them
+    # equality only (uid, app, status): merged.
+    "app/repo/sessions.py::_stored_count": [_q("sessions", ("status", "=="))],
     # The demo cap's per-device half: any account's sessions from one device.
     "app/repo/sessions.py::count_device_sessions": [
         _q("sessions", ("deviceId", "==")),

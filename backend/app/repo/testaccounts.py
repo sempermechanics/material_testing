@@ -91,8 +91,10 @@ def licences_of_test_account(user: dict) -> list[str]:
     revoked: the one it holds, and any still waiting at its address (a mint
     whose attach lost a race). Never a real licence, and never a Demo key."""
     out = []
-    held = user.get("licenseId") or ""
-    if held:
+    # One licence per app (ADR-033).
+    for held in dict.fromkeys(apps.read_field(user, "licenseId", app) or "" for app in apps.ALL):
+        if not held:
+            continue
         lic = _base.get_license(held) or {}
         if lic.get("testAccount") is True and not _base._is_revoked(lic):
             out.append(held)

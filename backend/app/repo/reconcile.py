@@ -1,7 +1,7 @@
 """Reconciliation of an institution's intended seats against the accounts that hold them.
 """
 
-from .. import errors
+from .. import apps, errors
 from ..errors import Refusal
 from ..licenses import (
     MODE_LICENSED,
@@ -52,10 +52,11 @@ DEMOTED = "demoted"
 #: device lock, none of which a roster report needs. `licenseGraceDays` and
 #: `licenseExpiresAt` feed `_expiry_state`; `mode` and `plan`, `_license_mode`.
 SEAT_FIELDS = ("uid", "email", "status", "revokedAt", "updatedAt")
-HOLDER_FIELDS = (
-    "email", "licenseId", "mode", "plan", "lastSeenAt",
-    "licenseExpiresAt", "licenseGraceDays",
-)
+HOLDER_FIELDS = ("email", "lastSeenAt") + tuple(dict.fromkeys(
+    apps.legacy_field(name, app) or apps.field(name, app)
+    for app in apps.ALL
+    for name in ("licenseId", "mode", "plan", "licenseExpiresAt", "licenseGraceDays")
+))
 
 
 def _seat_revoked_at(seat: dict):
@@ -128,7 +129,10 @@ def reconcile_institution_seats(license_id: str) -> dict:
         if snap.exists
     } if uids else {}
     for (seat, _seat_id), uid in zip(roster, uids):
+        # The holder as this licence's app sees them (ADR-033).
         user = holders.get(uid)
+        if user is not None:
+            user = apps.licence_view(user, apps.slot_holding(user, license_id) or apps.SEMPER)
 
         on_this_license = user is not None and user.get("licenseId") == license_id
         holds = on_this_license and _license_mode(user) == MODE_LICENSED

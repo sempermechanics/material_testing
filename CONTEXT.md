@@ -136,8 +136,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Licensing rework** ([ADR-033](docs/adr/ADR-033-licence-per-app-explicit-activation.md)): a licence per app,
   explicit Activate, a device count instead of the cooldown. Steps 1–2 merged 2026-10-29 (#506, #507),
   not deployed; before step 2's backend serves, the owner runs `backend/scripts/retire_stale_devices.py`
-  (dry run, then `--apply`). Step 3 (activations, routes, cooldown gone) is
-  #508; steps 4+ (licence per app, upgrade, split, app, consoles) follow.
+  (dry run, then `--apply`). Step 3 (activations, routes, cooldown gone) merged as
+  #508. Step 4 (a licence per app: mint, invites, mirror slots, per-app quota) is
+  `claude/licence-per-app-pr2c`; upgrade by issue and QC accounts, the split, app and
+  consoles follow.
 - **Admin actions** are one table, [gate § Admin actions](docs/ops/PRODUCTION_READINESS_GATE.md#admin-actions-external):
   monitoring `--apply` (no notification channel yet), the posture FAILs (17 on 2026-10-24, the same 17 on 2026-10-28),
   TD-215, the checklist's §6; the readiness report's §4 adds that run's one-off actions.

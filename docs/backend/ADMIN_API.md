@@ -124,12 +124,12 @@ pasted CSV does not survive the round trip: paste it and import again on return.
 | `GET /v1/admin/licenses` | `admin` | Licences, newest first, paged (`limit` ≤ 200, `page_token`, `include_demo`, `include_revoked`, `include_test`). A test account's licence (`testAccount: true` on every row, false on the rest) is left out unless `include_test=true`, filtered from the page, so a page may be short with more to come. `q` (exact address, domain or key prefix) is **deprecated**: it puts an address in the URL, which request logs keep. It still answers for one release and logs `deprecated_query_search` with the caller's uid, never the value (`backend/app/routers/admin.py:136-158`; removal TD-273) |
 | `POST /v1/admin/licenses/search` | `admin` | The search with its terms in the body: `{"q", "limit", "page_token", "include_demo", "include_revoked", "include_test"}`, `q` required (at most 320 characters; empty pages the listing), any other field 422. On `admin_bucket`, no step-up; the answer has the GET's shape (`backend/app/routers/admin.py:161-169`; `AdminLicenseSearch`, `backend/app/models.py:458-472`). Declared at the gateway ahead of `/{licenseId}` (`backend/gateway/openapi.yaml:650-668`). The operator desk searches with it |
 | `GET /v1/admin/licenses/{license_id}` | `admin` | One licence |
-| `POST /v1/admin/licenses` | `admin-stepup` | Mint; the plaintext key is returned once |
-| `PATCH /v1/admin/licenses/{license_id}` | `admin-stepup` | Terms, renewal, `clearDeviceLock` |
+| `POST /v1/admin/licenses` | `admin-stepup` | Mint; the plaintext key is returned once. `app` (`semper`, `semperclassroom`) makes it that app's licence, licensing the phones activated on it up to `maxDevices` (default 1, or `maxSeats` on an assigned institution licence; not on a floating one); without `app` it holds for every app as before the split. 409 `email_already_licensed` counts per app ([ADR-033](../adr/ADR-033-licence-per-app-explicit-activation.md)) |
+| `PATCH /v1/admin/licenses/{license_id}` | `admin-stepup` | Terms, renewal, `clearDeviceLock`, `maxDevices` (422 `max_devices_needs_app` on a licence without an app, 422 `max_devices_below_active` below the phones active now) |
 | `POST /v1/admin/licenses/{license_id}/revoke` | `admin-stepup-fresh` | Whole-licence revoke |
 | `DELETE /v1/admin/licenses/{license_id}` | `admin-stepup-fresh` | Delete into a 30-day hold |
 | `GET /v1/admin/deleted-licenses`, `POST …/{license_id}/restore` | `admin`, `admin-stepup` | The hold |
-| `POST /v1/admin/licenses/{license_id}/convert` | `admin-stepup` | Individual to institution |
+| `POST /v1/admin/licenses/{license_id}/convert` | `admin-stepup` | Individual to institution; 409 `license_not_convertible` on a licence that names its app (ADR-033) |
 | `PATCH /v1/admin/licenses/{license_id}/seats/{uid}/device` | `admin-stepup` | Clear one seat's device lock |
 | `GET /v1/admin/licenses/{license_id}/reconcile` | `admin` | Per-seat check of what a licence actually entitles; `revokedStillRunning` |
 | `GET /v1/admin/licenses/{license_id}/device-history` | `admin` | Recent device moves |

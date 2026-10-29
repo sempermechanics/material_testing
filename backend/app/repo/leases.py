@@ -3,7 +3,7 @@
 import logging
 from datetime import timedelta
 
-from .. import errors
+from .. import apps, errors
 from ..config import settings
 from ..errors import Refusal
 from ..licenses import (
@@ -109,9 +109,9 @@ def _reclaim_expired_lease(lic_ref, seat_ref, now) -> bool:
     return _run_tx(_reclaim, on_contended=lambda: False)
 
 
-def checkout_lease(user: dict, device_id: str) -> dict:
-    """Claim or extend a floating-seat lease. Returns the config, or raises
-    `Refusal`.
+def checkout_lease(user: dict, device_id: str, app: str = apps.SEMPER) -> dict:
+    """Claim or extend a floating-seat lease on `app`'s licence (ADR-033).
+    Returns the config, or raises `Refusal`.
 
     Re-checkout IS the heartbeat — extending an existing lease takes the same
     path and must not consume a second slot. There is deliberately no separate
@@ -120,7 +120,7 @@ def checkout_lease(user: dict, device_id: str) -> dict:
     writing per request on a hot path costs.
     """
     uid = user.get("uid") or ""
-    license_id = user.get("licenseId")
+    license_id = apps.licence_view(user, app).get("licenseId")
     if not license_id:
         raise Refusal(errors.NO_LICENSE)
     lic = get_license(license_id)
@@ -142,6 +142,8 @@ def checkout_lease(user: dict, device_id: str) -> dict:
 
     seat_ref = _seat_ref(license_id, uid)
     user_ref = db().collection("users").document(uid)
+    mirror = apps.licence_patch(
+        {"leaseExpiresAt": expires_at, "leaseDeviceId": device_id}, apps.licence_slot(lic))
 
     @_base.firestore.transactional
     def _checkout(tx) -> str:
@@ -176,11 +178,7 @@ def checkout_lease(user: dict, device_id: str) -> dict:
         # The phone the lease is for, mirrored with its expiry: on a licence
         # that runs activations the lease is the activation, so only this
         # phone is licensed (ADR-033, `repo.activations.revalidate`).
-        tx.update(user_ref, {
-            "leaseExpiresAt": expires_at,
-            "leaseDeviceId": device_id,
-            "updatedAt": _base.firestore.SERVER_TIMESTAMP,
-        })
+        tx.update(user_ref, {**mirror, "updatedAt": _base.firestore.SERVER_TIMESTAMP})
         return ""
 
     # Fail closed on contention: granting a lease we could not commit is what
@@ -189,10 +187,10 @@ def checkout_lease(user: dict, device_id: str) -> dict:
     err = _run_tx(_checkout, on_contended=lambda: errors.NO_FLOATING_SEAT)
     if err:
         raise Refusal(err)
-    return resolve_user_config({**user, "leaseExpiresAt": expires_at, "leaseDeviceId": device_id})
+    return resolve_user_config({**user, **mirror}, app)
 
 
-def release_lease(user: dict) -> dict:
+def release_lease(user: dict, app: str = apps.SEMPER) -> dict:
     """Give a floating slot back. Idempotent — releasing twice frees one slot.
 
     The user's mirror is cleared in the same commit, so the account resolves
@@ -200,9 +198,11 @@ def release_lease(user: dict) -> dict:
     would have expired on its own.
     """
     uid = user.get("uid") or ""
-    license_id = user.get("licenseId")
+    license_id = apps.licence_view(user, app).get("licenseId")
     if not license_id:
         raise Refusal(errors.NO_LICENSE)
+    slot = apps.licence_app(user, app)
+    cleared = apps.licence_patch({"leaseExpiresAt": None, "leaseDeviceId": None}, slot)
 
     lic_ref = db().collection("licenses").document(license_id)
     seat_ref = _seat_ref(license_id, uid)
@@ -226,8 +226,7 @@ def release_lease(user: dict) -> dict:
             # hides it from the sweep and the slot leaks.
             tx.update(lic_ref, {"leasesActive": _base.firestore.Increment(-1)})
         tx.update(user_ref, {
-            "leaseExpiresAt": _base.firestore.DELETE_FIELD,
-            "leaseDeviceId": _base.firestore.DELETE_FIELD,
+            **{k: _base.firestore.DELETE_FIELD for k in cleared},
             "updatedAt": _base.firestore.SERVER_TIMESTAMP,
         })
         return ""
@@ -240,5 +239,5 @@ def release_lease(user: dict) -> dict:
     )
     if err:
         raise Refusal(err)
-    merged = {k: v for k, v in user.items() if k != "leaseExpiresAt"}
-    return resolve_user_config(merged)
+    merged = {k: v for k, v in user.items() if k not in cleared}
+    return resolve_user_config(merged, app)

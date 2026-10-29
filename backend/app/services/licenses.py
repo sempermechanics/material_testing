@@ -26,13 +26,15 @@ def _mint_institution(body: AdminLicenseCreate, admin_uid: str) -> dict:
         support_until=body.supportUntil,
         max_analyses=body.maxAnalyses,
         note=body.note,
+        app=body.app,
+        max_devices=body.maxDevices,
     )
     audit.record(
         admin_uid, action="ADMIN_LICENSE_MINT",
         target={"type": "license", "id": minted["license"]["id"]},
         detail={"kind": KIND_INSTITUTION, "domainLock": body.domainLock,
                 **admin_email_detail(body.adminEmails), "maxSeats": body.maxSeats,
-                "seating": body.seating},
+                "seating": body.seating, **_app_detail(minted)},
     )
     return minted
 
@@ -42,7 +44,7 @@ def _mint_individual(body: AdminLicenseCreate, admin_uid: str) -> dict:
     # used to go ahead and only report that the licence had not reached them.
     # The id is the licence they hold, for the desk to open — renewal is
     # Extend on that one.
-    held = repo.licence_held_by(body.emailLock)
+    held = repo.licence_held_by(body.emailLock, app=body.app)
     if held:
         raise HTTPException(409, f"{errors.EMAIL_ALREADY_LICENSED}: {held}")
     minted = repo.create_individual_license(
@@ -54,11 +56,14 @@ def _mint_individual(body: AdminLicenseCreate, admin_uid: str) -> dict:
         support_until=body.supportUntil,
         max_analyses=body.maxAnalyses,
         note=body.note,
+        app=body.app,
+        max_devices=body.maxDevices,
     )
     audit.record(
         admin_uid, action="ADMIN_LICENSE_MINT",
         target={"type": "license", "id": minted["license"]["id"]},
         detail={"kind": KIND_INDIVIDUAL, "emailLockHash": audit.address_tag(body.emailLock),
+                **_app_detail(minted),
                 "deviceIdLock": body.deviceIdLock,
                 "inviteError": minted.get("inviteError") or "",
                 # Set when the address already had an account, which the
@@ -67,6 +72,12 @@ def _mint_individual(body: AdminLicenseCreate, admin_uid: str) -> dict:
                 "claimError": minted.get("claimError") or ""},
     )
     return minted
+
+
+def _app_detail(minted: dict) -> dict:
+    """The app and device count a mint stamped (ADR-033), for its audit row."""
+    lic = minted.get("license") or {}
+    return {"app": lic.get("app") or "", "maxDevices": lic.get("maxDevices")}
 
 
 def mint_license(body: AdminLicenseCreate, admin_uid: str) -> dict:

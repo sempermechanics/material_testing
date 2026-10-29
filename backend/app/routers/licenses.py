@@ -86,6 +86,7 @@ def activate_license(
 @router.post("/v1/licenses/checkout")
 def checkout_lease(
     user=Depends(current_user),
+    app: str = Depends(request_app),
     x_device_id: str = Header(default=""),
 ):
     """Take or renew a floating seat.
@@ -106,17 +107,18 @@ def checkout_lease(
     """
     rate_limit.enforce(rate_limit.institution_bucket, user["uid"])
     device_id = require_header_identifier(x_device_id, name="device_id", maximum=128)
+    license_id = apps.licence_view(user, app).get("licenseId")
     try:
-        config = repo.checkout_lease(user, device_id)
+        config = repo.checkout_lease(user, device_id, app)
     except Refusal as refusal:
-        _licence_event("checkout", user.get("licenseId"), refusal, uid=user["uid"])
+        _licence_event("checkout", license_id, refusal, uid=user["uid"])
         raise
-    _licence_event("checkout", user.get("licenseId"), uid=user["uid"])
+    _licence_event("checkout", license_id, uid=user["uid"])
     return {"config": config}
 
 
 @router.post("/v1/licenses/release")
-def release_lease(user=Depends(current_user)):
+def release_lease(user=Depends(current_user), app: str = Depends(request_app)):
     """Give a floating seat back so someone else can take it.
 
     Idempotent — releasing a lease that already lapsed frees nothing and still
@@ -124,10 +126,11 @@ def release_lease(user=Depends(current_user)):
     heartbeat.
     """
     rate_limit.enforce(rate_limit.institution_bucket, user["uid"])
-    config = repo.release_lease(user)
+    config = repo.release_lease(user, app)
+    license_id = apps.licence_view(user, app).get("licenseId")
     audit.record(
         user["uid"], action="INSTITUTION_LEASE_RELEASE",
-        target={"type": "lease", "id": f"{user.get('licenseId')}/{user['uid']}"},
+        target={"type": "lease", "id": f"{license_id}/{user['uid']}"},
     )
     return {"config": config}
 
@@ -172,7 +175,7 @@ def unbind_device(
     """
     named = named_app(app, header_app)
     user = ctx.user
-    license_id = user.get("licenseId") or ""
+    license_id = apps.licence_view(user, named).get("licenseId") or ""
     if not license_id:
         raise HTTPException(404, errors.NO_LICENSE)
     cleared = repo.clear_device_lock(license_id, user["uid"], actor=repo.ACTOR_SELF, app=named)
