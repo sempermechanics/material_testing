@@ -7,7 +7,9 @@ model, its routes and the cooldown's removal, for licences that name their app.
 Step 4 built: staff mint a licence for one app with its device count, and it
 lives in that app's mirror, invite and quota (CLOUD_ARCHITECTURE_GCP §20.17).
 Licences minted without an app, every one before the split, keep the old
-model. Every later step is listed under Action items.
+model. Step 5 built: upgrade by issue, applied on Activate (CLOUD_ARCHITECTURE_GCP §20.18), and QC
+test accounts on the activation model. Every later step is listed under
+Action items.
 **Date:** 2026-10-29
 **Deciders:** product owner
 **Supersedes in part:** [ADR-007](ADR-007-licence-lifecycle.md) (one licence per person becomes one per person per app; conversion becomes issue then activate),
@@ -185,9 +187,12 @@ The product owner's decisions (2026-10-29):
       (`apps.licence_slot`, `apps.slot_holding`), the per-app quota
       (`sessions.count_user_sessions`), and a seat revoke or account erasure giving
       the phones back (`backend/tests/test_licence_per_app.py`).
-- [ ] Step 5: issue and apply upgrade (`pendingLicenseId`, the old licence revoked
-      on Activate; `/convert` refuses an app's licence until then), and QC test
-      accounts on the activation model.
+- [x] Step 5: issue and apply upgrade (`repo/licence_upgrade.py`,
+      `POST /v1/admin/licenses/{id}/upgrade` and `…/apply-upgrade`, Activate with
+      `{"upgrade": true}`, `pendingLicence` on `/v1/config` and `/v1/me`), and QC
+      test accounts on the activation model, one licence per app
+      (`backend/tests/test_licence_upgrade.py`, `test_test_accounts.py`). `/convert`
+      stays for licences from before the split.
 - [ ] Migration to split existing licences, dry run first, run by the owner.
 - [ ] App and consoles; fork sync.
 - [ ] Set `IMPLICIT_ACTIVATION=off` once adoption allows, then remove the legacy

@@ -202,6 +202,29 @@ def _revoke_fanout(ref, license_id: str, lic: dict) -> None:
             _drop_user_to_demo_if_licensed(redeemer, license_id)
         _delete_license_invites(license_id, lic.get("emailLock") or "",
                                 app=apps.licence_slot(lic))
+    if lic.get("supersedes"):
+        _withdraw_pending_upgrade(lic["supersedes"], license_id)
+
+
+def _withdraw_pending_upgrade(old_id: str, new_id: str) -> None:
+    """A licence issued as an upgrade is revoked (ADR-033): its holder stops
+    being offered it, and the old licence may be upgraded again. Nothing
+    changes once the upgrade was applied, since both pointers are gone."""
+    old_ref = db().collection("licenses").document(old_id)
+    old_snap = _get(old_ref)
+    old = (old_snap.to_dict() or {}) if old_snap.exists else {}
+    if old.get("upgradePendingId") == new_id:
+        _update_doc(old_ref, {"upgradePendingId": _base.firestore.DELETE_FIELD})
+    holder = old.get("redeemedByUid") or ""
+    if not holder:
+        return
+    user_ref = db().collection("users").document(holder)
+    snap = _get(user_ref)
+    user = (snap.to_dict() or {}) if snap.exists else {}
+    for app in apps.ALL:
+        if apps.read_field(user, "pendingLicenseId", app) == new_id:
+            _update_doc(user_ref, apps.written_fields(
+                "pendingLicenseId", app, _base.firestore.DELETE_FIELD))
 
 
 # ---------------- pending fan-outs (ADR-026, TD-294) ----------------

@@ -11,7 +11,8 @@
       "expiresAt": null,
       "inGrace": false,
       "seating": "assigned",
-      "held": true
+      "held": true,
+      "pendingLicence": null
     },
     "semperclassroom": {
       "mode": "demo",
@@ -20,7 +21,8 @@
       "expiresAt": null,
       "inGrace": false,
       "seating": "assigned",
-      "held": false
+      "held": false,
+      "pendingLicence": null
     }
   },
   "license": {

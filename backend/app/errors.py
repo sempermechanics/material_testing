@@ -185,6 +185,14 @@ FLOATING_NEEDS_MAX_SEATS = "floating_needs_max_seats"
 # holder whose address is not on the new licence's domain (422).
 LICENSE_NOT_CONVERTIBLE = "license_not_convertible"
 CONVERT_DOMAIN_MISMATCH = "convert_domain_mismatch"
+# Upgrading by issuing a new licence (ADR-033, repo/licence_upgrade.py).
+# `not_upgradable` is anything but a live individual licence naming its app
+# (409); `upgrade_pending` is an upgrade already waiting on it (409, with its
+# id); `no_pending_upgrade` is an Activate or staff apply with none waiting
+# for the account (404).
+LICENSE_NOT_UPGRADABLE = "license_not_upgradable"
+UPGRADE_PENDING = "upgrade_pending"
+NO_PENDING_UPGRADE = "no_pending_upgrade"
 # Deleting a licence into the 30-day hold (repo/deletion.py). A system Demo
 # key is refused (409): the account would only be issued another. Restore
 # answers 404 for nothing held, 410 once the hold has ended (the TTL purge
@@ -381,6 +389,9 @@ STATUS: dict[str, int] = {
     DEVICE_IN_USE: 409,
     DEVICE_RELEASED: 409,
     DELETED_LICENSE_PURGED: 410,
+    LICENSE_NOT_UPGRADABLE: 409,
+    UPGRADE_PENDING: 409,
+    NO_PENDING_UPGRADE: 404,
     # A licence edit or conversion that is not allowed as asked.
     CONVERT_DOMAIN_MISMATCH: 422,
     MEMBER_OFF_DOMAIN: 422,

@@ -85,26 +85,40 @@ def create(body: AdminTestAccountCreate, admin_uid: str) -> dict:
            "expiresAt": expires, "maxDevices": body.maxDevices, "note": body.note}
     try:
         repo.create_test_account_user(uid, email, tag)
-        minted = repo.create_individual_license(
+        minted = [repo.create_individual_license(
             email_lock=email, created_by_uid=admin_uid, expires_at=expires,
             grace_days=0 if expires is not None else None, note=body.note, test_account=True,
-        )
+            app=app, max_devices=body.licenceMaxDevices if app else None,
+        ) for app in _licence_apps(body)]
     except Exception:
         repo.delete_all_user_data(uid)
         google_auth.delete_auth_user(uid)
         raise
-    license_id = minted["license"]["id"]
-    if not minted["claimedByUid"]:
-        # The invite still delivers it on the first sign-in.
-        obs.log_event(log, logging.WARNING, "test_account_licence_not_attached", uid=uid,
-                      licenseId=license_id, errorCode=minted["inviteError"] or minted["claimError"])
+    for one in minted:
+        if not one["claimedByUid"]:
+            # The invite still delivers it on the first sign-in.
+            obs.log_event(log, logging.WARNING, "test_account_licence_not_attached", uid=uid,
+                          licenseId=one["license"]["id"],
+                          errorCode=one["inviteError"] or one["claimError"])
+    license_ids = [one["license"]["id"] for one in minted]
+    license_id = license_ids[0] if license_ids else ""
     _audit(admin_uid, "test_account_created", uid, {
         "purpose": body.purpose, "expiresAt": str(expires) if expires else None,
-        "maxDevices": body.maxDevices, "licenseId": license_id,
+        "maxDevices": body.maxDevices, "licenseId": license_id, "licenseIds": license_ids,
         "addressTag": audit.address_tag(email), "noteLength": len(body.note),
     })
     return {"uid": uid, "email": email, "password": password, "purpose": body.purpose,
-            "expiresAt": expires, "maxDevices": body.maxDevices, "licenseId": license_id}
+            "expiresAt": expires, "maxDevices": body.maxDevices, "licenseId": license_id,
+            "licenseIds": license_ids}
+
+
+def _licence_apps(body: AdminTestAccountCreate) -> list[str | None]:
+    """One mint per app a QC account's licences are for (ADR-033), none for a
+    Demo one; a CI account's one licence names no app (`None`), so it holds
+    for every app and no phone binds it."""
+    if body.purpose == repo.PURPOSE_CI:
+        return [None]
+    return list(body.licence_apps())
 
 
 def _require(uid: str) -> dict:

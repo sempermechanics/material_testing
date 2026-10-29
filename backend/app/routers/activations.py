@@ -18,9 +18,12 @@ licence's phones, each on routes of its own and each scoped again in
 Nothing here touches an analysis: a deactivated phone keeps its files.
 """
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from typing import Optional
+
 from pydantic import BaseModel, ConfigDict
 
 from .. import apps, errors, rate_limit, repo
+from ..models import DeviceActivate
 from ..deps import admin_user, current_user, rate_limited, request_app, verified_device
 from ..step_up import attested_or_mfa_admin, attested_or_mfa_user
 from ..validation import DeviceId, DocumentId
@@ -45,6 +48,7 @@ class StaffActivation(BaseModel):
 )
 def activate_this_phone(
     request: Request,
+    body: Optional[DeviceActivate] = None,
     ctx=Depends(verified_device),
     app=Depends(request_app),
     x_device_id: str = Header(default=""),
@@ -58,10 +62,20 @@ def activate_this_phone(
     (check out a seat instead), `404 no_license` with none. A phone already
     active answers as a success.
 
+    `{"upgrade": true}` activates it on the new licence issued to the
+    account instead, which moves the account there and revokes the old one
+    (`repo.apply_upgrade`); `404 no_pending_upgrade` with none waiting.
+
     The answer carries the config the phone holds from now on, so the app
     unlocks without a restart or a second call.
     """
-    done = repo.activate_device(ctx.user["uid"], x_device_id, app)
+    if body is not None and body.upgrade:
+        pending = apps.licence_view(ctx.user, app).get("pendingLicenseId") or ""
+        if not pending:
+            raise HTTPException(404, errors.NO_PENDING_UPGRADE)
+        done = repo.apply_upgrade(pending, ctx.user["uid"], app, device_id=x_device_id)["activation"]
+    else:
+        done = repo.activate_device(ctx.user["uid"], x_device_id, app)
     user = repo.get_user(ctx.user["uid"]) or ctx.user
     # The check on the way in found this phone not yet active; read afresh.
     request.state.activation = {}

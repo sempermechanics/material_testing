@@ -72,7 +72,9 @@ def me(user=Depends(current_user)):
         "access_status": user["access_status"],
         # Each app's own licence (ADR-033), for the web account page, which
         # shows both. `license` stays Semper's, for the pages that read it.
-        "licences": {app: _licence_block(repo.license_summary(user, app)) for app in apps.ALL},
+        "licences": {app: {**_licence_block(repo.license_summary(user, app)),
+                           "pendingLicence": repo.pending_upgrade(user, app)}
+                     for app in apps.ALL},
         "license": {
             "mode": summary["mode"],
             "kind": summary["licenseKind"],
@@ -202,6 +204,9 @@ def config_body(request: Request, user: dict, app: str, x_device_id: str) -> dic
         "testAccount": _test_account(user),
         "activation": (getattr(request.state, "activation", None)
                        or repo.activation_summary(user, app, x_device_id)),
+        # A new licence issued to this account for the app, waiting for
+        # Activate (ADR-033); null when none waits.
+        "pendingLicence": repo.pending_upgrade(user, app),
     }
     # The token names the app as the calling build pins it (`apps.token_claim`):
     # a Material Testing build from before the rename (ADR-030) refuses one

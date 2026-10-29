@@ -19,6 +19,7 @@ from ..observability import DependencyError
 
 from . import _base, activations
 from ._base import (
+    PURPOSE_CI,
     SCHEMA_VERSION,
     _active_devices,
     _is_institution,
@@ -105,14 +106,16 @@ def _device_lock_state(user: dict, device_id: str, app: str = apps.SEMPER, *,
     if not snap.exists:
         return _Lock.OK, None, activations.NONE_BLOCK
     lic = snap.to_dict() or {}
-    if activations.runs_activations(lic) and test_account_of(user) is None:
+    # A CI account keeps its unbound licence (ADR-027): Tier 3 rotates
+    # emulators through it. A QC account runs activations like any holder.
+    tag = test_account_of(user)
+    if activations.runs_activations(lic) and (tag or {}).get("purpose") != PURPOSE_CI:
         verdict, shown = activations.revalidate_activation(user, license_id, lic, device_id, app,
                                                 explicit=explicit)
         return _BY_ACTIVATION[verdict], None, shown
     if _is_revoked(lic):
         return _Lock.REVOKED, None, activations.NONE_BLOCK
     if not _is_institution(lic):
-        tag = test_account_of(user)
         if tag is not None:
             verdict = _test_lock_verdict(user, tag, device_id, app)
             return verdict, None, _lock_block(verdict)

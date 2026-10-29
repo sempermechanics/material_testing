@@ -117,6 +117,8 @@ EXPECTED = {
     ("PATCH", "/v1/admin/licenses/{license_id}"): ADMIN_STEPUP,
     ("POST", "/v1/admin/licenses/{license_id}/revoke"): ADMIN_STEPUP_FRESH,
     ("POST", "/v1/admin/licenses/{license_id}/convert"): ADMIN_STEPUP,
+    ("POST", "/v1/admin/licenses/{license_id}/upgrade"): ADMIN_STEPUP,
+    ("POST", "/v1/admin/licenses/{license_id}/apply-upgrade"): ADMIN_STEPUP,
     ("DELETE", "/v1/admin/licenses/{license_id}"): ADMIN_STEPUP_FRESH,
     ("GET", "/v1/admin/deleted-licenses"): ADMIN,
     ("POST", "/v1/admin/deleted-licenses/{license_id}/restore"): ADMIN_STEPUP,
