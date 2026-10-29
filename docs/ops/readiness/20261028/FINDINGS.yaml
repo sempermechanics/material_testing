@@ -42,7 +42,7 @@
   effort: M
   fix_risk: medium — launcher-alias behaviour differs by launcher; needs a device check on Pixel and Samsung launchers
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -59,6 +59,10 @@
   verifier_note: Arguably P0-adjacent (the app vanishes from a core flow like a crash), but no process death and
     no result loss, so P1 kept.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R2 VERIFIED
+  fix_commits:
+  - 1e2965655
+  - 79d7a3826
 - id: AE1-102
   axis: aesthetic
   gate: UX
@@ -99,7 +103,7 @@
   effort: M
   fix_risk: low — layout-only; check font-scale 2.0 shots again
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: AE1-006
   carried: false
   verdict: CONFIRMED
@@ -115,6 +119,10 @@
     @null, no minHeight - consistent with the record.'
   verifier_note: 'Also seen: etStepDepthValue 280x47.7 dp on sweep step 3 (just under 48).'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R2 VERIFIED
+  fix_commits:
+  - 9534b5774
+  - c9947dd0c
 - id: AE1-103
   axis: aesthetic
   gate: UX
@@ -144,7 +152,7 @@
   effort: S
   fix_risk: low — one dialog
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -156,6 +164,10 @@
     [614,1917][957,2082] and ''Send reports'' scrolls to [447,1839][957,1917]. Exactly as recorded (screens/v1_103_diagconsent_360_fs2.png).'
   verifier_note: Declined with 'Not now'.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R3 VERIFIED
+  fix_commits:
+  - 7d25906da
+  - e69b13ad5
 - id: AE1-104
   axis: aesthetic
   gate: UX
@@ -182,7 +194,7 @@
   effort: S
   fix_risk: low — drawing code only, not in the export path
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -196,6 +208,10 @@
     150dp.'
   verifier_note: 'P1 kept: a dropped leading digit reads as a wrong count on a viewer surface at an a11y font scale.'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R2 VERIFIED
+  fix_commits:
+  - 3ac806ce6
+  - 87023c336
 - id: AE1-105
   axis: aesthetic
   gate: UX
@@ -220,7 +236,7 @@
   effort: S
   fix_risk: low — one theme attribute
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -232,6 +248,9 @@
   verifier_note: Measured only on the delete dialog; the same stock body style applies to the other MaterialAlertDialogs
     named.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R2 VERIFIED
+  fix_commits:
+  - 1cbc5eb7c
 - id: AE1-106
   axis: aesthetic
   gate: UX
@@ -253,7 +272,7 @@
   effort: S
   fix_risk: low — style only
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -263,6 +282,9 @@
   verified_observation: 'Page #F4F9FC, off track #B3B8BC (1.89:1), thumb #FAFAFA (~1.02:1) on both switchDiagnostics
     and switchImprovementConsent; matches the record (crop screens/v1_106_switch_crop.png).'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R2 VERIFIED
+  fix_commits:
+  - b9a76503f
 - id: AE1-107
   axis: aesthetic
   gate: UX
@@ -287,7 +309,7 @@
   effort: S
   fix_risk: low — accessibility metadata only
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -300,6 +322,10 @@
     with empty content-desc in the dump.
   verifier_note: Verified from code and the dump, not with TalkBack running.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R2 VERIFIED
+  fix_commits:
+  - 0268a9bbf
+  - 87797ce3d
 - id: AE1-108
   axis: aesthetic
   gate: UX
@@ -320,7 +346,7 @@
   effort: S
   fix_risk: low — layout only
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -330,6 +356,11 @@
   verified_observation: 'fs1: ''speckle_02.pn  2 / 3'' (extension cut, no ellipsis). fs2: ''speck'' with the second
     line clipped, then ''2 / 3'' (screens/v1_108_crop_fs1.png, v1_108_crop_fs2.png).'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R3 VERIFIED
+  fix_commits:
+  - '112421019'
+  - 5ea415fa5
+  - cd263a0d0
 - id: AE1-109
   axis: aesthetic
   gate: UX
@@ -355,7 +386,7 @@
   effort: S
   fix_risk: low — one call
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -365,6 +396,9 @@
   verified_observation: After the density change step 2 title reads 'New analysis' while tvStepDots desc is 'Step
     2 of 2'; after font_scale 2.0 the sweep step reads 'New analysis' with 'Step 2 of 3'.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R2 VERIFIED
+  fix_commits:
+  - c9a3f2b95
 - id: AE1-110
   axis: aesthetic
   gate: UX
@@ -383,7 +417,7 @@
   effort: S
   fix_risk: low — display only
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -392,6 +426,9 @@
   verified_observation: 'After the drag tvHud ''ROI: 881 x 705 px | Pos: (533, 67)''; after the font-scale change
     ''Mode: Crop'' (and still ''Mode: Crop'' after going back to 1.0); the ROI itself was kept (saved as 881 x 705).'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R2 VERIFIED
+  fix_commits:
+  - 61de29ea8
 - id: AE1-111
   axis: technical
   gate: UX
@@ -416,7 +453,7 @@
   effort: M
   fix_risk: low — UI plumbing
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -427,6 +464,12 @@
     mode ('1 selected' bar) are both gone after the change. MediaPickerSheet.kt:32-40 is a plain class holding the
     AppCompatActivity, not a DialogFragment.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R5 VERIFIED
+  fix_commits:
+  - 055ca46eb
+  - 1f07be311
+  - 6ae9cb8e4
+  - aaf2e95b3
 - id: AE1-112
   axis: aesthetic
   gate: UX
@@ -450,7 +493,7 @@
   effort: S
   fix_risk: low — display strings; not in exports
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -460,6 +503,10 @@
     ''%1$s: %2$s %3$s\n(%4$d, %5$d)''); Details ''Region of interest 881 x 705 at (533, 67)'' vs ''Image size 1920
     x 1080 px'' (strings.xml:304); run sheet y axis ''100'' / ''50'' and bar labels ''97'' with no % (screens/v1_112_run_running.png).'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R2 VERIFIED
+  fix_commits:
+  - 760c9795c
+  - 8b5ee613f
 - id: AE1-113
   axis: aesthetic
   gate: UX
@@ -480,7 +527,7 @@
   effort: S
   fix_risk: low — one window flag
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -490,6 +537,9 @@
   verified_observation: 'Status-bar strip background #1B1B1B, icons/time #000000 = 1.22:1 (battery fill green unaffected)
     (screens/v1_113_sheetmedia_360_dark_fs1_nocoach.png).'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R2 VERIFIED
+  fix_commits:
+  - 001a54dfa
 - id: AE1-114
   axis: aesthetic
   gate: UX
@@ -511,7 +561,7 @@
   effort: S
   fix_risk: low — colour token
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -523,6 +573,9 @@
     - worse than the record's 3.5:1 because the heatmap, not raw speckle, was under it.
   verifier_note: Depends on pan/zoom; fails whenever image content sits under the puck.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R2 VERIFIED
+  fix_commits:
+  - b9a76503f
 - id: AE1-115
   axis: aesthetic
   gate: UX
@@ -544,7 +597,7 @@
   effort: S
   fix_risk: low — layout only
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: AE1-019
   carried: false
   verdict: CONFIRMED
@@ -554,6 +607,9 @@
     (screens/v1_115_wizard1_840_dark.png).
   verifier_note: Lattice bar not checked on device (needs a sweep run).
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R2 VERIFIED
+  fix_commits:
+  - b7a2fc99e
 - id: AE1-116
   axis: aesthetic
   gate: UX
@@ -594,7 +650,7 @@
   effort: S
   fix_risk: low — copy and placement
   external_action: null
-  status: confirmed
+  status: observation
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -629,7 +685,7 @@
   effort: M
   fix_risk: medium — changes reported output; ORACLE-CHANGE if the PDF/CSV digits move
   external_action: 'Admin/owner: decide the precision rule per quantity (TD-342)'
-  status: needs_admin
+  status: admin-action
   prior_id: AE1-017
   carried: true
   verdict: NEEDS_ADMIN
@@ -660,7 +716,7 @@
   effort: S
   fix_risk: low — copy
   external_action: 'Admin/counsel: sign off the beta-notice wording (TD-343)'
-  status: needs_admin
+  status: admin-action
   prior_id: AE1V-016
   carried: true
   verdict: NEEDS_ADMIN
@@ -690,7 +746,7 @@
   effort: M
   fix_risk: low — visual only
   external_action: null
-  status: approved
+  status: accepted-partial
   prior_id: AE1-011
   carried: true
   verdict: CONFIRMED
@@ -702,6 +758,7 @@
   verifier_note: Accepted partial (ADMIN_DECISIONS.md:83). The count grew by 9 since TD-331 was written (latest
     textSize-adding commit c4882342e, 2026-10-19); TD-331's numbers are stale.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R2 VERIFIED
 - id: AE1-010
   axis: technical
   gate: UX
@@ -720,7 +777,7 @@
   effort: S
   fix_risk: low
   external_action: null
-  status: approved
+  status: accepted-partial
   prior_id: AE1-010
   carried: true
   verdict: CONFIRMED
@@ -732,6 +789,7 @@
     Most other hits are log or exception messages. ADMIN_DECISIONS.md:83 accepted partial; PDF English-only by decision.'
   verifier_note: Accepted-partial state unchanged.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R2 VERIFIED
 - id: AE1V-022
   axis: aesthetic
   gate: G4
@@ -756,7 +814,7 @@
   effort: M
   fix_risk: low — debug source set only
   external_action: null
-  status: confirmed
+  status: observation
   prior_id: AE1V-022
   carried: true
   verdict: CONFIRMED
@@ -783,7 +841,7 @@
   effort: S
   fix_risk: low
   external_action: null
-  status: confirmed
+  status: observation
   prior_id: AE1V-017
   carried: true
   verdict: CONFIRMED
@@ -810,7 +868,7 @@
   effort: S
   fix_risk: low
   external_action: null
-  status: confirmed
+  status: observation
   prior_id: AE1V-019
   carried: true
   verdict: CONFIRMED
@@ -835,7 +893,7 @@
   effort: M
   fix_risk: low
   external_action: null
-  status: confirmed
+  status: observation
   prior_id: AE1-008
   carried: true
   verdict: CONFIRMED
@@ -861,7 +919,7 @@
   effort: S
   fix_risk: low
   external_action: null
-  status: confirmed
+  status: duplicate
   prior_id: AE1-020
   carried: true
   verdict: CONFIRMED
@@ -890,7 +948,7 @@
   effort: M
   fix_risk: low — test-only
   external_action: 'Admin: approve a screenshot/a11y-check dependency (new dependency rule)'
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -902,6 +960,9 @@
   verifier_note: Fix needs an Admin dependency approval; the 2026-10-28 approved tool list (Schemathesis, Lighthouse,
     Android dependency scan, semgrep) does not include one.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R3 VERIFIED
+  fix_commits:
+  - a5bd8c7dd
 - id: AE2-101
   axis: aesthetic
   gate: UX
@@ -929,7 +990,7 @@
   effort: S
   fix_risk: low — inline CSS on two static pages
   external_action: Hosting deploy (deploy-console.sh) to ship
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -942,6 +1003,9 @@
   verifier_note: Same .brand line reads 'Semper DIC'; ADDENDUM-4 also wants it 'semper' (AE3-110), so fix both in
     one edit.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - f8a84316a
 - id: AE2-102
   axis: aesthetic
   gate: UX
@@ -961,7 +1025,7 @@
   effort: S
   fix_risk: low — static page, no script
   external_action: Hosting deploy
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -971,6 +1035,9 @@
   verified_observation: axe critical meta-refresh, redirectDelay 5, light and dark, 360 and 1280; 404.html:13 <meta
     http-equiv=refresh content='5; url=/login'>.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - e2704a7a7
 - id: AE2-103
   axis: aesthetic
   gate: UX
@@ -995,7 +1062,7 @@
   fix_risk: low — generator template only; legal text unchanged
   external_action: Hosting deploy; note TD-277 (legal pages taken from b940cc29 at deploy) — regenerate from the
     cleared text
-  status: confirmed
+  status: pending-legal
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1037,7 +1104,7 @@
   effort: S
   fix_risk: low — CSS/markup at one breakpoint; roster.js unchanged
   external_action: Hosting deploy
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1051,6 +1118,9 @@
   verifier_note: Sort is reachable by keyboard (invisibly) but not by touch/pointer at <=600 px; 120-row stub used,
     not 500.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 2ffb2c397
 - id: AE2-105
   axis: aesthetic
   gate: UX
@@ -1081,7 +1151,7 @@
   effort: S
   fix_risk: low — the signed-out path already exists; only who writes the line changes
   external_action: Hosting deploy
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1097,6 +1167,11 @@
   verifier_note: A P1 could be argued (primary IT screen lacks its defined expired state), kept at P2 since every
     action is refused server-side.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R3 VERIFIED
+  fix_commits:
+  - 0d56ec508
+  - 4e16ac6f8
+  - 57ef9e475
 - id: AE2-106
   axis: aesthetic
   gate: UX
@@ -1118,7 +1193,7 @@
   effort: S
   fix_risk: low — attributes only
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1129,6 +1204,9 @@
     text ''3 of 3'', aria-label null. test-accounts.js:179 summary, :194-196 buttons without aria-label; :220 Release
     has one.'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 6aa26aa47
 - id: AE2-107
   axis: aesthetic
   gate: UX
@@ -1150,7 +1228,7 @@
   effort: S
   fix_risk: low — one breakpoint rule
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1161,6 +1239,9 @@
     open, summary at x40 y794, on the line under the label (out/ae2_107_closed_360.png vs ae2_107_open_360.png).
     1280 px unaffected (no label column).'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 0f6d8c6ed
 - id: AE2-108
   axis: aesthetic
   gate: UX
@@ -1183,7 +1264,7 @@
   effort: S
   fix_risk: low — Cancel path already exists
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1194,6 +1275,9 @@
     (1 left) and next() stays pending. Control confirmInPage: role=alertdialog, Escape removes it and resolves false.
     dialogs.js:187-265 has no role/Escape handler (only Enter at the input).'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 565bd3655
 - id: AE2-109
   axis: aesthetic
   gate: UX
@@ -1216,7 +1300,7 @@
   effort: S
   fix_risk: low — the guard already exists (`submit.disabled` check)
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1228,6 +1312,9 @@
     :98.'
   verifier_note: Export not exercised in the browser; same disabled pattern at audit-log.js:98.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - a14c25f4b
 - id: AE2-110
   axis: aesthetic
   gate: UX
@@ -1251,7 +1338,7 @@
   effort: M
   fix_risk: low — dev-only, CI job
   external_action: Admin approves the @lhci/cli dev dependency (or accepts axe-core as the substitute)
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1262,6 +1349,12 @@
   verifier_note: Admin approved Lighthouse as a dev/CI dependency on 2026-10-28 (ADMIN_DECISIONS.md fix-round scope),
     so the external_action is settled; the gap itself remains.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 0db7d04ac
+  - 34fe88481
+  - 85c33fa53
+  - f635f8c0a
 - id: AE2-111
   axis: aesthetic
   gate: UX
@@ -1285,7 +1378,7 @@
   effort: S
   fix_risk: low — test-only
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1296,6 +1389,9 @@
     test; no 404, finishReset, finishSignIn, privacy or terms; no step-up, Test-accounts or error-banner state.
     AE2-101/102/103 reproduce on pages the spec never opens.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 41076fdf6
 - id: AE3-003
   axis: aesthetic
   gate: UX
@@ -1330,7 +1426,7 @@
   effort: S
   fix_risk: low — copy only, once named
   external_action: Owner decision TD-340 / TD-341; counsel aligns the Terms (TD-277)
-  status: approved
+  status: fixed-verified
   prior_id: AE3-003
   carried: true
   verdict: CONFIRMED
@@ -1348,6 +1444,15 @@
     plan'') stay with counsel (legal). Overlaps AE3-105 (console-side lower-case demo) and AE3-104 (same account.js:342
     line).'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R3 VERIFIED
+  fix_commits:
+  - 58bb3f0e6
+  - 5e0c74bdb
+  - 793c2fede
+  - a1caa12e8
+  - b57485095
+  - d17aa3c5b
+  - d7fb0bdd7
 - id: AE3-101
   axis: aesthetic
   gate: UX
@@ -1381,7 +1486,7 @@
   effort: S
   fix_risk: low — mail text; needs a backend deploy; the mail is off until NOTIFY_SECURITY_FROM is set (TD-295)
   external_action: Backend deploy (Admin dispatch)
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1394,6 +1499,9 @@
   verifier_note: 'ADDENDUM-4: the mail''s {name} comes from notify.py _APP_NAMES (''Semper'', ''Semper Classroom'')
     and test_notify.py:152 asserts ''Semper'' in the subject; the wording fix should also lower-case the brand (''semper'').'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - d17aa3c5b
 - id: AE3-102
   axis: aesthetic
   gate: UX
@@ -1416,7 +1524,7 @@
   effort: S
   fix_risk: low — label text; it is not part of the .dat or GIF oracles
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1426,6 +1534,9 @@
     ID:"); strings.xml:321 'Exporting analysis %1$d of %2$d'; :1110 'Session expired.'; UserTermsTest.kt:17 reads
     values/strings.xml only.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 743f94ca5
 - id: AE3-103
   axis: aesthetic
   gate: UX
@@ -1448,7 +1559,7 @@
   effort: S
   fix_risk: low — docs; the website copy is published separately
   external_action: Republish the FAQ to semperdic/website
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1459,6 +1570,10 @@
     has no decoder', :322 'for this session', :325 'a session that completed'; strings.xml:97 'which this phone
     has no decoder for'.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R2 VERIFIED
+  fix_commits:
+  - 4728a9d9a
+  - 60acedc49
 - id: AE3-104
   axis: aesthetic
   gate: UX
@@ -1485,7 +1600,7 @@
   effort: S
   fix_risk: low — operator copy; deploy only via scripts/deploy-console.sh
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1497,6 +1612,9 @@
     limit of N'; strings.xml:1010 'the demo limit'; messages.js:119-120 'offline allowance' (offline window).
   verifier_note: Remedy 'the Demo limit (N)' matches ADDENDUM-3.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 58bb3f0e6
 - id: AE3-105
   axis: aesthetic
   gate: UX
@@ -1522,7 +1640,7 @@
   effort: S
   fix_risk: low — copy; tests that assert these messages need the same edit
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1534,6 +1652,9 @@
   verifier_note: Remedy agrees with ADDENDUM-3 ('Demo'), the TD-341 alternative is now moot. Related to AE3-003
     (same rule, console side) but a distinct fix site.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 58bb3f0e6
 - id: AE3-106
   axis: aesthetic
   gate: UX
@@ -1562,7 +1683,7 @@
   effort: S
   fix_risk: low — copy; console tests assert dialog text
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1576,6 +1697,11 @@
   verifier_note: The record's :459 is the card heading, :468 the button. Proposed app text uses 'Semper support';
     under ADDENDUM-4 the brand is 'semper'. Shares strings.xml:1133 with AE3-107 ('an admin').
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 110b18fff
+  - 4e474cdaf
+  - e37b41c4a
 - id: AE3-107
   axis: aesthetic
   gate: UX
@@ -1605,7 +1731,7 @@
   effort: S
   fix_risk: low
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1620,6 +1746,10 @@
     user-facing, so the chosen helper term should be written with the lower-case brand (owner may rule whether 'support'
     names the company, Semper Mechanics, instead).
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 4e474cdaf
+  - ef4eb27d3
 - id: AE3-108
   axis: aesthetic
   gate: UX
@@ -1648,7 +1778,7 @@
   effort: S
   fix_risk: low — copy plus one string id
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1659,6 +1789,10 @@
     unavailable.'; messages.js:42 'switched off for maintenance just now'; LicenseErrors.kt:40-41 downloadMessage
     maps FEATURE_PAUSED to R.string.restore_paused; messages.js:160 'has paused your seat'.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - a074338aa
+  - ac027055d
 - id: AE3-109
   axis: aesthetic
   gate: UX
@@ -1687,7 +1821,7 @@
   effort: S
   fix_risk: low
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1699,6 +1833,9 @@
     account/index.html:85 'Redeem a claim code', :88 placeholder 'Claim code'; messages.js has 15 'claim code' lines;
     Terms :74,137,175 'claim code' (legal).
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 841d22696
 - id: AE3-110
   axis: aesthetic
   gate: UX
@@ -1732,7 +1869,7 @@
   effort: S
   fix_risk: low for titles; medium for the TOTP issuer (existing authenticator entries)
   external_action: Owner confirms 'Semper DIC' is not a deliberate web brand
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1749,6 +1886,10 @@
     (strings.xml:3) is itself now off-rule. external_action (owner confirms) is answered. Privacy Policy :4 stays
     with counsel (legal).'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 0931cf0b5
+  - 0f90ea5c5
 - id: AE3-111
   axis: aesthetic
   gate: UX
@@ -1771,7 +1912,7 @@
   effort: S
   fix_risk: low
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1781,6 +1922,10 @@
     SEAT_STATUS maps disabled->'paused', revoked->'removed' but verify.js does not use it; TECH_DEBT.md:534 TD-323
     open.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 661cb200c
+  - aeb8d008a
 - id: AE3-112
   axis: aesthetic
   gate: UX
@@ -1810,7 +1955,7 @@
   effort: S
   fix_risk: low — tests only
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1825,6 +1970,9 @@
     the mail text, so the gap holds. Add an ADDENDUM-4 rule (''Semper'' capital in user-facing copy) alongside the
     proposed ones.'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R2 VERIFIED
+  fix_commits:
+  - e7c766768
 - id: AE3-113
   axis: aesthetic
   gate: UX
@@ -1852,7 +2000,7 @@
   effort: S
   fix_risk: low — docs only; the legal text itself waits on counsel
   external_action: Counsel reviews the wording list with TD-277
-  status: confirmed
+  status: pending-legal
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1887,7 +2035,7 @@
   effort: S
   fix_risk: low
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: AE3-008
   carried: false
   verdict: CONFIRMED
@@ -1898,6 +2046,9 @@
     'license id', :1316 'licenses leaks' (the 'foreign institution's licenses' phrase spans :1315-1316). dc9dcffb
     and ad5059d4 do not touch the manual.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 18212c8f3
 - id: AE3-115
   axis: aesthetic
   gate: UX
@@ -1915,7 +2066,7 @@
   effort: S
   fix_risk: low
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1924,6 +2075,9 @@
   verified_observation: strings.xml:1103 status_changed_relogin 'Please log in again.'; :342,1110,1127,1131 'sign
     in again'. Only values/ holds strings (no translations).
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 2abf49c9b
 - id: AE3-116
   axis: aesthetic
   gate: UX
@@ -1941,7 +2095,7 @@
   effort: S
   fix_risk: low
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1950,6 +2104,9 @@
   verified_observation: PdfReportGenerator.kt:214 drawSectionHeader("Analyzed Images"); strings.xml:1024 'Update
     to keep analysing'.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 743f94ca5
 - id: AE3-117
   axis: aesthetic
   gate: UX
@@ -1972,7 +2129,7 @@
   effort: S
   fix_risk: low
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -1982,6 +2139,11 @@
   verified_observation: operator/index.html:88 nav 'Approvals', :443 'Accounts awaiting approval'; strings.xml:946
     'Pending access requests', :947 'Access requests'; notify.py:206 'open Settings -> Access requests in the app'.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 63ec9dcdf
+  - d17aa3c5b
+  - eefe9e514
 - id: AE3-118
   axis: aesthetic
   gate: UX
@@ -2001,7 +2163,7 @@
   effort: S
   fix_risk: low — check the export contract snapshot (ADR-029) if it pins the note
   external_action: Backend deploy
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -2013,6 +2175,9 @@
   verifier_note: 'No backend test pins the note (grep ''Restore screen''/''artifactDownload'' in backend/tests:
     none), so the ADR-029 snapshot concern does not block.'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - d17aa3c5b
 - id: TE1-101
   axis: technical
   gate: G5
@@ -2055,7 +2220,7 @@
   effort: S
   fix_risk: medium — a deletion under files/sessions; must never fire when index.json fails to parse
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -2077,6 +2242,10 @@
     only the orphaned files fail the criterion. The phase-1 orphan 5d93cf9a-441 (12M) was still on the device before
     pm clear.'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R2 VERIFIED
+  fix_commits:
+  - 409a12874
+  - 8b5ee613f
 - id: TE1-102
   axis: technical
   gate: G5
@@ -2103,7 +2272,7 @@
   effort: S
   fix_risk: low — floors stay 2 points under the measured value
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -2118,6 +2287,9 @@
     2b7f8f4ec) did not touch the floors. TESTING.md:347-348 still shows 80.51 / 62.69.'
   verifier_note: koverVerify itself passes, so this is a process-rule breach, not a failing gate; P2 stands.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R2 VERIFIED
+  fix_commits:
+  - 1b7541cfd
 - id: TE1-103
   axis: technical
   gate: G5
@@ -2160,7 +2332,7 @@
   effort: M
   fix_risk: low — threading only; no measurement path (SemperNativeLib stays one executor)
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -2180,6 +2352,10 @@
     debug-only; the record''s '':85'' is the sweep''s EngineDebug call. Same fix pattern (resolve cacheDir on IO);
     add it to the fix. Counts lower than phase 1 (fewer launches); distinct sites 6/6 claimed + 1 unclaimed.'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R3 VERIFIED
+  fix_commits:
+  - 000afff99
+  - 6b4cce9ec
 - id: TE1-104
   axis: technical
   gate: G5
@@ -2208,7 +2384,7 @@
   effort: S
   fix_risk: low — a migrate that has not finished must still precede the first read of dic_settings; keep it ordered
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -2225,6 +2401,10 @@
   verifier_note: 'Distinct from TD-338 (EntitlementStore calls on main: SettingsAccountSection.kt:42, not :32) and
     from TE1-103 (different sites, same check); not a duplicate.'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R3 VERIFIED
+  fix_commits:
+  - 0af01f792
+  - 9af3642f5
 - id: TE1-105
   axis: technical
   gate: G5
@@ -2246,7 +2426,7 @@
   fix_risk: low — the first screen may see the previous cached policy for one read; policy is enforced again on
     change
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -2259,6 +2439,11 @@
     :55 is RestrictionsManager.applicationRestrictions.
   verifier_note: Count x8 vs claimed x15 reflects fewer foreground transitions; one per return to foreground.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R4 VERIFIED
+  fix_commits:
+  - 15507202f
+  - 76ef48ae1
+  - d011d96ef
 - id: TE1-001
   axis: technical
   gate: G6
@@ -2289,7 +2474,7 @@
   effort: S
   fix_risk: medium — a wrong or unrotated pin locks every installed build out of the API
   external_action: 'Admin: choose pins and set SEMPER_API_CERT_PINS (A8), or sign the TE1-001 risk row (A10)'
-  status: approved
+  status: fixed-verified
   prior_id: TE1-001
   carried: true
   verdict: CONFIRMED
@@ -2309,6 +2494,10 @@
     now in the fix round''s scope (implement pins + --require-pins); the code at 046d54c5 still fails the criterion.
     Overlaps TD-318/TD-218 and gate row A5 (its own tracking rows, not a duplicate finding).'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R2 VERIFIED
+  fix_commits:
+  - 3f8a041c5
+  - 9c446c363
 - id: TE1-003
   axis: technical
   gate: G5
@@ -2342,7 +2531,7 @@
   effort: S
   fix_risk: low — a device check and fixtures
   external_action: 'Admin: device install-over smoke from the 1036 release APK (A13)'
-  status: approved (device)
+  status: admin-action
   prior_id: TE1-003
   carried: true
   verdict: NEEDS_DEVICE
@@ -2358,6 +2547,9 @@
     S22+'), so it is now a lead/fix-round device action, not an Admin one; this verifier was not given that device
     (and the debug build's signer blocks install-over on the emulator).
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R2 PENDING
+  fix_commits:
+  - e41a91368
 - id: TE1-008
   axis: technical
   gate: G6
@@ -2377,7 +2569,7 @@
   effort: S
   fix_risk: low — a decision
   external_action: Admin decides the 1036 support window (A12)
-  status: confirmed
+  status: observation
   prior_id: TE1-008
   carried: true
   verdict: CONFIRMED
@@ -2441,7 +2633,7 @@
   effort: S
   fix_risk: low — docs; making the flag explicit restates the current effective value, so no output change
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -2457,6 +2649,10 @@
     split.'
   verifier_note: Admin decided 2026-10-28 'Document + arm64 check (Recommended)'.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 605b906fe
+  - e41a91368
 - id: TE2-102
   axis: technical
   gate: G1
@@ -2494,7 +2690,7 @@
   effort: S
   fix_risk: low — CI and docs only; option (b) adds a few minutes to a path-filtered job
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -2513,6 +2709,10 @@
     in the same job. What fails is narrower: the numeric goldens (GoldenCorpus 4x4/6x6, FullFieldGolden.CaptureOrCompare)
     never compare in this repo''s CI and nothing checks the engine repo''s compare run.'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 65259f0a3
+  - 79bedded7
 - id: TE2-002
   axis: technical
   gate: G1
@@ -2547,7 +2747,7 @@
   effort: M
   fix_risk: low — test and docs
   external_action: null
-  status: approved
+  status: fixed-pending-engine-merge
   prior_id: TE2-002
   carried: true
   verdict: CONFIRMED
@@ -2560,6 +2760,9 @@
     (:439-440). full_field_solver.cpp:199 safe_cores = hardware_concurrency. CONTEXT.md:185 corrected. TD-346 open
     (TECH_DEBT.md:553).
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 PENDING
+  fix_commits:
+  - dad405d35
 - id: TE2-003
   axis: technical
   gate: G1
@@ -2601,7 +2804,7 @@
   fix_risk: low — CI and a device run
   external_action: 'Device owner: run EnginePipelineSmokeTest on one arm64 device (not the S22+ benchmark phone
     unless the Admin allows) and record it (A13).'
-  status: approved
+  status: fixed-device-accepted
   prior_id: TE2-003
   carried: true
   verdict: CONFIRMED
@@ -2616,6 +2819,9 @@
   verifier_note: Criterion (an automated solver/oracle test covers the arm64 release build) fails from repo evidence
     alone; the device run in reproduce was not executed (no device given). Admin allowed the S22+ for it on 2026-10-28.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 PENDING
+  fix_commits:
+  - e41a91368
 - id: TE2-004
   axis: technical
   gate: G1
@@ -2654,7 +2860,7 @@
   effort: M
   fix_risk: low — test-only builds
   external_action: null
-  status: approved
+  status: fixed-pending-engine-merge
   prior_id: TE2-004
   carried: true
   verdict: CONFIRMED
@@ -2667,6 +2873,9 @@
     TD-326 (:537) and TD-347 (:554) open. Fixed part holds: sanitized host job green (172/172), 7 Dice* tolerance
     tests OK.'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 PENDING
+  fix_commits:
+  - dad405d35
 - id: TE2-005
   axis: technical
   gate: G1
@@ -2693,7 +2902,7 @@
   effort: S
   fix_risk: low — docs
   external_action: Owner with SEMPER_DICE_REPO and material_testing's scripts runs both at f072da0 (A14).
-  status: confirmed
+  status: admin-action
   prior_id: TE2-005
   carried: true
   verdict: CONFIRMED
@@ -2745,7 +2954,7 @@
   effort: S
   fix_risk: low — test double only; the full suite passes with the monotonic clock (2298 passed)
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -2760,6 +2969,9 @@
   verifier_note: 'Order-dependent too: the test passes when the whole file runs, so the full-suite failure in pytest.log
     is timing luck either way.'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - b5a8fdf4b
 - id: TE3-102
   axis: technical
   gate: G2
@@ -2811,7 +3023,7 @@
   external_action: 'Admin: decide whether off-domain roster adds are allowed, and whether IT may see ''already licensed''.
     Lead may consider P0 under ''cross-institution data access'' (membership inference of A''s invites/seats by
     B, one bit per guessed address); TE-3 rates P1 because no A record is read or changed'
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -2830,6 +3042,12 @@
     adds and reply-by-state both fail it. Kept P1: membership inference is one bit per guessed address and no A
     record is read or changed; the lead may weigh P0 ''cross-institution data access''.'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 1c8247766
+  - 7c7688f6a
+  - e5a01bac9
+  - f485d4028
 - id: TE3-103
   axis: technical
   gate: G2
@@ -2857,7 +3075,7 @@
   effort: S
   fix_risk: low — test-only; same gate as the routes already covered
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -2870,6 +3088,9 @@
     on POST /v1/me/terms (test_terms_and_consent.py:100). deps.py:178-180 refuses non-approved status for every
     tier (low risk).'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 6b4b1c7e5
 - id: TE3-104
   axis: technical
   gate: G2
@@ -2893,7 +3114,7 @@
   effort: S
   fix_risk: low — docs/test only
   external_action: null
-  status: confirmed
+  status: observation
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -2938,7 +3159,7 @@
   effort: S
   fix_risk: low — docs and an additive test
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -2953,6 +3174,11 @@
   verifier_note: The ADR-029 status line is also listed in TE6-104 (stale 'not merged' docs); fix once. The rest
     (no PR-template / semantic check) is distinct, so not a duplicate.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 3fe3482c9
+  - 84012bdf6
+  - 9c777fbcf
 - id: TE3-007
   axis: technical
   gate: G3
@@ -2977,7 +3203,7 @@
   effort: M
   fix_risk: low — test-only, lock bump per the pip-compile rule
   external_action: 'Admin: approve or keep declining the dependency (TD-319)'
-  status: approved
+  status: fixed-verified
   prior_id: TE3-007
   carried: true
   verdict: CONFIRMED
@@ -2988,6 +3214,11 @@
   verifier_note: 'No longer only deferred: on 2026-10-28 the Admin approved Schemathesis as a dev/CI dependency
     (ADMIN_DECISIONS.md, Run 2026-10-28 scope of the fix round), so the gap is now actionable.'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 1c8247766
+  - ae154a6df
+  - e0de4b63d
 - id: TE4-001
   axis: technical
   gate: G4
@@ -3031,7 +3262,7 @@
   fix_risk: medium — a mis-provisioned key/pin pair is designed to fall back to the cache (ADR-023 decision 7),
     but the pinned Keystore path has never run under test (TE4-101)
   external_action: 'Admin: TD-215 / A7 (Secret Manager key, repo variables, SA grants, deploy, release with pins)'
-  status: confirmed
+  status: admin-action
   prior_id: TE4-001
   carried: true
   verdict: CONFIRMED
@@ -3074,7 +3305,7 @@
   effort: S
   fix_risk: n/a — observation
   external_action: null
-  status: confirmed
+  status: observation
   prior_id: TE4-008
   carried: true
   verdict: CONFIRMED
@@ -3128,7 +3359,7 @@
   effort: M
   fix_risk: low — a test seam and tests; production behaviour unchanged
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -3142,6 +3373,11 @@
     keys a token changes nothing'. Valid/Lapsed appear only in pure-part tests (EntitlementPolicyTest, EntitlementRefreshTest,
     SealedRecordStoreTest).
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R3 VERIFIED
+  fix_commits:
+  - 3c0f1a8ee
+  - 41275f8be
+  - 944d9534e
 - id: TE4-102
   axis: technical
   gate: G4
@@ -3177,7 +3413,7 @@
   effort: S
   fix_risk: low — docs and a test
   external_action: null
-  status: confirmed
+  status: observation
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -3192,6 +3428,9 @@
   verifier_note: No Gradle, so not run as a JVM test; the arithmetic is direct from advance()/effectiveNowMs().
     Latent until TD-215.
   decision: report only (observation)
+  fix_commits:
+  - 4ea867d27
+  - bfb9ecdae
 - id: TE4-103
   axis: technical
   gate: G4
@@ -3234,7 +3473,7 @@
   effort: S
   fix_risk: low — comment, one assertion, doc cites
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -3247,6 +3486,9 @@
     explicitly at test_entitlement_token.py:320). ADR-023 cites :102-111, :210-242, :237, account.py:145-189; code
     is now device_key_thumbprint :110, build_claims :218, 'lic' :245, app_config :156 / return body :188.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 4ea867d27
 - id: TE5-101
   axis: technical
   gate: G2
@@ -3295,7 +3537,7 @@
     cover verify_id_token paths
   external_action: Admin dispatches the backend deploy (staging, then production) after the lock PR merges — together
     with A4 (TE5-102).
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -3312,6 +3554,10 @@
   verifier_note: P1 kept on 'a gate criterion fails' (and it blocks deploy/release, see TE6-101/TE6-103); no exploit
     path found.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 5b4dfb6ea
+  - bb50295a1
 - id: TE5-102
   axis: technical
   gate: G2
@@ -3338,7 +3584,7 @@
   effort: S
   fix_risk: n/a — deploy only
   external_action: 'Admin: A4 backend deploy (deploy-backend.yml, staging then production) after TE5-101 merges.'
-  status: confirmed
+  status: duplicate
   prior_id: TE5-001
   carried: false
   verdict: CONFIRMED
@@ -3380,7 +3626,7 @@
   effort: S
   fix_risk: low — text only
   external_action: Counsel hold on the legal pages (TD-277); Admin deploys Hosting by deploy-console.sh.
-  status: confirmed
+  status: pending-legal
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -3423,7 +3669,7 @@
   effort: S
   fix_risk: low — docs only
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: TE5-009
   carried: false
   verdict: CONFIRMED
@@ -3434,6 +3680,10 @@
     RESILIENCE-1 cites :416. Header :15-16 claims every citation re-checked 2026-10-24 at 875e2334. The 47 other
     citations were not re-checked by V3.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R2 VERIFIED
+  fix_commits:
+  - 12651abd2
+  - 2694a05dd
 - id: TE5-105
   axis: technical
   gate: G2
@@ -3465,7 +3715,7 @@
   effort: S
   fix_risk: low — additive CI step or a docs row
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: TE5-010
   carried: false
   verdict: CONFIRMED
@@ -3478,6 +3728,17 @@
     204.
   verifier_note: Admin approved an Android dependency scan and semgrep as dev/CI dependencies on 2026-10-28.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 1c8247766
+  - 513faa463
+  - 8d09e83cd
+  - a37d64166
+  - a7aa3d371
+  - b5dd921ef
+  - c7f95d225
+  - cc87ea355
+  - e5d6224e6
 - id: TE5-106
   axis: technical
   gate: G2
@@ -3508,7 +3769,7 @@
   effort: S
   fix_risk: low — lint markers and one URL check
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: TE5-010
   carried: false
   verdict: CONFIRMED
@@ -3520,6 +3781,10 @@
     launch_smoke.py:59, ci_test_report.py:82 and :52, check_release_apk.py:306 and :660, micro_ab.py:153. TD-321
     still says 30 (S603 x19 ...). ruff.toml:25 ''../scripts/**'' = [''S'']. Gate config: ''All checks passed!''.'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R2 VERIFIED
+  fix_commits:
+  - 7f7984e57
+  - ac8ae69f2
 - id: TE5-003
   axis: technical
   gate: G2
@@ -3553,7 +3818,7 @@
   fix_risk: low — text only
   external_action: Operator provides legal name, registered address, Grievance Officer name and email, region (TD-36);
     counsel hold (TD-277); or the Admin signs the Risk acceptance row.
-  status: confirmed
+  status: pending-legal
   prior_id: TE5-003
   carried: true
   verdict: CONFIRMED
@@ -3598,7 +3863,7 @@
   fix_risk: low — text only
   external_action: Policy owner / counsel edits the text (TD-317, A11); Admin deploys Hosting; or the Admin signs
     the Risk acceptance row.
-  status: confirmed
+  status: pending-legal
   prior_id: TE5-004
   carried: true
   verdict: CONFIRMED
@@ -3639,7 +3904,7 @@
   effort: S
   fix_risk: low — dev tooling
   external_action: null
-  status: confirmed
+  status: observation
   prior_id: TE5-011
   carried: true
   verdict: CONFIRMED
@@ -3672,7 +3937,7 @@
   effort: S
   fix_risk: n/a
   external_action: Admin decides on pins (A5 / TE1-001).
-  status: confirmed
+  status: observation
   prior_id: TE5-012
   carried: true
   verdict: CONFIRMED
@@ -3724,7 +3989,7 @@
   external_action: 'Admin: create the notification channel and run apply-monitoring.sh --apply with roles/monitoring.editor
     + roles/logging.configWriter, then the printed run.invoker grant; name the on-call; or sign the TE6-001 Risk
     acceptance row (gate :723).'
-  status: confirmed
+  status: admin-action
   prior_id: TE6-001
   carried: true
   verdict: CONFIRMED
@@ -3780,7 +4045,7 @@
     indicvision-dic-app-firestore-backups --region asia-south1 --services "semper-api semper-api-staging" and record
     it; or sign the TE6-011 Risk acceptance row (gate :724, whose text ''17 FAIL on 2026-10-24'' should get today''s
     date).'
-  status: confirmed
+  status: admin-action
   prior_id: TE6-011
   carried: true
   verdict: CONFIRMED
@@ -3827,7 +4092,7 @@
   effort: S
   fix_risk: low — additive
   external_action: null
-  status: confirmed
+  status: observation
   prior_id: TE6-016
   carried: true
   verdict: CONFIRMED
@@ -3898,7 +4163,7 @@
   effort: S
   fix_risk: low — docs; the optional input only narrows one advisory with an approver
   external_action: 'Admin: drill the emergency lever on staging with the TD-220 drills (gate A6).'
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -3912,6 +4177,9 @@
     lever variable then deploy-backend.yml; RELEASING:198-201 the workflow builds the dispatched commit. 13 files
     changed (12 app + lock) between live 46ac8b5e and HEAD. Only dispatch input is environment.'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - fb86634d6
 - id: TE6-102
   axis: technical
   gate: G3
@@ -3952,7 +4220,7 @@
   effort: S
   fix_risk: low — stub-tested script; exit-code change affects only manual runs
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -3967,6 +4235,11 @@
     Script exits 1 only when FAILS > 0. noauth log: ''FAIL: 0  UNKNOWN: 20''. Gate A2 done-when ''no FAIL but 3.1
     (A8) and 3.5 (A4)'' has no UNKNOWN condition.'
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 30174ff58
+  - 94c9fb7dd
+  - c6733ad2b
 - id: TE6-103
   axis: technical
   gate: G6
@@ -4015,7 +4288,7 @@
   external_action: 'Admin: dispatch deploy-backend.yml (staging, then production with the required-reviewer approval)
     after the lock fix merges; deploy Hosting by scripts/deploy-console.sh; both are the Admin''s (deploy dispatch
     and Hosting are outward-facing).'
-  status: confirmed
+  status: admin-action
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -4067,7 +4340,7 @@
   effort: S
   fix_risk: low — docs
   external_action: null
-  status: approved
+  status: fixed-verified
   prior_id: null
   carried: false
   verdict: CONFIRMED
@@ -4081,3 +4354,7 @@
     undeployed.'
   verifier_note: Overlaps TE3-105's ADR-029 status line.
   decision: 'fix now (Admin 2026-10-28: complete everything but legal)'
+  reverify: R1 VERIFIED
+  fix_commits:
+  - 9753dfc02
+  - b1b6260fe

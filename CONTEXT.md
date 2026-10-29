@@ -116,7 +116,7 @@ emulator (`scripts/micro_ab.py`, [TESTING.md](docs/app/TESTING.md)); the phone-r
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-28)
+## Current state (2026-10-29)
 
 - **Deployed.** Backend and Hosting from `46ac8b5e` (2026-10-26; #484, the Semper Classroom
   rename, on top of #482): `semper-api-40300681201-1`, staging `semper-api-staging-40299991596-1`,
@@ -128,10 +128,11 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   (TD-277). Deploy Hosting from a worktree with `/privacy` and `/terms` taken from `b940cc29`
   ([checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md) §4) and compare the live pages after; a
   plain-`main` deploy on 2026-10-26 published them until the same day's redeploy.
-- **Readiness run 2026-10-24:** merged as #489 (`6d2bde6c`, 2026-10-26), not deployed; verdict
-  **No-go** ([report](docs/ops/readiness/20261024/REPORT.md); open rows TD-318–TD-332 but TD-323 and TD-330, TD-336–TD-344, TD-346, TD-347).
-  Its backend changes need a deploy: lock bump, kill switches on `GET …/uploads` and
-  `PUT …/metadata`, the `/readyz` budget, `--no-access-log`, roster codes, quota wording.
+- **Readiness runs.** 2026-10-24: merged as #489 (`6d2bde6c`), not deployed ([report](docs/ops/readiness/20261024/REPORT.md)).
+  2026-10-28: branch `claude/readiness-20261028`, 98 findings, verdict **No-go** on six P1s that need the
+  Admin or counsel ([report](docs/ops/readiness/20261028/REPORT.md) §4): deploys, monitoring, posture, the entitlement
+  key, and the two legal ones. Its backend adds the IT domain lock (ADDENDUM-2), msgpack 1.2.4, "Demo"/"Licensed" and
+  the lower-case "semper" brand (ADDENDUM-3/4); both runs' backend and console changes need a deploy.
 - **Admin actions** are one table, [gate § Admin actions](docs/ops/PRODUCTION_READINESS_GATE.md#admin-actions-external):
   monitoring `--apply` (no notification channel yet), the posture FAILs (17 on 2026-10-24, the same 17 on 2026-10-28),
   TD-215, the checklist's §6; the readiness report's §4 adds that run's one-off actions.
@@ -141,7 +142,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   #453, #457–#462, #464, #469 (TD-298); engine `f072da0` v0.6.1 (#470); tamper-evident records
   ([ADR-028](docs/adr/ADR-028-tamper-evident-records.md), #471, review findings in its comments);
   AD_ID removed (#475, TD-232).
-- **Release blockers:** TD-229 (Play account; TD-226, TD-230, TD-231 follow it), TD-232 (two
+- **Release blockers:** `SEMPER_API_CERT_PINS` unset (every release fails `--require-pins` until it is; readiness A7); TD-229 (Play account; TD-226, TD-230, TD-231 follow it), TD-232 (two
   owner decisions, then submit), TD-219's device checks, counsel on the Terms (TD-277).
 - **Semper Classroom** (`material_testing`; [ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md),
   old names aliased until TD-330) merges this `main` (last `25334af1`, material_testing#146,
@@ -150,7 +151,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   readiness port (report §6), then `rename_classroom_app.py`.
 - **CI.** Tiers follow the diff, floors rise with every test PR ([TESTING.md](docs/app/TESTING.md#coverage-floors)),
   `main` requires `CI OK`, and Tier 3 signs in to live staging, so a staging backend behind
-  `main` fails it. Always-on: `engine-pin`, `console-a11y`; `engine-host-sanitized` follows
+  `main` fails it. Always-on: `engine-pin`, `console-a11y`, `console-lighthouse` (2026-10-28 run, with `android-deps-osv` on app diffs and `semgrep`); `engine-host-sanitized` follows
   Tier 3. The OpenAPI snapshot is rewritten with `UPDATE_OPENAPI_SNAPSHOT=1` ([ADR-029](docs/adr/ADR-029-api-contract-snapshot.md)). Merged
   2026-10-27 (#488, from material_testing#148 and #150): the release check
   fails a targetSdk below 36 or a `.so` off 16 KB pages; the `benchmark` build is R8-minified
