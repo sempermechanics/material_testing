@@ -181,8 +181,9 @@ The product owner's decisions (2026-10-29):
       `activation` and `/v1/me`'s `licences`, `X-Activation` and
       `IMPLICIT_ACTIVATION`, the cooldown removed, the floating lease's phone
       mirrored (CLOUD_ARCHITECTURE_GCP §20.16).
-- [ ] Before the step-3 backend serves: drop `SELF_DEVICE_CHANGE_COOLDOWN_DAYS`
-      from the service (`--remove-env-vars`, owner); it is no longer read.
+- [x] Before the step-3 backend serves: drop `SELF_DEVICE_CHANGE_COOLDOWN_DAYS`
+      from the service (`--remove-env-vars`, owner); it is no longer read. Gone from
+      both services on 2026-10-30.
 - [x] Step 4: a licence per app: one per person per app (`holders.licence_held_by`),
       per-app invites (`licenses.invite_id`), mint `app` and `maxDevices`, the staff
       edit of `maxDevices`, each mirror writer and guard by the licence's slot
@@ -198,8 +199,8 @@ The product owner's decisions (2026-10-29):
 - [x] The split's migration: `backend/scripts/split_licences_per_app.py`, with
       `--only-domain` for a QC rehearsal (FIRESTORE_SCHEMA_RUNBOOK,
       `backend/tests/test_script_split_licences_per_app.py`, the emulator tier).
-- [ ] Run the split (owner): dry run, the QC rehearsal, then `--apply`, once the
-      step-5 backend serves all traffic.
+- [x] Run the split (owner): dry run, the QC rehearsal, then `--apply`, once the
+      step-5 backend serves all traffic. Applied 2026-10-30 (CHANGELOG).
 - [x] App (Semper): `X-Activation: explicit` (`AppIdHeader`), Activate / list /
       Deactivate (`PhonesApi`, `data/account/phones/DeviceActivation.kt`), the
       Your phones screen (`ui/phones/`), Home's card, Settings' row, the limit
