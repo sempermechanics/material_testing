@@ -72,7 +72,7 @@ def _activate_individual(user: dict, uid: str, email: str, device_id: str, lic: 
     err = claim_individual_license(ref.id, uid, email, patch)
     if err:
         raise Refusal(_public_claim_error(err))
-    return resolve_user_config(_apply_patch(user, patch))
+    return resolve_user_config(_apply_patch(user, patch), app)
 
 
 def _activate_institution(user: dict, uid: str, email: str, device_id: str, lic: dict, ref,
@@ -86,7 +86,7 @@ def _activate_institution(user: dict, uid: str, email: str, device_id: str, lic:
     err = claim_seat(ref.id, uid, email, device_id, patch, app=app)
     if err:
         raise Refusal(_public_claim_error(err))
-    return resolve_user_config(_apply_patch(user, patch))
+    return resolve_user_config(_apply_patch(user, patch), app)
 
 
 def activate_license(uid: str, email: str, device_id: str, key: str,
@@ -121,12 +121,17 @@ def activate_license(uid: str, email: str, device_id: str, key: str,
         # onto the user, effective_mode immediately resolves demo, and the
         # caller is handed err="" with a demo config and no explanation.
         raise Refusal(errors.LICENSE_EXPIRED)
-    if licence_held_by(email, user=user, exclude_id=license_id):
+    if licence_held_by(email, user=user, exclude_id=license_id, app=lic.get("app")):
         # One licence per person. Before this the key simply won: an
         # institution seat or an individual licence replaced whatever the
         # account held, and the licence it left stayed `redeemed` in their
         # name. Asked before the kind branch so both refuse alike.
         raise Refusal(errors.ALREADY_LICENSED)
+    if lic.get("app"):
+        # A licence that names its app licenses phones by Activate
+        # (ADR-033), never by the key: the account takes it, and no lock is
+        # compared or bound, as for a redemption with no device.
+        device_id = ""
     if _is_institution(lic):
         return _activate_institution(user, uid, email, device_id, lic, ref, app)
     return _activate_individual(user, uid, email, device_id, lic, ref, app)

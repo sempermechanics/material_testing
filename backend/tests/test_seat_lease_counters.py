@@ -302,7 +302,7 @@ def test_a_blocked_invite_is_not_retried_on_every_request(store, monkeypatch):
     calls = []
     real = repo._invite_ref
     repo.patch(monkeypatch, "_invite_ref",
-                        lambda address: calls.append(address) or real(address))
+                        lambda address, *app: calls.append(address) or real(address, *app))
 
     out = repo.ensure_entitlement(_user(store, "n1"), "dev-n")
 

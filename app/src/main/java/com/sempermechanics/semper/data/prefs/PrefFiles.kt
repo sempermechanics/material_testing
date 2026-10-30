@@ -17,6 +17,9 @@ object PrefFiles {
         val SCHEMA = PrefKey.int("schema")
         val SAVE_TO_CLOUD = PrefKey.boolean("save_to_cloud", default = true)
         val UPLOAD_WIFI_ONLY = PrefKey.boolean("upload_wifi_only")
+
+        /** Download, on Wi-Fi, what the account's other phones backed up (`PhoneSyncWorker`). */
+        val SYNC_FROM_OTHER_PHONES = PrefKey.boolean("sync_from_other_phones", default = true)
         val MAX_FRAMES = PrefKey.int("max_frames", AppSettings.DEFAULT_MAX_FRAMES)
         val AUTO_FREE_GB = PrefKey.int("auto_free_gb", AppSettings.AUTO_FREE_OFF)
         val DIAGNOSTICS_ENABLED = PrefKey.boolean("diagnostics_enabled")
@@ -144,6 +147,33 @@ object PrefFiles {
         /** `testAccount.expiresAt`, epoch millis; 0 = no end on file. */
         val TEST_ACCOUNT_EXPIRES_AT = PrefKey.long("test_account_expires_at", 0L)
 
+        /** `activation.state` (ADR-033): `active`, `available`, `full`, `floating` or `none`. */
+        val ACTIVATION_STATE = PrefKey.string("activation_state", "none")
+
+        /** `activation.devicesActive`. */
+        val DEVICES_ACTIVE = PrefKey.int("activation_devices_active")
+
+        /** `activation.maxDevices`; 0 = no count on file. */
+        val MAX_DEVICES = PrefKey.int("activation_max_devices")
+
+        /** `activation.pool`: the count is an institution's. */
+        val ACTIVATION_POOL = PrefKey.boolean("activation_pool")
+
+        /** `activation.model`: `activation` or `lock`. */
+        val ACTIVATION_MODEL = PrefKey.string("activation_model", "")
+
+        /** `pendingLicence.licenseId`; "" = no new licence waiting. */
+        val PENDING_LICENCE_ID = PrefKey.string("pending_licence_id", "")
+
+        /** `pendingLicence.prefix`. */
+        val PENDING_LICENCE_PREFIX = PrefKey.string("pending_licence_prefix", "")
+
+        /** `pendingLicence.expiresAt`, epoch millis; 0 = perpetual. */
+        val PENDING_LICENCE_EXPIRES_AT = PrefKey.long("pending_licence_expires_at", 0L)
+
+        /** The Home activation card the user hid (`HomeActivationCard.Offer.key`); "" = none. */
+        val ACTIVATION_CARD_HIDDEN = PrefKey.string("activation_card_hidden", "")
+
         /** Written by builds before the plan → mode rename; read once on upgrade. */
         val LEGACY_PLAN = PrefKey.string("plan")
     }
@@ -173,6 +203,9 @@ object PrefFiles {
         /** JSON array of the listed backups. */
         val BACKUPS = PrefKey.string("backups")
         val HIDDEN = PrefKey.stringSet("hidden")
+
+        /** Backups the sync from other phones has already started a restore of, once each (`PhoneSync`). */
+        val SYNC_TRIED = PrefKey.stringSet("sync_tried")
     }
 
     /** `CloudSync.reconcile`'s throttle. */

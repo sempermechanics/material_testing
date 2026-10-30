@@ -18,6 +18,7 @@ import com.google.firebase.auth.TotpMultiFactorGenerator
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.LicenseConfigWorker
 import com.sempermechanics.semper.data.cloud.CloudBackupListing
+import com.sempermechanics.semper.data.cloud.sync.PhoneSyncWorker
 import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.CloudApi
 import com.sempermechanics.semper.data.net.SemperApi
@@ -263,6 +264,7 @@ class AuthRepository(
     suspend fun signOut(releaseSeat: Boolean = true) = withContext(Dispatchers.IO) {
         if (releaseSeat) SeatLease.releaseBestEffort(appContext, api, tokens)
         LicenseConfigWorker.cancel(appContext)
+        PhoneSyncWorker.cancel(appContext)
         auth.signOut()
         AccountCache.clear(appContext)
         // The next account's backups are not these.

@@ -18,12 +18,29 @@ import java.io.File
  */
 class UserTermsTest {
 
+    /**
+     * Every string in every `values/strings*.xml`, not only `strings.xml`: the
+     * account-deletion strings live in their own file and once kept a capital
+     * "Semper". Each plurals item is keyed as "name[quantity]".
+     */
     private val strings: Map<String, String> by lazy {
-        val xml = File("src/main/res/values/strings.xml").readText()
-        Regex("""<string name="([^"]+)"[^>]*>(.*?)</string>""", RegexOption.DOT_MATCHES_ALL)
-            .findAll(xml)
-            // A "\n" or "\t" escape reads as a break, so "\nDevice:" still starts a word.
-            .associate { it.groupValues[1] to it.groupValues[2].replace(Regex("""\\[nt]"""), " ") }
+        val dotAll = RegexOption.DOT_MATCHES_ALL
+        val string = Regex("""<string name="([^"]+)"[^>]*>(.*?)</string>""", dotAll)
+        val plurals = Regex("""<plurals name="([^"]+)"[^>]*>(.*?)</plurals>""", dotAll)
+        val item = Regex("""<item quantity="([^"]+)"[^>]*>(.*?)</item>""", dotAll)
+        // A "\n" or "\t" escape reads as a break, so "\nDevice:" still starts a word.
+        val breaks = Regex("""\\[nt]""")
+        val files = File("src/main/res/values").listFiles().orEmpty()
+            .filter { it.isFile && it.name.startsWith("strings") && it.extension == "xml" }
+        check(files.size > 1) { "expected strings.xml and its sibling files, found $files" }
+        files.flatMap { file ->
+            val xml = file.readText()
+            string.findAll(xml).map { it.groupValues[1] to it.groupValues[2] }.toList() +
+                plurals.findAll(xml).flatMap { p ->
+                    val name = p.groupValues[1]
+                    item.findAll(p.groupValues[2]).map { "$name[${it.groupValues[1]}]" to it.groupValues[2] }
+                }.toList()
+        }.associate { (name, value) -> name to value.replace(breaks, " ") }
     }
 
     private fun offenders(pattern: String, except: (String, String) -> Boolean = { _, _ -> false }): List<String> {
@@ -100,6 +117,7 @@ class UserTermsTest {
         assertEquals("semper Classroom", strings.getValue("app_name"))
         assertEquals(emptyList<String>(), caseSensitiveOffenders("""\bSemper\b(?! Mechanics\b)"""))
         assertTrue(strings.getValue("delete_account_body").contains("semper Classroom"))
+        assertTrue(strings.getValue("delete_account_phone_not_cleared").contains("Clear semper Classroom\\'s storage"))
     }
 
     @Test

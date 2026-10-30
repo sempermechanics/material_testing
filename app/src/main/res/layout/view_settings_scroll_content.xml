@@ -61,6 +61,25 @@
                         android:textSize="12sp"
                         android:visibility="gone" />
 
+                    <!-- The licence's phones (ADR-033): "Licensed on 1 of 2 phones", and Your phones. -->
+                    <TextView
+                        android:id="@+id/tvAccountPhones"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"
+                        android:visibility="gone" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnAccountPhones"
+                        style="@style/Widget.Semper.Button.Outlined"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:text="@string/phones_title"
+                        android:visibility="gone" />
+
                     <!-- Refresh licence: asks /v1/config now (LicenseRefresh). -->
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnRefreshLicense"
@@ -167,6 +186,10 @@
                             android:layout_height="wrap_content"
                             android:contentDescription="@string/settings_wifi_only_desc" />
                     </LinearLayout>
+
+                    <include
+                        android:id="@+id/rowSyncOtherPhones"
+                        layout="@layout/view_settings_sync_row" />
 
                     <TextView
                         android:id="@+id/tvCloudSyncStatus"

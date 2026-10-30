@@ -70,6 +70,11 @@ def me(user=Depends(current_user)):
         "email": user.get("email"),
         "role": user.get("role"),
         "access_status": user["access_status"],
+        # Each app's own licence (ADR-033), for the web account page, which
+        # shows both. `license` stays Semper's, for the pages that read it.
+        "licences": {app: {**_licence_block(repo.license_summary(user, app)),
+                           "pendingLicence": repo.pending_upgrade(user, app)}
+                     for app in apps.ALL},
         "license": {
             "mode": summary["mode"],
             "kind": summary["licenseKind"],
@@ -91,6 +96,15 @@ def me(user=Depends(current_user)):
         "terms": _terms_block(user),
         "improvement_consent": _improvement_consent(user),
     }
+
+
+def _licence_block(summary: dict) -> dict:
+    """One app's licence for `/v1/me`'s `licences`: the `license` block's
+    fields, by the same names."""
+    return {"mode": summary["mode"], "kind": summary["licenseKind"],
+            "prefix": summary["prefix"], "expiresAt": summary["expiresAt"],
+            "inGrace": summary["inGrace"], "seating": summary["seating"],
+            "held": summary["held"]}
 
 
 class TermsAcceptance(BaseModel):
@@ -169,7 +183,17 @@ def app_config(
     rely on offline (`entitlement_token`). Absent, never an error, otherwise.
     The caller's `X-App-Version` is logged with the request, not checked.
     """
-    config = repo.resolve_user_config(user)
+    return config_body(request, user, app, x_device_id)
+
+
+def config_body(request: Request, user: dict, app: str, x_device_id: str) -> dict:
+    """`/v1/config`'s answer, shared with Activate, which answers with the
+    config the phone holds from then on (`routers/activations.py`).
+
+    `activation` is this phone's place in the licence's device count
+    (ADR-033): what the licence check found on the way in, or read here for a
+    call that carried no device."""
+    config = repo.resolve_user_config(user, app)
     min_supported, recommended = settings.release_gate(app)
     body = {
         **config,
@@ -178,6 +202,11 @@ def app_config(
         "recommendedVersionCode": recommended,
         "killSwitches": list(settings.KILL_SWITCHES),
         "testAccount": _test_account(user),
+        "activation": (getattr(request.state, "activation", None)
+                       or repo.activation_summary(user, app, x_device_id)),
+        # A new licence issued to this account for the app, waiting for
+        # Activate (ADR-033); null when none waits.
+        "pendingLicence": repo.pending_upgrade(user, app),
     }
     # The token names the app as the calling build pins it (`apps.token_claim`):
     # a Material Testing build from before the rename (ADR-030) refuses one

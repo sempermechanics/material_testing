@@ -46,7 +46,11 @@ const emailOf = (uid) => (accounts.find((a) => a.uid === uid) || {}).email || ui
 
 /* -------------------------------------------------------------- form */
 
-/** CI may run without an end: its days field says so, and starts blank. */
+/**
+ * CI may run without an end: its days field says so, and starts blank. The
+ * licence fields are QC's alone (ADR-033): a CI account keeps one licence
+ * for every app that no phone binds, so Tier 3 can rotate emulators.
+ */
 function syncPurpose() {
   const ci = $("taPurpose").value === "ci";
   $("taDaysHint").textContent = ci ? "(1–90, or blank: never ends)" : "(1–90)";
@@ -54,8 +58,49 @@ function syncPurpose() {
   const days = $("taDays").value;
   if (ci && days === String(TEST_ACCOUNT.defaultDays)) $("taDays").value = "";
   if (!ci && !days) $("taDays").value = String(TEST_ACCOUNT.defaultDays);
+  $("taQcFields").hidden = ci;
 }
 $("taPurpose").addEventListener("change", syncPurpose);
+
+/** A Demo QC account has no licence, so no apps and no licensed phones to choose. */
+function syncLicence() {
+  const none = $("taLicence").value === "none";
+  $("taApps").disabled = none;
+  $("taLicenceMaxDevices").disabled = none;
+}
+$("taLicence").addEventListener("change", syncLicence);
+
+/**
+ * A QC account's licence fields, added to the body `testAccountBody` built,
+ * or `{ error }`: which apps it holds a licence for, or none (Demo), and how
+ * many phones each licence may have activated (empty: 1, as the backend).
+ */
+function qcLicence(body) {
+  if (body.purpose !== "qc") return { body };
+  const out = { ...body, licence: $("taLicence").value === "none" ? "none" : "individual" };
+  if (out.licence === "none") return { body: out };
+  out.apps = $("taApps").value;
+  const phones = $("taLicenceMaxDevices").value.trim();
+  if (phones) {
+    const n = Number(phones);
+    if (!/^\d+$/.test(phones) || n < 1 || n > TEST_ACCOUNT.maxDevices) {
+      return { error: "Licensed phones is 1 to 10." };
+    }
+    out.licenceMaxDevices = n;
+  }
+  return { body: out };
+}
+
+/** What a created account's licence is, for the status line. */
+function licenceSaid(body) {
+  if (body.purpose !== "qc") return "approved and Licensed";
+  if (body.licence === "none") return "approved, on Demo with no licence";
+  const apps = body.apps === "both"
+    ? `${APP_NAMES.semper} and ${APP_NAMES.semperclassroom}, a licence each`
+    : APP_NAMES[body.apps] || body.apps;
+  const phones = body.licenceMaxDevices ?? 1;
+  return `approved and Licensed for ${apps} (${phones} activated phone${phones === 1 ? "" : "s"} a licence)`;
+}
 
 $("taCreate").addEventListener("click", async () => {
   const { body, error } = testAccountBody({
@@ -65,13 +110,14 @@ $("taCreate").addEventListener("click", async () => {
     maxDevices: $("taMaxDevices").value,
     note: $("taNote").value,
   });
-  if (error) {
-    setStatus(error, true);
+  const qc = error ? { error } : qcLicence(body);
+  if (qc.error) {
+    setStatus(qc.error, true);
     return;
   }
   $("taCreate").disabled = true;
   try {
-    await sendCreate(body);
+    await sendCreate(qc.body);
   } finally {
     $("taCreate").disabled = false;
   }
@@ -90,7 +136,7 @@ async function sendCreate(body) {
     $("taEmail").value = "";
     $("taNote").value = "";
     setStatus(`Test account ${email} created (${PURPOSES[out.purpose || body.purpose]}): ` +
-      `approved and Licensed, ${ends}, on up to ${phones} phone${phones === 1 ? "" : "s"} at once. ` +
+      `${licenceSaid(body)}, ${ends}; up to ${phones} phone${phones === 1 ? "" : "s"} may sign in, for each app. ` +
       "Copy its password now.");
     showPassword(email, out.password);
     loadTestAccounts();

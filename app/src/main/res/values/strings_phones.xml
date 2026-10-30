@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A licence's phones (ADR-033): Activate, Your phones, Deactivate. The licence
+     reaches the account on the server; these only say which of the holder's
+     phones it covers. No price, no purchase and no link to one here. -->
+<resources>
+    <string name="phones_title">Your phones</string>
+    <plurals name="phones_count_fmt">
+        <item quantity="one">Licensed on %1$d of %2$d phone</item>
+        <item quantity="other">Licensed on %1$d of %2$d phones</item>
+    </plurals>
+    <plurals name="phones_pool_fmt">
+        <item quantity="one">Your institution\'s licence: %1$d of %2$d phone in use</item>
+        <item quantity="other">Your institution\'s licence: %1$d of %2$d phones in use</item>
+    </plurals>
+    <string name="phones_this_active">This phone is activated.</string>
+    <string name="phones_this_available">This phone isn\'t activated. Activate it to use your licence here.</string>
+    <string name="phones_this_full">Every phone your licence covers is in use. Deactivate one to activate this phone.</string>
+    <string name="phones_this_none">Your account has no licence for this app. This phone runs as Demo.</string>
+    <string name="phones_this_floating">Your institution\'s licence is shared: take a seat when you start work.</string>
+    <string name="phones_upgrade_ready_fmt">A new licence (%1$s) is ready. Activate it on this phone to move to it.</string>
+    <string name="phones_upgrade_ready">A new licence is ready. Activate it on this phone to move to it.</string>
+    <string name="phones_activate">Activate this phone</string>
+    <string name="phones_activate_upgrade">Activate new licence</string>
+    <string name="phones_deactivate">Deactivate</string>
+    <string name="phones_deactivate_title_fmt">Deactivate %1$s?</string>
+    <string name="phones_deactivate_body">It runs as Demo until it\'s activated again. Its analyses stay on it.</string>
+    <string name="phones_deactivate_this_body">This phone runs as Demo until it\'s activated again. Its analyses stay on it.</string>
+    <string name="phones_row_this">This phone</string>
+    <string name="phones_row_activated">Activated</string>
+    <string name="phones_row_this_activated">This phone · Activated</string>
+    <string name="phones_row_not_activated">Not activated</string>
+    <string name="phones_row_this_not_activated">This phone · Not activated</string>
+    <string name="phones_unknown_model">Android phone</string>
+    <string name="phones_offline">Couldn\'t reach semper. Check your connection and try again.</string>
+    <string name="phones_load_failed">Couldn\'t load your phones.</string>
+    <string name="phones_retry">Try again</string>
+
+    <!-- What an Activate or Deactivate tap did (DeviceActivation). -->
+    <string name="activate_done">This phone is activated</string>
+    <string name="activate_already">This phone was already activated</string>
+    <string name="activate_full_fmt">All %2$d phones your licence covers are in use. Deactivate one first.</string>
+    <string name="activate_no_licence">Your account has no licence for this app</string>
+    <string name="activate_floating">Your institution\'s licence is shared: take a seat instead</string>
+    <string name="activate_no_upgrade">That new licence is no longer waiting</string>
+    <string name="activate_failed">Couldn\'t activate this phone</string>
+    <string name="deactivate_done">Phone deactivated</string>
+    <string name="deactivate_gone">That phone was already deactivated</string>
+    <string name="deactivate_failed">Couldn\'t deactivate that phone</string>
+
+    <!-- Refresh licence (LicenseRefresh) when the licence is there but this phone isn't on it. -->
+    <string name="license_refresh_not_activated">Licence found. Activate this phone to use it</string>
+    <string name="license_refresh_phones_full">Licence found, but every phone it covers is in use</string>
+    <string name="license_refresh_upgrade_ready">A new licence is ready. Activate it in Your phones</string>
+
+    <!-- Home's card (HomeActivationCard) and Settings' account row. -->
+    <string name="home_activate_text">Your licence isn\'t active on this phone yet.</string>
+    <string name="home_activate_full_text">Your licence is in use on all its phones. Deactivate one to use it here.</string>
+    <string name="home_upgrade_text">A new licence is ready for your account.</string>
+    <string name="home_activate_hide">Not now</string>
+    <string name="home_activate_phones">Phones</string>
+    <!-- LicenseLock's note when the licence is there and this phone is not on it. -->
+    <string name="license_lock_activate_note">Your licence isn\'t active on this phone. Activate it in Settings › Your phones.</string>
+</resources>

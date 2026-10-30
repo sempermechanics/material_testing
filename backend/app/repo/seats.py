@@ -1,18 +1,18 @@
 """Institution seat administration: clearing a device lock, holding and revoking a seat.
 """
-from datetime import timedelta
 
-from .. import apps, errors
-from ..config import settings
+from .. import apps, errors, statuses
 from ..errors import Refusal
 from ..licenses import (
     MODE_LICENSED,
     STATUS_ACTIVE,
-    as_utc,
 )
 
 from . import _base
-from ._base import (
+from ._base import (  # ACTOR_IT is re-exported through `repo`
+    ACTOR_IT,  # noqa: F401
+    ACTOR_SELF,
+    ACTOR_STAFF,
     SCHEMA_VERSION,
     _is_institution,
     _is_revoked,
@@ -20,13 +20,13 @@ from ._base import (
     _lease_clear_patch,
     _license_mode,
     _mode_patch,
-    _now,
     _run_tx,
     _seat_lease_counted,
     _seat_ref,
     _get,
     _update_doc,
 )
+from .deactivations import deactivate_holder
 from .devices import (
     _release_devices,
     forget_device_sessions,
@@ -37,11 +37,6 @@ from .license_admin import (
 )
 
 
-#: Who asked for a device change. Only the holder is rate-limited; see
-#: `clear_device_lock`.
-ACTOR_SELF = "self"
-ACTOR_STAFF = "staff"
-ACTOR_IT = "it"
 
 
 def _live_holder(license_id: str, lic: dict, ref, scope: str, uid: str):
@@ -69,7 +64,7 @@ def _live_holder(license_id: str, lic: dict, ref, scope: str, uid: str):
     if not snap.exists:
         return None
     user = snap.to_dict() or {}
-    if user.get("licenseId") != license_id:
+    if apps.slot_holding(user, license_id) is None:
         return None
     return user_ref, user
 
@@ -94,16 +89,15 @@ def _settle_holder(license_id: str, lic: dict, ref, scope: str, uid: str,
       re-stamped here. Nothing is resurrected: `effective_mode` still
       re-applies expiry, grace and the floating-lease check, so a licence that
       has run out stays demo either way.
-    - **Registered device.** `POST /v1/devices/register` refuses any device but
-      `users/{uid}.activeDeviceId` with `device_conflict`, and nothing else
-      empties that field short of suspending the account. It is dropped here
-      and the old device retired (`_retire_device`), so the new phone can
-      register. Only when it is the phone the cleared `lock` named, or the
-      lock named none: a lock on some other device (bound before
-      `revalidate_device_lock` bound only the registered phone) leaves the
-      account split, and the registered phone is the one still working. It
-      is kept and binds the empty lock on its next request; a holder who did
-      want a new phone gets it from a second clear, which then releases it.
+    - **Registered device.** The phone the cleared `lock` named (with no
+      lock, the latest registered one) is retired (`_retire_device`) and
+      signed out, and the account's `activeDeviceId` dropped where it names
+      that phone. Only when it is one of the account's registered phones: a
+      lock on a phone that never registered (bound before
+      `revalidate_device_lock` bound only the registered phone) releases
+      nothing. An account holds several phones (ADR-033), so its other
+      registered phones stay; the latest of them binds the empty lock on its
+      next request.
     - **Release hold.** The released id is stamped (`releasedDeviceId`,
       `releasedAt`) so registration can hold it off for
       `DEVICE_RELEASE_HOLD_HOURS`: the old phone's upload worker re-registers as
@@ -131,10 +125,11 @@ def _settle_holder(license_id: str, lic: dict, ref, scope: str, uid: str,
     }
     releasing = {}
     for app, lock in locks.items():
-        active = apps.read_field(user, "activeDeviceId", app) or ""
-        if active and (not lock or lock == active):
-            releasing[app] = active
-    _release_devices(user_ref, releasing, patch)
+        phone = lock or apps.read_field(user, "activeDeviceId", app) or ""
+        dev = (_get(db().collection("devices").document(phone)).to_dict() or {}) if phone else {}
+        if dev.get("uid") == user_ref.id and dev.get("status") == statuses.DEVICE_ACTIVE:
+            releasing[app] = phone
+    _release_devices(user_ref, releasing, patch, user)
     return {**none, **releasing}
 
 
@@ -161,31 +156,31 @@ def clear_device_lock(license_id: str, uid: str = "", *,
 
     **Which apps.** Each app has its own lock (ADR-010). A staff or IT clear
     releases every app, because the holder's phone changed and both apps are
-    on it. The holder's own clear releases `app` alone, the app that asked,
-    and its cooldown is that app's: moving Semper to a new phone does not make
-    Semper Classroom wait a month to follow.
+    on it. The holder's own clear releases `app` alone, the app that asked.
 
     A staff or IT clear also stops the released phone's demo count holding
     the holder's analyses (`forget_device_sessions`, TD-218); the holder's
     own clear does not, or a second account on the same phone could shed
     the first one's count.
 
-    The cooldown applies to `ACTOR_SELF` alone. A second factor proves *who*
-    is asking, not *how often*, so one person could otherwise re-bind daily
-    and pass a single licence round a lab. It is counted against
-    `deviceChangedAt`, which only this path writes: a staff or IT clear
-    neither reads nor writes that stamp, so a support request always works
-    however recently the holder changed device themselves. Each app has its
-    own stamp (`apps.read_field(doc, "deviceChangedAt", app)`).
+    No cooldown (ADR-033): the holder may clear their own lock as often as
+    they like. The licence's device count is what limits how many phones hold
+    it, and every clear is audited.
+
+    **Activations.** A licence that names its app has no lock to clear: its
+    phones are its activations. A clear there deactivates every phone the
+    holder has active on it (`repo.activations.deactivate_holder`), with the
+    same release a staff or IT deactivation does, and the lock mirror empties
+    with them.
 
     The answer is the audit detail, including the device
     that was given up — the other half of the record `revalidate_device_lock`
     writes when the replacement binds. `previousDeviceId` is the lock's device
     and `releasedDeviceId` the registered one the account was signed out of;
     a registered phone the lock did not name is kept (`_settle_holder`), and either can be empty (a lock that never bound, an
-    account with nothing registered, or a holder `_settle_holder` skips). A
-    `device_change_too_soon` refusal carries the instant the next change is
-    allowed, so it can say when.
+    account with nothing registered, or a holder `_settle_holder` skips).
+    On a licence that runs activations, `deactivated` lists the phones
+    deactivated.
     Both device ids come once per app (`apps.spread`): `previousDeviceId` and
     `releasedDeviceId` are Semper's, `previousDeviceIdSemperClassroom` and so
     on the other app's (mirrored under the old `...MaterialTesting` names,
@@ -207,11 +202,21 @@ def clear_device_lock(license_id: str, uid: str = "", *,
         detail["app"] = app
     not_found = errors.SEAT_NOT_FOUND if scope == "seat" else errors.LICENSE_NOT_FOUND
 
+    if lic.get("app"):
+        holder = uid if scope == "seat" else lic.get("redeemedByUid") or ""
+        if scope == "seat" and not _get(ref).exists:
+            raise Refusal(not_found)
+        gone = deactivate_holder(license_id, holder, actor=actor) if holder else []
+        first = gone[0] if gone else ""
+        named = apps.canonical(lic.get("app"))
+        return {**detail, **apps.spread("previousDeviceId", {named: first}),
+                **apps.spread("releasedDeviceId", {named: first if actor != ACTOR_SELF else ""}),
+                "deactivated": gone}
+
     if actor != ACTOR_SELF:
-        # No invariant to protect: staff and IT have no cooldown, and two
-        # clears landing together produce the same empty lock. A plain read
-        # and update keeps the support path out of the transaction machinery
-        # entirely.
+        # No invariant to protect: two clears landing together produce the
+        # same empty lock. A plain read and update keeps the support path out
+        # of the transaction machinery entirely.
         snap = _get(ref)
         if not snap.exists:
             raise Refusal(not_found)
@@ -230,48 +235,19 @@ def clear_device_lock(license_id: str, uid: str = "", *,
         return {**detail, **apps.spread("previousDeviceId", previous),
                 **apps.spread("releasedDeviceId", released), "sessionsForgotten": forgotten}
 
-    now = _now()
-    cooldown = timedelta(days=max(0, settings.SELF_DEVICE_CHANGE_COOLDOWN_DAYS))
-
-    def too_soon(next_allowed) -> Refusal:
-        # The refusal says when, as the success does: "not yet" with no date
-        # left the holder guessing how long to wait.
-        return Refusal(errors.DEVICE_CHANGE_TOO_SOON, next_allowed.isoformat(),
-                       retry_at=next_allowed)
-
-    @_base.firestore.transactional
-    def _clear(tx) -> dict:
-        snap = _get(ref, tx)
-        if not snap.exists:
-            raise Refusal(not_found)
-        doc = snap.to_dict() or {}
-        changed = as_utc(apps.read_field(doc, "deviceChangedAt", app))
-        if cooldown and changed and now - changed < cooldown:
-            raise too_soon(changed + cooldown)
-        tx.update(ref, {
-            **apps.written_fields("deviceIdLock", app, ""),
-            **apps.written_fields("deviceChangedAt", app, now),
-            "updatedAt": _base.firestore.SERVER_TIMESTAMP,
-            "schemaVersion": SCHEMA_VERSION,
-        })
-        return {
-            **detail,
-            **apps.spread("previousDeviceId",
-                          {app: apps.read_field(doc, "deviceIdLock", app) or ""}),
-            "nextChangeAllowedAt": (now + cooldown).isoformat() if cooldown else "",
-        }
-
-    def _lost() -> dict:
-        # Two self-service clears at once is the only way to lose on
-        # contention, and the cooldown is exactly what one of them must lose.
-        # The winner has just stamped `now`, so the next change is a cooldown
-        # from here.
-        raise too_soon(now + cooldown)
-
-    cleared = _run_tx(_clear, on_contended=_lost)
-    previous = cleared.get(apps.field("previousDeviceId", app)) or ""
+    snap = _get(ref)
+    if not snap.exists:
+        raise Refusal(not_found)
+    doc = snap.to_dict() or {}
+    previous = apps.read_field(doc, "deviceIdLock", app) or ""
+    _update_doc(ref, {
+        **apps.written_fields("deviceIdLock", app, ""),
+        "updatedAt": _base.firestore.SERVER_TIMESTAMP,
+        "schemaVersion": SCHEMA_VERSION,
+    })
     released = _settle_holder(license_id, lic, ref, scope, uid, {app: previous})
-    return {**cleared, **apps.spread("releasedDeviceId", released)}
+    return {**detail, **apps.spread("previousDeviceId", {app: previous}),
+            **apps.spread("releasedDeviceId", released)}
 
 
 def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> None:
@@ -321,11 +297,12 @@ def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> None:
         tx.update(ref, patch)
         if release and lic_snap.exists:
             tx.update(lic_ref, {"leasesActive": _base.firestore.Increment(-1)})
-        if user_snap.exists and (user_snap.to_dict() or {}).get("licenseId") == license_id:
-            tx.update(user_ref, _demo_drop_patch() if not enabled else {
+        slot = apps.slot_holding(user_snap.to_dict() if user_snap.exists else None, license_id)
+        if slot:
+            tx.update(user_ref, apps.licence_patch(_demo_drop_patch() if not enabled else {
                 **_mode_patch(MODE_LICENSED),
                 "updatedAt": _base.firestore.SERVER_TIMESTAMP,
-            })
+            }, slot))
         return ""
 
     # Losing means a revoke, checkout or another hold landed on this seat
@@ -336,9 +313,11 @@ def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> None:
         raise Refusal(err)
 
 
-def revoke_institution_seat(license_id: str, uid: str) -> bool:
+def revoke_institution_seat(license_id: str, uid: str, *, actor: str = ACTOR_STAFF) -> bool:
     """Single-seat revoke: drops the holder to Demo and frees the slot
-    (decrements seatsUsed) so another roster member can take it.
+    (decrements seatsUsed) so another roster member can take it. On a licence
+    that names its app, the member's phones are deactivated too, as `actor`,
+    so they free the pool's phone slots as well (ADR-033).
 
     Transactional for the same reason `claim_seat` is, and against the mirror
     image of its race: two concurrent revokes of one seat both read a status
@@ -387,4 +366,5 @@ def revoke_institution_seat(license_id: str, uid: str) -> bool:
     revoked = _run_tx(_revoke, on_contended=lambda: _get(seat_ref).exists)
     if revoked:
         _drop_user_to_demo_if_licensed(uid, license_id)
+        deactivate_holder(license_id, uid, actor=actor)
     return revoked

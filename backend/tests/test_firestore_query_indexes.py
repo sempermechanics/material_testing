@@ -88,6 +88,11 @@ QUERY_SHAPES: dict[str, list[Shape]] = {
         _q("audit_logs", ("licenseId", "=="), ("ts", ">="), ("ts", "<"), order=(("ts", DESC),)),
     ],
     "app/repo/account.py::list_user_devices": [_q("devices", ("uid", "=="))],
+    # A licence's phones (ADR-033): its own subcollection, by holder or by
+    # status; and the holder's registered phones for the phones screen.
+    "app/repo/activations.py::_holder_activations": [_q("activations", ("uid", "=="))],
+    "app/repo/activations.py::licence_devices": [_q("activations", ("status", "=="))],
+    "app/repo/activations.py::account_devices": [_q("devices", ("uid", "=="))],
     # Every seat an erased account held, on any licence (TD-202).
     "app/repo/account.py::_seats_of": [
         _q("seats", ("uid", "=="), scope=GROUP),
@@ -132,10 +137,14 @@ QUERY_SHAPES: dict[str, list[Shape]] = {
         _q("files", ("uid", "=="), order=(("sessionId", ASC),)),
     ],
     "app/repo/sessions.py::iter_user_sessions": [_q("sessions", ("uid", "=="))],
+    # Per app (ADR-033): one app's sessions by each name it is stored under.
     "app/repo/sessions.py::count_user_sessions": [
         _q("sessions", ("uid", "==")),
-        _q("sessions", ("uid", "=="), ("status", "=="), note="equality only: merged"),
+        _q("sessions", ("uid", "=="), ("app", "=="), note="equality only: merged"),
     ],
+    # Its stored-only half, narrowing any of the queries above, all of them
+    # equality only (uid, app, status): merged.
+    "app/repo/sessions.py::_stored_count": [_q("sessions", ("status", "=="))],
     # The demo cap's per-device half: any account's sessions from one device.
     "app/repo/sessions.py::count_device_sessions": [
         _q("sessions", ("deviceId", "==")),

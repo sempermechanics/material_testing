@@ -183,9 +183,12 @@ def _authenticate(
         # or revoked institution seat, or a device that no longer matches the lock
         # drops the account to Demo immediately (fails closed); it never
         # touches the account's stored sessions/files. Checked against the
-        # lock of the app the request came from (ADR-010).
+        # lock of the app the request came from (ADR-010; ADR-033 for Activate).
         if x_device_id:
-            user = repo.revalidate_device_lock(user, x_device_id, app)
+            explicit = request.headers.get("x-activation", "").strip().lower() == "explicit"
+            request.state.activation = shown = {}
+            user = repo.revalidate_device_lock(user, x_device_id, app,
+                                               explicit=explicit, shown=shown)
     request.state.uid = user["uid"]
     obs.bind_uid(user["uid"])
     # Verified claims, for dependencies that need to know *how* the caller
@@ -455,20 +458,17 @@ def _signature_ok(public_key_pem: str, signature_b64: str, signed: bytes, body: 
 
 
 def _device_is_bound(dev: dict | None, user: dict, device_id: str, app: str) -> bool:
-    """Whether `dev` is the device `user` has bound for `app`.
-
-    ACTIVE and the caller's is not enough: the account's binding for the
-    asking app must name this device too, so a stale ACTIVE record (a
-    registration that lost a race, a release that left one behind) cannot
-    sign (ADR-010, device trust). A test account holds several phones, so
-    any of its ACTIVE ones for the app signs (ADR-027).
-    """
+    """Whether `dev` is one of `user`'s registered phones: ACTIVE and the
+    caller's. An account holds several phones per app (ADR-033, as test
+    accounts already did, ADR-027), so any of them signs; whether it is
+    licensed is the licence's question (`revalidate_device_lock`), not this
+    one. The record's app is checked beside this (`_device_app`). Registration
+    is one transaction and every release retires the phone it frees, so an
+    ACTIVE record is a phone the account holds."""
     return bool(
         dev
         and dev.get("uid") == user.get("uid")
         and dev.get("status") == statuses.DEVICE_ACTIVE
-        and (apps.read_field(user, "activeDeviceId", app) == device_id
-             or repo.test_account_of(user) is not None)
     )
 
 

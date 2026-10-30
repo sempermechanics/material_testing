@@ -55,12 +55,13 @@ const day = (n) => new Date(Date.now() + n * 86400e3).toISOString().slice(0, 10)
 const IND = {
   id: "lic-individual-1", keyPrefix: "SEMP-IND1", kind: "individual", mode: "licensed",
   status: "redeemed", duration: "timed", expiresAt: day(200), graceDays: 14, maxAnalyses: 50,
-  emailLock: "pat@lab.org", note: "Prof. Chen, PO 4471",
+  emailLock: "pat@lab.org", note: "Prof. Chen, PO 4471", app: "semper", maxDevices: 2, devicesActive: 1,
 };
 const UNI = {
   id: "L1", keyPrefix: "SEMP-UNI1", kind: "institution", mode: "licensed", status: "redeemed",
   duration: "timed", expiresAt: day(24), seating: "assigned", maxSeats: 150, seatsUsed: 120,
-  domainLock: "uni.edu", adminEmails: ["it@uni.edu"],
+  domainLock: "uni.edu", adminEmails: ["it@uni.edu"], app: "semperclassroom", maxDevices: 150,
+  devicesActive: 2,
 };
 const DEMO = {
   id: "lic-demo-1", keyPrefix: "SEMP-DEMO", kind: "individual", mode: "demo", status: "redeemed",
@@ -84,6 +85,27 @@ const ROSTER = {
 const SUMMARY = { counts: {
   assigned: 120, activeLast7Days: 60, onHold: 7, invited: 2, revocationPending: 1, expiringWithin30Days: 120,
 } };
+
+/** The pool's phones, as IT and staff list them (ADR-033). */
+const POOL_PHONES = {
+  licenseId: "L1", app: "semperclassroom", devicesActive: 2, maxDevices: 150, pool: true, model: "activation",
+  devices: [
+    { deviceId: "and-phone-1", uid: "u1", app: "semperclassroom", status: "active", activatedAt: day(-3),
+      activatedBy: "self", deviceModel: "Pixel 6", email: "member001@uni.edu" },
+    { deviceId: "and-phone-3", uid: "u3", app: "semperclassroom", status: "active", activatedAt: day(-1),
+      activatedBy: "it", deviceModel: "Galaxy S22+", email: "member003@uni.edu" },
+  ],
+};
+
+/** The holder's own phones for one app: one activated, one on Demo. */
+const MY_PHONES = {
+  app: "semper", licenseId: "lic-individual-1", devicesActive: 1, maxDevices: 2, pool: false, model: "activation",
+  devices: [
+    { deviceId: "and-mine-1", model: "Pixel 6", registeredAt: day(-30), activated: true, thisDevice: false,
+      activatedAt: day(-30), activatedBy: "self" },
+    { deviceId: "and-mine-2", model: "Galaxy S22+", registeredAt: day(-2), activated: false, thisDevice: false },
+  ],
+};
 
 /** The operator desk's Test accounts list: one account on two phones, one on none. */
 const TEST_ACCOUNTS = { accounts: [
@@ -118,6 +140,12 @@ export const PERSONAS = {
     me: { role: "user", email: "pat@lab.org", license: {
       mode: "licensed", held: true, kind: "individual", keyPrefix: "SEMP-IND1", expiresAt: day(200),
       graceEndsAt: day(214),
+    }, licences: {
+      semper: { mode: "licensed", kind: "individual", prefix: "SEMP-IND1", expiresAt: day(200), inGrace: false,
+        seating: "", held: true, pendingLicence: { licenseId: "lic-new-1", prefix: "SEMP-NEW1", kind: "individual",
+          expiresAt: day(565), maxDevices: 3, supersedes: "lic-individual-1" } },
+      semperclassroom: { mode: "demo", kind: "", prefix: "", expiresAt: null, inGrace: false, seating: "",
+        held: false, pendingLicence: null },
     } },
     administered: [],
   },
@@ -136,6 +164,8 @@ function answer(persona, method, path) {
     "GET /v1/institutions/licenses": () => ({ licenses: persona.administered }),
     "GET /v1/institutions/licenses/L1/seats": () => ROSTER,
     "GET /v1/institutions/licenses/L1/summary": () => SUMMARY,
+    "GET /v1/institutions/licenses/L1/devices": () => POOL_PHONES,
+    "GET /v1/me/devices": () => MY_PHONES,
     "GET /v1/institutions/licenses/L1/audit": () => ({
       events: [{ at: day(-1), action: "seat.add", actorEmail: "it@uni.edu", targetEmail: "new@uni.edu" }],
       page: {}, licenseId: "L1",
@@ -146,6 +176,7 @@ function answer(persona, method, path) {
     "GET /v1/admin/licenses": () => ({ licenses: [IND, UNI, DEMO], page: {}, demoMaxAnalyses: 25 }),
     "GET /v1/admin/licenses/L1/seats": () => ROSTER,
     "GET /v1/admin/licenses/L1/summary": () => SUMMARY,
+    "GET /v1/admin/licenses/L1/devices": () => POOL_PHONES,
     "GET /v1/admin/test-accounts": () => TEST_ACCOUNTS,
     "GET /v1/admin/users": () => ({ users: [{ uid: "w1", email: "wait@lab.org", displayName: "Wai Tan" }], page: {} }),
     "GET /v1/sessions": () => ({

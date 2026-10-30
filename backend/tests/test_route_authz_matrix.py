@@ -117,12 +117,19 @@ EXPECTED = {
     ("PATCH", "/v1/admin/licenses/{license_id}"): ADMIN_STEPUP,
     ("POST", "/v1/admin/licenses/{license_id}/revoke"): ADMIN_STEPUP_FRESH,
     ("POST", "/v1/admin/licenses/{license_id}/convert"): ADMIN_STEPUP,
+    ("POST", "/v1/admin/licenses/{license_id}/upgrade"): ADMIN_STEPUP,
+    ("POST", "/v1/admin/licenses/{license_id}/apply-upgrade"): ADMIN_STEPUP,
     ("DELETE", "/v1/admin/licenses/{license_id}"): ADMIN_STEPUP_FRESH,
     ("GET", "/v1/admin/deleted-licenses"): ADMIN,
     ("POST", "/v1/admin/deleted-licenses/{license_id}/restore"): ADMIN_STEPUP,
     # A read, so plain ADMIN like GET /v1/admin/licenses: it changes
     # nothing and the second factor gates state changes.
     ("GET", "/v1/admin/licenses/{license_id}/reconcile"): ADMIN,
+    # Any licence's phones at the staff tier: reading is an admin read,
+    # adding or deactivating one a staff write.
+    ("GET", "/v1/admin/licenses/{license_id}/devices"): ADMIN,
+    ("POST", "/v1/admin/licenses/{license_id}/devices/{device_id}"): ADMIN_STEPUP,
+    ("DELETE", "/v1/admin/licenses/{license_id}/devices/{device_id}"): ADMIN_STEPUP,
     # Staff unbinding one institution seat. The same operation IT has on its
     # own route, at the staff tier, because staff are not in a customer's
     # adminEmails and that route 404s for them.
@@ -154,6 +161,12 @@ EXPECTED = {
     # is exactly what a stolen one is, and this decides which device the
     # licence follows.
     ("POST", "/v1/licenses/unbind"): USER_STEPUP,
+    # A licence's phones (ADR-033). Activate is signed by the phone itself;
+    # listing your own is a plain read; deactivating one is reachable from a
+    # browser, so it takes the same step-up as a device change.
+    ("POST", "/v1/me/devices/activate"): DEVICE,
+    ("GET", "/v1/me/devices"): USER,
+    ("DELETE", "/v1/me/devices/{device_id}"): USER_STEPUP,
     # A claim code redeemed on the web account page. USER_STEPUP: a code is
     # worth a licence, and a stolen bare token must not be able to spend one
     # onto the account (or burn it). The app's own key route above stays USER
@@ -181,6 +194,8 @@ EXPECTED = {
     ("GET", "/v1/institutions/licenses/{license_id}/seats/export"): INSTITUTION_STEPUP,
     ("GET", "/v1/institutions/licenses/{license_id}/summary"): INSTITUTION_STEPUP,
     ("GET", "/v1/institutions/licenses/{license_id}/audit"): INSTITUTION_STEPUP,
+    ("GET", "/v1/institutions/licenses/{license_id}/devices"): INSTITUTION_STEPUP,
+    ("DELETE", "/v1/institutions/licenses/{license_id}/devices/{device_id}"): INSTITUTION_STEPUP,
     ("POST", "/v1/tasks/provision-session"): TASK,
     ("POST", "/v1/tasks/license-fanout"): TASK,
     # Staff test accounts (ADR-027). The list is a read; every change hands

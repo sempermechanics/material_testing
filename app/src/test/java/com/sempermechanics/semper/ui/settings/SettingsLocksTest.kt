@@ -87,7 +87,7 @@ class SettingsLocksTest {
         assertEquals(View.VISIBLE, view<View>(R.id.headerCloud).visibility)
         assertEquals(View.VISIBLE, lockOf(R.id.headerCloud).visibility)
         assertEquals(View.VISIBLE, view<View>(R.id.tvCloudLockNote).visibility)
-        for (id in listOf(R.id.switchSaveCloud, R.id.switchWifiOnly)) {
+        for (id in listOf(R.id.switchSaveCloud, R.id.switchWifiOnly, R.id.switchSyncOtherPhones)) {
             val switch = view<CompoundButton>(id)
             assertFalse(switch.isEnabled)
             assertFalse(switch.isChecked)

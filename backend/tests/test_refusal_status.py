@@ -113,19 +113,33 @@ async def test_a_refusal_keeps_its_status(staged, client, monkeypatch,
 
 
 @pytest.mark.asyncio
-async def test_a_device_change_too_soon_says_when(staged, client, monkeypatch):
-    """429 with the instant after the code, and a Retry-After to match."""
+async def test_a_refusal_with_a_suffix_says_it_after_the_code(staged, client, monkeypatch):
+    """The suffix follows the code, and with no `retry_at` there is no Retry-After."""
+    def at_the_limit(*_a, **_k):
+        raise errors.Refusal(errors.DEVICE_LIMIT_REACHED, "1/1")
+
+    repo.patch(monkeypatch, "clear_device_lock", at_the_limit)
+    resp = await client.post("/v1/licenses/unbind")
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == "device_limit_reached: 1/1"
+    assert "Retry-After" not in resp.headers
+
+
+@pytest.mark.asyncio
+async def test_a_refusal_with_retry_at_says_when(staged, client, monkeypatch):
+    """No code raises one with `retry_at` since the device-change cooldown went
+    (ADR-033), but the handler still turns it into a Retry-After to match."""
     from datetime import datetime, timedelta, timezone
 
     when = datetime.now(timezone.utc) + timedelta(days=3)
 
-    def too_soon(*_a, **_k):
-        raise errors.Refusal(errors.DEVICE_CHANGE_TOO_SOON, when.isoformat(), retry_at=when)
+    def come_back_later(*_a, **_k):
+        raise errors.Refusal(errors.DEVICE_LIMIT_REACHED, when.isoformat(), retry_at=when)
 
-    repo.patch(monkeypatch, "clear_device_lock", too_soon)
+    repo.patch(monkeypatch, "clear_device_lock", come_back_later)
     resp = await client.post("/v1/licenses/unbind")
-    assert resp.status_code == 429
-    assert resp.json()["detail"] == f"device_change_too_soon: {when.isoformat()}"
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == f"device_limit_reached: {when.isoformat()}"
     assert 3 * 86400 - 5 <= int(resp.headers["Retry-After"]) <= 3 * 86400
 
 

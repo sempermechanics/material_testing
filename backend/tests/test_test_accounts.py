@@ -20,7 +20,7 @@ from firebase_admin import auth as fb_auth
 
 import fake_firestore
 import repo_view as repo
-from app import audit, deps, drive, errors, google_auth, notify, rate_limit, session_provision
+from app import apps, audit, deps, drive, errors, google_auth, notify, rate_limit, session_provision
 from app.config import settings
 from app.models import DeviceReg
 from app.observability import DependencyError
@@ -165,7 +165,9 @@ async def test_create_makes_an_approved_licensed_login_and_shows_the_password_on
     assert r.headers["cache-control"] == "no-store"
     body = r.json()
     assert set(body) == {"uid", "email", "password", "purpose", "expiresAt", "maxDevices",
-                         "licenseId"}
+                         "licenseId", "licenseIds"}
+    # A QC account holds one licence per app by default (ADR-033), Semper's first.
+    assert len(body["licenseIds"]) == 2 and body["licenseIds"][0] == body["licenseId"]
     password, uid = body["password"], body["uid"]
     assert re.fullmatch(r"[A-Za-z0-9_-]{20}", password)
     assert body["email"] == QC_EMAIL and body["purpose"] == "qc" and body["maxDevices"] == 4
@@ -623,7 +625,8 @@ async def test_release_takes_the_fresh_staff_step_up(client, world, browser_staf
 
 async def test_a_released_phone_is_not_licensed_by_config_while_a_new_one_is(
         client, world, monkeypatch):
-    created = (await _create(client, maxDevices=2)).json()
+    # A CI account: its licence binds no phone (a QC one runs activations).
+    created = (await _create(client, purpose="ci", maxDevices=2)).json()
     uid = created["uid"]
     _register(uid, "and-phone-1")
     _register(uid, "and-phone-2")
@@ -669,14 +672,14 @@ async def test_end_erases_the_account_as_staff(client, world, monkeypatch):
     assert store["sessions"] == {} and store.get("devices", {}) == {}
     assert world["drive_deleted"] == ["drive-user-folder"]
     assert world["auth"].revoked == [uid] and world["auth"].deleted == [uid]
-    lic = store["licenses"][created["licenseId"]]
-    assert lic["status"] == "revoked"
+    for license_id in created["licenseIds"]:
+        assert store["licenses"][license_id]["status"] == "revoked"
     # Not handed back to the address, as an erased holder's licence would be.
     assert QC_EMAIL not in str(store.get("licenseInvites", {}))
     row = [a for a in world["audit"] if a["action"] == "test_account_ended"][0]
     assert row["uid"] == "dev-user" and row["target"] == {"type": "user", "id": uid}
     assert row["detail"]["testAccount"] is True and row["detail"]["authUserDeleted"] is True
-    assert row["detail"]["licenseIds"] == [created["licenseId"]]
+    assert row["detail"]["licenseIds"] == created["licenseIds"]
     # The holder's own erasure row is not written: staff ended it.
     assert not [a for a in world["audit"] if a["action"] == "ACCOUNT_DELETE"]
 
@@ -854,12 +857,14 @@ def test_a_retired_device_frees_its_place(world):
     _register("t-1", "and-phone-2")
 
 
-def test_a_real_account_still_refuses_a_second_phone(world):
+def test_a_real_account_holds_a_second_phone_too(world):
+    """Real accounts hold several phones since ADR-033, as test accounts
+    already did; their cap is `MAX_PHONES_PER_APP`, not `maxDevices`."""
     _real_user(world["store"], uid="real-1")
     _register("real-1", "and-phone-1")
-    with pytest.raises(errors.Refusal) as refused:
-        _register("real-1", "and-phone-2")
-    assert refused.value.code == errors.DEVICE_CONFLICT
+    _register("real-1", "and-phone-2")
+    devices = world["store"]._data["devices"]
+    assert devices["and-phone-1"]["status"] == devices["and-phone-2"]["status"] == "ACTIVE"
 
 
 def test_another_accounts_phone_is_still_refused(world):
@@ -871,7 +876,7 @@ def test_another_accounts_phone_is_still_refused(world):
     assert refused.value.code == errors.DEVICE_IN_USE
 
 
-def test_any_active_test_device_signs_and_only_a_real_accounts_bound_one(world):
+def test_any_active_device_signs_for_test_and_real_accounts(world):
     user = {**_test_user(world["store"], "t-1"), "activeDeviceId": "and-phone-2"}
     dev = {"uid": "t-1", "status": "ACTIVE", "app": "semper"}
     assert deps._device_is_bound(dev, user, "and-phone-1", "semper")
@@ -879,7 +884,7 @@ def test_any_active_test_device_signs_and_only_a_real_accounts_bound_one(world):
     assert not deps._device_is_bound({**dev, "uid": "other"}, user, "and-phone-1", "semper")
 
     real = {"uid": "real-1", "activeDeviceId": "and-phone-2"}
-    assert not deps._device_is_bound({**dev, "uid": "real-1"}, real, "and-phone-1", "semper")
+    assert deps._device_is_bound({**dev, "uid": "real-1"}, real, "and-phone-1", "semper")
     assert deps._device_is_bound({**dev, "uid": "real-1"}, real, "and-phone-2", "semper")
 
 
@@ -914,9 +919,9 @@ async def test_verified_device_accepts_a_second_test_phone(world, monkeypatch):
     ctx = await deps.verified_device(request, user, "and-phone-2", "n1", sig)
     assert ctx.device_id == "and-phone-2"
 
-    real = {**user, "testAccount": None}
+    world["store"]._data["devices"]["and-phone-2"]["status"] = "SUPERSEDED"
     with pytest.raises(HTTPException) as refused:
-        await deps.verified_device(request, real, "and-phone-2", "n1", sig)
+        await deps.verified_device(request, user, "and-phone-2", "n1", sig)
     assert refused.value.detail == errors.DEVICE_NOT_ACTIVE
 
 
@@ -971,7 +976,8 @@ async def test_a_real_account_keeps_its_hold_and_its_mail(client, world, monkeyp
 
 
 async def test_the_licence_lock_allows_the_device_cap(client, world):
-    created = (await _create(client, maxDevices=2)).json()
+    """A CI account's licence; a QC account's runs activations instead."""
+    created = (await _create(client, purpose="ci", maxDevices=2)).json()
     uid = created["uid"]
 
     def mode(device):
@@ -1119,13 +1125,13 @@ async def test_the_licence_desk_hides_test_licences_unless_asked(client, world):
     assert listed == {real["license"]["id"]}
     with_test = (await client.get("/v1/admin/licenses?include_test=true")).json()["licenses"]
     assert {lic["id"]: lic["testAccount"] for lic in with_test} == {
-        real["license"]["id"]: False, created["licenseId"]: True}
+        real["license"]["id"]: False, **{i: True for i in created["licenseIds"]}}
 
     search = await client.post("/v1/admin/licenses/search", json={"q": QC_EMAIL})
     assert search.json()["licenses"] == []
     search = await client.post("/v1/admin/licenses/search",
                                json={"q": QC_EMAIL, "include_test": True})
-    assert [lic["id"] for lic in search.json()["licenses"]] == [created["licenseId"]]
+    assert sorted(lic["id"] for lic in search.json()["licenses"]) == sorted(created["licenseIds"])
 
 
 # ------------------------------------------------------------------ Auth Admin
@@ -1154,3 +1160,42 @@ def test_the_lookup_says_whether_an_address_has_an_auth_user(world):
     assert google_auth.auth_user_exists(QC_EMAIL) is False
     world["auth"].users["u"] = {"email": QC_EMAIL}
     assert google_auth.auth_user_exists(QC_EMAIL) is True
+
+
+# ------------------------------------------------------------------ QC on activations
+
+
+async def test_a_qc_accounts_phone_is_demo_until_activated(client, world):
+    """ADR-033: a QC account's licences run the activation model, so QC can
+    exercise Activate and the device count as a holder would."""
+    created = (await _create(client, apps="semper", licenceMaxDevices=2)).json()
+    uid = created["uid"]
+    lic = world["store"]._data["licenses"][created["licenseId"]]
+    assert (lic["app"], lic["maxDevices"]) == ("semper", 2)
+    _register(uid, "and-phone-1")
+
+    def mode(device):
+        # As a build that taps Activate (`X-Activation: explicit`) checks it.
+        return repo.revalidate_device_lock(repo.get_user(uid), device, explicit=True)["mode"]
+
+    assert mode("and-phone-1") == "demo"
+    repo.activate_device(uid, "and-phone-1", "semper")
+    assert mode("and-phone-1") == "licensed"
+
+
+async def test_a_demo_qc_account_holds_no_licence(client, world):
+    created = (await _create(client, licence="none")).json()
+    assert created["licenseIds"] == [] and created["licenseId"] == ""
+    assert not world["store"]._data["users"][created["uid"]].get("licenseId")
+
+
+async def test_one_app_qc_account_leaves_the_other_on_demo(client, world):
+    created = (await _create(client, apps="semperclassroom")).json()
+    user = repo.get_user(created["uid"])
+    assert apps.read_field(user, "licenseId", MT) == created["licenseId"]
+    assert not user.get("licenseId")
+
+
+async def test_a_ci_account_takes_no_licence_fields(client, world):
+    r = await _create(client, purpose="ci", apps="semper")
+    assert r.status_code == 422

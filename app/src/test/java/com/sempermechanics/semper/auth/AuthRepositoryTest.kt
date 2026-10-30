@@ -122,6 +122,16 @@ class AuthRepositoryTest {
     }
 
     @Test
+    fun `an approved status check schedules the sync from other phones`() = runBlocking {
+        serverUp()
+
+        assertEquals(AccessStatus.APPROVED, repo.refreshStatus().getOrThrow())
+
+        val sync = WorkManager.getInstance(context).getWorkInfosForUniqueWork("phone-sync-periodic").get()
+        assertEquals(WorkInfo.State.ENQUEUED, sync.single().state)
+    }
+
+    @Test
     fun `a status check whose config read failed schedules no refresh`() = runBlocking {
         serverUp()
 
@@ -304,7 +314,7 @@ class AuthRepositoryTest {
 
         val lost = repo.refreshStatus().exceptionOrNull()
 
-        assertTrue(lost!!.message!!, lost.message!!.startsWith("This phone is already linked"))
+        assertTrue(lost!!.message!!, lost.message!!.startsWith("This phone is linked to another account"))
         // The handset is a "phone" in user copy (readiness AE3-002).
         assertFalse(lost.message!!, Regex("""\bdevice\b""").containsMatchIn(lost.message!!))
     }

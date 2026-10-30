@@ -233,6 +233,12 @@ TEST_ACCOUNT_DEFAULT_DEVICES = 3
 TEST_ACCOUNT_MAX_DEVICES = 10
 #: `testAccount.purpose`: staff QC, or the CI pipeline's own login. Here, not
 #: in `repo.testaccounts`, so `repo.devices` can read it without an import cycle.
+#: Who changed which phone a licence licenses: the holder, institution IT or
+#: Semper staff (`repo.seats.clear_device_lock`, `repo.activations`).
+ACTOR_SELF = "self"
+ACTOR_STAFF = "staff"
+ACTOR_IT = "it"
+
 PURPOSE_QC = "qc"
 PURPOSE_CI = "ci"
 

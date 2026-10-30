@@ -358,6 +358,9 @@ async def test_institution_seat_patch_clear_device_lock_over_http(client, monkey
     license_id = minted["license"]["id"]
     repo.activate_license("student", "a@university.edu", "old-dev", minted["key"])
     store._data["users"]["student"]["activeDeviceId"] = "old-dev"
+    # Registered, as the app does at sign-in: a clear signs out only a phone
+    # the account holds (ADR-033).
+    store._data.setdefault("devices", {})["old-dev"] = {"uid": "student", "status": "ACTIVE"}
 
     resp = await client.patch(
         f"/v1/institutions/licenses/{license_id}/seats/student",

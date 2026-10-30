@@ -3,7 +3,9 @@
  * Two calls answer the whole of the first card — `/v1/me` carries the
  * licence summary including seating and the lease, so nothing here has to
  * fetch limits to find out whether a seat is held. The analyses come from
- * `/v1/sessions`, which carries the quota alongside the page.
+ * `/v1/sessions`, which carries the quota alongside the page. Each app's
+ * own licence and phones (ADR-033) are phones.js's sections, drawn from
+ * `/v1/me`'s `licences`.
  */
 import { requireSignIn, sessionOver } from "../auth.js";
 import { api, apiBlob, saveBlob } from "../api.js";
@@ -16,6 +18,7 @@ import { explain as refusalText, ACCOUNT } from "../messages.js";
 import { mountSwitcher } from "../switcher.js";
 import { licencesAdministered } from "../roles.js";
 import { showClaim, onClaimed } from "./claim.js";
+import { mountPhones } from "./phones.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -24,6 +27,8 @@ const $ = (id) => document.getElementById(id);
 $("deleteAccount").textContent = ACCOUNT.deleteAccount;
 
 let licence = {};        // the `license` block of /v1/me
+let perApp = false;      // whether /v1/me carried each app's licence (`licences`)
+let licences = {};       // /v1/me's `licences`, each app's licence (ADR-033)
 let sessions = [];       // every page loaded so far
 let nextToken = "";
 let quota = null;        // the `quota` block of /v1/sessions
@@ -54,6 +59,14 @@ function showFactorPill() {
 
 /* ------------------------------------------------------------ licence */
 
+// Each app's Move button. On a licence that runs activations (ADR-033) each
+// phone is deactivated on its own in the app's section, so Move is offered
+// only on a licence from before the split, which holds one phone by a lock.
+const MOVE = { semper: "unbind", semperclassroom: "unbindMt" };
+const phones = mountPhones({
+  onModel: (app, model) => { $(MOVE[app]).hidden = model !== "lock"; },
+});
+
 // A failed /v1/me, kept so the analyses load (which runs alongside and
 // clears the status line when it succeeds) puts it back rather than
 // wiping it when it answers second.
@@ -68,8 +81,12 @@ async function loadAccount() {
   try {
     const me = await api("/v1/me");
     licence = me.license || {};
+    perApp = Boolean(me.licences);
+    licences = me.licences || {};
     accountError = "";
     renderLicence();
+    if (perApp) phones.show(me.licences);
+    else phones.hide();
     markFirstData();
     mountSwitcher("account", { me, licenses: administered });
   } catch (e) {
@@ -116,6 +133,10 @@ function renderLicence() {
     }
   }
   $("pills").innerHTML = `<p>${pills.join(" ")}</p>`;
+  // `license` is semper's alone: with each app's licence in its own card
+  // below, this one says whose it is, so a semper Classroom licence is not
+  // read as the account being on Demo.
+  $("licenceTitle").textContent = perApp ? `${appName("semper")} licence` : "Licence";
   $("explain").textContent = explain(licensed, floating, holdsSeat, held, lapsed);
   $("facts").innerHTML = facts(held, floating, holdsSeat)
     .map(([term, value]) => `<dt>${esc(term)}</dt><dd>${esc(value)}</dd>`).join("");
@@ -128,9 +149,10 @@ function renderLicence() {
   $("release").hidden = !(floating && holdsSeat);
   // Nothing to move without a licence. A Demo key has a kind too, so this
   // used to offer to move one; the backend then moved nothing worth having.
-  $("unbind").hidden = !held;
+  // With each app's licence on /v1/me, each app's phones decide (MOVE).
+  $("unbind").hidden = perApp || !held;
   // Each app holds its own device (ADR-010), so each moves on its own.
-  $("unbindMt").hidden = !held;
+  $("unbindMt").hidden = perApp || !held;
   // A claim code is for an account with nothing attached yet.
   showClaim(!held);
   renderQuota();
@@ -186,6 +208,12 @@ function explain(licensed, floating, holdsSeat, held, lapsed) {
            "Your saved work is untouched, and semper becomes Licensed again " +
            "on this account as soon as a colleague finishes.";
   }
+  const others = otherAppsLicensed();
+  if (!licensed && !held && others.length) {
+    return `${appName("semper")} is on Demo on this account. Your ${others.join(" and ")} ` +
+           "licence is in its card below. Ask your institution's IT or semper support if you " +
+           `need a licence for ${appName("semper")} too.`;
+  }
   if (!licensed) {
     return "You are on Demo. Analyses are capped and cloud backup is off. " +
            "Ask your institution's IT or semper support for a licence. Most " +
@@ -203,6 +231,13 @@ function explain(licensed, floating, holdsSeat, held, lapsed) {
       : "Your institution's seats are shared.";
   }
   return "Your licence is active on this account.";
+}
+
+/** The other apps this account is Licensed for, by name (`/v1/me`'s `licences`). */
+function otherAppsLicensed() {
+  return Object.entries(licences)
+    .filter(([app, lic]) => app !== "semper" && lic?.mode === "licensed")
+    .map(([app]) => appName(app));
 }
 
 $("release").addEventListener("click", async () => {
@@ -230,16 +265,17 @@ function releaseError(e) {
   });
 }
 
-$("unbind").addEventListener("click", () => unbind("", "semper"));
+$("unbind").addEventListener("click", () => unbind("", "semper", "semper"));
 // Semper Classroom's old short name: a backend from before ADR-030 knows only
 // it, and every backend since reads it as Semper Classroom (TD-56).
-$("unbindMt").addEventListener("click", () => unbind("materialtesting", "semper Classroom"));
+$("unbindMt").addEventListener("click", () =>
+  unbind("materialtesting", "semper Classroom", "semperclassroom"));
 
 /**
  * Move one app's device. A browser cannot send `X-App-Id`, so the app is
  * named in the query; the backend reads no app as Semper.
  */
-async function unbind(app, name) {
+async function unbind(app, name, section) {
   if (!(await confirmInPage({
     title: `Move ${name}`,
     message: `Move ${name} to another phone?\n\n` +
@@ -251,32 +287,21 @@ async function unbind(app, name) {
   setStatus("Unlocking…");
   try {
     const path = app ? `/v1/licenses/unbind?app=${encodeURIComponent(app)}` : "/v1/licenses/unbind";
-    const out = await api(path, { method: "POST" });
+    await api(path, { method: "POST" });
     setStatus(
       `Done. Sign in on the new phone, open ${name} once so the licence ` +
-      "attaches, and then restore your analyses." +
-      (out.nextChangeAllowedAt
-        ? ` You can do this again after ${when(out.nextChangeAllowedAt)}.`
-        : ""),
+      "attaches, and then restore your analyses.",
     );
+    // The phone that held the licence holds it no longer.
+    if (perApp) phones.reload(section);
   } catch (e) {
     setStatus(unbindError(e), true);
   }
 }
 
 function unbindError(e) {
-  // The cooldown refusal carries the instant it ends after the code.
-  const rest = e.rest || "";
+  // No cooldown since ADR-033: the licence's device count is the limit.
   return refusalText(e, {
-    // Not a refusal of entitlement: a second factor proves who is asking,
-    // not how often, so the cooldown is what stops one licence being
-    // passed round a lab.
-    device_change_too_soon:
-      "You have moved this licence recently" +
-      // Local date and time, as the success message gives it: the cooldown
-      // ends at the instant of the last move, not at a day boundary.
-      (rest ? `, so you can move it yourself again after ${when(rest)}` : "") +
-      ". Ask your institution's IT or semper support if you need to move it now.",
     mfa_required:
       "Set up two-factor authentication first — moving a licence needs it.",
     no_license: "There is no licence on this account to move.",

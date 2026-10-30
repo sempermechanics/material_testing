@@ -132,6 +132,24 @@ object ApiErrors {
     const val LICENSE_DEVICE_MISMATCH = "license_device_mismatch"
 
     /**
+     * Every phone the licence may license is active (409 from Activate). Carries
+     * a count tail, `device_limit_reached: 2/2`: deactivate one first (ADR-033).
+     */
+    const val DEVICE_LIMIT_REACHED = "device_limit_reached"
+
+    /** The account holds no live licence for this app (404 from Activate). */
+    const val NO_LICENSE = "no_license"
+
+    /** A floating licence has no Activate: its seat is checked out instead (409). */
+    const val SEATING_FLOATING = "seating_floating"
+
+    /** Activate with `upgrade`, and no new licence is waiting (404). */
+    const val NO_PENDING_UPGRADE = "no_pending_upgrade"
+
+    /** Deactivate named a phone that is not the account's, or not active (404). */
+    const val ACTIVATION_NOT_FOUND = "activation_not_found"
+
+    /**
      * The `detail` of an error [body], or the trimmed body when it is not the
      * usual JSON envelope — API Gateway and Cloud Run kills answer with plain
      * text or nothing at all, and those must not read as a code.

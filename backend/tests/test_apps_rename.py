@@ -183,27 +183,28 @@ def test_a_self_clear_of_a_legacy_lock_clears_both_names(store):
     assert cleared["releasedDeviceIdSemperClassroom"] == "and-classroom"
     lic = store._data["licenses"][license_id]
     assert lic["deviceIdLockSemperClassroom"] == "" and lic["deviceIdLockMaterialTesting"] == ""
-    assert "deviceChangedAtSemperClassroom" in lic and "deviceChangedAtMaterialTesting" in lic
+    assert not {"deviceChangedAtSemperClassroom", "deviceChangedAtMaterialTesting"} & set(lic)
     assert lic["deviceIdLock"] == "and-semper"
     user = store._data["users"]["solo-1"]
     assert not {"activeDeviceIdSemperClassroom", "activeDeviceIdMaterialTesting"} & set(user)
     assert user["releasedDeviceIdSemperClassroom"] == "and-classroom"
     assert user["releasedDeviceIdMaterialTesting"] == "and-classroom"
-    # The cooldown is read back through the new field and the old alike.
-    again = pytest.raises(repo.Refusal, repo.clear_device_lock, license_id, "solo-1",
-                          actor=repo.ACTOR_SELF, app=OLD)
-    assert again.value.code == "device_change_too_soon"
+    # The old name clears the same lock again at once: no cooldown (ADR-033).
+    again = repo.clear_device_lock(license_id, "solo-1", actor=repo.ACTOR_SELF, app=OLD)
+    assert again["previousDeviceIdSemperClassroom"] == ""
+    assert lic["deviceIdLockSemperClassroom"] == "" and lic["deviceIdLockMaterialTesting"] == ""
+    assert lic["deviceIdLock"] == "and-semper"
 
 
 def _as(store, monkeypatch, uid):
     monkeypatch.setattr(deps, "_DEV_USER", dict(store._data["users"][uid]))
 
 
-@pytest.mark.parametrize(("app_id", "status"), [(NEW_ID, 409), (OLDEST_ID, 410), ("", 201)])
-async def test_registration_reads_the_legacy_binding(client, monkeypatch, audited, app_id, status):
-    """The legacy field holds the Classroom phone: another phone is a
-    conflict for Semper Classroom, and Semper (no header, nothing registered)
-    is not held by it."""
+@pytest.mark.parametrize(("app_id", "status"), [(NEW_ID, 201), (OLDEST_ID, 410), ("", 201)])
+async def test_registration_beside_a_legacy_binding(client, monkeypatch, audited, app_id, status):
+    """A Classroom phone held in the legacy field does not keep another
+    phone out (several per app, ADR-033); the retired id still may not
+    register (410)."""
     store = fake_firestore.install(monkeypatch)
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     _legacy_licensed(store, "dev-user", "dev@local")
@@ -214,8 +215,6 @@ async def test_registration_reads_the_legacy_binding(client, monkeypatch, audite
                           json={"deviceId": "and-newphone", "publicKeyPem": _ec_pem()})
 
     assert r.status_code == status, r.text
-    if status == 409:
-        assert r.json()["detail"] == "device_conflict"
 
 
 async def test_the_new_app_heals_its_legacy_phone_and_writes_both_fields(client, monkeypatch, audited):
@@ -353,8 +352,9 @@ async def test_a_device_this_backend_registers_signs_for_either_id(store, monkey
 async def test_a_materialtesting_device_does_not_sign_for_semper(legacy_device):
     with pytest.raises(HTTPException) as e:
         await _verify(legacy_device, "com.sempermechanics.semper")
-    # Semper has no phone bound here, so the binding check answers first.
-    assert e.value.status_code == 409
+    # The record names another app, so its key does not sign for Semper.
+    assert e.value.status_code == 401
+    assert e.value.detail == "bad_signature"
 
 
 # ------------------------------------------------- sessions tagged the old way

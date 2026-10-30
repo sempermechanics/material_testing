@@ -445,7 +445,7 @@ def iter_user_sessions(uid: str):
         }
 
 
-def count_user_sessions(uid: str) -> int:
+def count_user_sessions(uid: str, app: str | None = None) -> int:
     """How many analyses count against this user's quota.
 
     The one count behind both the create-time check and `quota.used` on
@@ -457,13 +457,38 @@ def count_user_sessions(uid: str) -> int:
     A failed session that a Cloud Tasks retry later provisions counts again
     from then on; the quota is soft, so that overshoot is accepted.
 
-    Account-wide, across both apps (ADR-014): the cap is the account's, so a
-    session tagged with either app counts, though each app lists only its own.
+    Per app (ADR-033, reversing ADR-014 decision 4): each app's licence has
+    its own cap, so `app` counts that app's sessions alone, and None the whole
+    account. A session from before the `app` tag is Semper's (`session_app`);
+    an equality filter cannot match a missing field, so Semper's count is the
+    account's less every other app's. That subtraction takes the other app's
+    PROVISION_FAILED sessions too, leaving Semper's count low by those: they
+    are rare, and the quota is soft. Equality filters only, by each name an
+    app is stored under (ADR-030), so the automatic indexes serve every count.
     """
     sessions = db().collection("sessions").where("uid", "==", uid)
+    if app is not None and apps.canonical(app) != apps.SEMPER:
+        return sum(_stored_count(sessions.where("app", "==", name)) for name in _stored_names(app))
+    total = _stored_count(sessions)
+    if app is None:
+        return total
+    others = sum(int(_count(sessions.where("app", "==", name).count())[0][0].value)
+                 for other in apps.ALL if other != apps.SEMPER for name in _stored_names(other))
+    return max(0, total - others)
+
+
+def _stored_count(sessions) -> int:
+    """Sessions in `sessions` that store something: PROVISION_FAILED left out."""
     total = int(_count(sessions.count())[0][0].value)
     failed = _count(sessions.where("status", "==", statuses.SESSION_PROVISION_FAILED).count())
     return max(0, total - int(failed[0][0].value))
+
+
+def _stored_names(app: str) -> list[str]:
+    """Every `app` value a session of `app` may carry: its name today and the
+    one before a rename (ADR-030)."""
+    known = (*apps.ALL, apps.LEGACY_MATERIAL_TESTING)
+    return [name for name in known if apps.canonical(name) == apps.canonical(app)]
 
 
 def count_device_sessions(device_id: str) -> int:

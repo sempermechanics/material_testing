@@ -3,6 +3,28 @@
   "email": "researcher@university.edu",
   "role": "user",
   "access_status": "APPROVED",
+  "licences": {
+    "semper": {
+      "mode": "licensed",
+      "kind": "individual",
+      "prefix": "SEMP-U8BX",
+      "expiresAt": null,
+      "inGrace": false,
+      "seating": "assigned",
+      "held": true,
+      "pendingLicence": null
+    },
+    "semperclassroom": {
+      "mode": "demo",
+      "kind": "",
+      "prefix": "",
+      "expiresAt": null,
+      "inGrace": false,
+      "seating": "assigned",
+      "held": false,
+      "pendingLicence": null
+    }
+  },
   "license": {
     "mode": "licensed",
     "kind": "individual",

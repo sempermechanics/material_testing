@@ -178,12 +178,15 @@ async def _measure(client, priv, meter):
 #: lost one again on 2026-10-05: the retry lookup is one query, not two.
 #: It gained two on 2026-10-18 for a demo account (this one): the demo cap
 #: also counts the device's stored analyses, total less PROVISION_FAILED.
+#: On 2026-10-29 (ADR-033) the quota became per app: Semper's count is the
+#: account's less Semper Classroom's, two more counts on GET and POST
+#: /v1/sessions, and the first config call also reads Classroom's invite.
 BUDGET = {
-    "GET /v1/config (first ever)": (4, 3),
+    "GET /v1/config (first ever)": (5, 3),
     "GET /v1/config": (1, 0),
     "GET /v1/me": (1, 0),
-    f"GET /v1/sessions (S={SESSIONS})": (SESSIONS + 3, 0),
-    f"POST /v1/sessions (N={FILES})": (11, 11),
+    f"GET /v1/sessions (S={SESSIONS})": (SESSIONS + 5, 0),
+    f"POST /v1/sessions (N={FILES})": (13, 11),
     "POST /v1/files/{id}/complete (each)": (6, 4),
     f"DELETE /v1/sessions/{{id}} (N={FILES})": (7, 5),
 }
@@ -206,8 +209,9 @@ async def test_firestore_cost_per_request_stays_in_budget(world, client, capsys)
 #: provisioned inline (INLINE_PROVISION_MAX_FILES). Before: 8 + 2N, then 6 + N,
 #: then 7 + N with the failed-session count in the quota check (TD-128), then
 #: 6 + N once the retry lookup became one `status in` query (2026-10-05),
-#: then 8 + N for a demo account with the per-device count (2026-10-18).
-CREATE_READS = {1: 9, 3: 11, 8: 16}
+#: then 8 + N for a demo account with the per-device count (2026-10-18),
+#: then 10 + N with the per-app quota (ADR-033, 2026-10-29).
+CREATE_READS = {1: 11, 3: 13, 8: 18}
 
 
 @pytest.mark.asyncio

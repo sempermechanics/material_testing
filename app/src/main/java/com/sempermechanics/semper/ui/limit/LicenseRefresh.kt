@@ -7,6 +7,8 @@ import com.sempermechanics.semper.data.LicenseConfigWorker
 import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.account.SeatLease
 import com.sempermechanics.semper.data.account.entitlement.ConfigFetch
+import com.sempermechanics.semper.data.net.ActivationDto
+import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.net.CloudApi
 import com.sempermechanics.semper.data.net.SemperApi
 import com.sempermechanics.semper.data.net.TokenProvider
@@ -25,6 +27,15 @@ enum class LicenseRefreshResult(@StringRes val messageRes: Int) {
     /** The backend answered, and the account is on the demo. */
     DEMO(R.string.license_refresh_demo),
 
+    /** The account holds a licence for this app, and this phone is not activated on it (ADR-033). */
+    NOT_ACTIVATED(R.string.license_refresh_not_activated),
+
+    /** The account holds a licence, and every phone it covers is in use. */
+    PHONES_FULL(R.string.license_refresh_phones_full),
+
+    /** A new licence is waiting for this phone's Activate. */
+    UPGRADE_READY(R.string.license_refresh_upgrade_ready),
+
     /** No answer; the one-off refresh is queued and retries in the background. */
     UNREACHABLE(R.string.license_refresh_unreachable),
 }
@@ -39,6 +50,10 @@ data class LicenseState(
     val backup: Boolean,
     val share: Boolean,
     val cap: Int,
+    /** `activation.state` ([com.sempermechanics.semper.data.net.ActivationDto]). */
+    val activation: String = "",
+    /** A new licence is waiting for Activate. */
+    val upgrade: Boolean = false,
 )
 
 /**
@@ -82,6 +97,8 @@ object LicenseRefresh {
         backup = LicenseEntitlements.cloudBackupEnabled(context),
         share = LicenseEntitlements.shareEnabled(context),
         cap = LicenseEntitlements.analysisCap(context),
+        activation = AppRemoteConfig.activation(context).state,
+        upgrade = AppRemoteConfig.pendingLicence(context) != null,
     )
 
     /** Whether a fetch that went [fetch] leaves the retrying one-off to try again. */
@@ -90,10 +107,15 @@ object LicenseRefresh {
     /**
      * The line for a fetch that went [fetch], with the licence read [after] it.
      * No answer (a failure, or no call possible yet) is "couldn't reach", never
-     * "still on the demo": the cached answer may be stale.
+     * "still on the demo": the cached answer may be stale. A new licence
+     * waiting comes first, then a licence this phone is not activated on
+     * (ADR-033), which is Demo here until Activate.
      */
     fun resultOf(fetch: ConfigFetch, after: LicenseState): LicenseRefreshResult = when {
         fetch != ConfigFetch.ANSWERED -> LicenseRefreshResult.UNREACHABLE
+        after.upgrade -> LicenseRefreshResult.UPGRADE_READY
+        !after.licensed && after.activation == ActivationDto.STATE_AVAILABLE -> LicenseRefreshResult.NOT_ACTIVATED
+        !after.licensed && after.activation == ActivationDto.STATE_FULL -> LicenseRefreshResult.PHONES_FULL
         !after.licensed -> LicenseRefreshResult.DEMO
         after.kind == KIND_INSTITUTION -> LicenseRefreshResult.LICENSED_INSTITUTION
         else -> LicenseRefreshResult.LICENSED_INDIVIDUAL

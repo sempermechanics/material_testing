@@ -1,0 +1,199 @@
+# QC accounts by role. Addresses only: never a password, a TOTP secret or a
+# licence key. Staff create these accounts as ADR-027 test accounts (purpose
+# "qc") on the staging console; the step-up is the product owner's.
+# Field reference: qa/SCHEMA.md.
+#
+# Each lane has its own accounts, so lanes running at once never activate or
+# deactivate each other's phones: `{lane}` in an address is the lane id in
+# lower case (qc-ind1-a@ for lane A). `qa.py plan` writes each lane's
+# addresses into its brief; only the accounts a lane's scenarios name are
+# created for it. An institution is likewise one per lane that uses it.
+
+schema = 1
+
+# The domain QC accounts live on. It must be in the backend's
+# TEST_ACCOUNT_DOMAINS (exact match, ADR-027), and it is what test-account
+# expiry, End and a `--only-domain` migration rehearsal key on.
+domain = "qa.sempermechanics.com"
+
+# ---------------------------------------------------------------------------
+# Institutions the member accounts belong to. Staff mint each one.
+# ---------------------------------------------------------------------------
+
+[[institution]]
+id = "A"
+title = "QC institution A (assigned seats)"
+kind = "assigned"
+domain_lock = "qa.sempermechanics.com"
+max_seats = 3
+max_devices = 3
+apps = ["semper"]
+admins = ["qc-it"]
+
+[[institution]]
+id = "B"
+title = "QC institution B (the other tenant, for cross-tenant negatives)"
+kind = "assigned"
+domain_lock = "qa.sempermechanics.com"
+max_seats = 1
+max_devices = 1
+apps = ["semper"]
+admins = ["qc-it-b"]
+
+[[institution]]
+id = "F"
+title = "QC institution F (floating seats)"
+kind = "floating"
+domain_lock = "qa.sempermechanics.com"
+max_seats = 1
+apps = ["semper"]
+admins = []
+
+# ---------------------------------------------------------------------------
+# Accounts. `licence` is "individual", "institution", "floating" or "none"
+# (Demo). `max_devices` is the licence's device count (individual licences);
+# institution accounts take the pool from their [[institution]].
+# ---------------------------------------------------------------------------
+
+[[account]]
+id = "qc-ind1"
+address = "qc-ind1-{lane}@qa.sempermechanics.com"
+role = "holder"
+apps = ["semper"]
+licence = "individual"
+max_devices = 1
+created_by = "staff"
+used_for = "A count of 1, holder deactivate, files kept."
+
+[[account]]
+id = "qc-ind2"
+address = "qc-ind2-{lane}@qa.sempermechanics.com"
+role = "holder"
+apps = ["semper", "semperclassroom"]
+licence = "individual"
+max_devices = 2
+created_by = "staff"
+used_for = "One licence per app, cross-phone sync."
+
+[[account]]
+id = "qc-upg"
+address = "qc-upg-{lane}@qa.sempermechanics.com"
+role = "holder"
+apps = ["semper"]
+licence = "individual"
+max_devices = 1
+created_by = "staff"
+used_for = "Upgrade by issue."
+
+[[account]]
+id = "qc-upg2"
+address = "qc-upg2-{lane}@qa.sempermechanics.com"
+role = "holder"
+apps = ["semper"]
+licence = "individual"
+max_devices = 1
+created_by = "staff"
+used_for = "Upgrade for a holder who has never signed in: the invite moves. Never sign in with it before L7.7."
+
+[[account]]
+id = "qc-demo"
+address = "qc-demo-{lane}@qa.sempermechanics.com"
+role = "holder"
+apps = ["semper", "semperclassroom"]
+licence = "none"
+created_by = "staff"
+used_for = "The Demo floor, Demo to licensed."
+
+[[account]]
+id = "qc-it"
+address = "qc-it-{lane}@qa.sempermechanics.com"
+role = "it-admin"
+apps = ["semper"]
+licence = "none"
+institution = "A"
+created_by = "staff"
+second_factor = "totp"
+used_for = "The IT tier's scope. Enrols TOTP once (OPERATING_MANUAL Appendix E)."
+
+[[account]]
+id = "qc-m1"
+address = "qc-m1-{lane}@qa.sempermechanics.com"
+role = "member"
+apps = ["semper"]
+licence = "institution"
+institution = "A"
+created_by = "staff"
+used_for = "The pool count."
+
+[[account]]
+id = "qc-m2"
+address = "qc-m2-{lane}@qa.sempermechanics.com"
+role = "member"
+apps = ["semper"]
+licence = "institution"
+institution = "A"
+created_by = "staff"
+used_for = "The pool count; another member's phone is invisible to qc-m1."
+
+[[account]]
+id = "qc-m3"
+address = "qc-m3-{lane}@qa.sempermechanics.com"
+role = "member"
+apps = ["semper"]
+licence = "institution"
+institution = "A"
+created_by = "staff"
+used_for = "Fills the pool of 3."
+
+[[account]]
+id = "qc-out"
+address = "qc-out-{lane}@<a domain other than A's domain_lock>"
+role = "member"
+apps = ["semper"]
+licence = "institution"
+institution = "A"
+created_by = "staff"
+test_account = false
+used_for = "IT's out-of-domain negative: staff seat it on A, IT must not see or deactivate it."
+note = "Open: test accounts must be on qa.sempermechanics.com exactly, and A's domain_lock is that domain, so this one cannot be a test account. Pick a staff-owned mailbox on another domain, and remove it by hand at the end of the run."
+
+[[account]]
+id = "qc-it-b"
+address = "qc-it-b-{lane}@qa.sempermechanics.com"
+role = "it-admin"
+apps = ["semper"]
+licence = "none"
+institution = "B"
+created_by = "staff"
+second_factor = "totp"
+used_for = "Cross-tenant negatives: B's IT against A's phones."
+
+[[account]]
+id = "qc-b1"
+address = "qc-b1-{lane}@qa.sempermechanics.com"
+role = "member"
+apps = ["semper"]
+licence = "institution"
+institution = "B"
+created_by = "staff"
+used_for = "Cross-tenant negatives: A's IT against B's member."
+
+[[account]]
+id = "qc-fl1"
+address = "qc-fl1-{lane}@qa.sempermechanics.com"
+role = "member"
+apps = ["semper"]
+licence = "floating"
+institution = "F"
+created_by = "staff"
+used_for = "Floating: takes the one lease."
+
+[[account]]
+id = "qc-fl2"
+address = "qc-fl2-{lane}@qa.sempermechanics.com"
+role = "member"
+apps = ["semper"]
+licence = "floating"
+institution = "F"
+created_by = "staff"
+used_for = "Floating: no_floating_seat while qc-fl1 holds the lease."

@@ -81,8 +81,8 @@ function reason(error, code, text) {
  * the page's own for its code, else a common one, else `fallback` applied to
  * why it failed (`REASONS`, `GATEWAY`; "the server refused it (ref: <code>)"
  * for a code with no sentence; the message itself when it is already words,
- * as a validation 422's are). A suffixed code (`device_change_too_soon:
- * <instant>`) is matched on the code alone.
+ * as a validation 422's are). A suffixed code (`device_limit_reached:
+ * 1/1`) is matched on the code alone.
  */
 export function explain(error, sentences = {}, fallback = (text) => text) {
   const text = String(error?.message ?? error ?? "");
@@ -127,6 +127,38 @@ export const ACCOUNT = {
     "and removes the sign-in itself for both apps, semper and semper " +
     "Classroom, since they share one account. It cannot be undone: signing " +
     "in again with the same address starts a new, empty account.",
+  // Each app's section (account/phones.js, ADR-033): that app's licence from
+  // `/v1/me`'s `licences`, how many phones it covers, and the holder's own
+  // phones for it. Activating is done in the app; the page only deactivates.
+  // `name` is the app's name ("semper", "semper Classroom").
+  phones: {
+    noLicence: (name) => `None — ${name} is on Demo`,
+    endedInGrace: (ended) => `${ended} (now in its after-expiry grace)`,
+    count: (n, m) => `Licensed on ${n} of ${m} ${m === 1 ? "phone" : "phones"}.`,
+    pool: (n, m) => `Your institution's licence: ${n} of ${m} ${m === 1 ? "phone" : "phones"} in use.`,
+    demo: (name) => `${name} is on Demo, so its phones run with Demo limits.`,
+    shared: "Your institution's seats are shared: a phone is Licensed while it has a seat.",
+    // An upgrade issued by staff: it replaces the licence above once the
+    // holder taps Activate new licence in the app (no button here).
+    pending: (prefix) =>
+      `A new licence${prefix ? ` (${prefix})` : ""} is ready — open the app and tap Activate new licence.`,
+    loading: "Loading your phones…",
+    failed: (why) => `Could not list your phones: ${why}`,
+    none: (name) => `No phone has signed in to ${name} on this account yet.`,
+    unnamed: "Unnamed phone",
+    activated: (at) => (at ? `Activated ${at}` : "Activated"),
+    notActivated: "Not activated (Demo)",
+    deactivate: "Deactivate",
+    deactivateLabel: (model) => `Deactivate ${model}`,
+    confirm: (name, model) =>
+      `Deactivate ${name} on ${model}?\n\n` +
+      `${model} runs ${name} as Demo until it is activated again. Its analyses ` +
+      "stay on it, and its slot on your licence is free at once for another phone.",
+    working: (model) => `Deactivating ${model}…`,
+    done: (name, model) => `Deactivated. ${model} runs ${name} as Demo until it is activated again.`,
+    gone: "That phone is no longer activated on your licence. The list is up to date now.",
+    refused: (why) => `Could not deactivate the phone: ${why}`,
+  },
   // The "Redeem a claim code" card (account/claim.js), shown only while no
   // licence is attached. A claim code is how a reseller deal, joining an
   // institution by email domain, or a failed invite reaches an account; the

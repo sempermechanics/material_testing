@@ -21,12 +21,13 @@ def register_device(body: DeviceReg, request: Request, user=Depends(current_user
                      detail={"reason": "app_retired", "app": app})
         raise HTTPException(410, errors.APP_RETIRED)
     rate_limit.enforce(rate_limit.device_register_bucket, user["uid"])
-    active = apps.read_field(user, "activeDeviceId", app)
-    tag = repo.test_account_of(user)  # Several phones, no hold and no mail (ADR-027).
-    # A device-lock clear just released THIS phone for a new one; its upload
-    # worker re-registers on `device_not_active`, which would hand the account
-    # back. Installed builds read any 409 here as "bound to another device".
-    if not active and tag is None and repo.released_device_held(user, body.deviceId, app):
+    tag = repo.test_account_of(user)  # No hold and no mail (ADR-027).
+    # A clear or a staff release just released THIS phone; its upload worker
+    # re-registers on `device_not_active`, which would sign it straight back
+    # in. Held whatever else the account has registered since: it holds
+    # several phones (ADR-033). Installed builds read any 409 here as "bound
+    # to another device".
+    if tag is None and repo.released_device_held(user, body.deviceId, app):
         audit.record(user["uid"], body.deviceId, action="DEVICE_REGISTER", outcome="DENIED",
                      detail={"reason": "released", "app": app})
         raise HTTPException(409, errors.DEVICE_CONFLICT)
@@ -34,20 +35,18 @@ def register_device(body: DeviceReg, request: Request, user=Depends(current_user
     # token that registers the key proved a second factor (ADR-010, device
     # trust). An ordinary account has none, and its device is still its own.
     eligible = bool(second_factor(request))
-    healed = active == body.deviceId
-    # The account bound to a different device for this app (a real device
-    # switch, which needs a reset first: `device_conflict`), and the device
-    # bound to a different account (one account per device: `device_in_use`)
-    # are checked inside the registration's transaction, so two phones
-    # registering at once cannot both end up ACTIVE. Each app has its own
-    # binding (ADR-010): Semper Classroom on the phone Semper is registered on
-    # reports its own device id, and is not a conflict.
+    # The device bound to a different account (one account per device:
+    # `device_in_use`) and a full test account are checked inside the
+    # registration's transaction, so two registrations at once cannot both
+    # pass. An account holds several phones per app (ADR-033); each app has
+    # its own (ADR-010).
     try:
         registered = repo.register_device(user["uid"], body, app, step_up_eligible=eligible)
     except errors.Refusal as refusal:
         _audit_refused(user["uid"], refusal.code, body.deviceId, app)
         raise
-    _audit_rotated(user["uid"], registered.get("rotated"), app, body.deviceId)
+    healed = bool(registered.get("healed"))
+    _audit_rotated(user["uid"], registered.get("rotated"), app, body.deviceId, tag is not None)
     audit.record(user["uid"], body.deviceId, action="DEVICE_REBIND" if healed else "DEVICE_REGISTER",
                  detail={"app": app, "stepUpEligible": eligible, **({"testAccount": True} if tag else {})})
     if not healed and tag is None:  # A new device tells its holder (TD-232); a heal is not one.
@@ -68,11 +67,13 @@ def _audit_refused(uid: str, code: str, device_id: str, app: str) -> None:
                      detail={"reason": "staff_released", "app": app, "testAccount": True})
 
 
-def _audit_rotated(uid: str, rotated, app: str, by: str) -> None:
-    """One row per phone a full CI test account gave up for `by` (TD-248)."""
+def _audit_rotated(uid: str, rotated, app: str, by: str, test_account: bool) -> None:
+    """One row per phone a full account gave up for `by`: a CI test
+    account's oldest (TD-248), or a real account's oldest unlicensed phone
+    past `MAX_PHONES_PER_APP` (ADR-033)."""
     for old in rotated or ():
         audit.record(uid, old, action="DEVICE_ROTATED",
-                     detail={"app": app, "by": by, "testAccount": True})
+                     detail={"app": app, "by": by, **({"testAccount": True} if test_account else {})})
 
 
 @router.post("/v1/challenge")

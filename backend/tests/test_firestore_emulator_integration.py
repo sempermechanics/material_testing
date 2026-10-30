@@ -751,12 +751,15 @@ def test_the_first_device_wins_an_unbound_lock(emulator_repo):
     assert emulator_repo.get_license(license_id)["deviceIdLock"] == locked
 
 
-def test_concurrent_register_leaves_one_active(emulator_repo):
-    """Two phones registering one account at once used to both pass the
-    "already bound?" check the router read before the write, and both end up
-    ACTIVE. The check now runs inside the registration's transaction, so
-    exactly one device is ACTIVE for the account and it is the one its
-    binding names; every other registration is refused (or told to retry)."""
+def test_concurrent_registers_stay_within_the_phone_cap(emulator_repo):
+    """An account holds several phones per app (ADR-033), up to
+    `MAX_PHONES_PER_APP`; one more registering retires the oldest. Six phones
+    registering one account at once must still land as if one after another:
+    no more ACTIVE than the cap, one ACTIVE per registration that committed
+    (up to the cap), and the account's latest phone among them. Registration
+    reads the account's phones inside its transaction, so contenders retry
+    rather than each counting the others as absent."""
+    from app.config import settings
     from app.models import DeviceReg
     from key_helpers import _ec_pem
 
@@ -764,6 +767,7 @@ def test_concurrent_register_leaves_one_active(emulator_repo):
     uid = f"emu-{tag}"
     _emu_user(emulator_repo, uid, f"reg-{tag}@lab.org")
     devices = [f"dev-{tag}-{i}" for i in range(6)]
+    cap = max(1, settings.MAX_PHONES_PER_APP)
     pem = _ec_pem()
 
     def _register(device):
@@ -775,16 +779,67 @@ def test_concurrent_register_leaves_one_active(emulator_repo):
             return list(pool.map(_register, devices))
 
     def settled(codes):
-        assert set(codes) <= {"", "device_conflict", "claim_contended"}, codes
+        assert set(codes) <= {"", "claim_contended"}, codes
         active = [d for d in devices
                   if (emulator_repo.get_device(d) or {}).get("status") == "ACTIVE"]
-        assert len(active) <= 1, f"{len(active)} devices ACTIVE: {active}"
-        bound = emulator_repo._load_user(uid).get("activeDeviceId")
-        assert active == ([bound] if bound else []), (active, bound)
-        assert codes.count("") == len(active), codes
+        assert len(active) == min(codes.count(""), cap), (codes, active)
+        latest = emulator_repo._load_user(uid).get("activeDeviceId")
+        assert (latest in active) if active else not latest, (active, latest)
         return bool(active)
 
     _race_until(race, settled, what="no registration committed")
+
+
+def test_phones_racing_for_the_last_slot_leave_the_count_true(emulator_repo):
+    """ADR-033's activation model against a real Firestore: three phones of
+    one account tapping Activate at once on a licence with one slot. At most
+    one activation is active, `devicesActive` matches the documents, the
+    others are refused (or told to retry), and the licence check reads the
+    activation through a batched get. Deactivating gives the slot back."""
+    from app.models import DeviceReg
+    from key_helpers import _ec_pem
+
+    tag = uuid.uuid4().hex[:8]
+    address = f"activator-{tag}@lab.org"
+    license_id = _emu_individual(emulator_repo, address)
+    uid = f"emu-{tag}"
+    user = emulator_repo.ensure_entitlement(dict(_emu_user(emulator_repo, uid, address)), None)
+    assert user["licenseId"] == license_id
+    emulator_repo.db().collection("licenses").document(license_id).update(
+        {"app": "semper", "maxDevices": 1})
+    devices = [f"dev-{tag}-{i}" for i in range(3)]
+    pem = _ec_pem()
+    for device in devices:
+        emulator_repo.register_device(uid, DeviceReg(deviceId=device, publicKeyPem=pem))
+    activations = (emulator_repo.db().collection("licenses").document(license_id)
+                   .collection("activations"))
+
+    def _activate(device):
+        return attempt(emulator_repo.activate_device, uid, device, "semper")[0]
+
+    def race():
+        with ThreadPoolExecutor(max_workers=len(devices)) as pool:
+            return list(pool.map(_activate, devices))
+
+    def settled(codes):
+        assert set(codes) <= {"", "device_limit_reached", "claim_contended"}, codes
+        active = [s.id for s in activations.stream()
+                  if (s.to_dict() or {}).get("status") == "active"]
+        assert len(active) == codes.count("") <= 1, (codes, active)
+        assert emulator_repo.get_license(license_id).get("devicesActive", 0) == len(active)
+        return bool(active)
+
+    _race_until(race, settled, what="no phone activated")
+    winner = next(s.id for s in activations.stream()
+                  if (s.to_dict() or {}).get("status") == "active")
+    loser = next(d for d in devices if d != winner)
+    fresh = emulator_repo._load_user(uid) | {"uid": uid}
+    assert emulator_repo.revalidate_device_lock(dict(fresh), winner, explicit=True)["mode"] == "licensed"
+    assert emulator_repo.revalidate_device_lock(dict(fresh), loser, explicit=True)["mode"] == "demo"
+
+    emulator_repo.deactivate_device(license_id, winner, actor="self", caller=fresh)
+    assert emulator_repo.get_license(license_id)["devicesActive"] == 0
+    assert attempt(emulator_repo.activate_device, uid, loser, "semper")[0] == ""
 
 
 def test_an_address_finds_the_licences_it_administers(emulator_repo):
@@ -978,3 +1033,56 @@ def test_a_revoke_killed_part_way_is_finished_against_the_real_store(emulator_re
     assert users.document(member["uid"]).get().to_dict()["mode"] == "demo"
     assert lic["maxAnalyses"] == 40
     assert emulator_repo.finish_license_fanout(license_id) == []
+
+
+def test_the_licence_split_runs_against_the_real_store(emulator_repo):
+    """ADR-033's migration with Firestore's own preconditions, `create` and
+    paged walk: an app-less licence with a phone locked per app becomes a
+    Semper licence and a Semper Classroom twin, each phone stays licensed,
+    and a second run writes nothing. `--only-domain` keeps it to this test's
+    licence, since the emulator holds every other test's too."""
+    import sys
+    from pathlib import Path
+
+    from google.cloud import firestore
+
+    from app import apps
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    import split_licences_per_app as split
+
+    tag = uuid.uuid4().hex[:8]
+    domain = f"split-{tag}.test"
+    db = emulator_repo.db()
+    license_id = emulator_repo.create_individual_license(
+        email_lock=f"solo@{domain}", created_by_uid="emu-admin")["license"]["id"]
+    user = _emu_user(emulator_repo, f"emu-{tag}", f"solo@{domain}")
+    emulator_repo.ensure_entitlement(user, None)
+    phones = {apps.SEMPER: f"s-{tag}", apps.SEMPER_CLASSROOM: f"c-{tag}"}
+    lock = {}
+    for app, device_id in phones.items():
+        db.collection("devices").document(device_id).set(
+            {"uid": user["uid"], "status": "ACTIVE", "app": apps.stored_name(app)})
+        lock.update(apps.written_fields("deviceIdLock", app, device_id))
+    db.collection("licenses").document(license_id).update(lock)
+
+    def run():
+        return split.split(db, True, firestore.DELETE_FIELD, firestore.SERVER_TIMESTAMP,
+                           only_domain=domain)
+
+    assert run().counts["split"] == 1
+
+    lic = db.collection("licenses").document(license_id).get().to_dict()
+    twin_id = lic["splitInto"]
+    twin = db.collection("licenses").document(twin_id).get().to_dict()
+    assert (lic["app"], lic["devicesActive"]) == ("semper", 1) and "splitPending" not in lic
+    assert apps.canonical(twin["app"]) == apps.SEMPER_CLASSROOM and twin["devicesActive"] == 1
+    stored = {**db.collection("users").document(user["uid"]).get().to_dict(), "uid": user["uid"]}
+    assert apps.read_field(stored, "licenseId", apps.SEMPER_CLASSROOM) == twin_id
+    for app, device_id in phones.items():
+        out = emulator_repo.revalidate_device_lock(stored, device_id, app, explicit=True)
+        assert emulator_repo.effective_mode(out, app) == "licensed", app
+
+    again = run()
+    assert again.counts["split"] == 0 and again.counts["twins"] == 0
+    assert db.collection("licenses").document(license_id).get().to_dict()["splitInto"] == twin_id

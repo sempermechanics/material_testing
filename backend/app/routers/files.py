@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 
 from .. import audit, drive, errors, repo, statuses
 from .. import rate_limit
-from ..deps import rate_limited, unless_paused, verified_device
+from ..deps import rate_limited, request_app, unless_paused, verified_device
 from ..models import FileComplete
 from ..validation import DocumentId
 from ._shared import drive_failure
@@ -60,7 +60,8 @@ def _download_headers(f: dict, file_id: str, dl) -> dict:
 @router.get("/v1/files/{file_id}/content", dependencies=[
     rate_limited(rate_limit.download_bucket), unless_paused("restore"),
 ])
-def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_device)):
+def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_device),
+                  app=Depends(request_app)):
     """Stream one file back from Drive (restore).
 
     Drive has no anonymous signed download, so — unlike uploads, which go
@@ -76,7 +77,8 @@ def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_de
     """
     user = ctx.user
     f = _owned_file(file_id, user)
-    if not repo.cloud_backup_enabled(user):
+    # The asking app's licence (ADR-033); it lists and restores its own.
+    if not repo.cloud_backup_enabled(user, app):
         raise HTTPException(403, errors.feature_not_licensed_detail())
     drive_file_id = f.get("driveFileId")
     if not drive_file_id:

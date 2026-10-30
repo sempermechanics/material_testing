@@ -23,6 +23,18 @@ export const DEMO = {
   duration: "perpetual", createdByUid: "system", emailLock: "d@x.org",
 };
 
+/** An individual licence for one app, two phones, one of them active. */
+export const APP_IND = {
+  id: "lic-app-1", keyPrefix: "SEMP-APP1", kind: "individual", mode: "licensed", status: "redeemed",
+  duration: "perpetual", emailLock: "ana@lab.org", app: "semper", maxDevices: 2, devicesActive: 1,
+};
+/** An assigned institution licence for Classroom, no count of its own: one a seat. */
+export const APP_UNI = {
+  id: "lic-appuni-1", keyPrefix: "SEMP-AUN1", kind: "institution", mode: "licensed", status: "redeemed",
+  duration: "perpetual", seating: "assigned", maxSeats: 10, seatsUsed: 3, domainLock: "uni.edu",
+  adminEmails: ["it@uni.edu"], app: "semperclassroom", devicesActive: 3,
+};
+
 export const LIST = "GET /v1/admin/licenses?limit=50&include_revoked=false";
 export const PENDING = "GET /v1/admin/users?status=PENDING&limit=50";
 
