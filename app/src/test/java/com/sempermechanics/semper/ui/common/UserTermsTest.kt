@@ -117,7 +117,7 @@ class UserTermsTest {
         assertEquals("semper Classroom", strings.getValue("app_name"))
         assertEquals(emptyList<String>(), caseSensitiveOffenders("""\bSemper\b(?! Mechanics\b)"""))
         assertTrue(strings.getValue("delete_account_body").contains("semper Classroom"))
-        assertTrue(strings.getValue("delete_account_phone_not_cleared").contains("Clear semper\\'s storage"))
+        assertTrue(strings.getValue("delete_account_phone_not_cleared").contains("Clear semper Classroom\\'s storage"))
     }
 
     @Test
