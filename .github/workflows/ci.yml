@@ -203,6 +203,10 @@ jobs:
     # (firebase-hosting/tests/harness.mjs).
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The QC check compares scenario ids with HEAD^1 (the base tip in a
+          # PR's merge commit, the previous main on a push).
+          fetch-depth: 2
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -210,6 +214,16 @@ jobs:
         with:
           node-version: '22'
       - run: python scripts/check_console.py
+      # ADR-034: the QC catalogue under qa/ is data, so this is its gate:
+      # unique and never-deleted scenario ids (also against HEAD^1), every
+      # account, device, build, lane and gate a table names exists, no lane
+      # uses a device marked use = false, and every automation reference not
+      # marked planned: points at a real test file. Then the tool's own tests
+      # (stdlib unittest, nothing to install).
+      - name: QC catalogue is consistent
+        run: python scripts/qa/qa.py check --base HEAD^1
+      - name: Tests of the QC tool
+        run: python -m unittest discover -s scripts/qa/tests -p "test_*.py"
       # The tests write raw V8 coverage; console_coverage.mjs merges each
       # file's copies (pages load as page.js?load=N, which Node's own report
       # counts apart) and gates the console's line coverage two points

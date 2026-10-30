@@ -73,6 +73,10 @@ def convert_to_institution(
         raise Refusal(errors.LICENSE_NOT_FOUND)
     if normalize_kind(lic.get("kind")) != KIND_INDIVIDUAL or _license_mode(lic) == MODE_DEMO:
         raise Refusal(errors.LICENSE_NOT_CONVERTIBLE)
+    if lic.get("app"):
+        # One app's licence moves by a new licence the holder activates
+        # (ADR-033), not in place: converting would carry no phones over.
+        raise Refusal(errors.LICENSE_NOT_CONVERTIBLE)
     if _is_revoked(lic):
         raise Refusal(errors.LICENSE_REVOKED)
 

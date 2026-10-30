@@ -34,6 +34,7 @@
   <link rel="modulepreload" href="../switcher.js" />
   <link rel="modulepreload" href="../roles.js" />
   <link rel="modulepreload" href="claim.js" />
+  <link rel="modulepreload" href="phones.js" />
 </head>
 <body data-auth="pending">
   <header>
@@ -59,7 +60,7 @@
     <div id="app" hidden>
       <!-- ---------------------------------------------------- licence -->
       <section class="card">
-        <h2>Licence</h2>
+        <h2 id="licenceTitle">Licence</h2>
         <!-- Placeholders until /v1/me answers; renderLicence replaces them. -->
         <div id="pills" aria-hidden="true"><span class="skeleton pill"></span> <span class="skeleton pill"></span></div>
         <p class="muted" id="explain"><span class="skeleton line"></span></p>
@@ -74,6 +75,28 @@
           <button id="unbind" class="secondary" hidden>Move semper to another phone</button>
           <button id="unbindMt" class="secondary" hidden>Move semper Classroom to another phone</button>
         </div>
+      </section>
+
+      <!-- -------------------------------------------- each app's phones -->
+      <!-- One section per app, shown when /v1/me carries each app's licence
+           (`licences`, ADR-033): the app's licence field by field, how many
+           phones it covers, a new licence waiting to be activated in the app,
+           and the holder's own phones for the app, each activated one with
+           Deactivate (phones.js, words from messages.js). -->
+      <section class="card" id="semperCard" hidden>
+        <h2>semper</h2>
+        <dl class="facts" id="semperFacts"></dl>
+        <p id="semperPending" hidden></p>
+        <p class="muted" id="semperCount"></p>
+        <ul class="phone-list" id="semperPhones" aria-label="Your phones for semper"></ul>
+      </section>
+
+      <section class="card" id="classroomCard" hidden>
+        <h2>semper Classroom</h2>
+        <dl class="facts" id="classroomFacts"></dl>
+        <p id="classroomPending" hidden></p>
+        <p class="muted" id="classroomCount"></p>
+        <ul class="phone-list" id="classroomPhones" aria-label="Your phones for semper Classroom"></ul>
       </section>
 
       <!-- ------------------------------------------------- claim code -->

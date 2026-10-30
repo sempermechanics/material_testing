@@ -34,6 +34,7 @@
   <link rel="modulepreload" href="../roster.js" />
   <link rel="modulepreload" href="../roster-tools.js" />
   <link rel="modulepreload" href="../audit-log.js" />
+  <link rel="modulepreload" href="phones.js" />
 </head>
 <body data-auth="pending">
   <header>
@@ -114,6 +115,23 @@
               </tr>
             </thead>
             <tbody id="rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- The licence's phone pool (phones.js, ADR-033): only on a licence
+           that names its app. Members activate their own phones; IT may
+           deactivate one. -->
+      <section class="card" id="phonesCard" hidden>
+        <h2>Phones</h2>
+        <p class="muted" id="phonesPool" aria-live="polite"></p>
+        <p class="muted" id="phonesHelp"></p>
+        <div class="wrap">
+          <table>
+            <thead>
+              <tr><th>Member</th><th>Phone</th><th>Activated</th><th class="actions">Actions</th></tr>
+            </thead>
+            <tbody id="phoneRows"></tbody>
           </table>
         </div>
       </section>

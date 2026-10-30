@@ -29,6 +29,20 @@ object RestoreStart {
     /** How many of a batch were queued now, and how many were already on their way. */
     data class Counts(val started: Int, val alreadyRunning: Int)
 
+    /**
+     * A listed backup restored into its own local id, or into a `restored-…`
+     * row when it carries none ([CloudRestore.targetLocalId]). Home's card and
+     * the sync from other phones both name the row they fill this way, so a
+     * later restore of the same backup fills the same row.
+     */
+    fun targetFor(cloudSessionId: String, localSessionId: String, name: String) = Target(
+        cloudSessionId = cloudSessionId,
+        targetLocalId = CloudRestore.targetLocalId(
+            CloudSessionDto(sessionId = cloudSessionId, localSessionId = localSessionId),
+        ),
+        name = name,
+    )
+
     /** [start] each of [targets] in turn. Writes the index, so call it off the main thread. */
     @WorkerThread
     fun startAll(context: Context, targets: List<Target>): Counts {

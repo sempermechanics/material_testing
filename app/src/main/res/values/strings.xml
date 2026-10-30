@@ -1378,7 +1378,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="auth_account_check_failed">Could not verify your account. Try again later.</string>
     <string name="auth_account_check_offline">Could not verify account. Check your connection and sign in again.</string>
     <string name="auth_phone_released">Staff released this phone from this account, so it cannot be used with it again. Sign in with another account, or use another phone.</string>
-    <string name="auth_phone_linked_elsewhere">This phone is already linked to another account, or this account to another phone. Sign in with that account, or ask your institution\'s IT or semper support to move it to this phone.</string>
+    <string name="auth_phone_linked_elsewhere">This phone is linked to another account, or this account has no room for another phone. Sign in with that account, or deactivate a phone in Your phones on one of your other phones, or ask your institution\'s IT or semper support.</string>
 
     <!-- Sign out confirmation -->
     <string name="sign_out_confirm_title">Sign out of this phone?</string>

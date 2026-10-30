@@ -204,11 +204,12 @@ class ApiDtosContractTest {
     fun `license activate response decodes the nested config`() {
         // The seat routes' answer (checkout, release) has this shape. Only
         // GET /v1/config carries the token, the version and kill-switch
-        // fields and testAccount; these answers leave them out (key absent).
+        // fields, testAccount, and the phones' `activation` and
+        // `pendingLicence` (ADR-033); these answers leave them out (key absent).
         val resp = response<LicenseActivateResponse>(
             "license_activate_response",
             absentOk = listOf("entitlement", "minSupportedVersionCode", "recommendedVersionCode", "killSwitches")
-                .plus("testAccount")
+                .plus(listOf("testAccount", "activation", "pendingLicence"))
                 .mapTo(HashSet()) { "$.config.$it" },
         )
         assertNull(resp.config.entitlement)

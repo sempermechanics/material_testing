@@ -122,18 +122,19 @@ def resumed(existing: dict) -> dict:
     }
 
 
-def require_room(user: dict, cfg: dict, body: SessionCreate, device_id: str | None) -> None:
+def require_room(user: dict, cfg: dict, body: SessionCreate, device_id: str | None,
+                 app: str) -> None:
     """413 or 409 unless one more analysis of `body`'s size fits the caller's
-    quota: files per session, analyses per account, and for a demo account
-    analyses per device (`_device_cap_reached`)."""
+    quota: files per session, analyses per account and app (ADR-033), and for
+    a demo account analyses per device (`_device_cap_reached`)."""
     if len(body.files) > cfg["maxFilesPerSession"]:
         raise HTTPException(413, errors.TOO_MANY_FILES)
-    used = repo.count_user_sessions(user["uid"])
+    used = repo.count_user_sessions(user["uid"], app)
     if used >= cfg["maxSessions"]:
         raise HTTPException(
             409,
             f"{errors.SESSION_QUOTA_EXCEEDED}: {used}/{cfg['maxSessions']} analyses stored. "
-            + _QUOTA_REMEDY.get(repo.inactive_licence_reason(user), _QUOTA_REMEDY[""]),
+            + _QUOTA_REMEDY.get(repo.inactive_licence_reason(user, app), _QUOTA_REMEDY[""]),
         )
     if _device_cap_reached(cfg, device_id):
         raise HTTPException(409, _device_quota_detail(cfg["maxSessions"]))

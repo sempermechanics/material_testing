@@ -51,6 +51,12 @@ class AppIdHeaderTest {
     }
 
     @Test
+    fun `a backend call says this build taps Activate`() {
+        call(AppIdHeader("${server.hostName}:${server.port}", "com.sempermechanics.semper"))
+        assertEquals("explicit", server.takeRequest().headers["X-Activation"])
+    }
+
+    @Test
     fun `the default version is this build's versionCode, even with no app id`() {
         call(AppIdHeader("${server.hostName}:${server.port}", ""))
         val request = server.takeRequest()
@@ -65,6 +71,7 @@ class AppIdHeaderTest {
         val request = server.takeRequest()
         assertNull(request.headers["X-App-Id"])
         assertNull(request.headers["X-App-Version"])
+        assertNull(request.headers["X-Activation"])
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.sempermechanics.semper.data.net
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.core.content.edit
 import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.account.entitlement.EntitlementStore
@@ -120,9 +121,30 @@ object AppRemoteConfig {
                 put(RemoteConfig.TEST_ACCOUNT_PURPOSE, config.testAccount?.purpose?.trim().orEmpty())
                 put(RemoteConfig.TEST_ACCOUNT_EXPIRES_AT, parseInstant(config.testAccount?.expiresAt))
             }
+            putPhones(config, authoritative)
         }
         EntitlementStore.accept(context, config.entitlement, authoritative, ClientNonce.serverNowMs())
         Diagnostics.applyAccountType(context)
+    }
+
+    /**
+     * The `activation` and `pendingLicence` blocks (ADR-033); a lease answer,
+     * which carries neither, leaves them as they were.
+     */
+    private fun SharedPreferences.Editor.putPhones(config: AppConfigDto, authoritative: Boolean) {
+        if (authoritative || config.activation != null) {
+            val activation = config.activation ?: ActivationDto()
+            put(RemoteConfig.ACTIVATION_STATE, activation.state)
+            put(RemoteConfig.DEVICES_ACTIVE, activation.devicesActive.coerceAtLeast(0))
+            put(RemoteConfig.MAX_DEVICES, activation.maxDevices.coerceAtLeast(0))
+            put(RemoteConfig.ACTIVATION_POOL, activation.pool)
+            put(RemoteConfig.ACTIVATION_MODEL, activation.model)
+        }
+        if (authoritative || config.pendingLicence != null) {
+            put(RemoteConfig.PENDING_LICENCE_ID, config.pendingLicence?.licenseId.orEmpty())
+            put(RemoteConfig.PENDING_LICENCE_PREFIX, config.pendingLicence?.prefix.orEmpty())
+            put(RemoteConfig.PENDING_LICENCE_EXPIRES_AT, parseInstant(config.pendingLicence?.expiresAt))
+        }
     }
 
     /**
@@ -334,12 +356,75 @@ object AppRemoteConfig {
         return if (purpose.isBlank()) null else TestAccount(purpose, prefs[RemoteConfig.TEST_ACCOUNT_EXPIRES_AT])
     }
 
+    /**
+     * This phone's place in its licence's device count (`activation` on the
+     * last `/v1/config` or Activate; ADR-033). [Activation.NONE] before any
+     * answer, and from a backend that predates the block.
+     */
+    fun activation(context: Context): Activation {
+        val prefs = prefs(context)
+        return Activation(
+            state = prefs[RemoteConfig.ACTIVATION_STATE],
+            devicesActive = prefs[RemoteConfig.DEVICES_ACTIVE],
+            maxDevices = prefs[RemoteConfig.MAX_DEVICES],
+            pool = prefs[RemoteConfig.ACTIVATION_POOL],
+            model = prefs[RemoteConfig.ACTIVATION_MODEL],
+        )
+    }
+
+    /** The new licence waiting for Activate (`pendingLicence`), or null when none waits. */
+    fun pendingLicence(context: Context): PendingLicence? {
+        val prefs = prefs(context)
+        val id = prefs[RemoteConfig.PENDING_LICENCE_ID]
+        if (id.isBlank()) return null
+        return PendingLicence(
+            id,
+            prefix = prefs[RemoteConfig.PENDING_LICENCE_PREFIX],
+            expiresAtMs = prefs[RemoteConfig.PENDING_LICENCE_EXPIRES_AT],
+        )
+    }
+
+    /** The Home activation card's offer the user hid, by its key; "" when none. Cleared at sign-out. */
+    fun activationCardHidden(context: Context): String = prefs(context)[RemoteConfig.ACTIVATION_CARD_HIDDEN]
+
+    /** Hides Home's activation card for the offer [key] until the offer changes. */
+    fun hideActivationCard(context: Context, key: String) {
+        prefs(context).edit { put(RemoteConfig.ACTIVATION_CARD_HIDDEN, key) }
+    }
+
     /** Drop cached limits and the entitlement token (sign-out). */
     fun clear(context: Context) {
         prefs(context).edit { clear() }
         EntitlementStore.clear(context)
         Diagnostics.applyAccountType(context)
     }
+
+    /**
+     * [activation]: this phone's [state] (an [ActivationDto] `STATE_…`) and
+     * its licence's count, [devicesActive] of [maxDevices], an institution's
+     * when [pool].
+     */
+    data class Activation(
+        val state: String,
+        val devicesActive: Int,
+        val maxDevices: Int,
+        val pool: Boolean,
+        val model: String,
+    ) {
+        /** This phone is licensed by its activation (or, before the split, its lock). */
+        val isActive: Boolean get() = state == ActivationDto.STATE_ACTIVE
+
+        /** The account holds a licence for this app that this phone could take a slot on, or wait for. */
+        val canActivate: Boolean
+            get() = state == ActivationDto.STATE_AVAILABLE || state == ActivationDto.STATE_FULL
+
+        companion object {
+            val NONE = Activation(ActivationDto.STATE_NONE, 0, 0, pool = false, model = "")
+        }
+    }
+
+    /** [pendingLicence]: its id, key [prefix], and end ([NO_INSTANT] when perpetual). */
+    data class PendingLicence(val licenseId: String, val prefix: String, val expiresAtMs: Long)
 
     /**
      * A QC or CI test account (ADR-027): its [purpose] and the instant it is

@@ -5,6 +5,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
 import repo_view as repo
+from app.config import settings
 from app.models import DeviceReg
 from refusals import attempt
 
@@ -63,19 +64,42 @@ def test_unknown_user_is_reported_not_written(store):
     assert "nobody" not in store._data["users"]
 
 
-def test_registering_a_second_device_while_bound_is_refused(store):
-    """A device switch needs the old binding released first (a lock clear or
-    a staff release). The check and the write are one transaction, so two
-    registrations racing from two phones cannot both leave a device ACTIVE."""
-    code, _ = attempt(repo.register_device, "u1", DeviceReg(
+def test_a_second_device_registers_beside_the_first(store):
+    """An account holds several phones per app (ADR-033). The second is the
+    latest; the first stays ACTIVE; the licence decides which is licensed."""
+    out = repo.register_device("u1", DeviceReg(
         deviceId=DEV_B, publicKeyPem=_public_pem(),
         model="Pixel", osVersion="15", appVersion="1.0",
     ))
 
-    assert code == "device_conflict"
-    assert DEV_B not in store._data["devices"]
+    assert out["rotated"] == [] and out["healed"] is False
+    assert store._data["devices"][DEV_B]["status"] == "ACTIVE"
     assert store._data["devices"][DEV_A]["status"] == "ACTIVE"
-    assert store._data["users"]["u1"]["activeDeviceId"] == DEV_A
+    assert store._data["users"]["u1"]["activeDeviceId"] == DEV_B
+
+
+def test_past_the_cap_the_oldest_unlicensed_phone_makes_room(store, monkeypatch):
+    """`MAX_PHONES_PER_APP` phones at most; the first registered goes, as
+    superseded, and never the phone the licence is locked to."""
+    monkeypatch.setattr(settings, "MAX_PHONES_PER_APP", 2)
+    store._data["devices"][DEV_A]["registeredAt"] = 1
+    store._data["devices"]["dev-c-0003"] = {"uid": "u1", "status": "ACTIVE",
+                                            "registeredAt": 2, "publicKeyPem": _public_pem()}
+    store._data["users"]["u1"]["licenseId"] = "lic-1"
+    store._data["licenses"] = {"lic-1": {"kind": "individual", "status": "redeemed",
+                                         "deviceIdLock": DEV_A}}
+
+    out = repo.register_device("u1", DeviceReg(deviceId=DEV_B, publicKeyPem=_public_pem()))
+
+    assert out["rotated"] == ["dev-c-0003"]
+    assert store._data["devices"]["dev-c-0003"]["status"] == "SUPERSEDED"
+    assert store._data["devices"][DEV_A]["status"] == "ACTIVE"
+    assert store._data["devices"][DEV_B]["status"] == "ACTIVE"
+
+
+def test_reregistering_the_same_phone_is_a_heal(store):
+    out = repo.register_device("u1", DeviceReg(deviceId=DEV_A, publicKeyPem=_public_pem()))
+    assert out["healed"] is True and out["rotated"] == []
 
 
 def test_registering_a_device_another_account_holds_is_refused(store):

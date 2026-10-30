@@ -213,7 +213,7 @@ def email_domain(email: str) -> str:
     return address.rsplit("@", 1)[-1] if "@" in address else ""
 
 
-def invite_id(email: str) -> str:
+def invite_id(email: str, app: str = "") -> str:
     """Document id for a pending institution invite.
 
     A hash rather than the address itself, for two reasons that both matter.
@@ -223,4 +223,10 @@ def invite_id(email: str) -> str:
     The hash is deterministic, so claiming an invite at sign-in is a single
     document read rather than a query.
     """
-    return hashlib.sha256(normalize_email(email).encode("utf-8")).hexdigest()
+    address = normalize_email(email)
+    # Semper's id is the one every invite has had; another app's licence
+    # (ADR-033) is promised under the address and the app's name, so one
+    # person can be promised a licence for each app.
+    if app and app != "semper":
+        address = f"{address}#{app}"
+    return hashlib.sha256(address.encode("utf-8")).hexdigest()

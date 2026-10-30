@@ -162,8 +162,8 @@ export function inviteCells(invite) {
  * A backend error detail split into its code and what follows the code.
  *
  * Some codes carry a value after a colon — `session_quota_exceeded: 25/25 …`,
- * `device_change_too_soon: <ISO instant>` — and an instant has colons of its
- * own, so only the first one separates. Pages match on `code`.
+ * `device_limit_reached: 1/1` — and a suffix may hold colons of its own (an
+ * ISO instant does), so only the first one separates. Pages match on `code`.
  */
 export function errorDetail(detail) {
   const text = String(detail ?? "");
@@ -540,6 +540,13 @@ export function licenceEditPatch(lic, form, now = Date.now()) {
       if (!admins.length) return fail("An institution licence needs at least one IT contact.");
       patch.adminEmails = admins;
     }
+  }
+  // The phone count (ADR-033), on a licence that names its app; `undefined`
+  // when the field is not shown. An empty field leaves the count as it is.
+  const phones = String(form.maxDevices ?? "").trim();
+  if (phones && phones !== String(lic.maxDevices ?? "")) {
+    if (!/^\d+$/.test(phones) || Number(phones) < 1) return fail("Phones is a whole number, 1 or more.");
+    patch.maxDevices = Number(phones);
   }
   if ((form.note ?? "") !== (lic.note ?? "")) patch.note = form.note ?? "";
   if (!Object.keys(patch).length) return fail("Nothing changed.");

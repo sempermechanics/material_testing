@@ -7,6 +7,7 @@ import com.sempermechanics.semper.data.account.AuthRepository.AccessLostExceptio
 import com.sempermechanics.semper.data.account.entitlement.ConfigFetch
 import com.sempermechanics.semper.data.account.entitlement.EntitlementRefresh
 import com.sempermechanics.semper.data.account.entitlement.SignInRefresh
+import com.sempermechanics.semper.data.cloud.sync.PhoneSyncWorker
 import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.ApiErrors
 import com.sempermechanics.semper.data.net.AppConfigDto
@@ -63,6 +64,9 @@ internal class AccessStatusResolver(
         // repeat free.
         val answered = AppRemoteConfig.record(appContext, config)
         if (answered) LicenseConfigWorker.enqueue(appContext)
+        // The sync from other phones, while its switch is on; it checks the
+        // licence on each run. KEEP makes a repeat free here too.
+        PhoneSyncWorker.schedule(appContext)
         val registeredNow = ensureDeviceRegistered(token)
         // `/v1/config`, and the entitlement token only it carries, is stored
         // before this returns and Home opens (EntitlementRefresh.afterSignIn):

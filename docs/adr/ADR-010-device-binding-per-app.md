@@ -4,6 +4,10 @@
 and phases 1–3 (one phone per app) are built; the backend is deployed
 (2026-09-28), with the consoles. Material Testing builds from
 material_testing `main` send the header (material_testing#90).
+Superseded in part by [ADR-033](ADR-033-licence-per-app-explicit-activation.md)
+(2026-10-29): an account now holds several registered phones per app, any of
+which signs; the licence decides which is licensed. Per-app fields, the
+`X-App-Id` header and device trust levels stand.
 **Date:** 2026-09-28
 **Deciders:** product owner, backend owner
 

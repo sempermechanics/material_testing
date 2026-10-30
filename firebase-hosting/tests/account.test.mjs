@@ -483,7 +483,7 @@ async function unbind(response) {
   await settle();
 }
 
-test("moving the licence asks first and says when it can be moved again", async () => {
+test("moving the licence asks first, and names no wait (no cooldown, ADR-033)", async () => {
   await open({ license: { mode: "licensed", held: true }, routes: {} });
   confirms.answer(false);
   $("unbind").click();
@@ -491,12 +491,12 @@ test("moving the licence asks first and says when it can be moved again", async 
   assert.deepEqual(sent(/unbind/), []);
 
   reset();
-  const next = iso(7 * DAY);
-  await unbind(json(200, { nextChangeAllowedAt: next }));
+  // A backend from before ADR-033 may still send an instant; it is not shown.
+  await unbind(json(200, { nextChangeAllowedAt: iso(7 * DAY) }));
   assert.deepEqual(sent(/unbind/), ["POST /v1/licenses/unbind"]);
   assert.equal($("status").textContent,
     "Done. Sign in on the new phone, open semper once so the licence attaches, and then " +
-    `restore your analyses. You can do this again after ${when(next)}.`);
+    "restore your analyses.");
 });
 
 test("semper Classroom moves on its own, named in the query", async () => {
@@ -518,21 +518,7 @@ test("semper Classroom moves on its own, named in the query", async () => {
     "and then restore your analyses.");
 });
 
-test("a move inside the cooldown names the instant it ends", async () => {
-  const until = "2026-10-01T10:00:00Z";
-  await unbind(json(409, { detail: `device_change_too_soon: ${until}` }));
-  assert.deepEqual(status(), [
-    `You have moved this licence recently, so you can move it yourself again after ${when(until)}. ` +
-    "Ask your institution's IT or semper support if you need to move it now.",
-    "muted err",
-  ]);
-});
-
 test("the other move refusals read as sentences, and an unknown one keeps its code", async () => {
-  await unbind(json(409, { detail: "device_change_too_soon" }));
-  assert.equal($("status").textContent,
-    "You have moved this licence recently. Ask your institution's IT or semper support if you need to move it now.");
-  reset();
   await unbind(json(403, { detail: "mfa_required" }));
   assert.equal($("status").textContent, "Set up two-factor authentication first — moving a licence needs it.");
   reset();

@@ -163,8 +163,10 @@ def classify_route(method: str, path: str, template: str | None = None) -> tuple
     if template.startswith("/v1/admin"):
         return "admin", template
     # A licence's own lifecycle on the device: activate, seat checkout and
-    # release, unbind. Institution desk traffic is its own class.
-    if template.startswith("/v1/licenses/") or template == "/v1/me/claim":
+    # release, unbind, and the phones a licence licenses (ADR-033).
+    # Institution desk traffic is its own class.
+    if (template.startswith("/v1/licenses/") or template == "/v1/me/claim"
+            or template.startswith("/v1/me/devices")):
         return "license", template
     if template.startswith("/v1/institutions/"):
         return "institution", template

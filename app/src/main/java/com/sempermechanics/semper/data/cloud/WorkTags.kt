@@ -70,6 +70,10 @@ object WorkTags {
      */
     const val LICENSE_CONFIG_NOW_NAME = "license-config-now"
 
+    /** The periodic sync from the account's other phones, unique under [PHONE_SYNC_NAME]. */
+    const val PHONE_SYNC = "phone-sync"
+    const val PHONE_SYNC_NAME = "phone-sync-periodic"
+
     /**
      * The id in a job's `<tag>-<id>` tag ([restoreTag], [bundleDownloadTag]),
      * or null when [tags] has none: how the screens tell which analysis a

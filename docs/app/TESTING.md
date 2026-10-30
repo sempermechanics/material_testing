@@ -6,6 +6,12 @@ in [../WORKFLOWS.md](../WORKFLOWS.md) names the tests that pin it, so the two
 files answer opposite questions: "what covers this flow?" there, "what does this
 chunk own?" here.
 
+Manual and device QC (emulator lanes, the real phone, consoles, human gates)
+is not here: it is a catalogue of scenarios in [`qa/`](../../qa/README.md), run
+in lanes and reported by `scripts/qa/qa.py`
+([ADR-034](../adr/ADR-034-qc-framework.md)). When a scenario there is covered
+by a test in this suite, its `automation` field names the test.
+
 ## Chunk map
 
 | Chunk | User journey | JVM tests (`app/src/test`) | Instrumented (`androidTest`) |

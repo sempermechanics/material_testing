@@ -6,7 +6,7 @@ import { askInPage } from "../dialogs.js";
 import { setStatus } from "../status.js";
 import { day, isoDay, emailList, licenceEditPatch } from "../util.js";
 import { explain } from "../messages.js";
-import { $, findLicence, labelOf, demoCapNote } from "./state.js";
+import { $, findLicence, labelOf, demoCapNote, runsActivations } from "./state.js";
 import { showLicence, refreshLicence } from "./licences.js";
 import { kindRadios, syncKind, openIssue } from "./mint.js";
 
@@ -39,6 +39,16 @@ export function openEdit(id) {
   $("editSeating").value = lic.seating || "assigned";
   $("editAdmins").value = (lic.adminEmails || []).join(", ");
   $("editNote").value = lic.note || "";
+  // The phone count of a licence for one app (ADR-033). A shared (floating)
+  // licence counts its seats in use instead, and one from before the split
+  // has no count: one phone per app.
+  const counted = runsActivations(lic) && lic.seating !== "floating";
+  $("editDevicesField").hidden = !counted;
+  $("editMaxDevices").value = counted ? (lic.maxDevices ?? "") : "";
+  $("editMaxDevices").placeholder = institution ? "one a seat" : "1";
+  $("editDevicesHint").textContent = counted
+    ? `${Number(lic.devicesActive) || 0} active now. Lowering it deactivates nobody, so it cannot go below that.`
+    : "";
   syncEditTerm();
   $("editHint").textContent = "";
   $("editHint").className = "muted";
@@ -91,6 +101,7 @@ $("editForm").addEventListener("submit", async (ev) => {
     seating: $("editSeating").value,
     adminEmails: $("editAdmins").value,
     note: $("editNote").value,
+    maxDevices: $("editDevicesField").hidden ? undefined : $("editMaxDevices").value,
   });
   if (error) {
     editHint(error);
@@ -133,7 +144,13 @@ $("editForm").addEventListener("submit", async (ev) => {
 });
 
 function editError(e) {
+  const active = Number(editing?.devicesActive) || 0;
   return explain(e, {
+    max_devices_below_active:
+      `More phones are active on it than that (${active}). Lowering the count deactivates ` +
+      "nobody: deactivate phones under Phones first, or keep the number higher.",
+    max_devices_needs_app:
+      "This licence is from before the split and has no phone count: it holds one phone per app.",
     expiry_in_past: "That date has already passed. Ending a licence now is Revoke.",
     expiry_before_current: "That is earlier than the current expiry.",
     license_perpetual: "This licence is perpetual.",

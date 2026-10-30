@@ -212,22 +212,27 @@ class Settings:
     # made either way. The names are historical — the staff console is what
     # first needed them.
 
-    # How long a holder must wait between changing their own device. A second
-    # factor proves who is asking, not how often, so without this one person
-    # could re-bind daily and pass a single licence round a lab. Counted
-    # against `deviceChangedAt`, which only the self-service route writes:
-    # staff- and IT-initiated changes neither read nor write it, so a support
-    # request is never blocked by a cooldown the holder has spent. Set to 0 to
-    # disable the wait entirely.
-    SELF_DEVICE_CHANGE_COOLDOWN_DAYS = _env_int("SELF_DEVICE_CHANGE_COOLDOWN_DAYS", "30")
+    # Whether a request from a build that does not tap Activate (no
+    # `X-Activation: explicit` header) activates its phone by itself, on a
+    # licence that runs the activation model (ADR-033). `legacy`: the holder's
+    # first phone activates on its own while a slot is free, so installed
+    # builds keep their licence. `off`: only Activate does; set once the
+    # builds that send the header are what the fleet runs (semperdic-app's TD-363).
+    IMPLICIT_ACTIVATION = os.getenv("IMPLICIT_ACTIVATION", "legacy").strip().lower()
 
-    # How long a phone released by a device-lock clear is refused if it tries
-    # to register again. The old phone's upload worker re-registers whenever it
-    # reads `device_not_active`, so without a hold it takes the account back
-    # before the new phone signs in. Registering any other device ends the hold
-    # at once; after it, the old phone may come back (a mistaken clear strands
-    # nobody). Set to 0 to disable it.
+    # How long a phone released by a device-lock clear or a staff release is
+    # refused if it tries to register again. The old phone's upload worker
+    # re-registers whenever it reads `device_not_active`, so without a hold it
+    # would sign straight back in. Other phones registering do not end it (an
+    # account holds several, ADR-033); after it, the old phone may come back
+    # (a mistaken clear strands nobody). Set to 0 to disable it.
     DEVICE_RELEASE_HOLD_HOURS = _env_int("DEVICE_RELEASE_HOLD_HOURS", "24")
+
+    # How many phones a real account may hold registered per app at once
+    # (ADR-033). Only a licensed one is licensed; the rest run as Demo. Past
+    # it, the phone that registered first and holds no licence makes room. A
+    # test account has its own cap (`testAccount.maxDevices`, ADR-027).
+    MAX_PHONES_PER_APP = _env_int("MAX_PHONES_PER_APP", "5")
 
     # --- App Check (device callers only) ------------------------------------
     # The Firebase Web API key ships inside the APK (google-services.json) and

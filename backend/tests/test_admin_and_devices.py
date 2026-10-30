@@ -97,20 +97,24 @@ async def test_admin_list_users_cursor(store, client):
 
 
 # ---------------- register_device conflicts ----------------
-async def test_register_device_conflict_when_account_bound(store, client, monkeypatch):
-    # DEV user already has activeDeviceId="dev-device"; registering a different id conflicts.
+async def test_a_second_phone_registers_beside_the_first(store, client, monkeypatch):
+    """An account holds several phones per app (ADR-033): the second one
+    signs in and becomes the latest; the first stays registered."""
     monkeypatch.setattr(
         deps, "_DEV_USER",
         {**deps._DEV_USER, "activeDeviceId": "already-bound-device"},
     )
     store._data["users"] = {"dev-user": {"email": "dev@local", "access_status": "APPROVED",
                                          "activeDeviceId": "already-bound-device"}}
+    store._data["devices"] = {"already-bound-device": {"uid": "dev-user", "status": "ACTIVE"}}
     r = await client.post(
         "/v1/devices/register",
         json={"deviceId": "and-newdevice", "publicKeyPem": _ec_pem()},
     )
-    assert r.status_code == 409
-    assert r.json()["detail"] == "device_conflict"
+    assert r.status_code == 201, r.text
+    assert r.json() == {"deviceId": "and-newdevice", "healed": False}
+    assert store._data["users"]["dev-user"]["activeDeviceId"] == "and-newdevice"
+    assert store._data["devices"]["already-bound-device"]["status"] == "ACTIVE"
 
 
 async def test_register_device_in_use_by_other_account(store, client, monkeypatch):
@@ -280,14 +284,13 @@ async def test_a_device_signs_only_for_the_app_it_registered_under(secure, clien
     assert secure._data["users"]["target"]["access_status"] == "PENDING"
 
 
-async def test_an_active_device_the_account_no_longer_binds_cannot_sign(secure, client, monkeypatch):
-    """`devices/{id}` ACTIVE is not enough: the account's binding for the
-    asking app must name it too, so a registration that lost a race (or any
-    stale ACTIVE record) cannot keep signing."""
+async def test_a_retired_device_cannot_sign(secure, client, monkeypatch):
+    """Any of the account's ACTIVE phones signs (ADR-033); a retired one
+    (released, rotated out, superseded) cannot, whatever its key."""
     _token(monkeypatch, {"firebase": {"sign_in_second_factor": "totp"}})
     priv, pem = _key()
     secure._data["devices"] = {"stale-phone": {
-        "uid": "admin-1", "app": "semper", "status": "ACTIVE",
+        "uid": "admin-1", "app": "semper", "status": "SUPERSEDED",
         "publicKeyPem": pem, "stepUpEligible": True}}
 
     r = await _signed_approve(client, priv, "stale-phone")

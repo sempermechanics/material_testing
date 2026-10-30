@@ -78,6 +78,22 @@
             "title": "Adminemails",
             "type": "array"
           },
+          "app": {
+            "anyOf": [
+              {
+                "enum": [
+                  "semper",
+                  "semperclassroom",
+                  "materialtesting"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App"
+          },
           "deviceIdLock": {
             "anyOf": [
               {
@@ -171,6 +187,19 @@
               }
             ],
             "title": "Maxanalyses"
+          },
+          "maxDevices": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxdevices"
           },
           "maxSeats": {
             "anyOf": [
@@ -349,6 +378,19 @@
             ],
             "title": "Maxanalyses"
           },
+          "maxDevices": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxdevices"
+          },
           "maxSeats": {
             "anyOf": [
               {
@@ -417,10 +459,138 @@
         "title": "AdminLicenseUpdate",
         "type": "object"
       },
+      "AdminLicenseUpgrade": {
+        "additionalProperties": false,
+        "description": "Issue the holder of an individual licence a new one for the same app\n(ADR-033). What the old licence carries over unless named here: its\ndevice count, end, analysis cap and note. `kind=\"institution\"` makes it\nan assigned institution licence on `domainLock`, the holder's domain,\nadministered by `adminEmails`. The holder moves when they tap Activate.",
+        "properties": {
+          "adminEmails": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Adminemails",
+            "type": "array"
+          },
+          "domainLock": {
+            "anyOf": [
+              {
+                "maxLength": 253,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domainlock"
+          },
+          "expiresAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiresat"
+          },
+          "kind": {
+            "default": "individual",
+            "enum": [
+              "individual",
+              "institution"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "maxAnalyses": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxanalyses"
+          },
+          "maxDevices": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxdevices"
+          },
+          "maxSeats": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100000.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxseats"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "perpetual": {
+            "anyOf": [
+              {
+                "const": true,
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Perpetual"
+          }
+        },
+        "title": "AdminLicenseUpgrade",
+        "type": "object"
+      },
       "AdminTestAccountCreate": {
         "additionalProperties": false,
-        "description": "`POST /v1/admin/test-accounts` (ADR-027): a QC or CI login staff hand\nover. `days` is how long it lasts, 1..90: 30 when a QC account names\nnone, and no end at all when a CI account names none. `maxDevices` is how\nmany phones per app may be signed in at once. `note` says who or what it\nis for, never a password; at most 200 characters.",
+        "description": "`POST /v1/admin/test-accounts` (ADR-027): a QC or CI login staff hand\nover. `days` is how long it lasts, 1..90: 30 when a QC account names\nnone, and no end at all when a CI account names none. `maxDevices` is how\nmany phones per app may be signed in at once. `note` says who or what it\nis for, never a password; at most 200 characters.\n\nA QC account's licence runs the activation model (ADR-033): one licence\nper app in `apps`, each licensing `licenceMaxDevices` activated phones,\nor none at all (`licence: \"none\"`), which is Demo. A CI account keeps one\nlicence for every app that no phone is bound to, so Tier 3 can rotate\nemulators through it; the three licence fields are QC's alone.",
         "properties": {
+          "apps": {
+            "anyOf": [
+              {
+                "enum": [
+                  "semper",
+                  "semperclassroom",
+                  "both"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apps"
+          },
           "days": {
             "anyOf": [
               {
@@ -439,6 +609,34 @@
             "minLength": 3,
             "title": "Email",
             "type": "string"
+          },
+          "licence": {
+            "anyOf": [
+              {
+                "enum": [
+                  "individual",
+                  "none"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Licence"
+          },
+          "licenceMaxDevices": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Licencemaxdevices"
           },
           "maxDevices": {
             "default": 3,
@@ -497,6 +695,19 @@
           "improvement"
         ],
         "title": "ConsentUpdate",
+        "type": "object"
+      },
+      "DeviceActivate": {
+        "additionalProperties": false,
+        "description": "Activate's body, optional (ADR-033). `upgrade` activates this phone on\nthe new licence issued to the account, which moves it there.",
+        "properties": {
+          "upgrade": {
+            "default": false,
+            "title": "Upgrade",
+            "type": "boolean"
+          }
+        },
+        "title": "DeviceActivate",
         "type": "object"
       },
       "DeviceReg": {
@@ -801,6 +1012,19 @@
           "files"
         ],
         "title": "SessionCreate",
+        "type": "object"
+      },
+      "StaffActivation": {
+        "additionalProperties": false,
+        "description": "Staff adding a phone. `override` goes past the licence's count, for a\nsupport case the count should not block; it is audited as such.",
+        "properties": {
+          "override": {
+            "default": false,
+            "title": "Override",
+            "type": "boolean"
+          }
+        },
+        "title": "StaffActivation",
         "type": "object"
       },
       "TermsAcceptance": {
@@ -1930,6 +2154,116 @@
         "summary": "Admin Update License"
       }
     },
+    "/v1/admin/licenses/{license_id}/apply-upgrade": {
+      "post": {
+        "description": "Move the holder onto the issued licence `{id}` now, as their Activate\nwould, but with no phone: each of their phones activates again on it.\n`404 no_pending_upgrade` when `{id}` is not an upgrade waiting for its\nholder.",
+        "operationId": "admin_apply_upgrade_v1_admin_licenses__license_id__apply_upgrade_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "license_id",
+            "required": true,
+            "schema": {
+              "maxLength": 512,
+              "minLength": 1,
+              "title": "License Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-forwarded-authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Forwarded-Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-device-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Device-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-firebase-appcheck",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Firebase-Appcheck",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-app-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-App-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-nonce",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Nonce",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-signature",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Signature",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Admin Apply Upgrade"
+      }
+    },
     "/v1/admin/licenses/{license_id}/audit": {
       "get": {
         "description": "This licence's audit log, newest first: who did what to the\nlicence, its seats, its invites and its leases.\n\n`since` / `until` are ISO dates or instants (UTC unless they say\notherwise); `until` as a bare date includes that day. Paged by\n`page_size` (1..5000, default 100) and `page_token`. `format=csv` is\nthe same page as a download, with the next page's token in\n`X-Next-Page-Token`, and is audited (`…_AUDIT_EXPORT`).\n\nScoped by the licence the caller reached, so another institution's\nevents are never in it, and a page token naming one restarts the log.",
@@ -2293,6 +2627,346 @@
           }
         },
         "summary": "Admin License Device History"
+      }
+    },
+    "/v1/admin/licenses/{license_id}/devices": {
+      "get": {
+        "description": "Any licence's active phones, with its count.",
+        "operationId": "licence_devices_v1_admin_licenses__license_id__devices_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "license_id",
+            "required": true,
+            "schema": {
+              "maxLength": 512,
+              "minLength": 1,
+              "title": "License Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-forwarded-authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Forwarded-Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-device-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Device-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-firebase-appcheck",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Firebase-Appcheck",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-app-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-App-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Licence Devices"
+      }
+    },
+    "/v1/admin/licenses/{license_id}/devices/{device_id}": {
+      "delete": {
+        "description": "Deactivate any phone on any licence; it is signed out of its account.",
+        "operationId": "staff_deactivate_v1_admin_licenses__license_id__devices__device_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "license_id",
+            "required": true,
+            "schema": {
+              "maxLength": 512,
+              "minLength": 1,
+              "title": "License Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "device_id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Device Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-forwarded-authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Forwarded-Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-device-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Device-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-firebase-appcheck",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Firebase-Appcheck",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-app-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-App-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-nonce",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Nonce",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-signature",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Signature",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Staff Deactivate"
+      },
+      "post": {
+        "description": "Add a phone: activate one the holder has registered, for the app it\nregistered under, on this licence. For a holder whose build cannot tap\nActivate, or a support case. Within `maxDevices` unless `override`.",
+        "operationId": "staff_activate_v1_admin_licenses__license_id__devices__device_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "license_id",
+            "required": true,
+            "schema": {
+              "maxLength": 512,
+              "minLength": 1,
+              "title": "License Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "device_id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Device Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-forwarded-authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Forwarded-Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-device-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Device-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-firebase-appcheck",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Firebase-Appcheck",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-app-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-App-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-nonce",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Nonce",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-signature",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Signature",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffActivation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Staff Activate"
       }
     },
     "/v1/admin/licenses/{license_id}/invites/{invite_key}": {
@@ -3514,6 +4188,126 @@
           }
         },
         "summary": "Seat Summary"
+      }
+    },
+    "/v1/admin/licenses/{license_id}/upgrade": {
+      "post": {
+        "description": "Issue the holder of an individual licence that names its app a new\nlicence for the same app. `409 license_not_upgradable` for any other\nlicence (one from before the split converts with `/convert`), `409\nupgrade_pending: <id>` while an earlier one waits, `422\nconvert_domain_mismatch` for an institution licence off the holder's\ndomain. `pending` is false for a holder who never signed in: their\ninvite moved, and the old licence is revoked now.",
+        "operationId": "admin_issue_upgrade_v1_admin_licenses__license_id__upgrade_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "license_id",
+            "required": true,
+            "schema": {
+              "maxLength": 512,
+              "minLength": 1,
+              "title": "License Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-forwarded-authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Forwarded-Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-device-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Device-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-firebase-appcheck",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Firebase-Appcheck",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-app-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-App-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-nonce",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Nonce",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-signature",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Signature",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminLicenseUpgrade"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Admin Issue Upgrade"
       }
     },
     "/v1/admin/test-accounts": {
@@ -5331,6 +6125,237 @@
         "summary": "License Audit"
       }
     },
+    "/v1/institutions/licenses/{license_id}/devices": {
+      "get": {
+        "description": "The licence's active phones of members on its `domainLock`, with the\npool's count.",
+        "operationId": "institution_devices_v1_institutions_licenses__license_id__devices_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "license_id",
+            "required": true,
+            "schema": {
+              "maxLength": 512,
+              "minLength": 1,
+              "title": "License Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-forwarded-authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Forwarded-Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-device-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Device-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-firebase-appcheck",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Firebase-Appcheck",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-app-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-App-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-nonce",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Nonce",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-signature",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Signature",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Institution Devices"
+      }
+    },
+    "/v1/institutions/licenses/{license_id}/devices/{device_id}": {
+      "delete": {
+        "description": "Deactivate a member's phone, which also signs it out of their account\n(the release hold applies). Members off the licence's domain answer\n`404 activation_not_found`, as a phone that is not there does.",
+        "operationId": "institution_deactivate_v1_institutions_licenses__license_id__devices__device_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "device_id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Device Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "license_id",
+            "required": true,
+            "schema": {
+              "maxLength": 512,
+              "minLength": 1,
+              "title": "License Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-forwarded-authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Forwarded-Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-device-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Device-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-firebase-appcheck",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Firebase-Appcheck",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-app-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-App-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-nonce",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Nonce",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-signature",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Signature",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Institution Deactivate"
+      }
+    },
     "/v1/institutions/licenses/{license_id}/invites/{invite_key}": {
       "delete": {
         "description": "Withdraw a promise that has not been kept yet.\n\nAddressed by the invite id from the seats listing, not by email: an\naddress in a request path ends up in access logs and proxy history.\nNothing to undo on the account side — an unclaimed invite never\nentitled anyone. Removing someone who *has* signed in is the seat\nrevoke route.",
@@ -6540,7 +7565,7 @@
     },
     "/v1/licenses/unbind": {
       "post": {
-        "description": "\"Use Semper on a different device\" — the holder's own device change.\n\nUntil now only institution IT could unbind a device, which left an\nindividual customer, and any member whose IT is slow, writing to support\nfor something they can prove they are entitled to do. Since Gap A,\nclearing the lock is the whole operation: the licence or seat goes\nunbound, and the next device to sign in binds it, first writer wins.\n\n**Clearing is not revoking.** The entitlement, the seat, the lease and\nevery analysis stay exactly as they are; only the lock goes empty. Nothing\nhas to be typed on the new device.\n\nStep-up rather than plain USER: this is worth more than a bearer token,\nand it is reachable from a browser. But a second factor proves *who* is\nasking, not *how often*, so it is also the one caller subject to\nSELF_DEVICE_CHANGE_COOLDOWN_DAYS — one person could otherwise re-bind\ndaily and pass a single licence round a lab. Staff and IT are not, so a\nsupport request always works.\n\nThe order on the new device matters and the app should follow it: sign in\n(USER-tier, so `POST /v1/devices/register` works before any licence\nbinds), let the first authed request bind the lock, and only then restore.\nFile content is device-attested, so restoring first fails on a device the\nuser has legitimately just moved to.\n\nMoves one app's device (ADR-010): the app that asks, by `X-App-Id`, or\nfrom a browser, which cannot send that header, `?app=semperclassroom` (the\nold `?app=materialtesting` names the same app, ADR-030).\nEach app has its own cooldown. No app named is Semper.",
+        "description": "\"Use Semper on a different device\" — the holder's own device change.\n\nUntil now only institution IT could unbind a device, which left an\nindividual customer, and any member whose IT is slow, writing to support\nfor something they can prove they are entitled to do. Since Gap A,\nclearing the lock is the whole operation: the licence or seat goes\nunbound, and the next device to sign in binds it, first writer wins.\n\n**Clearing is not revoking.** The entitlement, the seat, the lease and\nevery analysis stay exactly as they are; only the lock goes empty. Nothing\nhas to be typed on the new device.\n\nStep-up rather than plain USER: this is worth more than a bearer token,\nand it is reachable from a browser. No cooldown (ADR-033): the licence's\ndevice count limits how many phones hold it, not how often they change.\nOn a licence that runs activations this deactivates the holder's phones\nfor it; `DELETE /v1/me/devices/{device_id}` deactivates one.\n\nThe order on the new device matters and the app should follow it: sign in\n(USER-tier, so `POST /v1/devices/register` works before any licence\nbinds), let the first authed request bind the lock, and only then restore.\nFile content is device-attested, so restoring first fails on a device the\nuser has legitimately just moved to.\n\nMoves one app's device (ADR-010): the app that asks, by `X-App-Id`, or\nfrom a browser, which cannot send that header, `?app=semperclassroom` (the\nold `?app=materialtesting` names the same app, ADR-030).\nNo app named is Semper.",
         "operationId": "unbind_device_v1_licenses_unbind_post",
         "parameters": [
           {
@@ -7021,6 +8046,331 @@
         "summary": "Set Consents"
       }
     },
+    "/v1/me/devices": {
+      "get": {
+        "description": "The caller's phones for one app: each registered phone, whether the\nlicence licenses it, and the licence's count. The app's phones screen\nand the web account page (`?app=`, since a browser sends no `X-App-Id`).\nOnly the caller's own phones, never another member's in a pool.",
+        "operationId": "my_devices_v1_me_devices_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "app",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "App",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-device-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Device-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-forwarded-authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Forwarded-Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-firebase-appcheck",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Firebase-Appcheck",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-app-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-App-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "My Devices"
+      }
+    },
+    "/v1/me/devices/activate": {
+      "post": {
+        "description": "Activate: license the phone that signs this request, for the app it\nruns (`X-App-Id`), on the licence the account holds for that app.\n\nSigned by the phone, so only the phone itself activates itself; staff add\none from the operator console instead. `409 device_limit_reached: n/m`\nwhen every slot is taken, `409 seating_floating` on a floating licence\n(check out a seat instead), `404 no_license` with none. A phone already\nactive answers as a success.\n\n`{\"upgrade\": true}` activates it on the new licence issued to the\naccount instead, which moves the account there and revokes the old one\n(`repo.apply_upgrade`); `404 no_pending_upgrade` with none waiting.\n\nThe answer carries the config the phone holds from now on, so the app\nunlocks without a restart or a second call.",
+        "operationId": "activate_this_phone_v1_me_devices_activate_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-device-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Device-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-forwarded-authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Forwarded-Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-firebase-appcheck",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Firebase-Appcheck",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-app-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-App-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-nonce",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Nonce",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-signature",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Signature",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DeviceActivate"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Activate This Phone"
+      }
+    },
+    "/v1/me/devices/{device_id}": {
+      "delete": {
+        "description": "Deactivate one of the caller's own phones on their licence for the\napp, freeing its slot at once. Step-up, like a device change: it is\nreachable from a browser. A phone that is not the caller's, or not\nactive, is `404 activation_not_found`.",
+        "operationId": "deactivate_my_phone_v1_me_devices__device_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "device_id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Device Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "app",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "App",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-forwarded-authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Forwarded-Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-device-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Device-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-firebase-appcheck",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Firebase-Appcheck",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-app-id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-App-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-nonce",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Nonce",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-signature",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Signature",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Deactivate My Phone"
+      }
+    },
     "/v1/me/erasure": {
       "get": {
         "description": "Whether the account this phone was registered to has been erased.\n\nFor an account deletion whose `DELETE /v1/me` was sent and never answered\n(the app's process died): the next start asks here before it wipes the\nphone. Erased is \"this phone's device record is gone, or someone else's\":\nthe erase deletes the account's device records, and nothing else ever\ndoes (a superseded or revoked device keeps its record with another\nstatus), so an admin's device reset does not read as an erase.\n\nToken-only (`token_uid`): any route behind `current_user` re-creates a\nprofile for the erased uid, and mails support when it is pending, which is\nwhat the app's earlier device-signed probe did (TD-193). The answer names\nonly the caller's own device, so it tells a token holder nothing about\nanyone else. Rate-limited in the handler: `rate_limited` goes through\n`current_user`.",
@@ -7280,7 +8630,7 @@
     },
     "/v1/sessions": {
       "get": {
-        "description": "The caller's cloud analyses. The app reconciles local sync state against\nthis, so a session deleted in the cloud stops showing as 'synced'.\n\nOne app's analyses (ADR-014): the asking app's, by `X-App-Id`, unless\n`?app=semper|semperclassroom` (or the old `materialtesting`) names one or\n`?app=all` asks for the whole account (the console). Each entry carries its\n`app`, by its name today. Semper and Semper Classroom share accounts, and each restoring the other's backups dropped\nwhat it did not understand.\n\nCursor-paginated (`page_size` 1..100, `page_token`, `nextPageToken`). Quota\n`used` is the full account count, every app's, not the page length: the\ncap is the account's.\n\nFirestore is only an index. `?verify=true` additionally confirms each\nsession on the *current page* still exists in Drive (bounded parallel\nprobes — not a full-account N+1). Orphaned metadata on that page is purged.",
+        "description": "The caller's cloud analyses. The app reconciles local sync state against\nthis, so a session deleted in the cloud stops showing as 'synced'.\n\nOne app's analyses (ADR-014): the asking app's, by `X-App-Id`, unless\n`?app=semper|semperclassroom` (or the old `materialtesting`) names one or\n`?app=all` asks for the whole account (the console). Each entry carries its\n`app`, by its name today. Semper and Semper Classroom share accounts, and each restoring the other's backups dropped\nwhat it did not understand.\n\nCursor-paginated (`page_size` 1..100, `page_token`, `nextPageToken`). Quota\n`used` is the asking app's count (ADR-033), whichever app is listed, not\nthe page length: each app's licence has its own cap.\n\nFirestore is only an index. `?verify=true` additionally confirms each\nsession on the *current page* still exists in Drive (bounded parallel\nprobes — not a full-account N+1). Orphaned metadata on that page is purged.",
         "operationId": "list_sessions_v1_sessions_get",
         "parameters": [
           {
@@ -7399,7 +8749,7 @@
         "summary": "List Sessions"
       },
       "post": {
-        "description": "Record an analysis: create the session and hand back its upload slots.\n\nOpen to every approved account, demo included. Recording is not the\nlicensed feature — retrieval is. A demo account's frames and results are\nstored under the same quota (`DEMO_MAX_ANALYSES`) and are never deleted\non downgrade; what a licence buys is getting them back (`/content` and\nthe session bundle), so the `cloudBackupEnabled` gate lives on those two\nroutes and deliberately not here. Installed builds that predate licensing\nretry a 403 from this route forever, which is one more reason the gate\nwould be the wrong shape.\n\nThe cap counts analyses stored at once, per account; for a demo account\nalso per device, whichever account stored them\n(`services.sessions._device_cap_reached`).",
+        "description": "Record an analysis: create the session and hand back its upload slots.\n\nOpen to every approved account, demo included. Recording is not the\nlicensed feature — retrieval is. A demo account's frames and results are\nstored under the same quota (`DEMO_MAX_ANALYSES`) and are never deleted\non downgrade; what a licence buys is getting them back (`/content` and\nthe session bundle), so the `cloudBackupEnabled` gate lives on those two\nroutes and deliberately not here. Installed builds that predate licensing\nretry a 403 from this route forever, which is one more reason the gate\nwould be the wrong shape.\n\nThe cap counts analyses stored at once, per account and app (ADR-033);\nfor a demo account also per device, whichever account stored them\n(`services.sessions._device_cap_reached`).",
         "operationId": "create_session_v1_sessions_post",
         "parameters": [
           {

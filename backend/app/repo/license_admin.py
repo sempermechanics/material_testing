@@ -4,7 +4,7 @@ import logging
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
-from .. import errors, tasks
+from .. import apps, errors, tasks
 from .. import observability as obs
 from ..errors import Refusal
 from ..config import settings
@@ -200,7 +200,31 @@ def _revoke_fanout(ref, license_id: str, lic: dict) -> None:
         redeemer = lic.get("redeemedByUid")
         if redeemer and _license_mode(lic) == MODE_LICENSED:
             _drop_user_to_demo_if_licensed(redeemer, license_id)
-        _delete_license_invites(license_id, lic.get("emailLock") or "")
+        _delete_license_invites(license_id, lic.get("emailLock") or "",
+                                app=apps.licence_slot(lic))
+    if lic.get("supersedes"):
+        _withdraw_pending_upgrade(lic["supersedes"], license_id)
+
+
+def _withdraw_pending_upgrade(old_id: str, new_id: str) -> None:
+    """A licence issued as an upgrade is revoked (ADR-033): its holder stops
+    being offered it, and the old licence may be upgraded again. Nothing
+    changes once the upgrade was applied, since both pointers are gone."""
+    old_ref = db().collection("licenses").document(old_id)
+    old_snap = _get(old_ref)
+    old = (old_snap.to_dict() or {}) if old_snap.exists else {}
+    if old.get("upgradePendingId") == new_id:
+        _update_doc(old_ref, {"upgradePendingId": _base.firestore.DELETE_FIELD})
+    holder = old.get("redeemedByUid") or ""
+    if not holder:
+        return
+    user_ref = db().collection("users").document(holder)
+    snap = _get(user_ref)
+    user = (snap.to_dict() or {}) if snap.exists else {}
+    for app in apps.ALL:
+        if apps.read_field(user, "pendingLicenseId", app) == new_id:
+            _update_doc(user_ref, apps.written_fields(
+                "pendingLicenseId", app, _base.firestore.DELETE_FIELD))
 
 
 # ---------------- pending fan-outs (ADR-026, TD-231) ----------------
@@ -267,7 +291,8 @@ def _run_ops(ref, license_id: str, lic: dict, ops) -> None:
     if clear_leases:
         _clear_seat_leases(ref)
     if FANOUT_TERMS in ops or clear_leases:
-        extra = {"leaseExpiresAt": _base.firestore.DELETE_FIELD} if clear_leases else {}
+        extra = ({"leaseExpiresAt": _base.firestore.DELETE_FIELD,
+                  "leaseDeviceId": _base.firestore.DELETE_FIELD} if clear_leases else {})
         _refresh_license_mirrors(_license_holder_uids(ref, lic), license_id,
                                  {**_license_mirror_patch(lic), **extra})
 
@@ -375,6 +400,13 @@ def license_edit_error(lic: dict, patch: dict) -> str:
                               allow_shorten=bool(patch.get("allowShorten")))
     if err:
         return err
+    if patch.get("maxDevices") is not None:
+        # Checked against the count as read; an Activate landing in between
+        # is held to the new count by its own transaction.
+        if not lic.get("app"):
+            return errors.MAX_DEVICES_NEEDS_APP
+        if int(patch["maxDevices"]) < int(lic.get("devicesActive") or 0):
+            return errors.MAX_DEVICES_BELOW_ACTIVE
     if institution and (patch.get("maxSeats") is not None or patch.get("seating")):
         after = {**lic, **{f: patch[f] for f in ("maxSeats", "seating") if patch.get(f) is not None}}
         if normalize_seating(after.get("seating")) == SEATING_FLOATING and after.get("maxSeats") is None:
@@ -496,30 +528,37 @@ def _license_holder_uids(ref, lic: dict) -> list[str]:
 
 
 def _users_on_license(uids: list[str], license_id: str) -> list:
-    """References to those of `uids` whose account still points at this licence.
+    """`(reference, app)` for those of `uids` whose account still points at
+    this licence, `app` being whose mirror fields hold it (ADR-033).
 
     One `get_all` for the lot. The guard is the one every writer here uses: a
     holder who has since moved to another licence must not have this one's
-    terms, or its revoke, written over theirs.
+    terms, or its revoke, written over theirs. Each write goes through
+    `apps.licence_patch` with that app, so a Semper Classroom licence's revoke
+    leaves the holder's Semper licence alone.
     """
     users = db().collection("users")
     refs = [users.document(uid) for uid in dict.fromkeys(u for u in uids if u)]
-    return [
-        snap.reference for snap in _get_all(refs)
-        if snap.exists and (snap.to_dict() or {}).get("licenseId") == license_id
-    ]
+    out = []
+    for snap in _get_all(refs):
+        slot = apps.slot_holding(snap.to_dict() or {}, license_id) if snap.exists else None
+        if slot:
+            out.append((snap.reference, slot))
+    return out
 
 
 def _refresh_license_mirrors(uids: list[str], license_id: str, mirror: dict) -> None:
     """Re-stamp every holder's copy of the license terms, in batches."""
     patch = {**mirror, "updatedAt": _base.firestore.SERVER_TIMESTAMP}
-    _update_refs([(ref, patch) for ref in _users_on_license(uids, license_id)])
+    _update_refs([(ref, apps.licence_patch(patch, slot))
+                  for ref, slot in _users_on_license(uids, license_id)])
 
 
 def _demo_drop_patch() -> dict:
     return {
         **_mode_patch(MODE_DEMO),
         "leaseExpiresAt": _base.firestore.DELETE_FIELD,
+        "leaseDeviceId": _base.firestore.DELETE_FIELD,
         "updatedAt": _base.firestore.SERVER_TIMESTAMP,
         # The instant from which "has this account been back since?" is
         # asked. `_touch_user` throttles lastSeenAt to the hour, which
@@ -535,7 +574,8 @@ def _drop_users_to_demo_if_licensed(uids: list[str], license_id: str) -> None:
     """`_drop_user_to_demo_if_licensed` for a whole roster: one read call,
     batched writes."""
     patch = _demo_drop_patch()
-    _update_refs([(ref, patch) for ref in _users_on_license(uids, license_id)])
+    _update_refs([(ref, apps.licence_patch(patch, slot))
+                  for ref, slot in _users_on_license(uids, license_id)])
 
 
 def _drop_user_to_demo_if_licensed(uid: str, license_id: str) -> None:
@@ -549,5 +589,6 @@ def _drop_user_to_demo_if_licensed(uid: str, license_id: str) -> None:
     copy left behind read as a seat still in use on the account page."""
     user_ref = db().collection("users").document(uid)
     user_snap = _get(user_ref)
-    if user_snap.exists and (user_snap.to_dict() or {}).get("licenseId") == license_id:
-        _update_doc(user_ref, _demo_drop_patch())
+    slot = apps.slot_holding(user_snap.to_dict() or {}, license_id) if user_snap.exists else None
+    if slot:
+        _update_doc(user_ref, apps.licence_patch(_demo_drop_patch(), slot))

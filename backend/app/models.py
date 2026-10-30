@@ -260,6 +260,15 @@ class AdminLicenseCreate(BaseModel):
     supportUntil: Optional[datetime] = None
     maxAnalyses: Optional[int] = Field(default=None, gt=0)
     note: DisplayString = ""
+    #: The app this licence is for (ADR-033): it then licenses only the
+    #: phones activated on it, up to `maxDevices`. Omitted, the licence holds
+    #: for every app and locks to one phone per app, as before the split.
+    #: `materialtesting` is Semper Classroom's old name (ADR-030).
+    app: Optional[Literal["semper", "semperclassroom", "materialtesting"]] = None
+    #: Phones that may be active at once; with `app` only. Default 1 on an
+    #: individual licence and `maxSeats` on an assigned institution one, a
+    #: pool across the licence; a floating licence counts its leases instead.
+    maxDevices: Optional[int] = Field(default=None, ge=0, le=100000)
 
     @field_validator("expiresAt", "supportUntil")
     @classmethod
@@ -337,6 +346,11 @@ class AdminLicenseCreate(BaseModel):
                 # A floating pool with no cap is an assigned license with extra
                 # steps: nobody would ever be refused a lease.
                 raise ValueError("floating licenses require maxSeats")
+        if self.maxDevices is not None:
+            if not self.app:
+                raise ValueError("maxDevices goes with an app (ADR-033)")
+            if self.seating == "floating":
+                raise ValueError("a floating licence counts leases, not maxDevices")
         return self
 
 
@@ -423,6 +437,9 @@ class AdminLicenseUpdate(BaseModel):
     seating: Optional[Literal["assigned", "floating"]] = None
     perpetual: Optional[Literal[True]] = None
     allowShorten: Optional[Literal[True]] = None
+    #: The licence's device count (ADR-033), on a licence that names its
+    #: app; not below the phones active on it now.
+    maxDevices: Optional[int] = Field(default=None, ge=0, le=100000)
 
     model_config = ConfigDict(extra="forbid")
 
@@ -449,7 +466,7 @@ class AdminLicenseUpdate(BaseModel):
             getattr(self, name) is None
             for name in ("expiresAt", "graceDays", "supportUntil", "maxSeats",
                          "maxAnalyses", "clearMaxAnalyses", "note", "clearDeviceLock",
-                         "adminEmails", "seating", "perpetual")
+                         "adminEmails", "seating", "perpetual", "maxDevices")
         ):
             raise ValueError("at least one field must be set")
         if self.clearMaxAnalyses and self.maxAnalyses is not None:
@@ -510,6 +527,74 @@ class AdminLicenseConvert(BaseModel):
         return self
 
 
+class AdminLicenseUpgrade(BaseModel):
+    """Issue the holder of an individual licence a new one for the same app
+    (ADR-033). What the old licence carries over unless named here: its
+    device count, end, analysis cap and note. `kind="institution"` makes it
+    an assigned institution licence on `domainLock`, the holder's domain,
+    administered by `adminEmails`. The holder moves when they tap Activate.
+    """
+    kind: Literal["individual", "institution"] = "individual"
+    maxDevices: Optional[int] = Field(default=None, ge=0, le=100000)
+    expiresAt: Optional[datetime] = None
+    perpetual: Optional[Literal[True]] = None
+    maxAnalyses: Optional[int] = Field(default=None, gt=0)
+    note: Optional[DisplayString] = None
+    domainLock: Optional[str] = Field(default=None, min_length=1, max_length=253)
+    adminEmails: List[str] = Field(default_factory=list, max_length=20)
+    maxSeats: Optional[int] = Field(default=None, gt=0, le=100000)
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("expiresAt")
+    @classmethod
+    def _aware_utc(cls, value: Optional[datetime]) -> Optional[datetime]:
+        if value is None or value.tzinfo is not None:
+            return value
+        return value.replace(tzinfo=timezone.utc)
+
+    @field_validator("domainLock")
+    @classmethod
+    def _domain_lock(cls, value: Optional[str]) -> Optional[str]:
+        return None if value is None else _bare_domain(value)
+
+    @field_validator("adminEmails")
+    @classmethod
+    def _admin_emails(cls, value: List[str]) -> List[str]:
+        return _admin_email_list(value) if value else value
+
+    @model_validator(mode="after")
+    def _shape(self) -> "AdminLicenseUpgrade":
+        if self.expiresAt is not None and self.perpetual:
+            raise ValueError("expiresAt and perpetual are exclusive")
+        institutional = self.domainLock or self.adminEmails or self.maxSeats is not None
+        if self.kind == "institution" and not (self.domainLock and self.adminEmails):
+            raise ValueError("an institution licence needs domainLock and adminEmails")
+        if self.kind == "individual" and institutional:
+            raise ValueError("domainLock, adminEmails and maxSeats are for an institution licence")
+        return self
+
+    def terms(self) -> dict:
+        """What overrides the old licence's terms, as `issue_upgrade` takes it."""
+        named = {"maxDevices": self.maxDevices, "expiresAt": self.expiresAt,
+                 "perpetual": self.perpetual, "maxAnalyses": self.maxAnalyses, "note": self.note}
+        return {k: v for k, v in named.items() if v is not None}
+
+    def institution(self) -> Optional[dict]:
+        if self.kind != "institution":
+            return None
+        return {"domainLock": self.domainLock, "adminEmails": self.adminEmails,
+                "maxSeats": self.maxSeats}
+
+
+class DeviceActivate(BaseModel):
+    """Activate's body, optional (ADR-033). `upgrade` activates this phone on
+    the new licence issued to the account, which moves it there."""
+    upgrade: bool = False
+
+    model_config = ConfigDict(extra="forbid")
+
+
 def _no_control_chars(value: str, name: str) -> str:
     if any(ord(char) < 0x20 or ord(char) == 0x7F for char in value):
         raise ValueError(f"{name} must not contain control characters")
@@ -521,14 +606,38 @@ class AdminTestAccountCreate(BaseModel):
     over. `days` is how long it lasts, 1..90: 30 when a QC account names
     none, and no end at all when a CI account names none. `maxDevices` is how
     many phones per app may be signed in at once. `note` says who or what it
-    is for, never a password; at most 200 characters."""
+    is for, never a password; at most 200 characters.
+
+    A QC account's licence runs the activation model (ADR-033): one licence
+    per app in `apps`, each licensing `licenceMaxDevices` activated phones,
+    or none at all (`licence: "none"`), which is Demo. A CI account keeps one
+    licence for every app that no phone is bound to, so Tier 3 can rotate
+    emulators through it; the three licence fields are QC's alone."""
     email: str = Field(min_length=3, max_length=254)
     purpose: Literal["qc", "ci"]
     days: Optional[int] = Field(default=None, ge=1, le=90)
     maxDevices: int = Field(default=3, ge=1, le=10)
     note: str = Field(default="", max_length=200)
+    apps: Optional[Literal["semper", "semperclassroom", "both"]] = None
+    licence: Optional[Literal["individual", "none"]] = None
+    licenceMaxDevices: Optional[int] = Field(default=None, ge=1, le=10)
 
     model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def _qc_licence_fields(self) -> "AdminTestAccountCreate":
+        named = self.apps is not None or self.licence is not None or self.licenceMaxDevices is not None
+        if self.purpose == "ci" and named:
+            raise ValueError("apps, licence and licenceMaxDevices are for a QC account")
+        return self
+
+    def licence_apps(self) -> tuple[str, ...]:
+        """The apps a QC account's licences are for, none for Demo; empty for
+        a CI account, whose one licence holds for every app."""
+        if self.purpose != "qc" or self.licence == "none":
+            return ()
+        chosen = self.apps or "both"
+        return ("semper", "semperclassroom") if chosen == "both" else (chosen,)
 
     @field_validator("email")
     @classmethod

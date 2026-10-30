@@ -141,6 +141,12 @@ data class AppConfigDto(
      * `/v1/config` sends it. Display and diagnostics only, never a gate: the
      * account's licence is what entitles it. */
     val testAccount: TestAccountDto? = null,
+    /** This phone's place in its licence's device count (ADR-033); null from a
+     * backend that predates it, or on a lease or seat answer. */
+    val activation: ActivationDto? = null,
+    /** A new licence issued to this account for this app, waiting for
+     * Activate; null when none waits. Only `/v1/config` and Activate send it. */
+    val pendingLicence: PendingLicenceDto? = null,
 )
 
 /** `/v1/config`'s `testAccount`: what the account is for and when it ends. */

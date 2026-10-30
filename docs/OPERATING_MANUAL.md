@@ -1121,7 +1121,10 @@ approves/revokes accounts):
   mint. A revoked licence, one past its grace, and the Demo key do not count.
   The same rule refuses a claim code (`409 already_licensed`) and an
   IT roster add (`409 member_already_licensed`). To change the person's
-  device, use **New phone** on their licence — never a second licence.
+  phone, use **Phones** (Deactivate, Add phone) on a licence that names its
+  app, or **New phone** on one from before the split — never a second licence.
+  Issue chooses the app (semper, semper Classroom, or both: one licence each)
+  and the **Phones** count, 1 by default (an assigned institution: one per seat).
   `backend/scripts/find_duplicate_licences.py --project <id>` lists anyone
   who got two before the rule existed. Nothing is sent to them and nothing is typed. `deviceIdLock` is
   still accepted for the rare case where the device is known up front, but
@@ -1180,7 +1183,16 @@ email/device/domain locks are fixed at mint — except **To institution**
 `adminEmails`, `maxSeats`, `seating`): a new institution key carrying the
 individual licence's terms, the holder moved onto its roster on the same
 device, and the individual licence revoked and marked replaced. The holder's
-address must be on the domain. The new key is shown once.
+address must be on the domain. The new key is shown once. On a licence that
+names its app, **Issue upgrade** replaces To institution and New phone
+(`POST …/{licenseId}/upgrade`): it issues the holder a new licence, individual
+or institution, carrying the terms you leave empty; the old one works until
+the holder taps **Activate new licence** in the app, which revokes it. A
+holder on a build with no Activate is moved with **Apply now**
+(`POST …/{newId}/apply-upgrade`), offered in the dialog, on an
+`upgrade_pending` refusal, and as **Apply upgrade** on the old licence's row,
+which says "upgrade issued (…), waiting for the holder" (the new one's row says
+"upgrade of …"); each of their phones then activates again.
 
 A new `expiresAt` must normally be **later** than the one in force. The
 request is refused with `422` and nothing changes if the date has already
@@ -1423,13 +1435,27 @@ which revocations have landed and which have not. Two answers matter:
 This is the check to run when someone reports that an ex-member is still using
 semper, and the answer to give when IT asks whether a removal "went through".
 
+**A licence's phones (ADR-033).** A licence that names its app licenses the
+phones activated on it, up to its **Phones** count; any other phone of the
+holder runs as Demo. The holder activates a phone in the app (**Activate this
+phone**). The three consoles show the phones, each to its own tier:
+
+| Who | Where | What |
+|---|---|---|
+| The holder | `/account`, the semper and semper Classroom cards | Their own phones for that app; **Deactivate** (second factor). A new licence waiting reads "open the app and tap Activate new licence". |
+| Institution IT | `/console/institution`, the Phones card | The pool's count and each member's activated phone on the licence's domain; **Deactivate**, which also signs the phone out (24 h hold). No Activate or Add. |
+| semper staff | `/console/operator`, **Phones n/m** on the licence row | Any licence's phones; **Deactivate** (signs it out), and **Add phone** by phone id, past the count with **Past the count** (audited as an override). **Edit** changes the count, never below the phones active now. |
+
+No deactivation touches an analysis on the phone. The section below is for a
+licence from before the split, which still has a device lock.
+
 **Changing device.** A phone dies, is replaced, or the wrong one was signed
-in on. Three people can move a licence, and all three do the same thing —
-empty the device lock:
+in on. On a licence from before the split, three people can move it, and all
+three do the same thing — empty the device lock:
 
 | Who | How |
 |---|---|
-| The holder | **Move semper to another phone** on their own `/account` page — `POST /v1/licenses/unbind`. Needs a second factor and a sign-in from the last 15 minutes, and is allowed once every `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` (default 30). |
+| The holder | **Move semper to another phone** on their own `/account` page — `POST /v1/licenses/unbind`. Needs a second factor and a sign-in from the last 15 minutes. No cooldown (ADR-033): the licence's device count is the limit. |
 | Institution IT | `PATCH /v1/institutions/licenses/{id}/seats/{uid}` `{"clearDeviceLock": true}`, or **New phone** on the seat in `/console/institution`. |
 | semper staff | **New phone** on the licence row (individual) or on the seat in the roster (institution) in `/console/operator`. |
 
@@ -1442,11 +1468,10 @@ person can use both apps on one phone, or each on a different phone, on one
 licence. Staff and IT **New phone**, and the staff phone release below,
 move both apps at once. The holder moves one app at a time: **Move semper to
 another phone** or **Move semper Classroom to another phone** on
-`/account`, or the same from inside that app, each with its own 30-day
-cooldown. Seats and the operator's user list show a semper Classroom device
+`/account`, or the same from inside that app. Seats and the operator's user list show a semper Classroom device
 as "semper Classroom …" beside semper's. semper Classroom was Material Testing
 until 2026-10 (ADR-030): a Material Testing build still installed is the same
-app to the account and shares its phone and cooldown, but it cannot register a
+app to the account and shares its phone, but it cannot register a
 new device; install semper Classroom instead.
 
 **Demo on the phone they use.** An account whose lock was taken by another
@@ -1480,11 +1505,11 @@ The old phone is signed out and held off for 24 hours, the same as after
 Demo (decided 2026-09-26). A Licensed account is refused there: use
 **New phone** on its licence.
 
-Only the holder's own change waits out a cooldown; a support request never
-does, so a lost phone is fixed the same day. `429 device_change_too_soon`
-means the holder has already moved device inside the window — the detail
-carries the instant they may again (`device_change_too_soon: <ISO time>`), and
-the account page shows it, and staff or IT can do it for them meanwhile.
+Nobody waits out a cooldown any more (ADR-033, 2026-10-29): the holder may move
+as often as they need, and the licence's device count limits how many phones
+hold it at once. A licence that names its app has phones activated on it
+rather than a lock; its phones and **Deactivate** are described in
+CLOUD_ARCHITECTURE_GCP §20.16.
 
 **The order on the new device matters.** Sign in first, then let one authed
 request bind the licence, and only then restore. Restoring first fails as

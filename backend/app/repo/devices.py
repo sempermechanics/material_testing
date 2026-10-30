@@ -6,6 +6,7 @@ from datetime import timedelta
 from google.api_core.exceptions import AlreadyExists
 
 from .. import apps, errors, statuses
+from ..config import settings
 from ..errors import Refusal
 from ..models import DeviceReg
 
@@ -28,6 +29,7 @@ from ._base import (
     staff_released_from,
     test_account_of,
 )
+from .devlock import licensed_devices
 from .entitlement import (
     ensure_entitlement,
 )
@@ -39,17 +41,22 @@ def get_device(device_id: str):
     return {**snap.to_dict(), "deviceId": device_id} if snap.exists else None
 
 
-def _release_patch(device_id: str, app: str = apps.SEMPER) -> dict:
-    """The `users/{uid}` fields that release `device_id` from `app`: the binding
-    dropped and the id stamped, so `repo.devlock.released_device_held` holds it
-    off while the new phone registers. Shared by a lock clear and a staff phone
-    release."""
+def _release_patch(device_id: str, app: str = apps.SEMPER, *,
+                   drop_active: bool = True) -> dict:
+    """The `users/{uid}` fields that release `device_id` from `app`: the id
+    stamped, so `repo.devlock.released_device_held` holds it off, and the
+    app's `activeDeviceId` dropped when it names this phone (`drop_active`).
+    An account holds several phones (ADR-033), so the latest registered one
+    may be another phone, which stays. Shared by a lock clear and a staff
+    phone release."""
     released_at = _now()
-    return {
-        **apps.written_fields("activeDeviceId", app, _base.firestore.DELETE_FIELD),
+    out = {
         **apps.written_fields("releasedDeviceId", app, device_id),
         **apps.written_fields("releasedAt", app, released_at),
     }
+    if drop_active:
+        out.update(apps.written_fields("activeDeviceId", app, _base.firestore.DELETE_FIELD))
+    return out
 
 
 def _retire_device(batch, device_ref, status: str, extra: dict | None = None) -> None:
@@ -72,17 +79,20 @@ def _retire_device(batch, device_ref, status: str, extra: dict | None = None) ->
 
 
 
-def _release_devices(user_ref, devices: dict[str, str], patch: dict) -> None:
+def _release_devices(user_ref, devices: dict[str, str], patch: dict,
+                     user: dict | None = None) -> None:
     """Release each `{app: device id}` from the account, in one batch with
-    `patch`: the app's binding dropped and the id held off (`_release_patch`),
-    and the device retired as superseded. Shared by a lock clear
-    (`repo.seats._settle_holder`) and a staff phone release
+    `patch`: the id held off (`_release_patch`), the app's `activeDeviceId`
+    dropped when `user` (as read) names this phone there, or always when no
+    `user` is given, and the device retired as superseded. Shared by a lock
+    clear (`repo.seats._settle_holder`) and a staff phone release
     (`repo.users.release_account_device`), so the two cannot release a phone
     differently."""
     patch = dict(patch)
     batch = db().batch()
     for app, device in devices.items():
-        patch.update(_release_patch(device, app))
+        drop = user is None or apps.read_field(user, "activeDeviceId", app) == device
+        patch.update(_release_patch(device, app, drop_active=drop))
         device_ref = db().collection("devices").document(device)
         if _get(device_ref).exists:
             _retire_device(batch, device_ref, statuses.DEVICE_SUPERSEDED)
@@ -138,26 +148,33 @@ def _oldest_active_devices(uid: str, app: str, *, exclude: str, count: int) -> l
 
 def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
                     step_up_eligible: bool = False) -> dict:
-    """Bind `body.deviceId` to `uid` for `app`, or raise `Refusal`.
+    """Register `body.deviceId` to `uid` for `app`, or raise `Refusal`.
 
-    The checks and the writes are one transaction (B5): the account must not
-    already be bound to a different device for this app (`device_conflict`;
-    a device change goes through a lock clear or a staff release, which drop
-    the binding first), and the device must not be ACTIVE for another account
-    (`device_in_use`). Read in the router ahead of a batch, two phones
-    registering at once both passed and both stayed ACTIVE. The same device id
-    re-registering is the reinstall heal: its key and stamp are replaced.
+    An account holds several phones per app (ADR-033): registering signs a
+    phone in, and only a licensed one is licensed; the rest run as Demo. Its
+    `activeDeviceId` names the latest. The checks and the writes are one
+    transaction (B5): the device must not be ACTIVE for another account
+    (`device_in_use`), so two accounts registering one phone at once cannot
+    both hold it. The same device id re-registering is the reinstall heal: its
+    key and stamp are replaced (`healed` in the answer).
 
-    A test account (ADR-027) is not bound to one device: it may register
-    while fewer than its `maxDevices` devices are ACTIVE for `app`, and its
-    `activeDeviceId` names the latest. A full QC account is refused
-    (`device_conflict`); a full CI account instead retires its oldest ACTIVE
-    phones as superseded in the same transaction, since every CI run is a
-    fresh emulator with a new key (TD-248). The answer's `rotated` lists them.
-    A phone staff released from the test account on its own
+    A real account holds up to `MAX_PHONES_PER_APP` phones per app. Past it,
+    the phones that registered first make room, retired as superseded in the
+    same transaction, but never the phone its licence is locked to
+    (`devlock.licensed_devices`, read before the transaction). The answer's
+    `rotated` lists them.
+
+    A test account (ADR-027) holds up to its own `maxDevices`. A full QC
+    account is refused (`device_conflict`); a full CI account retires its
+    oldest phones, since every CI run is a fresh emulator with a new key
+    (TD-248). A phone staff released from the test account on its own
     (`staff_released_from`) is refused `device_released` for that account, so
     it cannot take back the place it gave up (TD-249); another account may
-    still register it. A real account is unchanged.
+    still register it.
+
+    A registration of the released phone itself ends its release hold (the
+    router has already refused it while the hold lasts); another phone
+    registering leaves the hold in place.
 
     `step_up_eligible` is whether the registering token proved a second factor
     (ADR-010, device trust). Stamped on every registration, a heal included,
@@ -181,49 +198,59 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
     }
     user_ref = db().collection("users").document(uid)
     device_ref = db().collection("devices").document(body.deviceId)
-    # Only one device may be active per account and app (the app's
-    # `activeDeviceId` field is the single binding, ADR-010).
+    # The licensed phone is never retired to make room. Read ahead of the
+    # transaction: a transaction cannot query, and a lock that moves meanwhile
+    # only changes which unlicensed phone goes.
+    locked = licensed_devices(_load_user(uid) or {}, app)
     rotated: list[str] = []
+    healed: list[bool] = []
 
     @_base.firestore.transactional
     def _register(tx):
         rotated.clear()  # a contended transaction runs this again
+        healed.clear()
         user_snap = _get(user_ref, tx)
         held_user = (user_snap.to_dict() or {}) if user_snap.exists else {}
         tag = test_account_of(held_user)
+        # Counted after the user document is read in this transaction: every
+        # registration writes that document, so a second phone registering at
+        # once retries and counts this one.
+        others = _active_devices(uid, app, exclude=body.deviceId)
         if tag is not None:
-            # A test account holds up to `maxDevices` phones per app (ADR-027).
-            # Counted after the user document is read in this transaction:
-            # every registration writes that document, so a second phone
-            # registering at once retries and counts this one.
-            over = (len(_active_devices(uid, app, exclude=body.deviceId))
-                    - max_test_devices(tag) + 1)
+            over = len(others) - max_test_devices(tag) + 1
             if over > 0 and tag.get("purpose") != PURPOSE_CI:
                 raise Refusal(errors.DEVICE_CONFLICT)
             rotated.extend(_oldest_active_devices(uid, app, exclude=body.deviceId, count=over))
         else:
-            bound = apps.read_field(held_user, "activeDeviceId", app) if user_snap.exists else None
-            if bound and bound != body.deviceId:
-                raise Refusal(errors.DEVICE_CONFLICT)
+            over = len(others) - max(1, settings.MAX_PHONES_PER_APP) + 1
+            if over > 0:
+                spare = [d for d in _oldest_active_devices(
+                    uid, app, exclude=body.deviceId, count=len(others)) if d not in locked]
+                rotated.extend(spare[:over])
         existing = _get(device_ref, tx)
         held = (existing.to_dict() or {}) if existing.exists else {}
         if held.get("status") == statuses.DEVICE_ACTIVE and held.get("uid") != uid:
             raise Refusal(errors.DEVICE_IN_USE)
         if tag is not None and staff_released_from(held, uid):
             raise Refusal(errors.DEVICE_RELEASED)
+        healed.append(held.get("status") == statuses.DEVICE_ACTIVE
+                      and held.get("uid") == uid
+                      and apps.same_app(held.get("app"), app))
         for old in rotated:  # the writes come after every read of the transaction
             tx.update(db().collection("devices").document(old), {
                 "status": statuses.DEVICE_SUPERSEDED,
                 "revokedAt": _base.firestore.SERVER_TIMESTAMP,
             })
         tx.set(device_ref, dev)
-        # A registration ends any release hold: either the new phone has
-        # arrived, or the hold has run out and the old one is back.
-        tx.update(user_ref, {
-            **apps.written_fields("activeDeviceId", app, body.deviceId),
-            **apps.written_fields("releasedDeviceId", app, _base.firestore.DELETE_FIELD),
-            **apps.written_fields("releasedAt", app, _base.firestore.DELETE_FIELD),
-        })
+        user_patch = apps.written_fields("activeDeviceId", app, body.deviceId)
+        # The released phone back after its hold ends the hold; another phone
+        # registering leaves it, since the account holds several.
+        if apps.read_field(held_user, "releasedDeviceId", app) == body.deviceId:
+            user_patch.update(apps.written_fields(
+                "releasedDeviceId", app, _base.firestore.DELETE_FIELD))
+            user_patch.update(apps.written_fields(
+                "releasedAt", app, _base.firestore.DELETE_FIELD))
+        tx.update(user_ref, user_patch)
 
     def _contended():
         raise Refusal(errors.CLAIM_CONTENDED)
@@ -232,7 +259,8 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
     user = _load_user(uid)
     if user:
         ensure_entitlement(user, body.deviceId)
-    return {**dev, "deviceId": body.deviceId, "rotated": list(rotated)}
+    return {**dev, "deviceId": body.deviceId, "rotated": list(rotated),
+            "healed": bool(healed and healed[0])}
 
 
 # ---------------- challenge / nonce ----------------

@@ -97,6 +97,16 @@ def _license_public(license_id: str, data: dict) -> dict:
         "supersededBy": data.get("supersededBy") or "",
         # A staff test account's licence (ADR-027); false on every other.
         "testAccount": data.get("testAccount") is True,
+        # The app it licenses and its device count (ADR-033); "" and null on
+        # a licence from before the split, which holds for every app.
+        "app": apps.canonical(data.get("app")) if data.get("app") else "",
+        "maxDevices": data.get("maxDevices"),
+        "devicesActive": data.get("devicesActive", 0),
+        # Upgrade by issue (repo/licence_upgrade.py): on the new licence, the
+        # one it replaces; on the old, the new one waiting for its holder to
+        # tap Activate. Both "" otherwise.
+        "supersedes": data.get("supersedes") or "",
+        "upgradePendingId": data.get("upgradePendingId") or "",
     }
 
 
@@ -119,9 +129,14 @@ def _write_license(
     max_analyses: int | None = None,
     note: str = "",
     test_account: bool = False,
+    app: str | None = None,
+    max_devices: int | None = None,
 ) -> tuple[str, str, dict]:
     """Mint a key, persist the hash, return (plaintext, license_id, stored).
-    `test_account` tags a staff test account's licence (ADR-027)."""
+    `test_account` tags a staff test account's licence (ADR-027). `app` makes
+    it one app's licence, licensing only the phones activated on it, up to
+    `max_devices` (ADR-033); without it the licence holds for every app and
+    locks to one phone per app, as before the split."""
     key = generate_key()
     license_id = key_hash(key)
     stored = {
@@ -170,6 +185,11 @@ def _write_license(
         stored["maxAnalyses"] = int(max_analyses)
     if test_account:
         stored["testAccount"] = True
+    if app:
+        stored["app"] = apps.stored_name(app)
+        stored["devicesActive"] = 0
+        if max_devices is not None:
+            stored["maxDevices"] = int(max_devices)
     if redeemed_by_uid:
         stored["redeemedByUid"] = redeemed_by_uid
         stored["redeemedAt"] = _base.firestore.SERVER_TIMESTAMP
@@ -256,6 +276,8 @@ def create_individual_license(
     max_analyses: int | None = None,
     note: str = "",
     test_account: bool = False,
+    app: str | None = None,
+    max_devices: int | None = None,
 ) -> dict:
     """Ops mint of an individual licensed key. Returns the plaintext key
     once; only the hash is stored. `test_account` tags the licence of a
@@ -270,6 +292,9 @@ def create_individual_license(
     `device_id_lock` stays available for the rare mint against a device we
     already know, but is empty in normal use; the lock is bound at first
     sign-in instead.
+
+    `app` makes it that app's licence, for `max_devices` phones (default 1),
+    promised under that app's claim key (ADR-033).
     """
     key, license_id, stored = _write_license(
         mode=MODE_LICENSED,
@@ -284,8 +309,11 @@ def create_individual_license(
         max_analyses=max_analyses,
         note=note,
         test_account=test_account,
+        app=app,
+        max_devices=(1 if max_devices is None else max_devices) if app else None,
     )
-    err, _ = _write_invite(license_id, email_lock, created_by_uid)
+    err, _ = _write_invite(license_id, email_lock, created_by_uid,
+                           app=apps.licence_slot(stored))
     if err:
         # The licence exists and the key in hand still redeems it, so this is
         # degraded delivery rather than a failed mint. `invite_exists` means
@@ -300,7 +328,7 @@ def create_individual_license(
             "claimError": claim_err}
 
 
-def _holds_only_a_demo_key(user: dict) -> bool:
+def _holds_only_a_demo_key(user: dict, app: str = apps.SEMPER) -> bool:
     """True when this account can take a licence right now: it points at no
     licence, at the auto-minted Demo key, or at one that is revoked, past its
     grace, or gone — `licence_is_live`, the one-licence rule's own test.
@@ -309,8 +337,9 @@ def _holds_only_a_demo_key(user: dict) -> bool:
     a revoked holder is left demoted in place and still pointing at the real
     licence, so its stored `mode` says nothing about whether a new grant is
     welcome. A *live* non-demo licence is the one thing that must not be
-    overwritten — that is a support question, not a mint."""
-    license_id = user.get("licenseId") or ""
+    overwritten — that is a support question, not a mint. `app` is the
+    mirror the new licence goes into (`apps.licence_slot`)."""
+    license_id = apps.read_field(user, "licenseId", app) or ""
     if not license_id:
         return True
     return not licence_is_live(get_license(license_id))
@@ -342,11 +371,12 @@ def _attach_to_existing_holder(license_id: str, lic: dict, email: str) -> tuple[
         return "", ""
     if not _eligible_holder(holder):
         return "", ""
-    if not _holds_only_a_demo_key(holder):
+    slot = apps.licence_slot(lic)
+    if not _holds_only_a_demo_key(holder, slot):
         return "", errors.HOLDER_ALREADY_LICENSED
     err = claim_individual_license(
         license_id, holder["uid"], address,
-        _member_patch(license_id, lic), invite_ref=_invite_ref(address),
+        _member_patch(license_id, lic), invite_ref=_invite_ref(address, slot),
     )
     if err:
         # A lost race here has no next request to fall back on — the holder's
@@ -372,10 +402,17 @@ def create_institution_license(
     support_until=None,
     max_analyses: int | None = None,
     note: str = "",
+    app: str | None = None,
+    max_devices: int | None = None,
 ) -> dict:
     """Ops mint of an institution key. Seats are granted individually via
     activate_license as members of `domain_lock` redeem the same key; ops never
-    pre-allocates seats. Returns the plaintext key once."""
+    pre-allocates seats. Returns the plaintext key once.
+
+    `app` makes it that app's licence (ADR-033), its phones a pool of
+    `max_devices` across the whole licence: by default one per seat on an
+    assigned licence (`max_seats`), and none on a floating one, whose lease is
+    its activation."""
     key, license_id, stored = _write_license(
         mode=MODE_LICENSED,
         email_lock="",
@@ -392,5 +429,18 @@ def create_institution_license(
         support_until=support_until,
         max_analyses=max_analyses,
         note=note,
+        app=app,
+        max_devices=_pool_default(max_devices, max_seats, seating) if app else None,
     )
     return {"key": key, "license": _license_public(license_id, stored)}
+
+
+def _pool_default(max_devices: int | None, max_seats: int | None, seating: str) -> int | None:
+    """An institution licence's phone pool when staff name none: one per
+    seat on an assigned licence, none on a floating one (its lease is the
+    activation), and unset, so uncounted, without a seat cap."""
+    if max_devices is not None:
+        return max_devices
+    if normalize_seating(seating) != SEATING_ASSIGNED:
+        return None
+    return max_seats

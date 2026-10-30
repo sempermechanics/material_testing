@@ -598,13 +598,177 @@ paths:
         next device to sign in binds it, and nothing is typed. Clearing is not
         revoking — entitlement, seat, lease and data are untouched. Requires
         the user step-up (an attested device, or a second factor on a recent
-        sign-in), and is subject to SELF_DEVICE_CHANGE_COOLDOWN_DAYS, which
-        staff- and IT-initiated changes are not.
+        sign-in). No cooldown (ADR-033): the licence's device count limits how
+        many phones hold it. On a licence that runs activations it deactivates
+        the holder's phones for the app.
       responses:
         '200': { description: OK }
         '403': { description: "No second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
         '404': { description: "No license attached to this account, or no seat on it (no_license, seat_not_found)" }
-        '429': { description: "Rate limited, or another change is too soon (device_change_too_soon: <ISO instant the holder may change again>, with Retry-After)" }
+        '429': { description: Rate limited }
+  # A licence's phones (ADR-033): the holder, institution IT and staff.
+  /v1/me/devices/activate:
+    post:
+      operationId: activateThisPhone
+      description: >
+        Activate: license the phone that signs the request, for the app it
+        runs (X-App-Id), on the licence the account holds for that app.
+        Device-attested. Answers with the activation and the phone's fresh
+        config, so locks lift without a restart. A phone already active
+        answers as a success. With {"upgrade": true} it activates the phone
+        on the new licence issued to the account instead, which moves the
+        account there and revokes the old one (ADR-033).
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
+        '403': { description: "The licence was revoked or has ended (license_revoked, license_expired)" }
+        '404': { description: "No licence for this app, the phone is not registered to it, or no upgrade waits (no_license, device_not_found, seat_not_found, no_pending_upgrade)" }
+        '409': { description: "Every slot is taken (device_limit_reached: <active>/<max>), a floating licence (seating_floating), a held seat (license_seat_disabled), or another account's phone (device_in_use)" }
+        '429': { description: Rate limited }
+        '503': { description: "Lost a race with another change; retry (claim_contended)" }
+  /v1/me/devices:
+    get:
+      operationId: listMyPhones
+      description: >
+        The caller's phones for one app (X-App-Id, or ?app= from a browser):
+        each registered phone, whether the licence licenses it, and the
+        licence's count. Only the caller's own phones.
+      parameters:
+        - name: app
+          in: query
+          required: false
+          type: string
+      responses:
+        '200': { description: OK }
+        '400': { description: unknown_app }
+        '429': { description: Rate limited }
+  /v1/me/devices/{deviceId}:
+    delete:
+      operationId: deactivateMyPhone
+      description: >
+        Deactivate one of the caller's own phones on their licence for the
+        app, freeing its slot at once. User step-up (an attested device, or a
+        second factor on a recent sign-in), so the web account page can do it.
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          type: string
+        - name: app
+          in: query
+          required: false
+          type: string
+      responses:
+        '200': { description: OK }
+        '400': { description: unknown_app }
+        '403': { description: "No second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
+        '404': { description: "Not one of the caller's active phones (activation_not_found)" }
+        '429': { description: Rate limited }
+        '503': { description: "Lost a race with another change; retry (claim_contended)" }
+  /v1/institutions/licenses/{licenseId}/devices:
+    get:
+      operationId: institutionListPhones
+      description: >
+        Institution IT: the licence's active phones of members on its
+        domainLock, with the pool's count. Membership in adminEmails plus the
+        dashboard step-up; a foreign licence 404s.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '403': { description: "email_not_verified, mfa_required or reauth_required" }
+        '404': { description: license_not_found }
+        '429': { description: Rate limited }
+  /v1/institutions/licenses/{licenseId}/devices/{deviceId}:
+    delete:
+      operationId: institutionDeactivatePhone
+      description: >
+        Institution IT: deactivate a member's phone, which also signs it out
+        of the member's account. A member off the licence's domain answers as
+        a phone that is not there.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+        - name: deviceId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '403': { description: "email_not_verified, mfa_required or reauth_required" }
+        '404': { description: "license_not_found or activation_not_found" }
+        '429': { description: Rate limited }
+        '503': { description: "Lost a race with another change; retry (claim_contended)" }
+  /v1/admin/licenses/{licenseId}/devices:
+    get:
+      operationId: adminListPhones
+      description: >
+        Semper staff: any licence's active phones, with its count.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '403': { description: not_admin }
+        '404': { description: license_not_found }
+        '429': { description: Rate limited }
+  /v1/admin/licenses/{licenseId}/devices/{deviceId}:
+    post:
+      operationId: adminAddPhone
+      description: >
+        Semper staff step-up: activate a phone the holder has registered, on
+        this licence, within its maxDevices unless override is true.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+        - name: deviceId
+          in: path
+          required: true
+          type: string
+        - name: body
+          in: body
+          required: true
+          schema:
+            type: object
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
+        '403': { description: "not_admin, mfa_required or reauth_required" }
+        '404': { description: "device_not_found, no_license or license_not_found" }
+        '409': { description: "device_limit_reached: <active>/<max>, seating_floating, license_seat_disabled or device_in_use" }
+        '422': { description: Invalid body }
+        '429': { description: Rate limited }
+        '503': { description: "Lost a race with another change; retry (claim_contended)" }
+    delete:
+      operationId: adminDeactivatePhone
+      description: >
+        Semper staff step-up: deactivate any phone on any licence; it is
+        signed out of its account.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+        - name: deviceId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
+        '403': { description: "not_admin, mfa_required or reauth_required" }
+        '404': { description: activation_not_found }
+        '429': { description: Rate limited }
+        '503': { description: "Lost a race with another change; retry (claim_contended)" }
   /v1/licenses/activate:
     post:
       operationId: activateLicense
@@ -1193,6 +1357,48 @@ paths:
         '409': { description: "Not an individual licensed key (license_not_convertible)" }
         '422': { description: "The holder's address is not on domainLock (convert_domain_mismatch), or an invalid body" }
         '503': { description: Seating the holder lost a race; retry (claim_contended) }
+  /v1/admin/licenses/{licenseId}/upgrade:
+    post:
+      operationId: adminIssueLicenseUpgrade
+      description: >
+        Device-attested, Semper-staff only (ADR-033). Issue the holder of an
+        individual licence that names its app a new licence for the same app,
+        carrying its terms unless the body names new ones (maxDevices,
+        expiresAt or perpetual, maxAnalyses, note; kind institution with
+        domainLock, adminEmails, maxSeats). The holder moves when they tap
+        Activate; one who never signed in has their invite moved and the old
+        licence revoked now. Returns the new key once.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
+        '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required); or the licence is revoked (license_revoked)" }
+        '404': { description: License not found }
+        '409': { description: "Not a live individual licence naming its app (license_not_upgradable), or an upgrade already waits on it (upgrade_pending)" }
+        '422': { description: "The holder's address is not on domainLock (convert_domain_mismatch), an end in the past (expiry_in_past), or an invalid body" }
+  /v1/admin/licenses/{licenseId}/apply-upgrade:
+    post:
+      operationId: adminApplyLicenseUpgrade
+      description: >
+        Device-attested, Semper-staff only (ADR-033). Move the holder onto the
+        issued licence {licenseId} now, as their Activate would, with no phone:
+        the old licence is revoked with supersededBy set, and each phone
+        activates again.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
+        '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
+        '404': { description: "License not found, or no upgrade waits for its holder (no_pending_upgrade)" }
+        '503': { description: Claiming the licence lost a race; retry (claim_contended) }
   /v1/institutions/licenses:
     get:
       operationId: institutionMyLicenses

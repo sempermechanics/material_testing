@@ -6,10 +6,12 @@ import android.widget.CompoundButton
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.test.core.app.ApplicationProvider
+import androidx.work.WorkManager
 import androidx.work.impl.WorkManagerImpl
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.sempermechanics.semper.BuildConfig
 import com.sempermechanics.semper.R
+import com.sempermechanics.semper.data.cloud.sync.PhoneSyncWorker
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.prefs.AppSettings
@@ -91,6 +93,27 @@ class SettingsSectionsTest {
         wifi.isChecked = !wifi.isChecked
         assertEquals(!wifiBefore, AppSettings.wifiOnlyUploadEnabled(context))
     }
+
+    @Test
+    fun `the sync switch is on by default, and switching it stores the choice and stops or starts the sync`() {
+        open()
+        val sync = settings.findViewById<CompoundButton>(R.id.switchSyncOtherPhones)
+        assertTrue(sync.isChecked)
+        assertEquals(settings.getString(R.string.settings_sync_other_phones_desc), sync.contentDescription)
+        PhoneSyncWorker.schedule(context)
+
+        sync.isChecked = false
+        idle()
+        assertFalse(AppSettings.syncFromOtherPhonesEnabled(context))
+        assertTrue(syncQueued().all { it.state.isFinished })
+
+        sync.isChecked = true
+        idle()
+        assertTrue(AppSettings.syncFromOtherPhonesEnabled(context))
+        assertTrue(syncQueued().any { !it.state.isFinished })
+    }
+
+    private fun syncQueued() = WorkManager.getInstance(context).getWorkInfosForUniqueWork("phone-sync-periodic").get()
 
     // ── SettingsFooterSection ────────────────────────────────────────────
 

@@ -6,6 +6,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.isVisible
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.LicenseEntitlements
+import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.policy.FeatureAccess
 
 /**
@@ -16,9 +17,15 @@ import com.sempermechanics.semper.data.policy.FeatureAccess
  */
 object LicenseLock {
 
-    /** The licence note, as a toast. */
+    /**
+     * The licence note, as a toast. When the account's licence is there and
+     * this phone is not on it (ADR-033), it says to activate this phone instead.
+     */
     fun explain(context: Context) {
-        Feedback.toast(context, R.string.license_lock_note, long = true)
+        val activation = AppRemoteConfig.activation(context)
+        val activate = activation.canActivate || AppRemoteConfig.pendingLicence(context) != null
+        val note = if (activate) R.string.license_lock_activate_note else R.string.license_lock_note
+        Feedback.toast(context, note, long = true)
     }
 
     /**

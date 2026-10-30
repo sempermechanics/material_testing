@@ -41,7 +41,8 @@ class SemperApi @VisibleForTesting internal constructor(
     baseUrl: String,
     /** How calls are sent, from [endpoint]; null for the shared clients and this device's key. */
     newCalls: ((endpoint: (path: String) -> String) -> SemperApiCalls)?,
-) : CloudApi {
+) : CloudApi,
+    PhonesApi {
 
     private constructor(context: Context) : this(context, BuildConfig.SEMPER_API_BASE_URL, null)
 
@@ -202,6 +203,28 @@ class SemperApi @VisibleForTesting internal constructor(
             answer.fail()
         },
     ) { decode<LicenseActivateResponse>(it).config }
+
+    // ------------------------------------------------------------------ phones
+
+    /**
+     * POST /v1/me/devices/activate. Signed, so only this phone activates
+     * itself. A refusal (`device_limit_reached`, `no_license`,
+     * `seating_floating`, `no_pending_upgrade`) is an [ApiException] with its
+     * code; [com.sempermechanics.semper.data.account.phones.DeviceActivation] reads it.
+     */
+    override suspend fun activateDevice(idToken: String, upgrade: Boolean): DeviceActivateResponse =
+        calls.signed(
+            idToken,
+            SignedCall("POST", "/v1/me/devices/activate", jsonBytes(DeviceActivateRequest(upgrade))),
+        ) { decode(it) }
+
+    /** GET /v1/me/devices. The device id it sends marks this phone in the list. */
+    override suspend fun listDevices(idToken: String): AccountPhonesDto =
+        calls.bearer(idToken, { url(endpoint("/v1/me/devices")) }, ApiAnswer::failApprovedOnly) { decode(it) }
+
+    /** DELETE /v1/me/devices/{id}. Signed: the route asks a step-up, which this phone's signature is. */
+    override suspend fun deactivateDevice(idToken: String, deviceId: String): DeviceDeactivateResponse =
+        calls.signed(idToken, SignedCall("DELETE", "/v1/me/devices/$deviceId")) { decode(it) }
 
     // ---------------------------------------------------------- legal / consent
 

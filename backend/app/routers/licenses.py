@@ -86,6 +86,7 @@ def activate_license(
 @router.post("/v1/licenses/checkout")
 def checkout_lease(
     user=Depends(current_user),
+    app: str = Depends(request_app),
     x_device_id: str = Header(default=""),
 ):
     """Take or renew a floating seat.
@@ -106,17 +107,18 @@ def checkout_lease(
     """
     rate_limit.enforce(rate_limit.institution_bucket, user["uid"])
     device_id = require_header_identifier(x_device_id, name="device_id", maximum=128)
+    license_id = apps.licence_view(user, app).get("licenseId")
     try:
-        config = repo.checkout_lease(user, device_id)
+        config = repo.checkout_lease(user, device_id, app)
     except Refusal as refusal:
-        _licence_event("checkout", user.get("licenseId"), refusal, uid=user["uid"])
+        _licence_event("checkout", license_id, refusal, uid=user["uid"])
         raise
-    _licence_event("checkout", user.get("licenseId"), uid=user["uid"])
+    _licence_event("checkout", license_id, uid=user["uid"])
     return {"config": config}
 
 
 @router.post("/v1/licenses/release")
-def release_lease(user=Depends(current_user)):
+def release_lease(user=Depends(current_user), app: str = Depends(request_app)):
     """Give a floating seat back so someone else can take it.
 
     Idempotent — releasing a lease that already lapsed frees nothing and still
@@ -124,10 +126,11 @@ def release_lease(user=Depends(current_user)):
     heartbeat.
     """
     rate_limit.enforce(rate_limit.institution_bucket, user["uid"])
-    config = repo.release_lease(user)
+    config = repo.release_lease(user, app)
+    license_id = apps.licence_view(user, app).get("licenseId")
     audit.record(
         user["uid"], action="INSTITUTION_LEASE_RELEASE",
-        target={"type": "lease", "id": f"{user.get('licenseId')}/{user['uid']}"},
+        target={"type": "lease", "id": f"{license_id}/{user['uid']}"},
     )
     return {"config": config}
 
@@ -154,11 +157,10 @@ def unbind_device(
     has to be typed on the new device.
 
     Step-up rather than plain USER: this is worth more than a bearer token,
-    and it is reachable from a browser. But a second factor proves *who* is
-    asking, not *how often*, so it is also the one caller subject to
-    SELF_DEVICE_CHANGE_COOLDOWN_DAYS — one person could otherwise re-bind
-    daily and pass a single licence round a lab. Staff and IT are not, so a
-    support request always works.
+    and it is reachable from a browser. No cooldown (ADR-033): the licence's
+    device count limits how many phones hold it, not how often they change.
+    On a licence that runs activations this deactivates the holder's phones
+    for it; `DELETE /v1/me/devices/{device_id}` deactivates one.
 
     The order on the new device matters and the app should follow it: sign in
     (USER-tier, so `POST /v1/devices/register` works before any licence
@@ -169,15 +171,13 @@ def unbind_device(
     Moves one app's device (ADR-010): the app that asks, by `X-App-Id`, or
     from a browser, which cannot send that header, `?app=semperclassroom` (the
     old `?app=materialtesting` names the same app, ADR-030).
-    Each app has its own cooldown. No app named is Semper.
+    No app named is Semper.
     """
     named = named_app(app, header_app)
     user = ctx.user
-    license_id = user.get("licenseId") or ""
+    license_id = apps.licence_view(user, named).get("licenseId") or ""
     if not license_id:
         raise HTTPException(404, errors.NO_LICENSE)
-    # Too soon is 429 with the instant and a Retry-After (`errors.STATUS`): the
-    # answer is "not yet", and nothing about the entitlement has changed.
     cleared = repo.clear_device_lock(license_id, user["uid"], actor=repo.ACTOR_SELF, app=named)
     audit.record(
         user["uid"], action="LICENSE_DEVICE_UNBIND",
@@ -186,7 +186,9 @@ def unbind_device(
     )
     return {"licenseId": license_id, "app": named, "deviceIdLock": "",
             "previousDeviceId": cleared.get(apps.field("previousDeviceId", named)) or "",
-            "nextChangeAllowedAt": cleared.get("nextChangeAllowedAt") or ""}
+            # Kept for the pages and builds that read it: there is no next
+            # change to wait for any more.
+            "nextChangeAllowedAt": ""}
 
 
 #: `via` on a claim's event and audit row, by how the caller stepped up

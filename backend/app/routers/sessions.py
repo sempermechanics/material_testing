@@ -73,8 +73,8 @@ def list_sessions(
     what it did not understand.
 
     Cursor-paginated (`page_size` 1..100, `page_token`, `nextPageToken`). Quota
-    `used` is the full account count, every app's, not the page length: the
-    cap is the account's.
+    `used` is the asking app's count (ADR-033), whichever app is listed, not
+    the page length: each app's licence has its own cap.
 
     Firestore is only an index. `?verify=true` additionally confirms each
     session on the *current page* still exists in Drive (bounded parallel
@@ -92,10 +92,10 @@ def list_sessions(
     if verify and sessions:
         sessions, purged, indeterminate = session_service.verify_listed(user["uid"], sessions)
 
-    used = repo.count_user_sessions(user["uid"])
+    used = repo.count_user_sessions(user["uid"], header_app)
     return {
         "sessions": sessions,
-        "quota": {"used": used, "max": repo.resolve_user_config(user)["maxSessions"]},
+        "quota": {"used": used, "max": repo.resolve_user_config(user, header_app)["maxSessions"]},
         "page": page_block(page_size, len(sessions), next_token),
         # `indeterminate` tells the client the verification was incomplete, so a
         # session still listed is not proof it was confirmed present.
@@ -306,7 +306,8 @@ def download_session_bundle(sid: SessionId, ctx=Depends(attested_or_mfa_user)):
     """
     user = ctx.user
     session = _owned_session(sid, user)
-    if not repo.cloud_backup_enabled(user):
+    # The analysis's own app's licence (ADR-033): a browser names no app.
+    if not repo.cloud_backup_enabled(user, repo.session_app(session)):
         raise HTTPException(403, errors.feature_not_licensed_detail())
     artifacts = repo.list_session_artifacts(sid)
     if not artifacts:
@@ -352,18 +353,18 @@ def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_d
     retry a 403 from this route forever, which is one more reason the gate
     would be the wrong shape.
 
-    The cap counts analyses stored at once, per account; for a demo account
-    also per device, whichever account stored them
+    The cap counts analyses stored at once, per account and app (ADR-033);
+    for a demo account also per device, whichever account stored them
     (`services.sessions._device_cap_reached`).
     """
     user = ctx.user
-    cfg = repo.resolve_user_config(user)
+    cfg = repo.resolve_user_config(user, app)
     # Idempotent retry: same localSessionId + still in flight → return existing.
     existing = repo.find_incomplete_session(user["uid"], body.localSessionId)
     if existing:
         return session_service.resumed(existing)
     # Quotas: one session == one analysis.
-    session_service.require_room(user, cfg, body, ctx.device_id)
+    session_service.require_room(user, cfg, body, ctx.device_id, app)
     answer, counts = session_service.record_session(user, ctx.device, ctx.device_id, body, app)
     # Access-log middleware reads this after the response returns.
     request.state.usage_counts = counts

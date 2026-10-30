@@ -346,7 +346,7 @@ jobs:
             LICENSED_MAX_SESSIONS_PER_USER=${{ vars.LICENSED_MAX_SESSIONS_PER_USER || '999' }}
             ADMIN_WEB_MFA_ENABLED=${{ vars.ADMIN_WEB_MFA_ENABLED || '1' }}
             APP_CHECK_MODE=${{ vars.APP_CHECK_MODE || 'off' }}
-            SELF_DEVICE_CHANGE_COOLDOWN_DAYS=${{ vars.SELF_DEVICE_CHANGE_COOLDOWN_DAYS || '30' }}
+            IMPLICIT_ACTIVATION=${{ vars.IMPLICIT_ACTIVATION || 'legacy' }}
             CONSOLE_ORIGINS=${{ vars.CONSOLE_ORIGINS || 'https://app.sempermechanics.com https://indicvision-dic-app-auth.firebaseapp.com' }}
             CHECK_REVOKED_ON_STEP_UP=${{ vars.CHECK_REVOKED_ON_STEP_UP || 'false' }}
             ENTITLEMENT_KID=${{ vars.ENTITLEMENT_KID || 'ent-1' }}
