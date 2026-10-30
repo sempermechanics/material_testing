@@ -33,11 +33,15 @@ and INCIDENT_RESPONSE.md naming this repo on each `gh variable` and
 
 ## Syncing into material_testing
 
-**Last sync:** semperdic-app `b1c15346` (its #490–#503: the second readiness run, #503, with
-lower-case "semper", "Demo" / "Licensed" and `--require-pins`; CI speed-ups ported from
-here; the console's test-account fixes), merged on material_testing's
-`sync/semperdic-b1c1534` on 2026-10-29, the first sync to run `td_numbers.py translate`
-(155 auto-merged lines and the conflict hunks); before it `6d2bde6c` (its #487–#489, the
+**Last sync:** semperdic-app `12a89d31` (its #504–#515: the QC catalogue, `qa/` and
+[ADR-034](../adr/ADR-034-qc-framework.md); [ADR-033](../adr/ADR-033-licence-per-app-explicit-activation.md)'s
+licence per app, explicit Activate, Your phones and the sync from other phones, with its
+backend, migration and consoles; #509's lower-case "semper"), merged on material_testing's
+`sync/semperdic-12a89d3` on 2026-10-30; before it `b1c15346` (its #490–#503: the second
+readiness run, #503, with lower-case "semper", "Demo" / "Licensed" and `--require-pins`; CI
+speed-ups ported from here; the console's test-account fixes, `sync/semperdic-b1c1534`,
+2026-10-29, the first sync to run `td_numbers.py translate`: 155 auto-merged lines and the
+conflict hunks), `6d2bde6c` (its #487–#489, the
 production-readiness fixes, `sync/semperdic-6d2bde6`, 2026-10-26), `25334af1`
 (material_testing #146), `968637cb` (material_testing #144) and `14b279d6` (on
 `ccr-603fe346-1bw2fa`, 2026-10-21).
@@ -390,6 +394,42 @@ in it is Semper-only. What its lab code has to know:
   `ViewerArgs.refUpdateInterval`, `IntentKeys.REF_UPDATE_INTERVAL`, written only for an
   incremental run) and a "Record integrity" row, plus an `integrityWarnRow` chip in
   `sheet_settings_used.xml`.
+
+### A licence per app and Activate (ADR-033, 2026-10)
+
+[ADR-033](../adr/ADR-033-licence-per-app-explicit-activation.md) arrived with the sync of
+`12a89d31`. Nothing in it is Semper-only, and the fork's lab code needed no change; what a
+maintainer of this app has to know:
+
+- **This app has its own licence.** After the owner runs
+  `backend/scripts/split_licences_per_app.py`, a holder's semper Classroom licence is a
+  separate licence from their semper one, with its own terms, device count and analysis
+  quota. The app learns which by `X-App-Id` (`AppIdHeader`, this build's `applicationId`,
+  `com.sempermechanics.semperclassroom`, which the backend reads as `semperclassroom`);
+  `EntitlementApp` still maps that id to the `semperclassroom` claim. No call names the app
+  otherwise: Activate (`POST /v1/me/devices/activate`), Your phones
+  (`GET /v1/me/devices`) and Deactivate (`DELETE /v1/me/devices/{id}`) all act on this app's
+  licence through the header.
+- **A new phone is Demo until Activate.** Every build from this sync sends
+  `X-Activation: explicit`, so the backend never activates its phone itself. The ways in
+  are the shared screens: Home's activation card, Settings' account row, and the limit
+  screen's **Activate**, each opening `ui/phones/PhonesActivity`. The lab flows reach them
+  through the same gates as the + button: **Which test?** and the lab Re-run go through
+  `HomeNewAnalysis.mayStart`, and the examples' **Try it** through
+  `ExamplesActivity.canStart`, so an unactivated phone at Demo's limit lands on the limit
+  screen with its Activate. A lab screen that gates on the licence must read
+  `LicenseEntitlements` / `AppRemoteConfig.activation`, never assume a signed-in holder is
+  licensed.
+- **Builds before it never tap Activate.** v1.4-beta.2 (Material Testing) and any semper
+  Classroom build before this sync get their first phone activated only while the
+  backend's `IMPLICIT_ACTIVATION` is `legacy` (semperdic-app's TD-363). Release this app
+  before semperdic-app turns it `off`.
+- **Download from my other phones** (Settings → Cloud backup, default on) restores this
+  app's backups the phone lacks, lab sessions included, through the same `RestoreStart`
+  path as Home's card. Its restores run on any network once started and nothing checks
+  free space (TD-278).
+- **Nothing local is deleted** on a deactivation, an upgrade or a licence change: a
+  deactivated phone keeps its analyses and reads Demo.
 
 ## Porting back
 

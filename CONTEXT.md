@@ -131,15 +131,21 @@ no thresholds ([TESTING.md](docs/app/TESTING.md)); the phone-run gates (`benchma
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-29)
+## Current state (2026-10-30)
 
 - **Semper's UI plus two test choices ([ADR-022](docs/adr/ADR-022-semper-ui-plus-lab-tests.md)).**
   **Which test?** offers 2D DIC (Semper's analysis: no load card, no test type recorded),
   Tensile and Bending; a fork change to a shared screen runs only for a lab test.
   semperdic-app accepted making this a product flavour of its repo on 2026-10-22 ([ADR-025](docs/adr/ADR-025-test-type-extension-points.md), mirrored).
 - **Synced with `semperdic-app`** (forked at `bfe00e5`; `git log --merges
-  --grep=semperdic-app`; rules in its `docs/ops/FORK_SYNC.md`). Last: `b1c15346`, 2026-10-29,
-  on `sync/semperdic-b1c1534` (not pushed): its #490–#503, the second readiness run (lower-case
+  --grep=semperdic-app`; rules in its `docs/ops/FORK_SYNC.md`). Last: `12a89d31`, 2026-10-30,
+  on `sync/semperdic-12a89d3` (not pushed): its #504–#515, the QC catalogue (`qa/`,
+  [ADR-034](docs/adr/ADR-034-qc-framework.md)) and [ADR-033](docs/adr/ADR-033-licence-per-app-explicit-activation.md)'s
+  licence per app: this app sends `X-Activation: explicit`, so a new phone is Demo until
+  **Activate** (Home's card, Settings' account row, the limit screen, Your phones in
+  `ui/phones/`); Settings' **Download from my other phones** restores this app's backups the
+  phone lacks (TD-278); its backend, split script and consoles are semperdic-app's to deploy
+  and run. Before: `b1c15346`, 2026-10-29, on `sync/semperdic-b1c1534` (#158): its #490–#503, the second readiness run (lower-case
   "semper", here "semper Classroom"; "Demo" / "Licensed"; `--require-pins` in release.yml, so a
   release needs this repo's own `SEMPER_API_CERT_PINS` and `SEMPER_RELEASE_CERT_SHA256`, TD-13;
   Home's sheets kept across a configuration change, here the Which test? sheet too), the CI
@@ -166,7 +172,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   wizard state is `WizardInputs.lab`, changed through `edit {}`, and a run's result reads
   the lab test from its saved row (`ViewerArgs.of`). Metadata schema `/7` here (ours past
   `/3` are not the parent's numbers). Lab inputs ride its seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` (ADR-003),
-  `WizardDraft` (ADR-005). ADR numbers are shared; TD numbers are this repo's own since 2026-10-27 (ADR-032: restarted at TD-1, old numbers in `docs/ops/td-renumber-2026-10-27.csv`, upstream diffs through `scripts/td_numbers.py translate`). TD-56 is the rename, TD-57 and TD-58 the examples', TD-59 and TD-60 the Play listing's; next free TD-278.
+  `WizardDraft` (ADR-005). ADR numbers are shared; TD numbers are this repo's own since 2026-10-27 (ADR-032: restarted at TD-1, old numbers in `docs/ops/td-renumber-2026-10-27.csv`, upstream diffs through `scripts/td_numbers.py translate`). TD-56 is the rename, TD-57 and TD-58 the examples', TD-59 and TD-60 the Play listing's; next free TD-279.
 - **#140 merged 2026-10-20** (`a66606d9`, the 2026-10-19 review; not released): load logs
   in kgf/tf, decimal commas and the delimiter read after a long preamble, logged time units;
   photo times matched within 1 s when any lacks EXIF sub-seconds; E refitted over 10–40 % of
@@ -232,7 +238,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - `MAX_SESSIONS_PER_USER` is deleted; a deployment still setting it silently gets `DEMO_MAX_ANALYSES` (25) — [§7](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - List env vars (`CONSOLE_ORIGINS`, `ADMIN_EMAILS`) are space-separated; the deploy action splits on commas — [§20.8](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - Test phones are shared between sessions: before `adb install -r`, check `ps -A | grep instrument` and the app's `lastUpdateTime` — an install kills a running `am instrument`, and another session's install can replace the build under test. Never the connected task on a phone — [TESTING.md](docs/app/TESTING.md).
-- Restore on a new device has an order: sign in, let one authed request bind the lock, then restore — [§20.10](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
+- A licence with `app` licenses only the phones activated on it (`licenses/{id}/activations`); other phones are Demo per request. This app sends `X-Activation: explicit` (`AppIdHeader`), so a new phone of this build is Demo until Activate (Your phones, `ui/phones/`); builds without it (v1.4-beta.2) auto-activate only while `IMPLICIT_ACTIVATION=legacy` — [§20.16](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
+- Restore on a new device has an order: sign in, then Activate (a licence that names its app) or let one authed request bind the lock (one from before the split), then restore — [§20.10](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - Licence terms are mirrored onto users, so editing a licence reaches nobody without `update_license`'s fan-out — [§20.6](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - Demo uploads silently; only retrieval is licence-gated. Gating `POST /v1/sessions` on the licence would loop old builds on 403; a kill switch refuses it with 503 `feature_paused`, which every build retries — [§20.3](docs/backend/CLOUD_ARCHITECTURE_GCP.md), [§20.14](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - Share has no backend route: the licence check and the signed token are its only gate, so a modified APK can share (accepted, TD-49). Anything that touches the cloud is checked by the server — [ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md).
