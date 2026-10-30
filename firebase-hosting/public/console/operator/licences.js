@@ -371,7 +371,7 @@ function licenceRow(lic) {
   return `
     <tr>
       <td class="mono">${esc(label)}</td>
-      <td>${esc(lic.kind)}${lic.seating === "floating" ? " · shared" : ""}${appBadge(lic)}${upgradeNote(lic)}</td>
+      <td><span>${esc(lic.kind)}${lic.seating === "floating" ? " · shared" : ""}${appBadge(lic)}${upgradeNote(lic)}</span></td>
       <td>${esc(ACCOUNT.modes[lic.mode] || lic.mode)}</td>
       <td>${seatSummary(lic)}</td>
       <td>${term}</td>

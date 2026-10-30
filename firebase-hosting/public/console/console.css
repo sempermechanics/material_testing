@@ -553,6 +553,9 @@ details.phones-fold > summary:hover { background: rgba(255, 255, 255, 0.04); }
   /* The term ("until May 12, 2027 (UTC) +14d") and the analyses count wrap
      beside their label; kept on one line they ran past a 360 px card. */
   table.licences td:nth-child(5), table.licences td:nth-child(6) { white-space: normal; }
+  /* The kind, its app tag ("semper Classroom") and an upgrade note, as one
+     wrapping line: as separate flex items the tag ran past a 360 px card. */
+  table.licences td:nth-child(2) { white-space: normal; }
   /* The count beside its label, folded or not, then the phones under both
      at the card's full width. Basis 0: unfolded, the list's width pushed the
      fold, and the count with it, under the "Phones" label (AE2-107); the list
