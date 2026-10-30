@@ -172,9 +172,9 @@ The product owner's decisions (2026-10-29):
       the oldest phone not holding the licence makes room); any ACTIVE phone of the
       account signs (`deps._device_is_bound`); a clear signs out only a registered
       phone it released, and another phone registering no longer ends its hold.
-- [ ] Before the step-2 backend serves: `backend/scripts/retire_stale_devices.py`
+- [x] Before the step-2 backend serves: `backend/scripts/retire_stale_devices.py`
       dry run, then `--apply` (owner), so no ACTIVE record an older path left
-      behind can sign.
+      behind can sign. Run 2026-10-30, just after the deploy: 0 to retire.
 - [x] Step 3: the activation model (`repo/activations.py`), Activate and the
       phones routes for holder, IT and staff (`routers/activations.py`),
       role-scoped deactivation (`repo/deactivations.py`), `/v1/config`'s

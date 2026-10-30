@@ -128,13 +128,13 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Legal pages held:** #474's text (Privacy §2.3, Terms §6.1, retention values) waits on counsel
   (TD-277). Deploy Hosting from a worktree with `/privacy` and `/terms` taken from `b940cc29`
   ([checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md) §4) and compare the live pages after; a
-  plain-`main` deploy published them on 2026-10-26 and again on 2026-10-30; that
-  redeploy from `b940cc29` is owed.
+  plain-`main` deploy published them on 2026-10-26 and again on 2026-10-30, each time redeployed
+  the same day; live matches `b940cc29` since.
 - **Readiness runs** 2026-10-24 (#489) and 2026-10-28 (#503, verdict **No-go** on six P1s that need
   the Admin or counsel, [report](docs/ops/readiness/20261028/REPORT.md) §4) are merged and now deployed.
 - **Licensing rework** ([ADR-033](docs/adr/ADR-033-licence-per-app-explicit-activation.md)): merged
-  #506–#515 and deployed (above). Left: `retire_stale_devices.py` is not recorded as run; the
-  Semper release with Activate; the fork sync (Semper Classroom); then 30 days of
+  #506–#515 and deployed (above); `retire_stale_devices.py` found nothing to retire. Left: the
+  Semper release with Activate; the fork sync (material_testing#159) and its release; then 30 days of
   `event=activation`, `minSupportedVersionCode`, `IMPLICIT_ACTIVATION=off` and the cleanup (TD-363).
   Nothing of it has been tried on an emulator or against staging.
 - **Admin actions** are one table, [gate § Admin actions](docs/ops/PRODUCTION_READINESS_GATE.md#admin-actions-external):
