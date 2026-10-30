@@ -159,7 +159,7 @@ $("releasePhone").addEventListener("click", async () => {
     $("releaseEmail").value = "";
   } catch (e) {
     setStatus(`Could not release: ${explain(e, {
-      license_device_clear_required: "That account is Licensed: use New phone on its licence.",
+      license_device_clear_required: "That account is Licensed: use Phones on its licence, or New phone on one from before the split.",
     })}`, true);
   } finally {
     btn.disabled = false;

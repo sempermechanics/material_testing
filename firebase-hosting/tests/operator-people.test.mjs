@@ -249,7 +249,7 @@ test("a release with only a semper Classroom phone, or none, says which", async 
 test("a refused release is explained, and the address stays for another try", async () => {
   for (const [reply, text] of [
     [() => json(409, { detail: "license_device_clear_required" }),
-      "Could not release: That account is Licensed: use New phone on its licence."],
+      "Could not release: That account is Licensed: use Phones on its licence, or New phone on one from before the split."],
     [() => json(429, { detail: "rate_limited" }), "Could not release: Too many requests just now — wait a moment and try again."],
     [() => json(404, { detail: "user_not_found" }), "Could not release: No semper account has that address."],
     [offline, "Could not release: The server could not be reached — check your connection and try again."],

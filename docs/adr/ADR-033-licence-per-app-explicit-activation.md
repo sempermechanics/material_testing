@@ -210,6 +210,11 @@ The product owner's decisions (2026-10-29):
       phones** (default on) and `data/cloud/sync/PhoneSyncWorker` (every 6 hours,
       unmetered, battery not low), which restores the account's backups this
       phone lacks through `RestoreStart`. Its leftovers are TD-364.
-- [ ] Consoles; fork sync.
+- [x] Consoles: the account page's per-app cards (own phones, Deactivate, a
+      waiting licence), the institution page's pool and Deactivate, and the
+      operator desk's Issue per app with a phone count, Phones (Deactivate, Add
+      phone), Issue upgrade / Apply now, Edit's count and QC test accounts'
+      licence fields.
+- [ ] Fork sync.
 - [ ] Set `IMPLICIT_ACTIVATION=off` once adoption allows, then remove the legacy
       paths (TD-363).
