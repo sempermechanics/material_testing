@@ -338,3 +338,19 @@ async function rereadViaRelease() {
   $("release").click();
   await settle();
 }
+
+/* ---------------------------------------------- the top licence card */
+
+test("the top card names semper's licence, and a Classroom licence is not read as Demo", async () => {
+  await open({ licences: { semper: DEMO, semperclassroom: CLASSROOM }, semper: phonesOf("semper", { model: "none" }) });
+  assert.equal($("licenceTitle").textContent, "semper licence");
+  assert.equal($("explain").textContent,
+    "semper is on Demo on this account. Your semper Classroom licence is in its card below. " +
+    "Ask your institution's IT or semper support if you need a licence for semper too.");
+});
+
+test("on Demo for every app, the top card says Demo as before", async () => {
+  await open({ licences: { semper: DEMO, semperclassroom: DEMO },
+    semper: phonesOf("semper", { model: "none" }), classroom: phonesOf("semperclassroom", { model: "none" }) });
+  assert.match($("explain").textContent, /^You are on Demo\. Analyses are capped/);
+});

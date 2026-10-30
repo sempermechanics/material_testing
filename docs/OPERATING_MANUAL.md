@@ -1108,8 +1108,10 @@ names its app, **Issue upgrade** replaces To institution and New phone
 or institution, carrying the terms you leave empty; the old one works until
 the holder taps **Activate new licence** in the app, which revokes it. A
 holder on a build with no Activate is moved with **Apply now**
-(`POST …/{newId}/apply-upgrade`), offered in the dialog and on an
-`upgrade_pending` refusal; each of their phones then activates again.
+(`POST …/{newId}/apply-upgrade`), offered in the dialog, on an
+`upgrade_pending` refusal, and as **Apply upgrade** on the old licence's row,
+which says "upgrade issued (…), waiting for the holder" (the new one's row says
+"upgrade of …"); each of their phones then activates again.
 
 A new `expiresAt` must normally be **later** than the one in force. The
 request is refused with `422` and nothing changes if the date has already

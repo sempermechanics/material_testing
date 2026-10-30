@@ -9,7 +9,7 @@ import {
   placeholderRows, retryRow,
 } from "../util.js";
 import { ACCOUNT, explain } from "../messages.js";
-import { $, desk, demoCapNote, runsActivations, appName, devicesCap, capText } from "./state.js";
+import { $, desk, demoCapNote, labelOf, runsActivations, appName, devicesCap, capText } from "./state.js";
 
 // Whoever shows something derived from one licence, told when it is re-read.
 const readers = [];
@@ -333,9 +333,12 @@ function licenceRow(lic) {
   const convertButton = individual && !demo && !perApp
     ? `<button class="secondary" data-convert="${esc(lic.id)}">To institution</button>`
     : "";
-  const upgradeButton = individual && perApp
-    ? `<button class="secondary" data-upgrade="${esc(lic.id)}">Issue upgrade</button>`
-    : "";
+  // While an upgrade waits for its holder another cannot be issued; staff can
+  // apply the waiting one instead, for an app that has no Activate.
+  const upgradeButton = !(individual && perApp) ? ""
+    : lic.upgradePendingId
+      ? `<button class="secondary" data-apply="${esc(lic.id)}">Apply upgrade</button>`
+      : `<button class="secondary" data-upgrade="${esc(lic.id)}">Issue upgrade</button>`;
   // The phones activated on it, against its count. A shared (floating)
   // licence counts its seats in use instead: the lease is the activation.
   const phonesButton = perApp && lic.seating !== "floating" ? phonesControl(lic, label) : "";
@@ -368,9 +371,7 @@ function licenceRow(lic) {
   return `
     <tr>
       <td class="mono">${esc(label)}</td>
-      <td>${esc(lic.kind)}${lic.seating === "floating" ? " · shared" : ""}${appBadge(lic)}${lic.supersededBy
-        ? `<br><span class="muted">${lic.app ? "replaced by an upgrade" : "replaced by an institution licence"}</span>`
-        : ""}</td>
+      <td>${esc(lic.kind)}${lic.seating === "floating" ? " · shared" : ""}${appBadge(lic)}${upgradeNote(lic)}</td>
       <td>${esc(ACCOUNT.modes[lic.mode] || lic.mode)}</td>
       <td>${seatSummary(lic)}</td>
       <td>${term}</td>
@@ -379,6 +380,22 @@ function licenceRow(lic) {
       <td class="muted">${esc(lic.domainLock || lic.emailLock || "—")}</td>
       <td class="actions">${actions}</td>
     </tr>`;
+}
+
+/**
+ * Where a licence stands in an upgrade (ADR-033): replaced, waiting for its
+ * holder to activate the new one, or issued to replace another.
+ */
+function upgradeNote(lic) {
+  const note = (text) => `<br><span class="muted">${text}</span>`;
+  if (lic.supersededBy) {
+    return note(lic.app ? "replaced by an upgrade" : "replaced by an institution licence");
+  }
+  if (lic.upgradePendingId) {
+    return note(`upgrade issued (${esc(labelOf(lic.upgradePendingId))}), waiting for the holder`);
+  }
+  if (lic.supersedes && lic.status !== "revoked") return note(`upgrade of ${esc(labelOf(lic.supersedes))}`);
+  return "";
 }
 
 /** The app a licence is for, as a tag; none on one from before the split. */

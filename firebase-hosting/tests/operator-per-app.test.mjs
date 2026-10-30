@@ -6,7 +6,7 @@
 // Test accounts card's licence fields, QC's alone.
 import { beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { test, reset, settle, json, net, sent, $, loadAuth } from "./harness.mjs";
+import { test, reset, settle, json, net, sent, confirms, $, loadAuth } from "./harness.mjs";
 import {
   IND, UNI, DEMO, APP_IND, APP_UNI, openDesk, status, rows, rowButton, bodyOf,
 } from "./operator-desk.mjs";
@@ -183,6 +183,49 @@ test("an institution licence with no seat cap and no count reads ∞; a replaced
   ] });
   assert.equal(rowButton("phones", APP_UNI.id).textContent, "Phones 0/∞");
   assert.equal(row("SEMP-OLD1")[1], "individual semperreplaced by an upgrade");
+});
+
+test("an upgrade waiting is said on both rows, and Apply upgrade on the old one moves the holder", async () => {
+  const OLD = { ...APP_IND, upgradePendingId: "lic-up-9" };
+  const NEXT = { ...APP_IND, id: "lic-up-9", keyPrefix: "SEMP-UP09", status: "unused", supersedes: APP_IND.id };
+  const apply = `POST /v1/admin/licenses/${NEXT.id}/apply-upgrade`;
+  await openDesk({
+    licenses: [OLD, NEXT],
+    routes: {
+      [apply]: () => json(200, { licenseId: NEXT.id, supersededId: OLD.id, activation: null }),
+      [`GET /v1/admin/licenses/${OLD.id}`]: () => json(200, { ...APP_IND, status: "revoked", supersededBy: NEXT.id }),
+      [`GET /v1/admin/licenses/${NEXT.id}`]: () => json(200, { ...NEXT, status: "redeemed" }),
+    },
+  });
+  assert.equal(row("SEMP-APP1")[1], "individual semperupgrade issued (SEMP-UP09), waiting for the holder");
+  assert.equal(row("SEMP-UP09")[1], "individual semperupgrade of SEMP-APP1");
+  assert.equal(rowButton("upgrade", OLD.id), null, "no second upgrade while one waits");
+
+  confirms.answer(false);
+  rowButton("apply", OLD.id).click();
+  await settle();
+  assert.deepEqual(sent(/apply-upgrade/), [], "declined: nothing sent");
+
+  confirms.answer(true);
+  rowButton("apply", OLD.id).click();
+  await settle();
+  assert.deepEqual(sent(/apply-upgrade/), [apply]);
+  assert.deepEqual(status(), ["Applied: the holder of SEMP-APP1 is on SEMP-UP09, and SEMP-APP1 is revoked.", "muted"]);
+  assert.equal(row("SEMP-APP1"), undefined, "revoked, it leaves a table that hides revoked licences");
+});
+
+test("Apply upgrade refused is said on the status line", async () => {
+  const OLD = { ...APP_IND, upgradePendingId: "lic-up-9" };
+  await openDesk({
+    licenses: [OLD],
+    routes: { "POST /v1/admin/licenses/lic-up-9/apply-upgrade": () => json(404, { detail: "no_pending_upgrade" }) },
+  });
+  confirms.answer(true);
+  rowButton("apply", OLD.id).click();
+  await settle();
+  assert.deepEqual(status(), [
+    "That upgrade is no longer waiting: the holder has activated it already, or it was revoked.", "muted err",
+  ]);
 });
 
 /* ------------------------------------------------------------------ edit */

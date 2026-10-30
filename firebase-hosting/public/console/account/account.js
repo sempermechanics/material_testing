@@ -28,6 +28,7 @@ $("deleteAccount").textContent = ACCOUNT.deleteAccount;
 
 let licence = {};        // the `license` block of /v1/me
 let perApp = false;      // whether /v1/me carried each app's licence (`licences`)
+let licences = {};       // /v1/me's `licences`, each app's licence (ADR-033)
 let sessions = [];       // every page loaded so far
 let nextToken = "";
 let quota = null;        // the `quota` block of /v1/sessions
@@ -81,6 +82,7 @@ async function loadAccount() {
     const me = await api("/v1/me");
     licence = me.license || {};
     perApp = Boolean(me.licences);
+    licences = me.licences || {};
     accountError = "";
     renderLicence();
     if (perApp) phones.show(me.licences);
@@ -131,6 +133,10 @@ function renderLicence() {
     }
   }
   $("pills").innerHTML = `<p>${pills.join(" ")}</p>`;
+  // `license` is semper's alone: with each app's licence in its own card
+  // below, this one says whose it is, so a semper Classroom licence is not
+  // read as the account being on Demo.
+  $("licenceTitle").textContent = perApp ? `${appName("semper")} licence` : "Licence";
   $("explain").textContent = explain(licensed, floating, holdsSeat, held, lapsed);
   $("facts").innerHTML = facts(held, floating, holdsSeat)
     .map(([term, value]) => `<dt>${esc(term)}</dt><dd>${esc(value)}</dd>`).join("");
@@ -202,6 +208,12 @@ function explain(licensed, floating, holdsSeat, held, lapsed) {
            "Your saved work is untouched, and semper becomes Licensed again " +
            "on this account as soon as a colleague finishes.";
   }
+  const others = otherAppsLicensed();
+  if (!licensed && !held && others.length) {
+    return `${appName("semper")} is on Demo on this account. Your ${others.join(" and ")} ` +
+           "licence is in its card below. Ask your institution's IT or semper support if you " +
+           `need a licence for ${appName("semper")} too.`;
+  }
   if (!licensed) {
     return "You are on Demo. Analyses are capped and cloud backup is off. " +
            "Ask your institution's IT or semper support for a licence. Most " +
@@ -219,6 +231,13 @@ function explain(licensed, floating, holdsSeat, held, lapsed) {
       : "Your institution's seats are shared.";
   }
   return "Your licence is active on this account.";
+}
+
+/** The other apps this account is Licensed for, by name (`/v1/me`'s `licences`). */
+function otherAppsLicensed() {
+  return Object.entries(licences)
+    .filter(([app, lic]) => app !== "semper" && lic?.mode === "licensed")
+    .map(([app]) => appName(app));
 }
 
 $("release").addEventListener("click", async () => {

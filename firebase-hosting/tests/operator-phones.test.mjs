@@ -269,7 +269,7 @@ test("Issue upgrade sends what changes, shows the code once, and offers Apply no
   await settle();
   assert.match(confirms.asked[0], /^Move the holder of SEMP-APP1 onto SEMP-UP01 now\?/);
   assert.deepEqual(sent(/apply-upgrade/), [APPLY]);
-  assert.deepEqual(upHint(), ["Applied: the holder is on SEMP-UP01, and SEMP-APP1 is revoked.", "muted"]);
+  assert.deepEqual(upHint(), ["Applied: the holder of SEMP-APP1 is on SEMP-UP01, and SEMP-APP1 is revoked.", "muted"]);
   assert.equal($("upgradeApply").hidden, true);
   assert.deepEqual(rows().map((r) => r[0]), ["SEMP-UP01"], "the old licence, revoked, leaves the table");
 

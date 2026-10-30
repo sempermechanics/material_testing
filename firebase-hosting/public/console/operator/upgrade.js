@@ -5,9 +5,10 @@
  * until they tap Activate on the new one in the app, which revokes the old.
  *
  * Apply now is staff's fallback, for a holder whose app has no Activate: it
- * moves them onto the issued licence at once. The licence list does not say
- * which licence an upgrade waits on, so Apply now is offered here, from the
- * issue's answer, or from the refusal that names an upgrade already waiting.
+ * moves them onto the issued licence at once. It is offered here, from the
+ * issue's answer or the refusal that names an upgrade already waiting, and on
+ * the old licence's row while its upgrade waits (`upgradePendingId`), as
+ * Apply upgrade.
  */
 import { api } from "../api.js";
 import { confirmInPage } from "../dialogs.js";
@@ -179,30 +180,60 @@ async function applyNow() {
   const lic = upgrading;
   const target = pending;
   if (!lic || !target) return;
-  const label = labelOf(lic.id);
+  $("upgradeApply").disabled = true;
+  try {
+    const said = await applyUpgrade(lic.id, target, $("upgradeHint"));
+    if (said == null) return;
+    pending = "";
+    $("upgradeApply").hidden = true;
+    $("upgradeFields").hidden = true;
+    $("upgradeSave").hidden = true;
+    $("upgradeCancel").textContent = "Done";
+    hint(said, false);
+  } catch (e) {
+    hint(applyError(e));
+  } finally {
+    $("upgradeApply").disabled = false;
+  }
+}
+
+/**
+ * Apply upgrade on a row: the old licence `id`, whose upgrade waits on
+ * `upgradePendingId`. Asked first, in the page; the answer goes on the
+ * status line.
+ */
+export async function applyFromRow(id) {
+  const lic = findLicence(id);
+  const target = lic?.upgradePendingId || "";
+  if (!target) return;
+  try {
+    const said = await applyUpgrade(id, target);
+    if (said != null) setStatus(said);
+  } catch (e) {
+    setStatus(applyError(e), true);
+  }
+}
+
+/**
+ * Ask, then move the holder of `oldId` onto `target`, and read both rows
+ * again. Resolves to what was done, or null when declined; a refusal throws.
+ */
+async function applyUpgrade(oldId, target, anchor) {
+  const label = labelOf(oldId);
   if (!(await confirmInPage({
     title: `Apply the upgrade of ${label}`,
     message: `Move the holder of ${label} onto ${labelOf(target)} now?\n\n` +
       `${label} is revoked, and each of their phones activates again on the new licence, ` +
       "within its count. Nothing on their phones is deleted.",
     confirm: "Apply now",
-    anchor: $("upgradeHint"),
-  }))) return;
-  $("upgradeApply").disabled = true;
-  try {
-    await api(`/v1/admin/licenses/${encodeURIComponent(target)}/apply-upgrade`, { method: "POST" });
-    pending = "";
-    $("upgradeApply").hidden = true;
-    $("upgradeFields").hidden = true;
-    $("upgradeSave").hidden = true;
-    $("upgradeCancel").textContent = "Done";
-    hint(`Applied: the holder is on ${labelOf(target)}, and ${label} is revoked.`, false);
-    setStatus(`${label} moved to ${labelOf(target)}.`);
-    refreshLicence(lic.id);
-    refreshLicence(target);
-  } catch (e) {
-    hint(explain(e, SENTENCES, (text) => `Not applied: ${text}`));
-  } finally {
-    $("upgradeApply").disabled = false;
-  }
+    anchor,
+  }))) return null;
+  await api(`/v1/admin/licenses/${encodeURIComponent(target)}/apply-upgrade`, { method: "POST" });
+  refreshLicence(oldId);
+  refreshLicence(target);
+  return `Applied: the holder of ${label} is on ${labelOf(target)}, and ${label} is revoked.`;
+}
+
+function applyError(e) {
+  return explain(e, SENTENCES, (text) => `Not applied: ${text}`);
 }
