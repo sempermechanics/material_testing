@@ -44,8 +44,11 @@ build is R8-minified and launch-smoked; Macrobenchmarks dry-run on PRs; heavy ti
 for `tier1-static` only) and #492 (from material_testing#152: submodules come through
 `checkout-submodules`, Eigen cached by its pin, every fetch retried).
 
-Not done: `retire_stale_devices.py` is not recorded as run; no app release (Semper or
-Semper Classroom) carries Activate yet; no emulator or staging check of the new flows.
+- **Stale phones.** `retire_stale_devices.py`, dry run then `--apply`, after the deploy:
+  0 stale ACTIVE device records, nothing retired.
+
+Not done: no app release (Semper or Semper Classroom) carries Activate yet; no emulator or
+staging check of the new flows.
 
 ## 2026-10-26 — Material Testing becomes Semper Classroom: backend and console (#484)
 
