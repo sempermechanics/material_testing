@@ -116,32 +116,27 @@ emulator (`scripts/micro_ab.py`, [TESTING.md](docs/app/TESTING.md)); the phone-r
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-29)
+## Current state (2026-10-30)
 
-- **Deployed.** Backend and Hosting from `46ac8b5e` (2026-10-26; #484, the Semper Classroom
-  rename, on top of #482): `semper-api-40300681201-1`, staging `semper-api-staging-40299991596-1`,
-  gateway configs unchanged (`v202610230501-112`, `v202610221243-110`); recorded on `main` by
-  #486 ([CHANGELOG](docs/ops/CHANGELOG.md)). Project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
-  `main` is ahead of live: #489's backend (13 files incl. the lock) and console changes, and
-  the console PRs #493, #497, #500–#502, are not deployed.
+- **Deployed.** Backend from `main` at `12a89d31` (2026-10-30; everything through #515, ADR-033
+  included): staging `semper-api-staging-41004261956-1`, production `semper-api-41007741365-1`;
+  gateways `v202610300446-120` (staging), `v202610300526-121` (production). Both run
+  `IMPLICIT_ACTIVATION=legacy` without `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` (staging's
+  `-00055-j6q` is that removal). Hosting (consoles, account page) from the same commit.
+  The split (`split_licences_per_app.py --apply`) ran: 3 licences split, 0 conflicts
+  ([CHANGELOG](docs/ops/CHANGELOG.md)). Project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
 - **Legal pages held:** #474's text (Privacy §2.3, Terms §6.1, retention values) waits on counsel
   (TD-277). Deploy Hosting from a worktree with `/privacy` and `/terms` taken from `b940cc29`
   ([checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md) §4) and compare the live pages after; a
-  plain-`main` deploy on 2026-10-26 published them until the same day's redeploy.
-- **Readiness runs.** 2026-10-24: merged as #489 (`6d2bde6c`), not deployed ([report](docs/ops/readiness/20261024/REPORT.md)).
-  2026-10-28: branch `claude/readiness-20261028`, 98 findings, verdict **No-go** on six P1s that need the
-  Admin or counsel ([report](docs/ops/readiness/20261028/REPORT.md) §4): deploys, monitoring, posture, the entitlement
-  key, and the two legal ones. Its backend adds the IT domain lock (ADDENDUM-2), msgpack 1.2.4, "Demo"/"Licensed" and
-  the lower-case "semper" brand (ADDENDUM-3/4); both runs' backend and console changes need a deploy.
-- **Licensing rework** ([ADR-033](docs/adr/ADR-033-licence-per-app-explicit-activation.md)): a licence per app,
-  explicit Activate, a device count instead of the cooldown. Steps 1–2 merged 2026-10-29 (#506, #507),
-  not deployed; before step 2's backend serves, the owner runs `backend/scripts/retire_stale_devices.py`
-  (dry run, then `--apply`). Step 3 (activations, routes, cooldown gone) merged as
-  #508. Step 4 (a licence per app: mint, invites, mirror slots, per-app quota) merged as
-  #510. Step 5 (upgrade by issue, QC accounts on activations) merged as #511. The split's
-  migration (`backend/scripts/split_licences_per_app.py`, owner runs it) merged as #512.
-  The app's Activate and Your phones screen merged as #513, "Download from my other
-  phones" as #514. The consoles are `claude/licence-consoles-pr5`; the fork sync follows.
+  plain-`main` deploy published them on 2026-10-26 and again on 2026-10-30; that
+  redeploy from `b940cc29` is owed.
+- **Readiness runs** 2026-10-24 (#489) and 2026-10-28 (#503, verdict **No-go** on six P1s that need
+  the Admin or counsel, [report](docs/ops/readiness/20261028/REPORT.md) §4) are merged and now deployed.
+- **Licensing rework** ([ADR-033](docs/adr/ADR-033-licence-per-app-explicit-activation.md)): merged
+  #506–#515 and deployed (above). Left: `retire_stale_devices.py` is not recorded as run; the
+  Semper release with Activate; the fork sync (Semper Classroom); then 30 days of
+  `event=activation`, `minSupportedVersionCode`, `IMPLICIT_ACTIVATION=off` and the cleanup (TD-363).
+  Nothing of it has been tried on an emulator or against staging.
 - **Admin actions** are one table, [gate § Admin actions](docs/ops/PRODUCTION_READINESS_GATE.md#admin-actions-external):
   monitoring `--apply` (no notification channel yet), the posture FAILs (17 on 2026-10-24, the same 17 on 2026-10-28),
   TD-215, the checklist's §6; the readiness report's §4 adds that run's one-off actions.
@@ -154,19 +149,14 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Release blockers:** `SEMPER_API_CERT_PINS` unset (every release fails `--require-pins` until it is; readiness A7); TD-229 (Play account; TD-226, TD-230, TD-231 follow it), TD-232 (two
   owner decisions, then submit), TD-219's device checks, counsel on the Terms (TD-277).
 - **Semper Classroom** (`material_testing`; [ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md),
-  old names aliased until TD-330) merges this `main` (last `25334af1`, material_testing#146,
-  2026-10-26; [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); its engine-pin fix is in (#145,
-  readiness MT-TE2-001), the rename is material_testing#147. Owed before its release: the
-  readiness port (report §6), then `rename_classroom_app.py`.
+  old names aliased until TD-330) merges this `main` (last `b1c15346` with the readiness port,
+  material_testing#158; [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); the sync of `12a89d31` (ADR-033) is
+  under way. Then its release and `rename_classroom_app.py`.
 - **CI.** Tiers follow the diff, floors rise with every test PR ([TESTING.md](docs/app/TESTING.md#coverage-floors)),
   `main` requires `CI OK`, and Tier 3 signs in to live staging, so a staging backend behind
-  `main` fails it. Always-on: `engine-pin`, `console-a11y`, `console-lighthouse` (2026-10-28 run, with `android-deps-osv` on app diffs and `semgrep`); `engine-host-sanitized` follows
-  Tier 3. The OpenAPI snapshot is rewritten with `UPDATE_OPENAPI_SNAPSHOT=1` ([ADR-029](docs/adr/ADR-029-api-contract-snapshot.md)). Merged
-  2026-10-27 (#488, from material_testing#148 and #150): the release check
-  fails a targetSdk below 36 or a `.so` off 16 KB pages; the `benchmark` build is R8-minified
-  and launch-smoked; Macrobenchmarks dry-run on PRs; heavy tiers wait for `tier1-static` only.
-  Merged 2026-10-27 (#492, from material_testing#152): submodules come through
-  `checkout-submodules` (Eigen cached by its pin, every fetch retried).
+  `main` fails it. Always-on: `engine-pin`, `console-a11y`, `console-lighthouse`; `android-deps-osv`
+  on app diffs, `semgrep`; `engine-host-sanitized` follows Tier 3. The OpenAPI snapshot is
+  rewritten with `UPDATE_OPENAPI_SNAPSHOT=1` ([ADR-029](docs/adr/ADR-029-api-contract-snapshot.md)).
 - **Owed.** A device smoke of the next release ([RELEASING.md](docs/ops/RELEASING.md) step 5);
   TD-212 at the 0.6.1 pin (on the Galaxy S22+); ADR-015's queued-work upgrade check;
   [WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a on a device; both apps on one phone; TD-36.
