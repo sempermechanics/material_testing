@@ -29,8 +29,8 @@ readiness runs' backend and console changes (#489, #503), not deployed until now
   first phone itself.
 - **Hosting.** `deploy-console.sh` from `12a89d31`; the new console pages
   (`account/phones.js`, `operator/upgrade.js`, …) are live. That deploy came from a plain
-  `main`, so it published #474's Privacy and Terms text again (TD-277); see CONTEXT for
-  the redeploy with `b940cc29`'s pages.
+  `main`, so it published #474's Privacy and Terms text again (TD-277). Redeployed the same day
+  from a worktree of `12a89d31` with both pages from `b940cc29`; the live pages match it.
 - **The split.** `split_licences_per_app.py --apply`: 16 licences scanned; 3 split (3
   Semper Classroom twins minted, 3 accounts updated, 1 Semper and 1 Semper Classroom phone
   kept activated), 8 revoked licences stamped `semper`; left alone 4 Demo and 1 CI test
