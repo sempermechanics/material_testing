@@ -90,9 +90,19 @@ change on the desk, and the import is repeated by hand after the return.
 
 The operator desk is split by card: `operator.js` (sign-in and the row-button
 routing), `state.js` (the loaded licences, shared as one object), `licences.js`
-(the table), `mint.js`, `edit.js` (Edit and To institution), `verify.js`,
-`lifecycle.js` (revoke, delete, restore), `people.js`, `roster-card.js` and
-`test-accounts.js` (the Test accounts card).
+(the table), `mint.js`, `edit.js` (Edit and To institution), `phones.js` (a
+licence's phones: Deactivate, Add phone), `upgrade.js` (Issue upgrade, Apply
+now), `verify.js`, `lifecycle.js` (revoke, delete, restore), `people.js`,
+`roster-card.js` and `test-accounts.js` (the Test accounts card).
+
+A licence's phones (ADR-033) are on all three pages, each on its own tier's
+routes: the account page's `account/phones.js` (the holder's own phones per
+app, `GET`/`DELETE /v1/me/devices?app=`), the institution page's
+`institution/phones.js` (the pool's phones of members on the licence's
+domain, `…/institutions/licenses/{id}/devices`) and the operator desk's
+`operator/phones.js` (any licence's, `…/admin/licenses/{id}/devices`, plus
+Add phone). A licence with no `app`, from before the split, still runs its
+device lock: none of the three is drawn for it, and Move / New phone stay.
 `licences.js` imports none of the cards; the seat check hears about a re-read
 licence through `onLicenceRead`.
 
@@ -109,9 +119,9 @@ not declare.
 | Path | Who | What it can do |
 |---|---|---|
 | `/login` (`/console/`) | Anyone with an account | Signs in and forwards to whichever dashboard below is theirs. |
-| `/account` (`/console/account`) | Anyone with an account | See the licence field by field (mode, kind and key, seats, end, grace end, a shared seat's lease, all from `/v1/me`), what a phone does offline, and the saved analyses; give a floating seat back, move the licence to a new device, download an analysis, and, while no licence is attached, redeem a one-time claim code (`account/claim.js`, `POST /v1/me/claim`). The last three need **2FA**. Deleting the account is the app's (device-signed `DELETE /v1/me`); the page says where, and that it removes the sign-in for both apps. |
-| `/console/institution` | IT staff named in a licence's `adminEmails` | Add and remove roster members (one at a time or up to 500 from a CSV), withdraw an unclaimed invitation, see who has a seat, pause a member's seat, clear a device lock; seat counts, roster CSV export, and the licence's audit log with CSV / JSON export. |
-| `/console/operator` | Semper staff (`ADMIN_EMAILS` / `role=admin`) **with 2FA** | Issue individual and institution licences, edit or upgrade one, revoke or delete a key (30-day restore), drive any institution roster with IT's tools (seat counts, CSV import and export, the audit log with CSV / JSON export), approve accounts, and create, list, extend, re-password and end the test accounts for QC and CI. |
+| `/account` (`/console/account`) | Anyone with an account | See the licence field by field (mode, kind and key, seats, end, grace end, a shared seat's lease, all from `/v1/me`), what a phone does offline, and the saved analyses; per app (semper, semper Classroom, from `/v1/me`'s `licences`), that app's licence, "Licensed on n of m phones", the holder's own phones with **Deactivate** (2FA), and a new licence waiting to be activated in the app; give a floating seat back, move a licence from before the split to a new phone (Move, shown only on one), download an analysis, and, while no licence is attached, redeem a one-time claim code (`account/claim.js`, `POST /v1/me/claim`). The last three need **2FA**. Deleting the account is the app's (device-signed `DELETE /v1/me`); the page says where, and that it removes the sign-in for both apps. |
+| `/console/institution` | IT staff named in a licence's `adminEmails` | Add and remove roster members (one at a time or up to 500 from a CSV), withdraw an unclaimed invitation, see who has a seat, pause a member's seat, clear a device lock; on a licence that names its app, the pool's count and each member's activated phone with **Deactivate** (no Activate or Add); seat counts, roster CSV export, and the licence's audit log with CSV / JSON export. |
+| `/console/operator` | Semper staff (`ADMIN_EMAILS` / `role=admin`) **with 2FA** | Issue individual and institution licences per app (semper, semper Classroom, or both) with a phone count, edit or upgrade one (**Issue upgrade** and **Apply now** on a licence that names its app), list a licence's phones with **Deactivate** and **Add phone** (past the count with override), revoke or delete a key (30-day restore), drive any institution roster with IT's tools (seat counts, CSV import and export, the audit log with CSV / JSON export), approve accounts, and create, list, extend, re-password and end the test accounts for QC and CI. |
 
 ## The front door
 
@@ -601,6 +611,10 @@ The other files cover `auth.js`, `api.js`, `dialogs.js`, `status.js`,
 | `institution.test.mjs` | Nothing of the roster for an address no licence names (or an unverified one); a failed check leaves the page usable; the deep link; "N of M seats taken" / "in use right now" with invites counted apart; member rows (New device, Pause / Resume, Remove; nothing for a removed member; invites with Withdraw); not-found wording; Pause / Resume / New device bodies and reload; New device, Remove and Withdraw confirm first, naming the address; row buttons named after the member; `ACT_ERRORS`; adding a member (on now vs invited, each refusal, `claim_contended`); the licence picker; a roster longer than one page read to the end |
 | `institution-tools.test.mjs` | The seat-count tiles (attention marked, a failure said in place, a late answer for another licence dropped); Export roster CSV saves `roster-<keyPrefix>.csv`; the import's row-count preview and 500-row stop, a chosen file, the sent body, every row's result, a roster reload only when someone was added, each whole-file refusal; another licence clears the results, one not yours hides the tools; the audit log read on demand with its dates, members named by address, Older events, an empty range, `invalid_audit_range`, a late page dropped, CSV and JSON exports and the 5,000-event note |
 | `operator-test-accounts.test.mjs` | The Test accounts card: the create body (QC days, CI `days: null`, phones), each form error before anything is sent, the password in its dialog only and gone from the page, the status line and storage once closed (Close or Escape), Copy; `test_accounts_disabled`, `email_in_use` and the step-up refusals; a stale sign-in sent to Google with the change stashed (no password in it) and nothing sent, and the return leg finishing a create, Extend or End now after one confirmation, or saying a failed leg sent nothing; the list on demand (purpose, end or Never, phones, status, note never markup, Retry, a late answer dropped); Extend's days, New password, End now behind the typed address |
+| `operator-per-app.test.mjs` | Issue per app and for both (two claim codes, a refusal after the first said with what was issued), the phone count's defaults, the app tag and Phones n/m on a row, Issue upgrade in place of New phone and To institution only on a licence that names its app, Edit's phone count and its refusals, a QC test account's licence fields |
+| `operator-phones.test.mjs` | The Phones dialog: the list (who activated, an institution's members), Deactivate asked first and the list read again, Add phone within and past the count, `device_limit_reached` with its count, Issue upgrade (the code once, Apply now, Escape clears it), each refusal in words |
+| `institution-phones.test.mjs` | The Phones card on a licence that names its app: the pool count and its no-limit wording, rows with who activated, Deactivate confirmed or cancelled and the licence read again, each refusal, none for a licence from before the split, cleared on another licence, a late answer dropped |
+| `account-phones.test.mjs` | The semper and semper Classroom cards: facts, the count (a pool's own line), the holder's phones activated or on Demo, Deactivate confirmed, cancelled and refused, a new licence waiting, Move shown only on a licence from before the split, an old backend with no `licences` unchanged, a late answer dropped |
 | `operator-roster-tools.test.mjs` | The desk's roster card on the staff routes: the tiles (a failure in place, another licence's late answer dropped); Export roster CSV; the import's preview, 500-row stop, chosen file, sent body, every row's result, and the roster and licence row re-read; a refused import; a stale sign-in sent to Google with nothing else sent; another licence clears the results and the log; the audit log by date and page, `invalid_audit_range`, CSV and JSON exports and the 5,000-event note; and both pages drawing the same HTML and sending the same requests for the same answers |
 
 How the fake gets in: `tests/harness.mjs` calls `module.register` with

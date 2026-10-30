@@ -541,6 +541,13 @@ export function licenceEditPatch(lic, form, now = Date.now()) {
       patch.adminEmails = admins;
     }
   }
+  // The phone count (ADR-033), on a licence that names its app; `undefined`
+  // when the field is not shown. An empty field leaves the count as it is.
+  const phones = String(form.maxDevices ?? "").trim();
+  if (phones && phones !== String(lic.maxDevices ?? "")) {
+    if (!/^\d+$/.test(phones) || Number(phones) < 1) return fail("Phones is a whole number, 1 or more.");
+    patch.maxDevices = Number(phones);
+  }
   if ((form.note ?? "") !== (lic.note ?? "")) patch.note = form.note ?? "";
   if (!Object.keys(patch).length) return fail("Nothing changed.");
   return { patch, shortens, error: "" };

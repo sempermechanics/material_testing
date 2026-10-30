@@ -19,6 +19,8 @@ import {
 import { openVerified } from "./verify.js";
 import { revokeLicence, resumeRevoke, deleteLicence, resumeDelete } from "./lifecycle.js";
 import { openRoster } from "./roster-card.js";
+import { openPhones } from "./phones.js";
+import { openUpgrade, applyFromRow } from "./upgrade.js";
 import { isTestAccountResume, resumeTestAccount } from "./test-accounts.js";
 
 requireSignIn(async (user, resume) => {
@@ -114,4 +116,7 @@ $("licenceRows").addEventListener("click", (ev) => {
   if (btn.dataset.device) clearLicenceDevice(btn.dataset.device);
   if (btn.dataset.history) showDeviceHistory(btn.dataset.history);
   if (btn.dataset.verify) openVerified(btn.dataset.verify);
+  if (btn.dataset.phones) openPhones(btn.dataset.phones);
+  if (btn.dataset.upgrade) openUpgrade(btn.dataset.upgrade);
+  if (btn.dataset.apply) applyFromRow(btn.dataset.apply);
 });

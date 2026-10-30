@@ -112,7 +112,9 @@ const RULES = [
   // AE3-001: the cloud feature is backup (a function named sync is code).
   [/\bsync(?:s|ed|ing)?\b(?!\()/i, "back up / backup, not sync", () => true],
   // AE3-002: an account holder's handset is a phone (operator jargon may say device).
-  [/\bdevices?\b/i, "phone, not device, in account-holder copy", (name) => name.startsWith("account/")],
+  // Copy only: the holder's own phones route is `/v1/me/devices` (ADR-033).
+  [/\bdevices?\b/i, "phone, not device, in account-holder copy", (name) => name.startsWith("account/"),
+    copyText],
   // AE3-002: IT and operator staff see the same handset as a phone, as the app
   // and the account page call it. Only copy is read: ids, API paths and field
   // names keep "device".

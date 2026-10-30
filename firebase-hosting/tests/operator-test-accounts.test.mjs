@@ -90,7 +90,9 @@ test("a QC account is created with the form's values and its password is shown o
   assert.equal($("taCreate").disabled, true, "one click, one account");
   assert.deepEqual(status(), ["Creating the test account…", "muted"]);
   assert.deepEqual(createBody(),
-    { email: "new@test.example", purpose: "qc", days: 30, maxDevices: 3, note: "Pixel 6" });
+    { email: "new@test.example", purpose: "qc", days: 30, maxDevices: 3, note: "Pixel 6",
+      licence: "individual", apps: "both" },
+    "a QC account names its licence: one per app, by default for both");
 
   answer.resolve(created());
   await settle();
@@ -99,8 +101,9 @@ test("a QC account is created with the form's values and its password is shown o
   assert.equal($("taPassword").textContent, ISSUED);
   assert.equal($("taPasswordEmail").textContent, "new@test.example");
   assert.deepEqual(status(), [
-    `Test account new@test.example created (QC): approved and Licensed, ends ${day(ENDS)}, ` +
-    "on up to 3 phones at once. Copy its password now.", "muted"]);
+    "Test account new@test.example created (QC): approved and Licensed for semper and semper Classroom, " +
+    `a licence each (1 activated phone a licence), ends ${day(ENDS)}; up to 3 phones may sign in, ` +
+    "for each app. Copy its password now.", "muted"]);
   assert.ok(!$("status").textContent.includes(ISSUED));
   assert.deepEqual([$("taEmail").value, $("taNote").value], ["", ""], "ready for the next one");
   assert.deepEqual(sent(/test-accounts/), [CREATE, LIST], "the list is read again");
@@ -132,7 +135,8 @@ test("a CI account may run without an end; QC always has one", async () => {
   await create();
   assert.deepEqual(createBody(), { email: "new@test.example", purpose: "ci", days: null, maxDevices: 1 },
     "blank days is sent as null: no expiry");
-  assert.match(status()[0], /created \(CI\): approved and Licensed, never ends, on up to 1 phone at once/);
+  assert.match(status()[0], /created \(CI\): approved and Licensed, never ends; up to 1 phone may sign in, for each app/);
+  assert.equal($("taQcFields").hidden, true, "the licence fields are QC's alone");
 
   $("taPurpose").value = "qc";
   $("taPurpose").dispatch("change");
@@ -196,7 +200,8 @@ test("a stale sign-in goes to Google carrying the form, and nothing is sent", as
   assert.equal($("status").textContent, "Re-authenticating with Google to create this test account…");
   assert.deepEqual(JSON.parse(storage.getItem("semper.resume")), {
     action: "testAccountCreate",
-    body: { email: "new@test.example", purpose: "qc", days: 30, maxDevices: 3, note: "rack" },
+    body: { email: "new@test.example", purpose: "qc", days: 30, maxDevices: 3, note: "rack",
+      licence: "individual", apps: "both" },
   });
   assert.deepEqual(sent(/test-accounts/), []);
 });

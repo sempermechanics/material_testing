@@ -1,12 +1,13 @@
 import { requireSignIn, sessionOver } from "../auth.js";
 import { api } from "../api.js";
 import { setStatus, markFirstData, whileWaiting } from "../status.js";
-import { esc, day, licenceStatePill, placeholderRows, retryRow, sessionEnded } from "../util.js";
+import { esc, day, licenceStatePill, placeholderRows, retryRow, sessionEnded, APP_NAMES } from "../util.js";
 import { explain } from "../messages.js";
 import { fetchRoster, wireRoster } from "../roster.js";
 import { mountSwitcher } from "../switcher.js";
 import { loadTiles, wireExport, wireImport } from "../roster-tools.js";
 import { wireAuditLog } from "../audit-log.js";
+import { wirePhones } from "./phones.js";
 
 let licenseId = "";
 let shownId = null; // the licence the import results and audit log are for
@@ -36,6 +37,11 @@ const resetAudit = wireAuditLog({
   rows: $("auditRows"), since: $("auditSince"), until: $("auditUntil"), show: $("auditLoad"),
   more: $("auditMore"), csv: $("auditCsv"), json: $("auditJson"), base, name: fileName,
   who: (uid) => members.get(uid) || uid, report: setStatus,
+});
+// The licence's phone pool (ADR-033), on a licence that names its app.
+const phones = wirePhones({
+  card: $("phonesCard"), pool: $("phonesPool"), help: $("phonesHelp"), rows: $("phoneRows"),
+  licenseId: () => licenseId, report: setStatus, reload: load, domain: () => domainLock,
 });
 
 requireSignIn(async (user) => {
@@ -131,6 +137,7 @@ async function load(started) {
     $("tiles").innerHTML = "";
     clearImport();
     resetAudit();
+    phones.hide();
   }
   // The card shows its shape at once, and never the last licence's members
   // under this one's id.
@@ -140,6 +147,7 @@ async function load(started) {
   $("rows").innerHTML = placeholderRows(5, 3);
   $("rosterCard").hidden = false;
   $("load").disabled = true;
+  let phonesRead = null;
   try {
     const data = await whileWaiting(started || fetchRoster(base()), "Loading the roster…");
     // Another read (an export, a Remove) may have ended the session while
@@ -150,6 +158,9 @@ async function load(started) {
     setStatus("");
     // The counts come after the roster, and again after every change to it.
     loadTiles($("tiles"), base(), () => ticket === rosterLoad);
+    // So do the phones. Open is free again meanwhile, but this load ends
+    // once they are drawn: a Deactivate waits for them before it says so.
+    phonesRead = phones.show(data.license, () => ticket === rosterLoad && !sessionOver());
   } catch (e) {
     if (ticket !== rosterLoad || sessionOver()) return;
     $("summary").innerHTML = "";
@@ -160,6 +171,7 @@ async function load(started) {
       $("importCard").hidden = true;
       $("auditCard").hidden = true;
       $("tiles").innerHTML = "";
+      phones.hide();
     }
     // The backend answers 404 identically for a licence that does not
     // exist and one you do not administer, so that probing ids tells you
@@ -174,6 +186,7 @@ async function load(started) {
   } finally {
     if (ticket === rosterLoad) $("load").disabled = false;
   }
+  await phonesRead;
 }
 
 function render(data) {
@@ -195,6 +208,7 @@ function render(data) {
   $("summary").innerHTML = `
     <p>
       <span class="pill">${esc(lic.keyPrefix || "licence")}</span>
+      ${lic.app ? `<span class="pill">${esc(APP_NAMES[lic.app] || lic.app)}</span>` : ""}
       <span class="pill">${floating ? "shared seats" : "one seat each"}</span>
       ${licenceStatePill(lic)}
       ${lic.expiresAt ? `<span class="pill warn">ends ${esc(day(lic.expiresAt))}</span>` : ""}

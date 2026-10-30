@@ -9,7 +9,7 @@ import {
   placeholderRows, retryRow,
 } from "../util.js";
 import { ACCOUNT, explain } from "../messages.js";
-import { $, desk, demoCapNote } from "./state.js";
+import { $, desk, demoCapNote, labelOf, runsActivations, appName, devicesCap, capText } from "./state.js";
 
 // Whoever shows something derived from one licence, told when it is re-read.
 const readers = [];
@@ -323,11 +323,25 @@ function licenceRow(lic) {
   const cap = demo
     ? `<span class="muted">Demo limit${desk.demoAllowance == null ? "" : ` (${esc(desk.demoAllowance)})`}</span>`
     : lic.maxAnalyses == null ? '<span class="muted">default</span>' : esc(lic.maxAnalyses);
-  // An individual licensed key can become an institution one; a Demo key is
-  // not a licence anyone bought, so there is nothing to carry over.
-  const convertButton = lic.kind !== "institution" && !demo
+  // A licence for one app (ADR-033) moves by Issue upgrade: a new licence the
+  // holder activates, which revokes this one. One from before the split still
+  // converts in place (To institution) and frees its one phone (New phone);
+  // the backend refuses an upgrade there. A Demo key is not a licence anyone
+  // bought, so there is nothing to carry over.
+  const perApp = runsActivations(lic);
+  const individual = lic.kind !== "institution";
+  const convertButton = individual && !demo && !perApp
     ? `<button class="secondary" data-convert="${esc(lic.id)}">To institution</button>`
     : "";
+  // While an upgrade waits for its holder another cannot be issued; staff can
+  // apply the waiting one instead, for an app that has no Activate.
+  const upgradeButton = !(individual && perApp) ? ""
+    : lic.upgradePendingId
+      ? `<button class="secondary" data-apply="${esc(lic.id)}">Apply upgrade</button>`
+      : `<button class="secondary" data-upgrade="${esc(lic.id)}">Issue upgrade</button>`;
+  // The phones activated on it, against its count. A shared (floating)
+  // licence counts its seats in use instead: the lease is the activation.
+  const phonesButton = perApp && lic.seating !== "floating" ? phonesControl(lic, label) : "";
   // Revoked licences are what most deletes are for: the record of one is
   // the audit trail until nobody needs it. A system Demo key is not deleted —
   // the account would only be issued another.
@@ -338,6 +352,7 @@ function licenceRow(lic) {
   // most stays in view; the rest is under More, the irreversible last.
   const actions = revoked ? deleteButton : `
     <button class="secondary" data-edit="${esc(lic.id)}">Edit</button>
+    ${phonesButton}
     ${lic.kind === "institution"
       ? `<button class="secondary" data-roster="${esc(lic.id)}">Roster</button>` : ""}
     <details class="more">
@@ -345,7 +360,8 @@ function licenceRow(lic) {
       <div class="menu">
         ${lic.kind === "institution"
           ? `<button class="secondary" data-verify="${esc(lic.id)}">Verify</button>`
-          : `<button class="secondary" data-device="${esc(lic.id)}">New phone</button>`}
+          : perApp ? "" : `<button class="secondary" data-device="${esc(lic.id)}">New phone</button>`}
+        ${upgradeButton}
         ${convertButton}
         <button class="secondary" data-history="${esc(lic.id)}">Phone history</button>
         <button class="danger" data-revoke="${esc(lic.id)}">Revoke</button>
@@ -355,8 +371,7 @@ function licenceRow(lic) {
   return `
     <tr>
       <td class="mono">${esc(label)}</td>
-      <td>${esc(lic.kind)}${lic.seating === "floating" ? " · shared" : ""}${lic.supersededBy
-        ? '<br><span class="muted">replaced by an institution licence</span>' : ""}</td>
+      <td><span>${esc(lic.kind)}${lic.seating === "floating" ? " · shared" : ""}${appBadge(lic)}${upgradeNote(lic)}</span></td>
       <td>${esc(ACCOUNT.modes[lic.mode] || lic.mode)}</td>
       <td>${seatSummary(lic)}</td>
       <td>${term}</td>
@@ -365,4 +380,33 @@ function licenceRow(lic) {
       <td class="muted">${esc(lic.domainLock || lic.emailLock || "—")}</td>
       <td class="actions">${actions}</td>
     </tr>`;
+}
+
+/**
+ * Where a licence stands in an upgrade (ADR-033): replaced, waiting for its
+ * holder to activate the new one, or issued to replace another.
+ */
+function upgradeNote(lic) {
+  const note = (text) => `<br><span class="muted">${text}</span>`;
+  if (lic.supersededBy) {
+    return note(lic.app ? "replaced by an upgrade" : "replaced by an institution licence");
+  }
+  if (lic.upgradePendingId) {
+    return note(`upgrade issued (${esc(labelOf(lic.upgradePendingId))}), waiting for the holder`);
+  }
+  if (lic.supersedes && lic.status !== "revoked") return note(`upgrade of ${esc(labelOf(lic.supersedes))}`);
+  return "";
+}
+
+/** The app a licence is for, as a tag; none on one from before the split. */
+function appBadge(lic) {
+  return lic.app ? ` <span class="tag">${esc(appName(lic.app))}</span>` : "";
+}
+
+/** "Phones n/m": opens the licence's phones (phones.js). */
+function phonesControl(lic, label) {
+  const active = Number(lic.devicesActive) || 0;
+  const cap = capText(devicesCap(lic));
+  return `<button class="secondary" data-phones="${esc(lic.id)}"
+      aria-label="Phones on ${esc(label)}: ${esc(active)} of ${esc(cap)} active">Phones ${esc(active)}/${esc(cap)}</button>`;
 }

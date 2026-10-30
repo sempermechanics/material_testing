@@ -102,6 +102,11 @@ def _license_public(license_id: str, data: dict) -> dict:
         "app": apps.canonical(data.get("app")) if data.get("app") else "",
         "maxDevices": data.get("maxDevices"),
         "devicesActive": data.get("devicesActive", 0),
+        # Upgrade by issue (repo/licence_upgrade.py): on the new licence, the
+        # one it replaces; on the old, the new one waiting for its holder to
+        # tap Activate. Both "" otherwise.
+        "supersedes": data.get("supersedes") or "",
+        "upgradePendingId": data.get("upgradePendingId") or "",
     }
 
 

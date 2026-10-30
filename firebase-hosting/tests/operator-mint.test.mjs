@@ -85,7 +85,7 @@ test("an individual mint sends only what was filled, shows the key once, and rea
   await settle();
   assert.equal($("mint").disabled, true, "one click, one licence");
   assert.deepEqual(status(), ["Issuing…", "muted"]);
-  assert.deepEqual(mintBody(), { kind: "individual", duration: "perpetual", note: "PO 1", emailLock: "new@lab.org" },
+  assert.deepEqual(mintBody(), { kind: "individual", duration: "perpetual", note: "PO 1", emailLock: "new@lab.org", app: "semper" },
     "empty fields (expiry, grace, cap) are left out, not sent as null");
 
   answer.resolve(json(200, { key: "SEMP-NEW1-ABCD-EFGH", license: { id: NEW.id }, claimedByUid: "u9" }));
@@ -107,6 +107,7 @@ test("a timed mint ends at the last second of the chosen day, with its grace and
   await mint();
   assert.deepEqual(mintBody(), {
     kind: "individual", duration: "timed", expiresAt: "2027-06-30T23:59:59Z", graceDays: 7, maxAnalyses: 100,
+    app: "semper",
   });
   assert.equal($("mintedBox").hidden, true, "no key in the answer, nothing to copy");
   assert.deepEqual(status(), ["Issued. It attaches when that address first signs in.", "muted"]);
@@ -152,7 +153,7 @@ test("an institution mint sends the domain, IT contacts, seats and seating", asy
   await mint();
   assert.deepEqual(mintBody(), {
     kind: "institution", duration: "perpetual", domainLock: "uni.edu",
-    adminEmails: ["it@uni.edu", "ops@uni.edu"], maxSeats: 20, seating: "floating",
+    adminEmails: ["it@uni.edu", "ops@uni.edu"], maxSeats: 20, seating: "floating", app: "semper",
   }, "no email lock on an institution licence");
   assert.deepEqual(status(), [
     "Institution licence issued. People with a verified uni.edu address can redeem the claim code below on their account page, " +
@@ -166,7 +167,7 @@ test("an institution mint with no domain says 'domain' and sends an empty contac
   await openDesk({ routes: { [MINT]: () => json(200, {}) } });
   pickKind("institution");
   await mint();
-  assert.deepEqual(mintBody(), { kind: "institution", duration: "perpetual", adminEmails: [], seating: "assigned" });
+  assert.deepEqual(mintBody(), { kind: "institution", duration: "perpetual", adminEmails: [], seating: "assigned", app: "semper" });
   assert.match($("status").textContent, /^Institution licence issued\. People with a verified domain address/);
 });
 
@@ -182,7 +183,7 @@ test("an address that already holds a licence: nothing issued, and that licence 
   $("emailLock").value = "pat@lab.org";
   await mint();
   assert.deepEqual(status(), [
-    "Not issued: pat@lab.org already has a live licence (shown below). To renew it, use Edit. " +
+    "Not issued: pat@lab.org already has a live licence for that app (shown below). To renew it, use Edit. " +
     "To replace it, revoke it first, then issue again.", "muted err",
   ]);
   assert.equal($("filter").value, "pat@lab.org", "the filter is the address: it may be an institution seat");

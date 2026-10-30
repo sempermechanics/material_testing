@@ -79,6 +79,15 @@ def test_the_new_licence_carries_the_old_terms_unless_named(store):
     assert _lic(store, new)["expiresAt"] == ends and _lic(store, new)["note"] == "lab"
 
 
+def test_the_desk_reads_an_upgrade_waiting_on_both_licences(store):
+    old = _held(store)
+    new = repo.issue_upgrade(old, admin_uid="admin")["license"]["id"]
+
+    assert repo.get_license_public(old)["upgradePendingId"] == new
+    assert repo.get_license_public(new)["supersedes"] == old
+    assert repo.get_license_public(new)["upgradePendingId"] == ""
+
+
 def test_an_end_in_the_past_is_refused(store):
     old = _held(store)
     err, _ = attempt(repo.issue_upgrade, old, admin_uid="admin",

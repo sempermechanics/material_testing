@@ -36,7 +36,7 @@ test("a row with less filled in still reads sensibly", async () => {
       duration: "perpetual", seating: "floating", maxSeats: 5 },
   ];
   await openDesk({ licenses: sparse });
-  const kind = $("licenceRows").querySelector("tr").cells[1];
+  const kind = $("licenceRows").querySelector("tr").cells[1].childNodes[0]; // its one wrapping line
   assert.equal(kind.childNodes[0], "individual");
   assert.equal(kind.querySelector("span").textContent, "replaced by an institution licence", "on a line of its own");
   assert.deepEqual(rows().map((r) => r.slice(0, 8)), [
