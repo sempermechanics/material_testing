@@ -34,7 +34,9 @@ and INCIDENT_RESPONSE.md naming this repo on each `gh variable` and
 
 ## Syncing into semper_classroom
 
-**Last sync:** semperdic-app `12a89d31` (its #504–#515: the QC catalogue, `qa/` and
+**Last sync:** semperdic-app `5b9a9e9a` (its #516–#519: ADR-033's deploy records and
+`pyasn1` 0.6.5 in the backend lock, for the four CVEs that failed Tier 4's audit), merged on
+semper_classroom's `sync/semperdic-5b9a9e9` on 2026-10-31; before it `12a89d31` (its #504–#515: the QC catalogue, `qa/` and
 [ADR-034](../adr/ADR-034-qc-framework.md); [ADR-033](../adr/ADR-033-licence-per-app-explicit-activation.md)'s
 licence per app, explicit Activate, Your phones and the sync from other phones, with its
 backend, migration and consoles; #509's lower-case "semper"), merged on semper_classroom's
