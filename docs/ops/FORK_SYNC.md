@@ -1,13 +1,14 @@
-# material_testing: syncing and porting
+# semper_classroom: syncing and porting
 
-[material_testing](https://github.com/sempermechanics/material_testing) is a fork of
+[semper_classroom](https://github.com/sempermechanics/semper_classroom) is a fork of
 this repo. It adds the tensile, bending and lab-report features, ships as **Semper
 Classroom** under its own app id (`com.sempermechanics.semperclassroom`,
 [ADR-030](../adr/ADR-030-semper-classroom-app-identity.md); the app was Material
 Testing, `com.sempermechanics.materialtesting` and before that
 `com.indicvision.semper.materialtesting`, its ADR-009) and uses this repo's
-backend. The repo is to be renamed `semper_classroom` (an owner step; GitHub
-redirects the old URL, so the `mat` remote keeps working). It takes this `main` with a plain `git merge` on a `sync/semperdic-<sha>`
+backend. The repo was `material_testing` until it was renamed on GitHub in October
+2026; the old URL redirects, so a `mat` remote and old links keep working, and its
+PR numbers carried over (`material_testing#159` is `semper_classroom#159`). It takes this `main` with a plain `git merge` on a `sync/semperdic-<sha>`
 branch.
 
 In the week to 2026-10-01, nine changes were written twice, once in each repo: the
@@ -21,29 +22,29 @@ WORKFLOWS C21) and collided TD numbers. The rules below stop that.
 |---|---|---|
 | `backend/`, `firebase-hosting/`, `firestore.*`, `.github/`, `scripts/`, `benchmark/` harness | here | the next sync |
 | A fix to app code both repos have (wizard, ROI editor, viewer, Home, settings, cloud sync) | here | the next sync |
-| A fix found in material_testing in shared code | here, as `git cherry-pick -x <fork sha>` if it landed there first | the next sync (identical blobs merge silently) |
-| Lab, tensile, bending, loads, lab report | material_testing | never |
+| A fix found in semper_classroom in shared code | here, as `git cherry-pick -x <fork sha>` if it landed there first | the next sync (identical blobs merge silently) |
+| Lab, tensile, bending, loads, lab report | semper_classroom | never |
 
-material_testing does not edit `backend/`; the backend deployed from here serves both
+semper_classroom does not edit `backend/`; the backend deployed from here serves both
 apps. The deploy and Firestore workflows only run in this repo
 (`if: github.repository == …`). So every backend lever, the `_SEMPER_CLASSROOM`
-pair included, is a variable here: a sync keeps material_testing's RELEASING.md
+pair included, is a variable here: a sync keeps semper_classroom's RELEASING.md
 and INCIDENT_RESPONSE.md naming this repo on each `gh variable` and
 `deploy-backend.yml` step (`-R sempermechanics/semperdic-app`; its MT-001).
 
-## Syncing into material_testing
+## Syncing into semper_classroom
 
 **Last sync:** semperdic-app `12a89d31` (its #504–#515: the QC catalogue, `qa/` and
 [ADR-034](../adr/ADR-034-qc-framework.md); [ADR-033](../adr/ADR-033-licence-per-app-explicit-activation.md)'s
 licence per app, explicit Activate, Your phones and the sync from other phones, with its
-backend, migration and consoles; #509's lower-case "semper"), merged on material_testing's
+backend, migration and consoles; #509's lower-case "semper"), merged on semper_classroom's
 `sync/semperdic-12a89d3` on 2026-10-30; before it `b1c15346` (its #490–#503: the second
 readiness run, #503, with lower-case "semper", "Demo" / "Licensed" and `--require-pins`; CI
 speed-ups ported from here; the console's test-account fixes, `sync/semperdic-b1c1534`,
 2026-10-29, the first sync to run `td_numbers.py translate`: 155 auto-merged lines and the
 conflict hunks), `6d2bde6c` (its #487–#489, the
 production-readiness fixes, `sync/semperdic-6d2bde6`, 2026-10-26), `25334af1`
-(material_testing #146), `968637cb` (material_testing #144) and `14b279d6` (on
+(semper_classroom #146), `968637cb` (semper_classroom #144) and `14b279d6` (on
 `ccr-603fe346-1bw2fa`, 2026-10-21).
 `git log --merges --grep=semperdic-app` on the fork lists them all.
 
@@ -59,7 +60,7 @@ production-readiness fixes, `sync/semperdic-6d2bde6`, 2026-10-26), `25334af1`
 5. Before pushing the merge, check the gitlink: `git ls-tree HEAD engine` must equal
    `git ls-tree semperdic/main engine` unless the fork deliberately pins another
    engine, and `python scripts/check_jni_parity.py` must pass. The sync of
-   2026-10-22 (material_testing #144) resolved the gitlink to 0.2.3 although both
+   2026-10-22 (semper_classroom #144) resolved the gitlink to 0.2.3 although both
    parents pinned v0.6.1, so its incremental runs threw `UnsatisfiedLinkError`
    (MT-TE2-001).
 
@@ -339,7 +340,7 @@ group is one commit, reviewable with `git diff -M`.
 
 ### The 2026-10-19 review (#457)
 
-Four of #457's commits are already in material_testing, cherry-picked by its #140:
+Four of #457's commits are already in semper_classroom, cherry-picked by its #140:
 `6a8f86e` (upload restage, its `4e384d51`), `e4e4dca` (Save-to-Files on a stop,
 `af5bd1e2`), `a95d104` (the detekt split, `6d38abf5`) and `e2c30bb` (PDF render,
 byte units, SAF copy, `91699d09`). The rest touch files the fork hooks into, so they
@@ -361,7 +362,7 @@ fixed by hand:
 | `SessionMetadataDoc`'s nested field serializers | Top-level `internal object`s of the same names in `data/cloud/SessionMetadataSerializers.kt` (TD-229), a pure move: a sync conflict there is a move, not a change |
 | `VideoFrameExtractor.getFrame` returning a `Bitmap`; retriever frames timed as asked | `RetrievedFrame(bitmap, isSyncFrame)`; times from `RetrieverFrameClock` (TD-194) |
 
-material_testing took the rest of #457 with the sync of `14b279d6` (its TD-241, closed
+semper_classroom took the rest of #457 with the sync of `14b279d6` (its TD-241, closed
 there): the lab wizard state is one field of the inputs, `WizardInputs.lab`
 (`LabWizardState`), changed through `edit {}` / `editLab {}` with its Bundle keys unchanged
 (`putLab` / `restoreLab`); `LabInputs.kt` became pure functions of `WizardInputs`; the
@@ -372,7 +373,7 @@ as a parameter (`ViewerSummaryController`, `ViewerChromeController`) or read
 
 ### Tamper-evident records (ADR-028, 2026-10)
 
-material_testing gets the record manifest with the next sync of this `main`; nothing
+semper_classroom gets the record manifest with the next sync of this `main`; nothing
 in it is Semper-only. What its lab code has to know:
 
 - Every run that is not cancelled ends in `RunSession.commitRecord` (was `commit()` in

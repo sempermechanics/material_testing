@@ -64,7 +64,7 @@ repository before that commit existed; this repo only proves the pinned version
 still links and behaves. If the bump changes numeric results, declare it against
 the tiers in
 [docs/engine/ENGINE_APP_CONTRACT.md](docs/engine/ENGINE_APP_CONTRACT.md).
-material_testing (the Semper Classroom fork) must re-run its real-data checks after it syncs a bump
+semper_classroom (the Semper Classroom fork) must re-run its real-data checks after it syncs a bump
 ([docs/ops/FORK_SYNC.md](docs/ops/FORK_SYNC.md)).
 
 ### Local disk hygiene
@@ -320,7 +320,7 @@ row in [FORK_SYNC](docs/ops/FORK_SYNC.md).
 - If you change auth, quotas, deploy env vars, or CI modes, update the matching
   doc under `docs/` in the same PR.
 - Do not force-push `main`. Prefer revert of a bad merge over history rewrite.
-- A fix to code material_testing shares lands here first, even when it was found
+- A fix to code semper_classroom shares lands here first, even when it was found
   there; port its commit with `git cherry-pick -x` ([docs/ops/FORK_SYNC.md](docs/ops/FORK_SYNC.md)).
 
 ## License
