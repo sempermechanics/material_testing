@@ -184,7 +184,7 @@ Tier 1 (TD-14).
   used at `:88`). Tests `backend/tests/test_roster_bulk.py:338`, `:546`, `:550`.
 - **TD-214** (Update opened Play for a sideloaded build). `UpdateSource.urls`
   (`ui/limit/UpdateSource.kt:28-36`): a build Play installed opens its listing; any other
-  opens `https://github.com/sempermechanics/material_testing/releases`, chosen from
+  opens `https://github.com/sempermechanics/semper_classroom/releases`, chosen from
   `getInstallSourceInfo` (`UpdateRequiredActivity.openStore`,
   `ui/limit/UpdateRequiredActivity.kt:49-58`); Home's banner goes through it
   (`ui/home/HomeActivity.kt:360`). The repository is public (GitHub REST API, checked
