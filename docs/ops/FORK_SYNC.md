@@ -1,13 +1,14 @@
-# material_testing: syncing and porting
+# semper_classroom: syncing and porting
 
-[material_testing](https://github.com/sempermechanics/material_testing) is a fork of
+[semper_classroom](https://github.com/sempermechanics/semper_classroom) is a fork of
 this repo. It adds the tensile, bending and lab-report features, ships as **Semper
 Classroom** under its own app id (`com.sempermechanics.semperclassroom`,
 [ADR-030](../adr/ADR-030-semper-classroom-app-identity.md); the app was Material
 Testing, `com.sempermechanics.materialtesting` and before that
 `com.indicvision.semper.materialtesting`, its ADR-009) and uses this repo's
-backend. The repo is to be renamed `semper_classroom` (an owner step; GitHub
-redirects the old URL, so the `mat` remote keeps working). It takes this `main` with a plain `git merge` on a `sync/semperdic-<sha>`
+backend. The repo was `material_testing` until it was renamed on GitHub in October
+2026; the old URL redirects, so a `mat` remote and old links keep working, and its
+PR numbers carried over (`material_testing#159` is `semper_classroom#159`). It takes this `main` with a plain `git merge` on a `sync/semperdic-<sha>`
 branch.
 
 In the week to 2026-10-01, nine changes were written twice, once in each repo: the
@@ -21,14 +22,14 @@ WORKFLOWS C21) and collided TD numbers. The rules below stop that.
 |---|---|---|
 | `backend/`, `firebase-hosting/`, `firestore.*`, `.github/`, `scripts/`, `benchmark/` harness | here | the next sync |
 | A fix to app code both repos have (wizard, ROI editor, viewer, Home, settings, cloud sync) | here | the next sync |
-| A fix found in material_testing in shared code | here, as `git cherry-pick -x <fork sha>` if it landed there first | the next sync (identical blobs merge silently) |
-| Lab, tensile, bending, loads, lab report | material_testing | never |
+| A fix found in semper_classroom in shared code | here, as `git cherry-pick -x <fork sha>` if it landed there first | the next sync (identical blobs merge silently) |
+| Lab, tensile, bending, loads, lab report | semper_classroom | never |
 
-material_testing does not edit `backend/`; the backend deployed from here serves both
+semper_classroom does not edit `backend/`; the backend deployed from here serves both
 apps. The deploy and Firestore workflows only run in this repo
 (`if: github.repository == …`).
 
-## Syncing into material_testing
+## Syncing into semper_classroom
 
 1. `git fetch semperdic main` and branch `sync/semperdic-<short sha>` from its `main`.
 2. `git merge semperdic/main`. Keep its `applicationId`, `rootProject.name` and
@@ -316,7 +317,7 @@ group is one commit, reviewable with `git diff -M`.
 
 ### The 2026-10-19 review (#457)
 
-Four of #457's commits are already in material_testing, cherry-picked by its #140:
+Four of #457's commits are already in semper_classroom, cherry-picked by its #140:
 `6a8f86e` (upload restage, its `4e384d51`), `e4e4dca` (Save-to-Files on a stop,
 `af5bd1e2`), `a95d104` (the detekt split, `6d38abf5`) and `e2c30bb` (PDF render,
 byte units, SAF copy, `91699d09`). The rest touch files the fork hooks into, so they
@@ -340,7 +341,7 @@ fixed by hand:
 
 ### Tamper-evident records (ADR-028, 2026-10)
 
-material_testing gets the record manifest with the next sync of this `main`; nothing
+semper_classroom gets the record manifest with the next sync of this `main`; nothing
 in it is Semper-only. What its lab code has to know:
 
 - Every run that is not cancelled ends in `RunSession.commitRecord` (was `commit()` in

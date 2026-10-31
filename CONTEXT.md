@@ -134,7 +134,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   the Admin or counsel, [report](docs/ops/readiness/20261028/REPORT.md) §4) are merged and now deployed.
 - **Licensing rework** ([ADR-033](docs/adr/ADR-033-licence-per-app-explicit-activation.md)): merged
   #506–#515 and deployed (above); `retire_stale_devices.py` found nothing to retire. Left: the
-  Semper release with Activate; the fork sync (material_testing#159) and its release; then 30 days of
+  Semper release with Activate; the Semper Classroom release (its sync merged); then 30 days of
   `event=activation`, `minSupportedVersionCode`, `IMPLICIT_ACTIVATION=off` and the cleanup (TD-363).
   Nothing of it has been tried on an emulator or against staging.
 - **Admin actions** are one table, [gate § Admin actions](docs/ops/PRODUCTION_READINESS_GATE.md#admin-actions-external):
@@ -148,10 +148,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   AD_ID removed (#475, TD-232).
 - **Release blockers:** `SEMPER_API_CERT_PINS` unset (every release fails `--require-pins` until it is; readiness A7); TD-229 (Play account; TD-226, TD-230, TD-231 follow it), TD-232 (two
   owner decisions, then submit), TD-219's device checks, counsel on the Terms (TD-277).
-- **Semper Classroom** (`material_testing`; [ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md),
-  old names aliased until TD-330) merges this `main` (last `b1c15346` with the readiness port,
-  material_testing#158; [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); the sync of `12a89d31` (ADR-033) is
-  under way. Then its release and `rename_classroom_app.py`.
+- **Semper Classroom** (`semper_classroom`, formerly `material_testing`; [ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md),
+  old names aliased until TD-330) merges this `main` (last `12a89d31`, ADR-033, semper_classroom#159,
+  2026-10-31; [FORK_SYNC.md](docs/ops/FORK_SYNC.md)). Then its release, before `IMPLICIT_ACTIVATION=off`,
+  and `rename_classroom_app.py`.
 - **CI.** Tiers follow the diff, floors rise with every test PR ([TESTING.md](docs/app/TESTING.md#coverage-floors)),
   `main` requires `CI OK`, and Tier 3 signs in to live staging, so a staging backend behind
   `main` fails it. Always-on: `engine-pin`, `console-a11y`, `console-lighthouse`; `android-deps-osv`

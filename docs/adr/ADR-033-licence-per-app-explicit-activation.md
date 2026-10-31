@@ -216,6 +216,8 @@ The product owner's decisions (2026-10-29):
       operator desk's Issue per app with a phone count, Phones (Deactivate, Add
       phone), Issue upgrade / Apply now, Edit's count and QC test accounts'
       licence fields.
-- [ ] Fork sync.
+- [x] Fork sync: material_testing#159 (2026-10-31) merged `12a89d31`; Semper
+      Classroom reaches Activate through the shared screens and gates, and its
+      own FORK_SYNC.md has the section. Its release is still owed.
 - [ ] Set `IMPLICIT_ACTIVATION=off` once adoption allows, then remove the legacy
       paths (TD-363).
