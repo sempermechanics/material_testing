@@ -79,10 +79,7 @@ class ExamplesActivity : AppCompatActivity() {
         }
     }
 
-    private fun metaText(set: ExampleManifest): String {
-        val badge = getString(if (set.expectedToFail) R.string.examples_badge_fails else R.string.examples_badge_works)
-        return getString(R.string.examples_meta_fmt, badge, set.deformed.size + 1)
-    }
+    private fun metaText(set: ExampleManifest): String = getString(R.string.examples_meta_fmt, set.deformed.size + 1)
 
     private fun openSet(set: ExampleManifest) {
         ExampleDetailSheet.show(this, set, onTry = { tryIt(set) }, onSave = { viewModel.save(set) })

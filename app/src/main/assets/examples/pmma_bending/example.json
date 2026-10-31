@@ -5,7 +5,6 @@
   "title": "PMMA beam in 3-point bending",
   "summary": "Real photos of a speckled acrylic beam loaded at mid-span until it breaks, with the load cell's force at each photo. Gives the deflection, bending stress and E.",
   "test_type": "bending",
-  "outcome": "works",
   "folder_name": "PMMA bending",
   "image_size": [
     2380,

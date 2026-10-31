@@ -1,9 +1,0 @@
-file,original_image,time_s,load_kN,piston_displacement_mm
-concrete_00.jpg,G5-IB_t=49.JPG,49,0.105,-0.001
-concrete_01.jpg,G5-IB_t=228.JPG,228,9.840,5.922
-concrete_02.jpg,G5-IB_t=358.JPG,358,19.778,7.082
-concrete_03.jpg,G5-IB_t=464.JPG,464,29.816,7.982
-concrete_04.jpg,G5-IB_t=553.JPG,553,39.840,8.737
-concrete_05.jpg,G5-IB_t=636.JPG,636,49.799,9.427
-concrete_06.jpg,G5-IB_t=729.JPG,729,59.631,10.125
-concrete_07.jpg,G5-IB_t=840.JPG,840,61.987,11.741

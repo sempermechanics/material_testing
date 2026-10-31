@@ -14,8 +14,6 @@ import kotlinx.serialization.Serializable
  * folder, under the names it lists; [credit] is what the set's licence asks
  * the app to show.
  *
- * @property outcome [OUTCOME_WORKS], or [OUTCOME_EXPECTED_TO_FAIL] for a set
- *   kept to show what photos that cannot be tracked do.
  * @property folderName the folder Save to phone writes under `Download/semper examples/`.
  * @property imageSize the reference's width and height in pixels.
  * @property roi x, y, width, height in reference pixels.
@@ -28,7 +26,6 @@ data class ExampleManifest(
     val title: String,
     val summary: String,
     @SerialName("test_type") val testTypeWire: String,
-    val outcome: String = OUTCOME_WORKS,
     @SerialName("folder_name") val folderName: String,
     @SerialName("image_size") val imageSize: List<Int>,
     val reference: String,
@@ -43,8 +40,6 @@ data class ExampleManifest(
     val credit: Credit,
 ) {
     val testType: TestType? get() = TestType.fromWire(testTypeWire)
-
-    val expectedToFail: Boolean get() = outcome == OUTCOME_EXPECTED_TO_FAIL
 
     val referenceSize: ImageSize get() = ImageSize(imageSize[0], imageSize[1])
 
@@ -70,8 +65,7 @@ data class ExampleManifest(
 
     /**
      * The dimensions the wizard is pre-filled with: [crossSectionMm2] and
-     * [loadAxis] for tensile, the beam's for bending. [spanIsPlaceholder]
-     * marks a span the dataset does not publish.
+     * [loadAxis] for tensile, the beam's for bending.
      */
     @Serializable
     data class Specimen(
@@ -80,7 +74,6 @@ data class ExampleManifest(
         @SerialName("span_mm") val spanMm: Float = 0f,
         @SerialName("width_mm") val widthMm: Float = 0f,
         @SerialName("thickness_mm") val thicknessMm: Float = 0f,
-        @SerialName("span_is_placeholder") val spanIsPlaceholder: Boolean = false,
     ) {
         val loadAxisX: Boolean get() = loadAxis != "y"
 
@@ -133,8 +126,6 @@ data class ExampleManifest(
     )
 
     companion object {
-        const val OUTCOME_WORKS = "works"
-        const val OUTCOME_EXPECTED_TO_FAIL = "expected_to_fail"
         const val SOURCE_DATASET = "dataset"
         const val SOURCE_APP = "app"
         const val README = "README.md"

@@ -205,8 +205,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   ADR-022's screenshots; the synced tip cards, summary pill and Re-run (3.11a–3.11m); Pixel 6
   references (TD-6). Owner decision: Terms §1.2 and §1.3 against a student audience.
 - **Example data in the app ([ADR-031](docs/adr/ADR-031-bundled-example-data.md)), merged
-  2026-10-26 (#149, `8b11ed8f`), not released:** steel, PMMA, concrete (CC BY 4.0) and two DICe
-  pairs (BSD-3) in `app/src/main/assets/examples/` (~80 MB), with ground truth and credits;
+  2026-10-26 (#149, `8b11ed8f`), not released:** steel, PMMA (CC BY 4.0) and two DICe
+  pairs (BSD-3) in `app/src/main/assets/examples/` (~73 MB; the concrete set that could not be
+  tracked left on 2026-10-31), with ground truth and credits;
   Try it / Save to phone / Credits & licences. Terms §4.6 merged upstream (semperdic-app #487)
   and synced here (#153); its Hosting deploy is owed, from semperdic-app. The website's Examples
   page merged (semper-website #13). The §3c device pass ran on a Galaxy S22 on 2026-10-27; its

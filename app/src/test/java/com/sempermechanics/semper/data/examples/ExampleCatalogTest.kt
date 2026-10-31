@@ -34,9 +34,9 @@ class ExampleCatalogTest {
     private val sets = ExampleCatalog.load(assets)
 
     @Test
-    fun `the five sets load in order`() {
+    fun `the four sets load in order`() {
         assertEquals(
-            listOf("steel_tensile", "pmma_bending", "concrete_bending", "dice_oht_cfrp", "dice_translation"),
+            listOf("steel_tensile", "pmma_bending", "dice_oht_cfrp", "dice_translation"),
             sets.map { it.id },
         )
     }

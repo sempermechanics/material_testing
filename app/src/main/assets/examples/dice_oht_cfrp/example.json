@@ -5,7 +5,6 @@
   "title": "Carbon-fibre plate with a hole",
   "summary": "Two images of an open-hole tension specimen from DICe's test data. 2D DIC only, no load log. Compare the field with DICe's own solution.",
   "test_type": "dic2d",
-  "outcome": "works",
   "folder_name": "DICe open-hole CFRP",
   "image_size": [
     400,

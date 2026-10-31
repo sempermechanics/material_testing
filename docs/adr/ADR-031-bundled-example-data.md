@@ -3,6 +3,9 @@
 **Status:** Accepted, built (not merged or released)
 **Date:** 2026-10-26
 **Deciders:** app owner
+**Amended:** 2026-10-31: `concrete_bending` removed. It could not be tracked
+(the app stopped at frame 2), so it showed nothing a student could use; the app
+now ships only sets that run. Four sets, about 73 MB.
 **Relates to:** [ADR-015](ADR-015-package-layout.md) (packages),
 [ADR-016](ADR-016-work-that-outlives-the-activity.md) (Save to phone runs on the view model),
 [ADR-018](ADR-018-error-convention.md) (its outcome),

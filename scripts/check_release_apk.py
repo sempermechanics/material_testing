@@ -40,7 +40,7 @@ Checks (FAIL exits 1; WARN is reported and does not fail):
                     the APK (ADR-031), and the ones the wizard opens through
                     ExampleAssetProvider (photos, load log) are stored
                     uncompressed, as openFd needs
-  apk-size          the APK is at most APK_BUDGET_MB (the examples are ~80 MB)
+  apk-size          the APK is at most APK_BUDGET_MB (the examples are ~73 MB)
   entitlement-pins  WARN (FAIL with --require-entitlement-pins) when no
                     `kid:<P-256 SPKI base64>` entitlement key is in the dex,
                     i.e. SEMPER_ENTITLEMENT_PUBKEYS was empty at build: the

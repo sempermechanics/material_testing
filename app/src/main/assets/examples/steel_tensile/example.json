@@ -5,7 +5,6 @@
   "title": "Steel strip in tension",
   "summary": "Real photos of a stainless-steel strip pulled to failure, with the machine's force at each photo. Gives a stress–strain curve and Young's modulus.",
   "test_type": "tensile",
-  "outcome": "works",
   "folder_name": "Steel tensile",
   "image_size": [
     2000,

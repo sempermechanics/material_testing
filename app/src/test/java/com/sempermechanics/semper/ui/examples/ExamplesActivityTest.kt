@@ -54,18 +54,14 @@ class ExamplesActivityTest {
         activity.findViewById<android.view.ViewGroup>(R.id.examplesList).getChildAt(2 + index)
 
     @Test
-    fun `a card per set, in order, with its badge and licence`() {
+    fun `a card per set, in order, with its photo count and licence`() {
         val activity = screen()
         val list = activity.findViewById<android.view.ViewGroup>(R.id.examplesList)
-        assertEquals(2 + 5, list.childCount)
+        assertEquals(2 + 4, list.childCount)
         val steel = card(activity, 0)
         assertEquals("Steel strip in tension", steel.findViewById<TextView>(R.id.tvExampleTitle).text.toString())
-        val works = activity.getString(R.string.examples_badge_works)
-        assertTrue(steel.findViewById<TextView>(R.id.tvExampleMeta).text.startsWith(works))
+        assertEquals("41 photos", steel.findViewById<TextView>(R.id.tvExampleMeta).text.toString())
         assertTrue(steel.findViewById<TextView>(R.id.tvExampleLicence).text.startsWith("CC BY 4.0"))
-        val concrete = card(activity, 2)
-        val fails = activity.getString(R.string.examples_badge_fails)
-        assertTrue(concrete.findViewById<TextView>(R.id.tvExampleMeta).text.startsWith(fails))
     }
 
     @Test
@@ -114,7 +110,7 @@ class ExamplesActivityTest {
     fun `a gate that refuses keeps the wizard closed`() {
         val activity = screen()
         activity.canStart = { false }
-        card(activity, 3).performClick()
+        card(activity, 2).performClick()
         (ShadowDialog.getLatestDialog() as BottomSheetDialog).findViewById<View>(R.id.btnDetailTry)!!.performClick()
         shadowOf(android.os.Looper.getMainLooper()).idle()
         assertNull(shadowOf(activity).nextStartedActivity)
@@ -126,7 +122,7 @@ class ExamplesActivityTest {
         val viewModel = androidx.lifecycle.ViewModelProvider(activity)[ExamplesViewModel::class.java]
         val sink = RecordingSink()
         viewModel.downloads = { ExampleDownloads(app.assets, sink) }
-        card(activity, 4).performClick()
+        card(activity, 3).performClick()
         (ShadowDialog.getLatestDialog() as BottomSheetDialog).findViewById<View>(R.id.btnDetailSave)!!.performClick()
         idleUntil("the save reports") {
             (ShadowDialog.getLatestDialog() as? AlertDialog)?.isShowing == true
