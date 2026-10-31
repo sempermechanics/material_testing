@@ -148,8 +148,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   AD_ID removed (#475, TD-232).
 - **Release blockers:** `SEMPER_API_CERT_PINS` unset (every release fails `--require-pins` until it is; readiness A7); TD-229 (Play account; TD-226, TD-230, TD-231 follow it), TD-232 (two
   owner decisions, then submit), TD-219's device checks, counsel on the Terms (TD-277).
-- **Semper Classroom** (`material_testing`; [ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md),
-  old names aliased until TD-330) merges this `main` (last `12a89d31`, ADR-033, material_testing#159,
+- **Semper Classroom** (`semper_classroom`, formerly `material_testing`; [ADR-030](docs/adr/ADR-030-semper-classroom-app-identity.md),
+  old names aliased until TD-330) merges this `main` (last `12a89d31`, ADR-033, semper_classroom#159,
   2026-10-31; [FORK_SYNC.md](docs/ops/FORK_SYNC.md)). Then its release, before `IMPLICIT_ACTIVATION=off`,
   and `rename_classroom_app.py`.
 - **CI.** Tiers follow the diff, floors rise with every test PR ([TESTING.md](docs/app/TESTING.md#coverage-floors)),
