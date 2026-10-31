@@ -1555,9 +1555,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="examples_open_action">Example data</string>
     <string name="examples_try_from_sheet">No photos yet? Try an example with published data</string>
     <string name="examples_intro">Real tests published by their authors, with the answers they measured. Try one in a new analysis, or save it to your phone and run it like your own photos. Each set keeps its own licence; the credit is on its page.</string>
-    <string name="examples_badge_works">Works</string>
-    <string name="examples_badge_fails">Expected to fail</string>
-    <string name="examples_meta_fmt">%1$s · %2$d photos</string>
+    <string name="examples_meta_fmt">%1$d photos</string>
     <string name="examples_licence_line_fmt">%1$s · %2$s</string>
     <plurals name="examples_setup_fmt">
         <item quantity="one">%1$s, %2$d deformed frame, %3$d × %4$d px.</item>
@@ -1565,7 +1563,6 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     </plurals>
     <string name="examples_setup_tensile_fmt">Area %1$.1f mm², load along %2$s.</string>
     <string name="examples_setup_bending_fmt">Span L %1$.0f mm, width b %2$.0f mm, depth t %3$.0f mm.</string>
-    <string name="examples_setup_span_placeholder">The span is not published; 700 mm is a placeholder, so E is only indicative.</string>
     <string name="examples_setup_load_log_fmt">Load log: %1$s, in %2$s.</string>
     <string name="examples_setup_taps_fmt">Tap the beam\'s edges under the load: x ≈ %1$d px, top y ≈ %2$d, bottom y ≈ %3$d.</string>
     <string name="examples_expected">What to expect</string>

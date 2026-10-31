@@ -65,7 +65,7 @@ class LicencesActivityTest {
 
     @Test
     fun `each example set's row opens its credit, and a DICe set's carries the BSD text`() {
-        assertEquals(5, rows.count { it.target is Target.Page && "credit:" in (it.target as Target.Page).key })
+        assertEquals(4, rows.count { it.target is Target.Page && "credit:" in (it.target as Target.Page).key })
         val pmma = pageText(row("PMMA beam in 3-point bending").target)
         assertTrue(pmma, "doi:10.5281/zenodo.1172068" in pmma)
         val dice = pageText(row("Carbon-fibre plate with a hole").target)

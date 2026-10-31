@@ -526,7 +526,8 @@ tensile test and a PMMA bend. They are manual runs (emulator, and a Pixel 6 on
 `scripts/real_data_pmma_bending.py`, not part of CI; the app's resulting curves
 are pinned in `report/RealSteelModulusTest` and `report/RealPmmaBendingTest`.
 Re-run them after a change to the solve, the strain window, `ElasticModulus` or
-`BeamDeflection`. A third set, a concrete beam, is expected to fail.
+`BeamDeflection`. Case 3 there, a concrete beam, is expected to fail; it is not
+one of the app's example sets.
 
 ## Source checks (no Gradle)
 

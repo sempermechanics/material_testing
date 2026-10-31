@@ -39,7 +39,7 @@ class ExampleDatasetsDeviceTest {
     @Test
     fun everyListedFileOpensThroughTheProvider() {
         val sets = ExampleCatalog.load(context.assets)
-        assertEquals(5, sets.size)
+        assertEquals(4, sets.size)
         sets.forEach { set ->
             (listOf(set.reference) + set.deformed + listOfNotNull(set.loadLog?.file)).forEach { file ->
                 val uri = ExampleAssetProvider.uriFor(context, set.id, file)

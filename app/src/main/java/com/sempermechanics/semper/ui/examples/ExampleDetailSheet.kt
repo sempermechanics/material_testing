@@ -69,7 +69,6 @@ internal object ExampleDetailSheet {
                 specimen.thicknessMm,
             )
         }
-        if (specimen?.spanIsPlaceholder == true) lines += context.getString(R.string.examples_setup_span_placeholder)
         set.loadLog?.let { lines += context.getString(R.string.examples_setup_load_log_fmt, it.file, it.unit) }
         set.tapHint?.let { lines += context.getString(R.string.examples_setup_taps_fmt, it.x, it.topY, it.bottomY) }
         return lines.joinToString("\n")

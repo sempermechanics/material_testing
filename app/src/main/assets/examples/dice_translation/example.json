@@ -5,7 +5,6 @@
   "title": "Sub-pixel shift",
   "summary": "A speckle image and a copy shifted by 0.4 px, from DICe's test data. 2D DIC only. The known answer is u = v = 0.4 px everywhere.",
   "test_type": "dic2d",
-  "outcome": "works",
   "folder_name": "DICe translation",
   "image_size": [
     512,
