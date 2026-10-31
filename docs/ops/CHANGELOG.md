@@ -12,6 +12,44 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-10-30 — semperdic-app's backend and consoles: licence per app (ADR-033) and the split
+
+The backend and Hosting from `main` at `12a89d31` went live, staging first. That commit
+carries #504–#515: the QC framework (`qa/`, ADR-034), the lower-case "semper" strings, and
+ADR-033 whole (a licence per app, explicit Activate, a device count instead of the
+cooldown, upgrade by issue, role-scoped deactivation, the consoles). It also carries the
+readiness runs' backend and console changes (#489, #503), not deployed until now.
+
+- **Staging.** Run 41004261956: `semper-api-staging-41004261956-1`, gateway
+  `v202610300446-120`. The owner then removed `SELF_DEVICE_CHANGE_COOLDOWN_DAYS`
+  (`semper-api-staging-00055-j6q`).
+- **Production.** Run 41007741365: `semper-api-41007741365-1` at 100 %, gateway
+  `v202610300526-121`, without `SELF_DEVICE_CHANGE_COOLDOWN_DAYS`. Both services run
+  `IMPLICIT_ACTIVATION=legacy`, so a build without `X-Activation` still activates its
+  first phone itself.
+- **Hosting.** `deploy-console.sh` from `12a89d31`; the new console pages
+  (`account/phones.js`, `operator/upgrade.js`, …) are live. That deploy came from a plain
+  `main`, so it published #474's Privacy and Terms text again (TD-51). Redeployed the same day
+  from a worktree of `12a89d31` with both pages from `b940cc29`; the live pages match it.
+- **The split.** `split_licences_per_app.py --apply`: 16 licences scanned; 3 split (3
+  Semper Classroom twins minted, 3 accounts updated, 1 Semper and 1 Semper Classroom phone
+  kept activated), 8 revoked licences stamped `semper`; left alone 4 Demo and 1 CI test
+  account; 0 conflicts. No seats or invites to copy.
+- **No index.** ADR-033's planned override on `activations.uid` is not needed yet: every
+  activation query stays inside one licence's subcollection.
+
+Moved from CONTEXT's CI line: merged 2026-10-27, #488 (from material_testing#148 and #150:
+the release check fails a targetSdk below 36 or a `.so` off 16 KB pages; the `benchmark`
+build is R8-minified and launch-smoked; Macrobenchmarks dry-run on PRs; heavy tiers wait
+for `tier1-static` only) and #492 (from material_testing#152: submodules come through
+`checkout-submodules`, Eigen cached by its pin, every fetch retried).
+
+- **Stale phones.** `retire_stale_devices.py`, dry run then `--apply`, after the deploy:
+  0 stale ACTIVE device records, nothing retired.
+
+Not done: no app release (Semper or Semper Classroom) carries Activate yet; no emulator or
+staging check of the new flows.
+
 ## 2026-10-26 — semperdic-app's backend and console: Material Testing becomes Semper Classroom (#484)
 
 The backend and Hosting from `main` at `46ac8b5e` went live, staging first. That commit

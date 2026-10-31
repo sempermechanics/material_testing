@@ -172,17 +172,18 @@ The product owner's decisions (2026-10-29):
       the oldest phone not holding the licence makes room); any ACTIVE phone of the
       account signs (`deps._device_is_bound`); a clear signs out only a registered
       phone it released, and another phone registering no longer ends its hold.
-- [ ] Before the step-2 backend serves: `backend/scripts/retire_stale_devices.py`
+- [x] Before the step-2 backend serves: `backend/scripts/retire_stale_devices.py`
       dry run, then `--apply` (owner), so no ACTIVE record an older path left
-      behind can sign.
+      behind can sign. Run 2026-10-30, just after the deploy: 0 to retire.
 - [x] Step 3: the activation model (`repo/activations.py`), Activate and the
       phones routes for holder, IT and staff (`routers/activations.py`),
       role-scoped deactivation (`repo/deactivations.py`), `/v1/config`'s
       `activation` and `/v1/me`'s `licences`, `X-Activation` and
       `IMPLICIT_ACTIVATION`, the cooldown removed, the floating lease's phone
       mirrored (CLOUD_ARCHITECTURE_GCP §20.16).
-- [ ] Before the step-3 backend serves: drop `SELF_DEVICE_CHANGE_COOLDOWN_DAYS`
-      from the service (`--remove-env-vars`, owner); it is no longer read.
+- [x] Before the step-3 backend serves: drop `SELF_DEVICE_CHANGE_COOLDOWN_DAYS`
+      from the service (`--remove-env-vars`, owner); it is no longer read. Gone from
+      both services on 2026-10-30.
 - [x] Step 4: a licence per app: one per person per app (`holders.licence_held_by`),
       per-app invites (`licenses.invite_id`), mint `app` and `maxDevices`, the staff
       edit of `maxDevices`, each mirror writer and guard by the licence's slot
@@ -198,8 +199,8 @@ The product owner's decisions (2026-10-29):
 - [x] The split's migration: `backend/scripts/split_licences_per_app.py`, with
       `--only-domain` for a QC rehearsal (FIRESTORE_SCHEMA_RUNBOOK,
       `backend/tests/test_script_split_licences_per_app.py`, the emulator tier).
-- [ ] Run the split (owner): dry run, the QC rehearsal, then `--apply`, once the
-      step-5 backend serves all traffic.
+- [x] Run the split (owner): dry run, the QC rehearsal, then `--apply`, once the
+      step-5 backend serves all traffic. Applied 2026-10-30 (CHANGELOG).
 - [x] App (Semper): `X-Activation: explicit` (`AppIdHeader`), Activate / list /
       Deactivate (`PhonesApi`, `data/account/phones/DeviceActivation.kt`), the
       Your phones screen (`ui/phones/`), Home's card, Settings' row, the limit
@@ -215,6 +216,8 @@ The product owner's decisions (2026-10-29):
       operator desk's Issue per app with a phone count, Phones (Deactivate, Add
       phone), Issue upgrade / Apply now, Edit's count and QC test accounts'
       licence fields.
-- [ ] Fork sync.
+- [x] Fork sync: material_testing#159 (2026-10-31) merged `12a89d31`; Semper
+      Classroom reaches Activate through the shared screens and gates, and its
+      own FORK_SYNC.md has the section. Its release is still owed.
 - [ ] Set `IMPLICIT_ACTIVATION=off` once adoption allows, then remove the legacy
       paths (semperdic-app's TD-363).

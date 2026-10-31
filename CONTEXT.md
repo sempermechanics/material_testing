@@ -138,8 +138,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   Tensile and Bending; a fork change to a shared screen runs only for a lab test.
   semperdic-app accepted making this a product flavour of its repo on 2026-10-22 ([ADR-025](docs/adr/ADR-025-test-type-extension-points.md), mirrored).
 - **Synced with `semperdic-app`** (forked at `bfe00e5`; `git log --merges
-  --grep=semperdic-app`; rules in its `docs/ops/FORK_SYNC.md`). Last: `12a89d31`, 2026-10-30,
-  on `sync/semperdic-12a89d3` (not pushed): its #504–#515, the QC catalogue (`qa/`,
+  --grep=semperdic-app`; rules in its `docs/ops/FORK_SYNC.md`). Last: `5b9a9e9a`, 2026-10-31,
+  on `sync/semperdic-5b9a9e9`: its #516–#519, ADR-033's deploy records and `pyasn1` 0.6.5 in
+  the backend lock (four CVEs failed Tier 4's audit on both `main`s). Before: `12a89d31`, 2026-10-30,
+  on `sync/semperdic-12a89d3` (#159): its #504–#515, the QC catalogue (`qa/`,
   [ADR-034](docs/adr/ADR-034-qc-framework.md)) and [ADR-033](docs/adr/ADR-033-licence-per-app-explicit-activation.md)'s
   licence per app: this app sends `X-Activation: explicit`, so a new phone is Demo until
   **Activate** (Home's card, Settings' account row, the limit screen, Your phones in
