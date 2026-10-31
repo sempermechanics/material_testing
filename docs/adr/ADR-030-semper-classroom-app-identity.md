@@ -226,6 +226,7 @@ this rollout.
       (`EntitlementPins.kt:72-78`); release it.
 - [ ] Dry-run, then `--apply`, the script once the new backend serves all
       traffic and rollback past it is ruled out (owner).
-- [ ] Rename the GitHub repo `material_testing` to `semper_classroom` (owner).
+- [x] Rename the GitHub repo `material_testing` to `semper_classroom` (owner;
+      2026-10-31, the old URL redirects).
 - [ ] TD-56: retag, move reads and tags to the new names, then remove the
       alias, the mirrors and the fallbacks.

@@ -113,7 +113,7 @@ Check the R8 mapping reached Crashlytics (the release build uploads it); the wor
    a build not installed by Play opens
    this repository's Releases list (`/latest` skips pre-releases; `ui/limit/UpdateSource.kt:19`
    names `sempermechanics/semper_classroom/releases`; an old Material Testing build names
-   `material_testing/releases`, which GitHub redirects once the repository is renamed), and a Play
+   `material_testing/releases`, which GitHub redirects since the rename on 2026-10-31), and a Play
    install opens its Play listing. Attach the APK to every release. Customer
    distribution is separate:
    - Upload the APK (GitHub Release on
