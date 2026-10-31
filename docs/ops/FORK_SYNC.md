@@ -1,13 +1,14 @@
-# material_testing: syncing and porting
+# semper_classroom: syncing and porting
 
-[material_testing](https://github.com/sempermechanics/material_testing) is a fork of
+[semper_classroom](https://github.com/sempermechanics/semper_classroom) (formerly
+material_testing) is a fork of
 this repo. It adds the tensile, bending and lab-report features, ships as **Semper
 Classroom** under its own app id (`com.sempermechanics.semperclassroom`,
 [ADR-030](../adr/ADR-030-semper-classroom-app-identity.md); the app was Material
 Testing, `com.sempermechanics.materialtesting` and before that
 `com.indicvision.semper.materialtesting`, its ADR-009) and uses this repo's
-backend. The repo is to be renamed `semper_classroom` (an owner step; GitHub
-redirects the old URL, so the `mat` remote keeps working). It takes this `main` with a plain `git merge` on a `sync/semperdic-<sha>`
+backend. The repo was renamed from `material_testing` on 2026-10-31; GitHub
+redirects the old URL, so the `mat` remote keeps working. It takes this `main` with a plain `git merge` on a `sync/semperdic-<sha>`
 branch.
 
 In the week to 2026-10-01, nine changes were written twice, once in each repo: the
